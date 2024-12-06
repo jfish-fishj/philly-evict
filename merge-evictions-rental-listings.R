@@ -345,7 +345,9 @@ philly_evict_address_agg[,sum(num_evict), by = .(!n_sn_ss_c %in% xwalk_non_uniqu
 fwrite(xwalk, "/Users/joefish/Desktop/data/philly-evict/philly_evict_address_agg_xwalk.csv")
 fwrite(philly_evict_address_agg, "/Users/joefish/Desktop/data/philly-evict/philly_evict_address_agg.csv")
 
-
+xwalk = fread("/Users/joefish/Desktop/data/philly-evict/philly_evict_address_agg_xwalk.csv")
+xwalk[,PID := str_pad(as.character(PID),9, "left","0")]
+philly_evict_address_agg = fread("/Users/joefish/Desktop/data/philly-evict/philly_evict_address_agg.csv")
 ## merge rental listings and evictions on xwalk
 philly_rentals_long= philly_rentals_long %>% distinct(PID, year,.keep_all = T)
 philly_rentals_evict_m = philly_rentals_long[PID != "" & !is.na(PID)] %>%
@@ -388,14 +390,27 @@ parcels_agg = parcels_agg %>%
   ungroup() %>%
   as.data.table()
 
-ggplot(parcels_agg[xfileyear %in% c(2016,2019,2022,2023)  ],
+breaks <- c(seq(0, 95, by = 10), seq(99, 100, by = 0.1))
+coarse_breaks <- seq(0, 99, by = 10)
+fine_breaks <- seq(95, 100, by = 1)
+# Custom transformation
+transform_x <- function(x) {
+  ifelse(x <= 99, x, 99 + (x - 99) * 10) # Stretch 95-100 range
+}
+
+inverse_transform_x <- function(x) {
+  ifelse(x <= 99, x, 99 + (x - 99) / 10) # Inverse for correct labeling
+}
+
+
+ggplot(parcels_agg[xfileyear %in% c(2019)  ] ,
        aes(x = evict_ranking,
            y = cum_per_evict_filings)
        #    color = as.factor(xfileyear))
        ) +
   #geom_line(aes(color = "2019")) +
   geom_point( aes(color = "Percentage of Evictions")) +
-  geom_point(aes(y = cum_per_units,color = "Percentage of Units"), size = 1, alpha = .5) +
+  #geom_point(aes(y = cum_per_units,color = "Percentage of Units"), size = 1, alpha = .5) +
   #geom_point(aes(x = evict_ranking_cur,y = cum_per_evict_filings_cur,color = "2023")) +
   # scale_x_continuous(limits = c(0,100), breaks = seq(0,100,5)) +
   # scale_y_continuous(limits = c(0,1), breaks = seq(0,1,.1)) +
@@ -405,8 +420,9 @@ ggplot(parcels_agg[xfileyear %in% c(2016,2019,2022,2023)  ],
     title = "Cumulative distribution of evictions and units by Parcel",
     subtitle = "Philadelphia, 2019"
   ) +
-  theme_bw() +
-  facet_wrap(~xfileyear)
+
+  #coord_cartesian(xlim = c(0, 100)) +
+  theme_bw()
 
 ggsave("figs/cumulative_evict_dist_parcels.png", width = 10, height = 10, bg="white")
 
