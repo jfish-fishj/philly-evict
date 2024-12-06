@@ -5,12 +5,14 @@ library(tidycensus)
 
 philly_hist = readRDS("/Users/joefish/Desktop/data/philly-evict/philadelphia_historical.rds")
 philly_cur = readRDS("/Users/joefish/Desktop/data/philly-evict/philadelphia_2020_2021.rds")
+philly_lic = fread("/Users/joefish/Desktop/data/philly-evict/business_licenses.csv")
+
 
 setDT(philly_hist)
 setDT(philly_cur)
 
 philly_census = get_acs(
-  year= 2015,
+  year= 2019,
   survey = "acs5",
   variables = c(
     "pop"= "B01001_001",
@@ -224,12 +226,11 @@ ggplot(plaintiff_aggs_hist, aes(x = evict_ranking_hist, y = cum_per_evict_filing
 
 ggsave("figs/cumulative_evict_dist_plaintiff_hist.png", width = 10, height = 10)
 
-ggplot(plaintiff_aggs_cur, aes(x = evict_ranking_cur, y = cum_per_evict_filings_cur)) +
+ggplot(plaintiff_aggs_cur, aes(x = evict_ranking_cur, y = cum_per_evict_filings_cur, color = "2023")) +
   geom_point() +
   geom_point(data= plaintiff_aggs_hist,
              aes(x = evict_ranking_hist,
-                 y = cum_per_evict_filings_hist),
-             color = "red") +
+                 y = cum_per_evict_filings_hist, color = "2019")) +
   scale_x_continuous(limits = c(0,100), breaks = seq(0,100,5)) +
   scale_y_continuous(limits = c(0,1), breaks = seq(0,1,.1)) +
   labs(
@@ -264,4 +265,36 @@ ggplot(philly_year_aggs %>% filter(xfileyear <= 2023), aes(x = xfileyear, y = nu
   theme_bw()
 
 ggsave("figs/evict_by_year.png", width = 10, height = 10)
+
+
+philly_rentals = philly_lic[licensetype == "Rental"]
+philly_rentals[,start_year := as.numeric(substr(initialissuedate,1,4))]
+philly_rentals[,end_year := as.numeric(substr(expirationdate,1,4))]
+philly_rentals[,num_years := end_year - start_year]
+philly_rentals[,id := .I]
+philly_rentals_long = uncount(philly_rentals[num_years > 0], num_years) %>%
+  group_by(id) %>%
+  mutate(
+    year = start_year + row_number() - 1
+  ) %>%
+  ungroup() %>%
+  as.data.table()
+
+philly_rentals_long = philly_rentals_long[year %in% 2016:2024 & address != ""]
+philly_hist[,address := str_match(xdefendant_address, "^([0-9A-Z\\s]+),")[,2]]
+philly_rentals_long_m = merge(
+  philly_rentals_long[year <= 2019] %>% distinct(address, year,.keep_all = T),
+  philly_hist[commercial ==F& case_dup == F & include == T & !is.na(address),list(
+    num_evict = .N
+  ), by = .(xfileyear, address )],
+  by.y = c("xfileyear", "address"),
+  by.x = c("year", "address"),
+  all.x = T, all.y = T
+)
+philly_rentals_long_m[,sum(num_evict,na.rm = T), by = is.na(parcel_id_num)]
+philly_rentals_long_m[,sum(is.na(parcel_id_num),na.rm = T), by = year]
+View(philly_rentals_long_m[is.na(parcel_id_num)])
+
+
+
 
