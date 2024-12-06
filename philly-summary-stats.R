@@ -66,10 +66,18 @@ philly_summary_rent_high_evict_table = philly_summary_rent_high_evict %>%
   ) %>%
   cols_label(
     year = "Year",
-    median_rent_FALSE = "Median Rent (non-Top Evictor)",
-    median_rent_TRUE = "Median Rent (Top Evictor)",
-    num_evict_FALSE = "Num Evict (non-Top Evictor)",
-    num_evict_TRUE = "Num Evict (Top Evictor)"
+    median_rent_FALSE = "non-Top Evictor",
+    median_rent_TRUE = "Top Evictor",
+    num_evict_FALSE = "non-Top Evictor",
+    num_evict_TRUE = "Top Evictor"
+  ) %>%
+  gt::tab_spanner(
+    label = c("Rent"),
+    columns = c(median_rent_FALSE, median_rent_TRUE)
+  ) %>%
+  tab_spanner(
+    label = c("Number of Evictions"),
+    columns = c(num_evict_FALSE, num_evict_TRUE)
   ) %>%
   fmt_number(
     columns = c(median_rent_FALSE, median_rent_TRUE),
