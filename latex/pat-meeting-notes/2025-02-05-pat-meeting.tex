@@ -1,0 +1,195 @@
+\documentclass[10pt, xcolor=dvipsnames]{beamer}
+
+% There are many different themes available for Beamer. A comprehensive
+% list with examples is given here:
+% http://deic.uab.es/~iblanes/beamer_gallery/index_by_theme.html
+% You can uncomment the themes below if you would like to use a different
+% one:
+%\usetheme{AnnArbor}
+%\usetheme{Antibes}
+%\usetheme{Bergen}
+%\usetheme{Berkeley}
+%\usetheme{Berlin}
+%\usetheme{Boadilla}
+%\usetheme{boxes}
+%\usetheme{CambridgeUS}
+%\usetheme{Copenhagen}
+%\usetheme{Darmstadt}
+%\usetheme{default}
+%\usetheme{Frankfurt}
+%\usetheme{Goettingen}
+%\usetheme{Hannover}
+%\usetheme{Ilmenau}
+%\usetheme{JuanLesPins}
+%\usetheme{Luebeck}
+%\usetheme{Frankfurt}
+\usetheme{Madrid}
+%\usetheme{Malmoe}
+%\usetheme{Marburg}
+%\usetheme{Montpellier}
+%\usetheme{PaloAlto}
+%\usetheme{Pittsburgh}
+%\usetheme{Rochester}
+%\usetheme{Singapore}
+%\usetheme{Szeged}
+%\usetheme{Warsaw}
+
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{ragged2e}
+\usepackage{bbding}
+%\usepackage{enumitem}
+\usepackage{mathtools}
+\usepackage{indentfirst}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{mathtools}
+\usepackage{preview}
+\usepackage{xcolor}
+\usepackage{color}
+\usepackage{listings}
+\usepackage{float}
+\usepackage[caption = false]{subfig}
+\usepackage{pdfpages}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{makecell}
+\usepackage{bm}
+\usepackage{caption}
+\usepackage{cancel}
+\usepackage{anyfontsize}
+\usepackage{etoolbox}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{natbib}
+\usepackage[flushleft]{threeparttable}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{adjustbox}
+\usepackage{appendixnumberbeamer}
+\usepackage{pifont}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[percent]{overpic}
+
+
+
+\setbeamercolor{titlelike}{parent=structure}
+\definecolor{UBCblue}{rgb}{0.04706, 0.13725, 0.32}
+\colorlet{UBCblue2}{UBCblue!70!white}
+\usecolortheme[named=UBCblue]{structure}
+
+\makeatletter
+\setbeamertemplate{footline}
+{
+  \leavevmode%
+  \hbox{%
+  \begin{beamercolorbox}[wd=.4\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}%
+    \usebeamerfont{author in head/foot} \insertshortauthor %\hspace*{1em}(\insertshortinstitute)
+  \end{beamercolorbox}%
+  \begin{beamercolorbox}[wd=.5\paperwidth,ht=2.25ex,dp=1ex,center]{title in head/foot}%
+    \usebeamerfont{title in head/foot} \insertshorttitle
+  \end{beamercolorbox}%
+  \begin{beamercolorbox}[wd=.1\paperwidth,ht=2.25ex,dp=1ex,center]{date in head/foot}%
+    \usebeamerfont{date in head/foot}
+    \insertframenumber{} / \inserttotalframenumber\hspace*{2ex} 
+  \end{beamercolorbox}}%
+  \vskip0pt%
+}
+\makeatother
+
+\renewcommand{\arraystretch}{1.2}
+\renewcommand{\raggedright}{\leftskip=0pt \rightskip=0pt plus 0cm}
+\newcolumntype{C}[1]{>{\centering\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=UBCblue,
+    citecolor=UBCblue,
+    filecolor=magenta,      
+    urlcolor=blue,
+    allcolors=.
+}
+\setbeamercolor{button}{bg=UBCblue2,fg=white}
+\newcommand\fnote[1]{\captionsetup{font=tiny}\caption*{#1}}
+\newcommand\fnotev[1]{\captionsetup{font=scriptsize}\caption*{#1}}
+\setbeamertemplate{caption}[numbered]
+
+
+%\justifying
+\urlstyle{same}
+%\usefonttheme{serif}
+
+%------------------------
+%------------------------
+
+\date{}
+
+%------------------------
+%------------------------
+%----------------------------------------------------------------------------------------
+%	TITLE PAGE
+%----------------------------------------------------------------------------------------------------------------
+%------------------------
+
+\title[Landlord Responses to Changes in Tenant Protections]{Are Slumlords Necessary: \\Landlord Responses to Changes in Tenant Protections} % The short title appears at the bottom of every slide, the full title is only on the title page
+\author[Joe Fish]{Joe Fish}
+
+
+\begin{document}
+
+\begin{frame}
+\titlepage % Print the title page as the first slide
+\end{frame}
+
+
+\begin{frame}{Research Question and Motivation}
+   \textbf{ What does a city do about slumlords?}
+   \begin{itemize}
+    \item Most US cities have awful tenant protections
+    \item Tenants perceived as risky face large barriers to finding housing. Lots of rental listings will have "no eviction, no conviction" clauses, effectively locking them out of large parts of the rental market. This is true for private and public landlords.
+    \item Landlords that rent to risky tenants are providing a service, these landlords are also much more likely to be predatory.
+    \item When advocacy groups push for stronger tenant protections, landlords (public and private) argue that increased tenant protections would make them unable to be effective landlords. Thus, it's ex ante, unclear what the best way to regulate low income landlords is.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Stylized facts}
+    \textbf{Evictions in America are heavily concentrated:}
+\begin{itemize}
+    \item They are concentrated within certain cities (poorer, Blacker ones)
+    \item Within cities, they are concentrated within certain neighborhoods (poorer, Blacker ones)
+    \item Within neighborhoods, they are concentrated within certain buildings and within specific landlords 
+\end{itemize} 
+
+    \textbf{Rents in very low quality units are surprisingly high }
+\end{frame}
+
+\begin{frame}{Motivation}
+    \begin{itemize}
+        \item Econ probably coalescing on evictions as a "natural" part of low income rental market
+        \begin{itemize}
+            \item most evictions are for nonpayment of rent, nonpayment is pretty common
+        \end{itemize}
+        \item implies pretty limited role for policy (tenant payments; renters' insurance; expanded vouchers)
+        \item implies filing fee increases, right to council, all ineffective and maybe negatives
+        \item implies higher rents for lower quality units mostly reflecting risk premia
+    \end{itemize}
+
+    I think this is missing some important details about how low income rental markets work
+\end{frame}
+
+\begin{frame}{Where I'd Like to Be}
+    
+\end{frame}
+
+\begin{frame}{Things I've been working on / need help on}
+\begin{itemize}
+    \item What's the econ?
+    \item Descriptive on how different landlords use evictions
+\end{itemize}
+    
+\end{frame}
+
+\end{document}

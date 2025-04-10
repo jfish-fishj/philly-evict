@@ -4,20 +4,32 @@
 \usepackage{amsmath}
 \usepackage{longtable}
 \usepackage{booktabs}
-\title{PAT paper}
+
+%\usepackage{biblatex}
+\usepackage[backend=biber,
+style=authoryear,
+citestyle=authoryear]{biblatex} 
+\addbibresource{latex/bibliograph.bib}
+
+\title{Prospectus Proposal}
 \author{Joseph Fish}
 \date{March 2024}
 
 
 \begin{document}
 
-\section{Project Summary}
+\section{Motivation}
 
-Evictions in America are both remarkably common and remarkably concentrated. Each year, there are around 3.6 million eviction filings. These filings disproportionately occur within certain cities, within certain neighborhoods in those cities, and within certain buildings inside those neighborhoods. In the most extreme cases, like in Tuscon, Arizona, 300 buildings are responsible for over 66\% of eviction filings. In Philadelphia, only around 15\% of rental units will file an eviction in a given year, and around 1\% of rental units are responsible for a quarter of eviction filings. \\
+The vast majority of low income renters in America rent from the private market. These rental markets are characterized by surprisingly high prices and supernormal profits \parencite{Desmond_2019, Damen_2025,Eisfeldt_2015}, low maintenance, minimal entry, high search frictions, and high rates of tenant default \parencite{humphries-2024} and eviction \parencite{Gromis-et-al-2022}. The welfare costs to tenants through eviction are substantive \parencite{collison-et-al-2023, graetz-at-al-2023} and are compounded by likely monopoly rents in low income housing as well as documented predatory behavior by some low income landlords \parencite{desmond-evicted}. Because of these negative effects on tenants there is obvious scope and justification for regulation of and intervention into the low income rental market. Additionally, because most cities are relatively cash constrained, first best policies such as transfers are generally infeasible.\\
 
-Going further, serial evictions, which are consecutive (serial) filings on the same tenant at the same address, are also concentrated within particular sets of landlords. These filings are typically thought to be ways in which landlords use the court system as debt collectors as they do not result in a change in tenancy, even thought the landlord typically wins a writ of possession. Additionally, statements from the National  Apartment Association (NAA) highlight they think their ability to evict tenants is an important part of why they remain in the low income rental market. Taken together, there is substantial evidence that eviction is an important component of a particular kind of landlord's business model. \\
+Despite the aforementioned market failures, because the private market provides the majority of housing to low income renters, regulation has to be careful not to induce widespread exit of low income landlords as this has been linked to increased rent prices \parencite{collinson2024eviction}, declining housing supply \parencite{diamond-2019}, and homelessness \parencite{pinto2024sro}. As such, optimal regulation of the low income rental market is ex-ante unclear and relies on understanding the scope of market power in these markets as well as the exit thresholds for low-income landlords.\\   
 
-The frequent and concentrated nature of evictions leads to two immediate questions: to what extent are evictions a "necessary" option for the low income landlords, and how do landlords respond to changes in their ability to evict tenants? Additionally, I'd like to ask whether tenants who are exposed to high evicting landlords suffer worse long term outcomes, or if land lands are mostly accurately screening high risk tenants.
+This prospectus makes two contributions to the literature on low income housing and, more broadly, to how we should think about market power and landlord decisions in the rental market. In my job market paper
+
+% Evictions in America are both remarkably common and remarkably concentrated. Each year, there are around 3.6 million eviction filings. These filings disproportionately occur within certain cities, within certain neighborhoods in those cities, and within certain buildings inside those neighborhoods. In the most extreme cases, like in Tuscon, Arizona, 300 buildings are responsible for over 66\% of eviction filings. In Philadelphia, only around 15\% of rental units will file an eviction in a given year, and about 10\% of all eviction filings come from just 2\% of units, and 25\% come from 10\% of all rental units. \\
+
+% Going further, serial evictions, which are consecutive (serial) filings on the same tenant at the same address, are also concentrated within particular sets of landlords. These filings are typically thought to be ways in which landlords use the court system as debt collectors as they do not result in a change in tenancy, even thought the landlord typically wins a writ of possession. Additionally, statements from the National  Apartment Association (NAA) highlight they think their ability to evict tenants is an important part of why they remain in the low income rental market. Taken together, there is substantial evidence that eviction is an important component of a particular kind of landlord's business model. \\
+
 
 \section{Empirical Setting}
 
@@ -39,7 +51,7 @@ In this section, I lay out a series of motivating empirical facts about Philadel
 
 Secondly, I show that, when looking across properties, evictions are concentrated in a handful of buildings. To show this, I merged the eviction data, which contain the defendant's address, with the rental registry and the parcel data in Philadelphia. This lets me know which properties are rental units in a given year, as well as the number of rental units that are in each property. Doing this allows me to plot the CDF of eviction filings alongside the CDF of rental units. \\
 
-As figure \ref{fig:philly-evict-parcel} shows, the vast majority of rental units do not file an eviction in a typical year. Of the properties that do file an eviction, most file only one. There are, however, a handful of properties, comprising less than 1\% of the overall rental housing stock that file over 25\% of evictions. \\
+As figure \ref{fig:philly-evict-parcel} shows, the vast majority of rental units do not file an eviction in a typical year. Of the properties that do file an eviction, most file only one. Collectively, about 10\% of all eviction filings come from just 2\% of units. \\
 
 \begin{figure}[htbp]
     \centering
@@ -57,63 +69,31 @@ Third, in table \ref{tab:philly-rent},I group eviction filings by whether they w
 \end{table}
 
 
-Finally, in figure \ref{fig:philly-year}, I show that evictions declined substantially during COVID and have held at lower rates than the pre-pandemic baseline. \\
+% Finally, in figure \ref{fig:philly-year}, I show that evictions declined substantially during COVID and have held at lower rates than the pre-pandemic baseline. \\
 
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=1\linewidth]{figs/evict_by_year.png}
-    \caption{Evictions in Philadelphia}
-    \label{fig:philly-year}
-\end{figure}
+% \begin{figure}[htbp]
+%     \centering
+%     \includegraphics[width=1\linewidth]{figs/evict_by_year.png}
+%     \caption{Evictions in Philadelphia}
+%     \label{fig:philly-year}
+% \end{figure}
 
-Taken together, these empirical facts show that there are interesting patterns of spatial clustering, patterns of landlord behavior, and possible policy variation I could exploit.
-\pagebreak
-\section{Research Questions and Empirical Specifications}
+% Taken together, these empirical facts show that there are interesting patterns of spatial clustering, patterns of landlord behavior, and possible policy variation I could exploit.
+% \pagebreak
+% \section{Research Questions and Empirical Specifications}
 
-\subsection{Descriptive Evidence on Pricing and Eviction Filing Behavior}
+% \subsection{Descriptive Evidence on Pricing and Eviction Filing Behavior}
 
-The first set of findings I'd like to document are related to landlord pricing and filing behavior. Specifically:
+% The first set of findings I'd like to document are related to landlord pricing and filing behavior. Specifically:
 
-\begin{itemize}
-    \item Do high evicting landlords charge higher rents relative to similar properties?
-    \item Are thresholds (back rent required for eviction filing to occur) for high evicting landlords different from those for lower evicting landlords. 
-    \item Building on Alison Lodermeier's job market paper, a natural question would be whether high evicting landlords are more likely to statistically or tasted-basely discriminate against their tenants, relative to lower evicting landlords 
-    \item Are high evicting landlords also likely to be serial evictors -- meaning they use eviction both as a debt collection tool and as one to remove tenants.
-\end{itemize} \\
+% \begin{itemize}
+%     \item Do high evicting landlords charge higher rents relative to similar properties?
+%     \item Are thresholds (back rent required for eviction filing to occur) for high evicting landlords different from those for lower evicting landlords. 
+%     \item Building on Alison Lodermeier's job market paper, a natural question would be whether high evicting landlords are more likely to statistically or tasted-basely discriminate against their tenants, relative to lower evicting landlords 
+%     \item Are high evicting landlords also likely to be serial evictors -- meaning they use eviction both as a debt collection tool and as one to remove tenants.
+% \end{itemize} \\
 
-As these are all descriptive findings, I think the identification is relatively straightforward. The main consideration will be what "similar property" means -- I think for now it will be defined geographically, assuming there aren't large rental gradients within the same neighborhood.
-
-
-\subsection{Sorting into high evicting properties}
-A key question with the low income rental market is to what extent these high evicting properties are providing "housing of last resort" to those with previous eviction or conviction histories, or whether these buildings are high evicting due to their landlord's business model, even conditional on tenant selection. Given the empirical evidence of the negative consequences of eviction, and the distinct possibility that these properties could be providing housing to a segment of the market that might otherwise be homeless, this is an important question to get correct. \\
-
-As a first step, I want to know whether the tenants at these high evicting properties different across observable characteristics (race, prior eviction history, credit score, etc.) than those who sort into lower evicting properties. My expectation is that these tenants are more risk, however, the precise magnitudes would be an important empirical finding. One question I would like to answer, but which I'm struggling with how to do, would be to estimate the effect on <outcomes> of ending up in one of these buildings. \\
-
-
-\subsection{Landlord responses to changes in tenant protections}
-
-The next set of questions pertain to how landlords respond to changes in their ability to evict their tenants. As documented by cite, during the eviction moratoria, landlords increased their discrimination against Black and Hispanic tenants, suggesting that landlords do respond to changes in rental market institutions. My analysis would build on this and ask the following questions:\\
-
-As a result of both the eviction moratoria and Philadelphia's eviction diversion program:\\
-
-
-\begin{itemize}
-    \item Do landlords pass on the higher cost of evictions to tenants?
-    \item Do landlords exit the market following a change in the legal climate?
-    \item Do landlords change their behavior on other margins (rent to different kinds of tenants, make upgrades/downgrades to the property, etc.)
-\end{itemize} \\
-
-The key identification issue will be defining an appropriate control group, both because the eviction moratoria was temporary and because under both the moratoria and the eviction diversion program, the whole city is being treated. One option would be to try and define a synthetic Philadelphia, although this is complicated because other cities do not have the same quality of rental data. Another option would be to try a shift share approach where landlords shares are their pre-treatment reliance on eviction and the shock is either the COVID moratoria and/or the eviction diversion program. \\
-
-Another interesting angle is heterogeneity by landlord type. From interviews, landlords place a high value on the option of evicting a tenant (and claim there's a high compliance cost of landlord tenant laws), but empirically, relatively few landlords file an eviction in a given year-- in most cities I've checked, it's around half of apartment complexes with greater than ten units will file an eviction, but there's only 6 filings per every hundred units. To me, this suggests that there might be quite a lot of wiggle room to reduce evictions without doing much to change landlord behavior.
-
-
-
-\subsection{Welfare Analysis}
-
-The big hope of the paper would be to get the "correct" model of the low income rental market. In addition to the pass through analysis, analysis of exit decisions, and other margins of landlord adjustment, I'd like to put a dollar sign on the option value of being able to evict (with some probability). If you add that, plus rent increases (if they exist), you'd get a "cost" of the program. To my knowledge, no one has put out the "social cost of an eviction" number, but that would be the ideal to benchmark against. \\
-
-Big picture, "what's the correct way to regulate slum lords" is a question that has a lot of relevance, both in contemporary America, but also globally. There are some interesting historical parallels between New York City's tenement regulations, which to my knowledge were broadly successful, and New York City's 1955 ban on new single room occupancy hotels, which is generally attributed to a rise in homelessness.
+% As these are all descriptive findings, I think the identification is relatively straightforward. The main consideration will be what "similar property" means -- I think for now it will be defined geographically, assuming there aren't large rental gradients within the same neighborhood.
 
 
 
