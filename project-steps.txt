@@ -1,0 +1,8 @@
+project steps
+
+
+Todos
+  1. pick a topic...
+  2. merge altos data w/ evictions data to get panel of rentals
+  3. summary stats of market concentration
+  4. summary stats of evictions

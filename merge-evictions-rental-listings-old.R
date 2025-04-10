@@ -4,14 +4,9 @@ library(sf)
 library(tidycensus)
 
 philly_lic = fread("/Users/joefish/Desktop/data/philly-evict/business_licenses_clean.csv")
-philly_evict =  fread("/Users/joefish/Desktop/data/philly-evict/evict_address_cleaned.csv")
-philly_def_names <- fread("~/Desktop/data/philly-evict/phila-lt-data/names_merge_defendants.csv")
-#philly_evict_addys = fread("/Users/joefish/Desktop/data/philly-evict/evict_address_cleaned.csv")
+philly_evict = fread("/Users/joefish/Desktop/data/philly-evict/evict_address_cleaned.csv")
 philly_parcels = fread("/Users/joefish/Desktop/data/philly-evict/parcel_address_cleaned.csv")
 #rgdal::ogrInfo(system.file("/Users/joefish/Desktop/data/philly-evict/opa_properties_public.gdb", package="sf"))
-philly_parcels_sf = read_sf("/Users/joefish/Desktop/data/philly-evict/philly_parcels_sf/DOR_Parcel.shp")
-
-
 
 philly_rentals = philly_lic[licensetype == "Rental"]
 philly_rentals[,start_year := as.numeric(substr(initialissuedate,1,4))]
@@ -42,27 +37,25 @@ philly_rentals_long = philly_rentals_long[year %in% 2016:2024 & n_sn_ss_c != ""]
 
 # now add in the
 
-philly_evict[,pm.zip := (pm.zip) %>%
+philly_evict[,pm.zip := coalesce(pm.zip,GEOID.Zip) %>%
                str_pad(5, "left", pad = "0")]
 
-philly_evict[,dup := .N, by = .(n_sn_ss_c, plaintiff,defendant,d_filing)][,dup := dup > 1]
-philly_evict_address_agg = philly_evict[commercial =="f" & dup == F & year >= 2000 & !is.na(n_sn_ss_c),list(
+philly_evict_address_agg = philly_evict[commercial ==F& dup == F & include == T & !is.na(n_sn_ss_c),list(
   num_evict = .N
-), by = .(year, n_sn_ss_c, pm.house, pm.street,pm.zip,
-          pm.streetSuf, pm.sufDir, pm.preDir, longitude, latitude)]
+), by = .(xfileyear, n_sn_ss_c, pm.house, pm.street,pm.zip,
+          pm.streetSuf, pm.sufDir, pm.preDir, GEOID.longitude, GEOID.latitude)]
 
 philly_rentals_long_addys = unique(philly_rentals_long, by = "n_sn_ss_c")
 philly_evict_addys = unique(philly_evict_address_agg, by = "n_sn_ss_c")
-philly_evict_addys[,pm.sufDir := replace_na(as.character(pm.sufDir), "")]
 
 philly_parcels[,PID := str_pad(parcel_number,9, "left",pad = "0") ]
 philly_parcel_addys = unique(philly_parcels, by = "n_sn_ss_c")
 philly_parcel_rentals_long_addys = unique(rbindlist(list(philly_rentals_long_addys %>%
                                                            select(pm.address:PID, geocode_x, geocode_y),
-                                                philly_parcel_addys %>%
-                                                  select(pm.address:PID, geocode_x, geocode_y)
-                                                ), fill=T),
-                                          by = "n_sn_ss_c")
+                                                         philly_parcel_addys %>%
+                                                           select(pm.address:PID, geocode_x, geocode_y)
+), fill=T),
+by = "n_sn_ss_c")
 
 ## num st sfx prefix zip ##
 # merge the philly_evict_address_agg data back
@@ -70,11 +63,11 @@ num_st_sfx_dir_zip_merge = philly_evict_addys %>%
   # merge with address data
   # only let merge with parcels that have units aka residential ones
   merge(philly_parcel_rentals_long_addys[,.( pm.house, pm.street,pm.zip,
-                                    pm.streetSuf, pm.sufDir, pm.preDir,PID
-                                   )],
-    ,by = c("pm.house", "pm.street", "pm.streetSuf", "pm.sufDir", "pm.preDir", "pm.zip")
-    ,all.x= T,
-    allow.cartesian = T
+                                             pm.streetSuf, pm.sufDir, pm.preDir,PID
+  )],
+  ,by = c("pm.house", "pm.street", "pm.streetSuf", "pm.sufDir", "pm.preDir", "pm.zip")
+  ,all.x= T,
+  allow.cartesian = T
   ) %>%
   mutate(
     merge = "num_st_sfx_dir_zip"
@@ -124,12 +117,12 @@ unique(num_st_sfx_dir_zip_merge, by = "n_sn_ss_c")[,.N, by = .(num_pids==0)][,pe
 
 num_st_merge = philly_evict_addys %>%
   filter(
-      !n_sn_ss_c %in% matched_num_st_sfx_dir_zip
+    !n_sn_ss_c %in% matched_num_st_sfx_dir_zip
   ) %>%
   # merge with address data
   # only let merge with parcels that have units aka residential ones
   merge(philly_parcel_rentals_long_addys[,.( pm.house, pm.street,pm.zip,
-                                      pm.streetSuf, pm.sufDir, pm.preDir,PID
+                                             pm.streetSuf, pm.sufDir, pm.preDir,PID
   )],
   ,by = c("pm.house", "pm.street",'pm.zip')
   ,all.x= T,
@@ -172,7 +165,7 @@ num_st_sfx_merge = philly_evict_address_agg  %>%
   # merge with address data
   # only let merge with parcels that have units aka residential ones
   merge(philly_parcel_rentals_long_addys[,.( pm.house, pm.street,
-                                      pm.streetSuf,PID
+                                             pm.streetSuf,PID
   )],
   ,by = c("pm.house", "pm.street","pm.streetSuf")
   ,all.x= T,
@@ -207,64 +200,76 @@ sf_use_s2(FALSE)
 # filter to just be parcels that didn't uniquely merge
 # spatial_join = num_st_sfx_merge[num_pids != 1]
 #
-philly_parcels_sf_m = philly_parcels_sf %>% select(-matches("PID")) %>%
-  merge(philly_parcels[,.(pin, PID)], by.x = "PIN", by.y = "pin")
-
-
-parcel_sf_subset = philly_parcels_sf_m %>%
-  filter(PID %in% philly_rentals_long_addys$PID |
-           PID %in% philly_parcel_addys[category_code_description %in% c("MIXED USE",
-                                                                         "MULTI FAMILY",
-                                                                         "SINGLE FAMILY",
-                                                                         "APARTMENTS  > 4 UNITS"),PID])
-
-# filter to just be parcels that didn't uniquely merge
-spatial_join = num_st_sfx_merge[num_pids != 1]
-
-# make altos into shape file
-# note here that altos data is only geocoded to 5 digits or within a meter
-# of precission.
-# also pretty sure that it's geocoding to the street level in a lot of cases
-# so there might be some room to re geocode them and get parcel-level coordinates
-spatial_join_sf = spatial_join %>%
-  filter(!is.na(longitude) & !is.na(latitude)) %>%
-  st_as_sf(coords = c("longitude", "latitude")) %>%
-  st_set_crs(value = st_crs(parcel_sf_subset))
-
-spatial_join_sf_join = st_join(
-  spatial_join_sf,
-  parcel_sf_subset %>%
-    rename(PID_2 = PID) %>%
-    select(PID_2, geometry)# %>% filter(PID %in% fa_expand[, PID])
-)
-
-spatial_join_sf_join = spatial_join_sf_join %>%
-  as.data.table() %>%
-  select(-geometry) %>%
-  mutate(merge = "spatial")
-
-spatial_join_sf_join[,num_pids_st := uniqueN(PID_2), by = n_sn_ss_c]
-
-# keep unique matches
-spatial_join_sf_join[, matched := num_pids_st == 1 ]
-matched_spatial = spatial_join_sf_join[matched == T, n_sn_ss_c]
-
-## summary stats ##
-spatial_join_sf_join[,num_pids_st := uniqueN(PID_2,na.rm = T), by = n_sn_ss_c]
-unique(spatial_join_sf_join, by = "n_sn_ss_c")[,.N, by = .(num_pids_st==0)][,per := round(N/ sum(N),2)][order(N)]
-unique(spatial_join_sf_join, by = "n_sn_ss_c")[,.N, by = num_pids_st][,per := (N / sum(N)) %>% round(2)][order(N)]
-
-spatial_join_sf_join[num_pids_st == 0,.N, by = pm.street][
-  ,per :=N / sum(N)][order(-N),cum_p := cumsum(per)][
-    order(-N)][1:20]
-
+# parcel_sf_subset = philly_parcel_rentals_long_addys %>%
+#   filter(!is.na(geocode_x) & !is.na(geocode_y) & !is.na(pm.zip)) %>%
+#   filter(PID %in% philly_rentals_long_addys$PID |
+#   PID %in% philly_parcel_addys[category_code_description %in% c("MIXED USE",
+#                                                                        "MULTI FAMILY",
+#                                                                        "SINGLE FAMILY",
+#                                                                        "APARTMENTS  > 4 UNITS"),PID])
+#
+#
+# # annoying thing that philly has coordinates not polygons ...
+# # so i guess do nearest distance?
+#
+# spatial_join_sf_join = merge(
+#   spatial_join,
+#   parcel_sf_subset,
+#   by = "pm.zip",
+#   all.x = T,
+#   allow.cartesian = T,
+#   suffixes = c("_1", "_2")
+# )
+#
+# setDT(spatial_join_sf_join)
+#
+# dtHaversine <- function(lat_from, lon_from, lat_to, lon_to, r = 6378137){
+#   radians <- pi/180
+#   lat_to <- lat_to * radians
+#   lat_from <- lat_from * radians
+#   lon_to <- lon_to * radians
+#   lon_from <- lon_from * radians
+#   dLat <- (lat_to - lat_from)
+#   dLon <- (lon_to - lon_from)
+#   a <- (sin(dLat/2)^2) + (cos(lat_from) * cos(lat_to)) * (sin(dLon/2)^2)
+#   return(2 * atan2(sqrt(a), sqrt(1 - a)) * r)
+# }
+#
+# spatial_join_sf_join[,distance := dtHaversine(geocode_y,geocode_x,GEOID.latitude,GEOID.longitude)]
+# spatial_join_sf_join[,min_distance := min(distance), by = n_sn_ss_c_1]
+# spatial_join_sf_join[,num_within_5 := uniqueN(PID_2[distance < 5]), by = n_sn_ss_c_1]
+# spatial_join_sf_join[,num_within_10 := uniqueN(PID_2[distance < 10]), by = n_sn_ss_c_1]
+# spatial_join_sf_join[,num_within_25 := uniqueN(PID_2[distance < 25]), by = n_sn_ss_c_1]
+# spatial_join_sf_join[,num_within_50 := uniqueN(PID_2[distance < 50]), by = n_sn_ss_c_1]
+# spatial_join_sf_join[,which_min_pid := first(PID_2[distance == min(distance)]), by = n_sn_ss_c_1]
+#
+# spatial_join_sf_join[,num_pids_st := pmin(
+#   fifelse(num_within_50==0, 100000, num_within_50),
+#   fifelse(num_within_25==0, 100000, num_within_25),
+#   fifelse(num_within_10==0, 100000, num_within_10),
+#   fifelse(num_within_5==0, 100000, num_within_5))
+#   ]
+# spatial_join_sf_join[,num_pids_st := fifelse((num_pids_st==100000), 0, num_pids_st)]
+# #View(spatial_join_sf_join[n_sn_ss_c_1 == n_sn_ss_c_2 &  n_sn_ss_c_1!=""] %>% relocate(contains("n_sn"),num_within_1e10, distance, GEOID.longitude,geocode_x,GEOID.latitude , geocode_y,PID_2 ))
+# # keep unique matches
+# spatial_join_sf_join[, matched := num_pids_st == 1 ]
+# matched_spatial = spatial_join_sf_join[matched == T, n_sn_ss_c_1]
+#
+# ## summary stats ##
+# #spatial_join_sf_join[,num_pids_st := uniqueN(PID_2,na.rm = T), by = n_sn_ss_c_1]
+# unique(spatial_join_sf_join, by = "n_sn_ss_c_1")[,.N, by = .(num_pids_st==0)][,per := round(N/ sum(N),2)][order(N)]
+# unique(spatial_join_sf_join, by = "n_sn_ss_c_1")[,.N, by = num_pids_st][,per := (N / sum(N)) %>% round(2)][order(N)]
+#
+# spatial_join_sf_join[num_pids_st == 0,.N, by = n_sn_ss_c_1][
+#   ,per :=N / sum(N)][order(-N),cum_p := cumsum(per)][
+#     order(-N)][1:20]
 
 
 matched_ids = c(
   matched_num_st_sfx_dir_zip,
   matched_num_st,
-  matched_num_st_sfx,
-  matched_spatial
+  matched_num_st_sfx
+  #matched_spatial
 )
 
 
@@ -278,17 +283,17 @@ unique(num_st_sfx_dir_zip_merge, by = "n_sn_ss_c")[,.N, by = .(n_sn_ss_c %in% (m
 
 #### make philly_evict_address_agg-parcels xwalk ####
 # first start with parcels that merged uniquely
-spatial_join_sf_join = spatial_join_sf_join %>%
-  mutate(n_sn_ss_c = n_sn_ss_c,
-         merge = "spatial"
-         )
+# spatial_join_sf_join = spatial_join_sf_join %>%
+#   mutate(n_sn_ss_c = n_sn_ss_c_1,
+#          merge = "spatial"
+#          )
 xwalk_unique = bind_rows(list(
   num_st_sfx_dir_zip_merge[num_pids == 1, .(PID,n_sn_ss_c, merge)] %>% distinct(),
   num_st_merge[num_pids == 1, .(PID,n_sn_ss_c, merge)] %>% distinct(),
-  num_st_sfx_merge[num_pids == 1, .(PID,n_sn_ss_c, merge)] %>% distinct(),
-  spatial_join_sf_join[num_pids_st == 1 , .(PID_2,n_sn_ss_c, merge)]  %>%
-    distinct()%>%
-    rename(PID = PID_2)
+  num_st_sfx_merge[num_pids == 1, .(PID,n_sn_ss_c, merge)] %>% distinct()
+  # spatial_join_sf_join[num_pids_st == 1 & PID_2 == which_min_pid, .(PID_2,n_sn_ss_c, merge)]  %>%
+  #   distinct()%>%
+  #   rename(PID = PID_2)
   #fuzzy_match[num_matches==1, .(PID_match, n_sn_ss_c, merge)] %>% rename(PID = PID_match) %>% distinct()
 )
 ) %>%
@@ -299,10 +304,10 @@ xwalk_unique = bind_rows(list(
 xwalk_non_unique = bind_rows(list(
   num_st_sfx_dir_zip_merge[num_pids > 1, .(PID,n_sn_ss_c, merge)] %>% distinct(),
   num_st_merge[num_pids > 1, .(PID,n_sn_ss_c, merge)] %>% distinct(),
-  num_st_sfx_merge[num_pids > 1, .(PID,n_sn_ss_c, merge)] %>% distinct(),
-  spatial_join_sf_join[num_pids_st > 1 , .(PID_2,n_sn_ss_c, merge)]  %>%
-    distinct()%>%
-    rename(PID = PID_2)
+  num_st_sfx_merge[num_pids > 1, .(PID,n_sn_ss_c, merge)] %>% distinct()
+  # spatial_join_sf_join[num_pids_st > 1 & !is.na(PID_2) & distance < 50, .(PID_2,n_sn_ss_c, merge)]  %>%
+  #   distinct()%>%
+  #   rename(PID = PID_2)
   #fuzzy_match[num_matches > 1, .(PID_match, n_sn_ss_c, merge)] %>% rename(PID = PID_match) %>% distinct()
 )) %>%
   mutate(unique = F) %>%
@@ -316,7 +321,7 @@ xwalk = bind_rows(list(
   xwalk_unique,
   xwalk_non_unique,
   tibble(n_sn_ss_c = philly_evict_address_agg[(!n_sn_ss_c %in% xwalk_non_unique$n_sn_ss_c &
-                                     !n_sn_ss_c %in% xwalk_unique$n_sn_ss_c), n_sn_ss_c],
+                                                 !n_sn_ss_c %in% xwalk_unique$n_sn_ss_c), n_sn_ss_c],
          merge = "not merged", PID = NA) %>% distinct()
 ) )
 
@@ -332,12 +337,11 @@ unique(xwalk[], by = "n_sn_ss_c")[,.N, by = num_addys_matched][,per := round(N /
 
 #xwalk = unique(xwalk, by = c("n_sn_ss_c", "PID"))
 philly_evict_address_agg[,sum(num_evict), by = .(!n_sn_ss_c %in% xwalk_non_unique$n_sn_ss_c &
-                           !n_sn_ss_c %in% xwalk_unique$n_sn_ss_c)][,per := V1 / sum(V1)][]
+                                                   !n_sn_ss_c %in% xwalk_unique$n_sn_ss_c)][,per := V1 / sum(V1)][]
 
 xwalk_case = merge(
   xwalk,
-  philly_evict[n_sn_ss_c != "",.(n_sn_ss_c, id)],
-  by = "n_sn_ss_c"
+  philly_evict[,.(n_sn_ss_c, xcasenum)],
 )
 
 
@@ -350,42 +354,38 @@ xwalk = fread("/Users/joefish/Desktop/data/philly-evict/philly_evict_address_agg
 xwalk[,PID := str_pad(as.character(PID),9, "left","0")]
 philly_evict_address_agg = fread("/Users/joefish/Desktop/data/philly-evict/philly_evict_address_agg.csv")
 ## merge rental listings and evictions on xwalk
-philly_rentals_long = philly_rentals_long %>% distinct(PID, year,.keep_all = T)
+philly_rentals_long= philly_rentals_long %>% distinct(PID, year,.keep_all = T)
 philly_rentals_evict_m = philly_rentals_long[PID != "" & !is.na(PID)] %>%
   merge(xwalk[!is.na(PID) & PID != "" & num_parcels_matched ==1 ], by = "PID",all.x = T) %>%
-  mutate(year = year,n_sn_ss_c= n_sn_ss_c.y) %>%
-  merge(philly_evict_address_agg[!is.na(n_sn_ss_c),list(num_evict = first(num_evict)), by = .(n_sn_ss_c, year)],
-        by = c("n_sn_ss_c","year"),all.x = T)
+  mutate(xfileyear = year,n_sn_ss_c= n_sn_ss_c.y) %>%
+  merge(philly_evict_address_agg[!is.na(n_sn_ss_c),list(num_evict = first(num_evict)), by = .(n_sn_ss_c, xfileyear)],
+        by = c("n_sn_ss_c","xfileyear"),all.x = T)
 
 philly_rentals_evict_m[,num_evict := fifelse(is.na(num_evict), 0, num_evict)]
 
 # parcels agg
 parcels_agg = philly_rentals_evict_m[rentalcategory!= "Hotel",list(
   num_evict = sum(num_evict),
-  num_units = first(numberofunits),
-  med_rent = median()
+  num_units = first(numberofunits)
   #num_addys = uniqueN(n_sn_ss_c)
-), by = .(year, PID)]
+), by = .(xfileyear, PID)]
 
 # make sure i get about the same number of evictions
-philly_evict_address_agg[,sum(num_evict), by =year][order(year)] %>%
-  merge(parcels_agg[,sum(num_evict), by =year][order(year)], by = "year") %>%
-  mutate(per = V1.y/V1.x)
-
-philly_rentals_evict_m[,sum(num_evict), by =year][order(year)]
-parcels_agg[,sum(num_evict), by =year][order(year)]
-parcels_agg[,sum(num_units), by =year][order(year)]
+philly_evict_address_agg[,sum(num_evict), by =xfileyear][order(xfileyear)]
+philly_rentals_evict_m[,sum(num_evict), by =xfileyear][order(xfileyear)]
+parcels_agg[,sum(num_evict), by =xfileyear][order(xfileyear)]
+parcels_agg[,sum(num_units), by =xfileyear][order(xfileyear)]
 
 parcels_agg = parcels_agg %>%
   mutate(
     evict_filing_rate = num_evict / num_units
   )%>%
-  merge(philly_parcels[,.(PID, category_code_description,owner_1,mailing_street, pm.zip)], by = "PID", all.x = T) %>%
+  merge(philly_parcels[,.(PID, category_code_description,owner_1)], by = "PID", all.x = T) %>%
   filter(!category_code_description %in% c("HOTEL","GARAGE - COMMERCIAL","OFFICES",
-                                            "VACANT LAND","COMMERCIAL") ) %>%
+                                           "VACANT LAND","COMMERCIAL") ) %>%
   # remove student housing
   filter(!str_detect(owner_1, "PHILADELPHIA UNIVERSITY|TEMPLE UNI|DREXEL|UNIVERSITY|UNIV OF")) %>%
-  group_by(year) %>%
+  group_by(xfileyear) %>%
   arrange(num_evict) %>%
   mutate(
     cum_per_evict_filings = cumsum(num_evict) / sum(num_evict,na.rm = T),
@@ -408,11 +408,11 @@ inverse_transform_x <- function(x) {
 }
 
 
-ggplot(parcels_agg[year %in% c(2019)  ] ,
+ggplot(parcels_agg[xfileyear %in% c(2019)  ] ,
        aes(x = evict_ranking,
            y = cum_per_evict_filings)
-       #    color = as.factor(year))
-       ) +
+       #    color = as.factor(xfileyear))
+) +
   #geom_line(aes(color = "2019")) +
   geom_point( aes(color = "Percentage of Evictions")) +
   #geom_point(aes(y = cum_per_units,color = "Percentage of Units"), size = 1, alpha = .5) +
@@ -431,11 +431,11 @@ ggplot(parcels_agg[year %in% c(2019)  ] ,
 
 ggsave("figs/cumulative_evict_dist_parcels.png", width = 10, height = 10, bg="white")
 
-ggplot(parcels_agg[year %in% c(2016,2019,2022,2023) & num_evict == 0  ],
+ggplot(parcels_agg[xfileyear %in% c(2016,2019,2022,2023) & num_evict == 0  ],
        aes(x = evict_ranking,
-           color = as.factor(year),
+           color = as.factor(xfileyear),
            y = cum_per_evict_filings)
-       #    color = as.factor(year))
+       #    color = as.factor(xfileyear))
 ) +
   #geom_line(aes(color = "2019")) +
   #geom_point() +
@@ -452,8 +452,8 @@ ggplot(parcels_agg[year %in% c(2016,2019,2022,2023) & num_evict == 0  ],
   theme_bw()
 
 
-parcels_agg_wide = pivot_wider(parcels_agg[,num_evict := replace_na(num_evict,0)][,.(PID, num_evict, evict_filing_rate,year)],
-                               names_from = year, values_from = c(num_evict, evict_filing_rate))
+parcels_agg_wide = pivot_wider(parcels_agg[,num_evict := replace_na(num_evict,0)][,.(PID, num_evict, evict_filing_rate,xfileyear)],
+                               names_from = xfileyear, values_from = c(num_evict, evict_filing_rate))
 setDT(parcels_agg_wide)
 ggplot(parcels_agg_wide[],
        aes(x = replace_na(num_evict_2019,0), y = replace_na(num_evict_2023,0))) +

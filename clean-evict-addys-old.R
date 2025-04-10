@@ -8,57 +8,11 @@ library(postmastr)
 # philly_cur = readRDS("/Users/joefish/Desktop/data/philly-evict/philadelphia_2020_2021.rds")
 
 philly_evict =  fread("~/Desktop/data/philly-evict/phila-lt-data/summary-table.txt")
-
-suffixes = c(
-  postmastr::dic_us_suffix %>% pull(suf.input),
-  postmastr::dic_us_suffix %>% pull(suf.type),
-  postmastr::dic_us_suffix %>% pull(suf.output)
-) %>%
-  str_replace("(pt|pts)","")%>%
-  unique() %>%
-  str_to_lower() %>%
-  sort() %>%
-  append("st") %>%
-  append("la") %>%
-  append("blv") %>%
-  append("bld") %>%
-  str_c(collapse = "|")
-
-
-suffix_regex = paste0(
-  "(^|,|\\|)?([0-9-]+[a-z]?\\s[a-z0-9\\.\\s-]+\\s(", suffixes, "))"
-)
-
-stuck_regex = paste0(
-  "([a-z])(", suffixes, ")(\\.|\\|)"
-)
-
-test = c("7413a oxford ave|apt #21|phila, pa 19111|7413 oxford ave|apt #21|phila, pa 19111",
-         "401 w walnut la|phila. , pa 19144")
-str_match(test, suffix_regex)
-
-philly_evict[,def_address_lower := str_to_lower(defendant_address) %>%
-               str_replace_all("\\. ,", ".,") %>%
-               str_remove_all("\\.")]
-philly_evict[,def_address_lower := (def_address_lower) %>%
-               str_replace_all( "\\s([nsew])([0-9]+)", "\\1 \\2") ]
-philly_evict[,def_address_lower := str_replace_all(def_address_lower, stuck_regex ,"\\1 \\2\\3")]
-
-# philly_evict_sample= philly_evict[year > 2000] %>% sample_n(10000)
-# fix issue where addresses are stuck together...
-
-philly_evict[,short_address_r1 := str_match(def_address_lower, suffix_regex)[,3] ]
-philly_evict[,short_address_r2 := str_match(short_address_r1, "(.+)\\saka(.+)" )[,2] ]
-philly_evict[,short_address := coalesce(short_address_r2, short_address_r1)]
-
-
-#View(sample_n(philly_evict[str_detect(def_address_lower, suffix_regex)],1000) %>% select(def_address_lower, short_address_r1, short_address))
-
 # setDT(philly_hist)
 # setDT(philly_cur)
 # cols = c("xcasenum", "xfileyear", "xfileweek","xfilemonth",
 #          "xdefendant","xplaintiff",
-#          "short_address", "xplaintiff_address",
+#          "xdefendant_address", "xplaintiff_address",
 #          "GEOID.Tract","GEOID.latitude","GEOID.longitude","GEOID.Zip","GEOID.accuracy"  ,
 #          "sealed","dup","anon","include","commercial"
 #          )
@@ -67,10 +21,10 @@ philly_evict[,short_address := coalesce(short_address_r2, short_address_r1)]
 # philly_hist[,GEOID.longitude := Longitude]
 # philly_hist[,GEOID.latitude := Latitude]
 # philly_hist[,GEOID.accuracy := `Accuracy Score`]
-# philly_hist[, short_address := coalesce(xdefendant_street, short_address)]
+# philly_hist[, xdefendant_address := coalesce(xdefendant_street, xdefendant_address)]
 #
 # philly_cur= philly_cur %>% unite(
-#  col = "short_address", xdefendant_number, xdefendant_street, sep = " ", na.rm = T, remove = F
+#  col = "xdefendant_address", xdefendant_number, xdefendant_street, sep = " ", na.rm = T, remove = F
 # )
 
 # philly_evict = bind_rows(philly_hist %>%
@@ -78,7 +32,7 @@ philly_evict[,short_address := coalesce(short_address_r2, short_address_r1)]
 #                          philly_cur %>%
 #                            select(cols)
 #                          ) %>%
-#   mutate(short_address = str_to_lower(short_address))
+#   mutate(xdefendant_address = str_to_lower(xdefendant_address))
 
 # clean addresses
 # parse unit from address column. returns unit column, original address, and
@@ -149,15 +103,16 @@ parse_letter <- function(address_num){
 dirs <- pm_dictionary(type = "directional", filter = c("N", "S", "E", "W"), locale = "us")
 pa <- pm_dictionary(type = "state", filter = "PA", case = c("title", "upper","lower"), locale = "us")
 # list of boston n'hoods. done to parse off city. e.g. 123 main st, dorchester ma
-cities = c("phila", "philadelphia") %>% str_to_lower()
+cities = c(philly_evict$city, philly_cur$xdefendant_city) %>% str_to_lower()
 philly <-   tibble(city.input = unique(cities)) #%>%
+philly_evict[,xdefendant_address := str_remove_all(xdefendant_address, ", philadelphia, pa") %>%
+               str_replace_all("blv($|\\s)", "blvd")]
 philly_evict_sample = philly_evict %>%
-  #filter(short_address %in% sample(short_address, 25000)) %>%
-  pm_identify(var = short_address)
+  #filter(xdefendant_address %in% sample(xdefendant_address, 25000)) %>%
+  pm_identify(var = xdefendant_address)
 
-# bunch of unknown addys but these are generally pre-2000
 dropped_ids_og = philly_evict_sample %>% filter(!pm.type %in% c("full", "short")) %>% pull(pm.uid)
-View(philly_evict_sample[pm.type=="unknown" & year == 2004] %>% relocate(def_address_lower, defendant_address))
+
 
 # philly_evict_sample = philly_evict_sample%>%
 #   filter(pm.type %in% c("full", "short"))
@@ -180,7 +135,7 @@ post processing
 recombine
 "
 # philly_evict gets rid of any address that's not an intersection, so save those for later
-philly_evict_adds_sample <- pm_prep(philly_evict_sample, var = "short_address", type = "street")
+philly_evict_adds_sample <- pm_prep(philly_evict_sample, var = "xdefendant_address", type = "street")
 
 philly_evict_adds_sample <- pm_postal_parse(philly_evict_adds_sample, locale = "us")
 philly_evict_adds_sample <- pm_state_parse(philly_evict_adds_sample, dictionary = pa)
@@ -234,9 +189,9 @@ philly_evict_adds_sample = pm_streetSuf_parse(philly_evict_adds_sample)
 philly_evict_adds_sample_copy = copy(philly_evict_adds_sample)
 
 # have to peel off trailing letters
-# philly_evict_adds_sample = philly_evict_adds_sample %>% mutate(
-#   pm.address = pm.address %>% str_remove_all( "(\\s[a-z]{1}|1st|2nd)$")
-# )
+philly_evict_adds_sample = philly_evict_adds_sample %>% mutate(
+  pm.address = pm.address %>% str_remove_all( "(\\s[a-z]{1}|1st|2nd)$")
+)
 
 philly_evict_adds_sample = pm_street_parse(philly_evict_adds_sample, ordinal= T, drop = F)
 
@@ -254,19 +209,8 @@ philly_evict_adds_sample = philly_evict_adds_sample %>% mutate(
 )
 
 philly_evict_adds_sample = philly_evict_adds_sample %>% mutate(
-  pm.street = str_replace_all(
-    pm.street,"^([S])([dfgjbvxzs])","\\2"
-  ) %>% str_replace_all(
-    "^([E])([ebpgq])","\\2"
-  ) %>%
-    str_replace_all(
-      "^([NW])([dfgjbvxzs])","\\2"
-    ))
-
-philly_evict_adds_sample = philly_evict_adds_sample %>% mutate(
   pm.street = case_when(
     pm.street == "berkeley" ~ "berkley",
-    pm.street == "Berkeley" ~ "Berkley",
     TRUE ~ pm.street
   )
 )
@@ -279,14 +223,6 @@ philly_evict_adds_sample = philly_evict_adds_sample %>% mutate(
 
 )
 
-philly_evict_adds_sample = philly_evict_adds_sample %>%
-  mutate(pm.sufDir = NA_character_)
-
-philly_evict_adds_sample = philly_evict_adds_sample %>%
-  mutate(
-    pm.streetSuf = fifelse(is.na(pm.streetSuf) & str_detect(pm.street, "\\s[lL]a$"),"ln", pm.streetSuf),
-    pm.street = str_remove_all(pm.street, "\\s[lL]a$")
-  )
 
 # make all components lower case and make composite address column
 philly_evict_adds_sample_c = philly_evict_adds_sample %>%
@@ -307,10 +243,6 @@ philly_evict_adds_sample_m = merge(
   by.y = "pm.uid",
   all.x = T
 )
-
-philly_evict_adds_sample_m[,pm.zip := coalesce(pm.zip, zip)]
-philly_evict_adds_sample_m[,pm.city := coalesce(pm.city, "philadelphia")]
-philly_evict_adds_sample_m[,pm.state := coalesce(pm.state, "PA")]
 
 fwrite(philly_evict_adds_sample_m, "/Users/joefish/Desktop/data/philly-evict/evict_address_cleaned.csv")
 
