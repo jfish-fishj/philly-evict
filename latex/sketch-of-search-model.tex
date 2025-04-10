@@ -1,0 +1,142 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{longtable}
+\usepackage{booktabs}
+\title{PAT paper}
+\author{Joseph Fish}
+\date{March 2024}
+
+
+\begin{document}
+
+\section{Motivation}
+
+\textbf{Big Picture}: the Rental market behaves much more like the labor market than it does the car market. Firms post vacancies, tenants apply, contracts are bargained over, and posted units may or may not actually be available to tenants. This matters for how we think about market power and modelling the housing market. \\
+
+\textbf{Why this matters}: Recent models of market power in housing market model the supply side with differentiated Bertrand competition (sometimes Cournot), where market power comes from product differentiation and quantity reduction. The first issue is that implied elasticities from empirical estimates of prices and vacancies are not consistent with elasticities from demand estimation. The second issue is that, because most housing was built decades ago, firms can only move around quantities by:\\
+\begin{enumerate}
+    \item internalizing market power at time of development (unlikely for old buildings)
+    \item moving around quantities by changing vacancy rates, in which case search is the natural way to think about the problem
+\end{enumerate}
+
+
+In particular, it's  likely that landlords flex monopoly power by exploiting search costs and influencing tenants' outside options. One simple example of this is that they can exploit tenant switching costs
+
+\section{Intuition}
+To fix intuition, consider two markets of 1000 units each. In market 1, there are 100 landlords who each lease 10 units. In market 2, there are 10 landlords leasing 100 units each. Standard competition models say that as long as their vacancy rates are the same, so will market prices. I think this is weird!
+
+\section{Empirical Example}
+
+Take this job market paper from this year. The first figure is the results from a Diff in Diff on mergers of rental properties, filtered for mergers that increase concentration by a substantial amount. She estimates prices effects in the order of 7.5\%. \footnote{You can square this result with my field paper that shows no effect of these kinds of mergers by noting that she filters for mergers that are in the top 5\% of changes in predicted concentration; likely the total ATT is zero} She then explains this by noting that firms also increase vacancies concurrently with hiking prices (and that it doesn't look like they're doing unobserved quality upgrading). However, she finds vacancy effects in the order of a 5\% decline in \textit{own supply}. This would imply own price elasticities of around -0.66. If the coefficients on vacancies are percents (one, this is implausible, as occupancy rates do not hit low 70s), you get an elasticity of -2.66, which is technically plausible, but inconsistent with her estimates of demand elastcities later in the paper. 
+
+
+\section{RealPage}
+RealPage is an example of where I think firms actually are doing Bertrand style quantity reduction. However, I think this makes my point: with RealPage, market vacancy rates get reduced by ~3\% and prices go up by 3-5\%. This is a much more normal effect than what other people are finding.
+
+
+\section{Model}
+
+\subsection{Setup}
+
+\begin{itemize}
+    \item Discrete time economy
+    \item unit measure of infinitely lived, homogenous renters
+    \item renters are either housed and pay rent ($r$) to receive flow utility or are unhoused
+    \item Common discount factor $0 < \beta < 1$
+    \item housed renters experience exogenous separation shock at rate $\delta$
+\end{itemize}
+
+\subsection{Matching}
+\begin{itemize}
+    \item For each rental vacancy, firms pay a per period cost of $c_i$
+    \item Urn-ball matching function. Each period, $u$ unemployed workers send one application (balls) towards $v$ vacancies (urns).
+    \begin{itemize}
+        \item Due to coordination frictions, some vacancies see $>1$ applications and some see zero. Applications per vacancy are exponentially distributed
+    \end{itemize}
+    \item If a firm gets multiple applicants, they select one at random to follow up with and bargain over rents
+    \begin{itemize}
+        \item Nash bargaining; $0 \leq \alpha \leq 1$
+        \item In this model, firms aren't allowed to have applicants bid up the rents (unclear why this couldn't be allowed, but I don't do it here)
+        
+    \end{itemize}
+    \item Tenants are assumed to search randomly within a market (equivalent to vacancies appearing randomly); no directed search. This will be important later.
+    \item Home finding rate = $\lambda \equiv \frac{v}{u}(1-e^{-\frac{v}{u}})$
+\end{itemize}
+
+\subsection{Worker Value Functions}
+\begin{itemize}
+    \item U = value of outside option (homelessness; living in non-preferred neighborhood); R = rent paid
+    \item \begin{equation}
+        U = b + \left(\lambda \sum_{i} f_iW_i + (1-\lambda)U\right)\label{eq:worker-val}
+    \end{equation}
+\end{itemize}
+
+\subsection{Threat and Market Power}
+\begin{itemize}
+    \item In eq \ref{eq:worker-val}, firms compete with themselves because the firm's other vacancies enter the worker's outside option
+    \item What firms can do instead is (partially) remove themselves from the tenants' outside option by committing themselves to not renting to the tenant in the future in the event bargaining breaks down.
+    \begin{itemize}
+        \item This commitment works by firm's choosing applicants randomly but removing the tenant in the event they have multiple applicants.
+        \item Importantly, this is costless to the firm, since they have multiple applicants. (If the deviating tenant is sole applicant, they get the unit)
+    \end{itemize}
+    \item Here, I say that this punishment lasts until the tenant's search is over, so landlords need only be able to recognize a tenant's application for a short period of time
+    \begin{itemize}
+        \item Intuitively, one could imagine a property manager making an take it or leave it offer to a tenant with the threat that if they leave it they can't see other units
+    \end{itemize}
+    \item Continuation value in event of breakdown:
+    \begin{equation}\label{eq:match-val}
+        U_i = b + \beta \left(\lambda\sum_{j\neq}f_iW_j + \lambda f_iW_i + (1-\lambda(1-f_i) - \lambda f_i)U_i\right)
+    \end{equation}
+\end{itemize}
+
+\subsection{Firm Value Function}
+\begin{itemize}
+    \item Bilateral value of match \begin{equation}
+        J_i = 1 - w_i + \beta(1 - \delta)J_i
+    \end{equation} 
+    \begin{itemize}
+        \item Value of landlord i of filling vacancy is flow output minus wage (maybe change to rent minus costs?)
+    \end{itemize}
+    \item \begin{equation}\label{eq:job-value}
+        V_i = -c_i + \beta(1  - e^{-\frac{u}{v}})J_i
+    \end{equation}
+    \begin{itemize}
+        \item Value of vacancy is fixed cost plus probability firm has at least one application; in equilibrium trade never breaks down and the match is always formed (how to think about tenant screening?)
+    \end{itemize}
+    \item \begin{equation}\label{eq:surplus-value}
+        S_i \equiv W_i = U_i + J_i
+    \end{equation}
+    \begin{itemize}
+        \item Joint value of surplus is then 
+    \end{itemize}
+    \item Assume nash bargaining:
+    \begin{itemize}
+        \item Worker Split: \begin{equation}\label{eq:nash-worker}
+            aS_i = W_i - U_i
+        \end{equation}
+        \item Firm Split: \begin{equation}
+            (1-\alpha)S_i = J_i
+        \end{equation}
+    \end{itemize}
+\end{itemize}
+
+\subsection{Closing the Model}
+\begin{itemize}
+    \item Assume free entry
+    \begin{itemize}
+        \item Is this correct for housing?
+        \item Is this necessary? Can just close by saying no entry? Some landlords are just lucky?
+    \end{itemize}
+\end{itemize}
+
+\subsection{Concentration Index}
+
+\section{}{Data (Lol)}
+
+\subsection{Market Definition}
+
+\subsection{Needed Variables}
+
+\end{document}

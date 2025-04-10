@@ -1,0 +1,265 @@
+\documentclass[10pt, xcolor=dvipsnames]{beamer}
+
+% There are many different themes available for Beamer. A comprehensive
+% list with examples is given here:
+% http://deic.uab.es/~iblanes/beamer_gallery/index_by_theme.html
+% You can uncomment the themes below if you would like to use a different
+% one:
+%\usetheme{AnnArbor}
+%\usetheme{Antibes}
+%\usetheme{Bergen}
+%\usetheme{Berkeley}
+%\usetheme{Berlin}
+%\usetheme{Boadilla}
+%\usetheme{boxes}
+%\usetheme{CambridgeUS}
+%\usetheme{Copenhagen}
+%\usetheme{Darmstadt}
+%\usetheme{default}
+%\usetheme{Frankfurt}
+%\usetheme{Goettingen}
+%\usetheme{Hannover}
+%\usetheme{Ilmenau}
+%\usetheme{JuanLesPins}
+%\usetheme{Luebeck}
+%\usetheme{Frankfurt}
+\usetheme{metropolis}
+%\usetheme{Malmoe}
+%\usetheme{Marburg}
+%\usetheme{Montpellier}
+%\usetheme{PaloAlto}
+%\usetheme{Pittsburgh}
+%\usetheme{Rochester}
+%\usetheme{Singapore}
+%\usetheme{Szeged}
+%\usetheme{Warsaw}
+
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{ragged2e}
+\usepackage{bbding}
+%\usepackage{enumitem}
+\usepackage{mathtools}
+\usepackage{indentfirst}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{mathtools}
+\usepackage{preview}
+\usepackage{xcolor}
+\usepackage{color}
+\usepackage{listings}
+\usepackage{float}
+\usepackage[caption = false]{subfig}
+\usepackage{pdfpages}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{makecell}
+\usepackage{bm}
+\usepackage{caption}
+\usepackage{cancel}
+\usepackage{anyfontsize}
+\usepackage{etoolbox}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{natbib}
+\usepackage[flushleft]{threeparttable}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{adjustbox}
+\usepackage{appendixnumberbeamer}
+\usepackage{pifont}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[percent]{overpic}
+
+
+
+\setbeamercolor{titlelike}{parent=structure}
+\definecolor{UBCblue}{rgb}{0.04706, 0.13725, 0.32}
+\colorlet{UBCblue2}{UBCblue!70!white}
+\usecolortheme[named=UBCblue]{structure}
+
+\makeatletter
+\setbeamertemplate{footline}
+{
+  \leavevmode%
+  \hbox{%
+  \begin{beamercolorbox}[wd=.4\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}%
+    \usebeamerfont{author in head/foot} \insertshortauthor %\hspace*{1em}(\insertshortinstitute)
+  \end{beamercolorbox}%
+  \begin{beamercolorbox}[wd=.5\paperwidth,ht=2.25ex,dp=1ex,center]{title in head/foot}%
+    \usebeamerfont{title in head/foot} \insertshorttitle
+  \end{beamercolorbox}%
+  \begin{beamercolorbox}[wd=.1\paperwidth,ht=2.25ex,dp=1ex,center]{date in head/foot}%
+    \usebeamerfont{date in head/foot}
+    \insertframenumber{} / \inserttotalframenumber\hspace*{2ex} 
+  \end{beamercolorbox}}%
+  \vskip0pt%
+}
+\makeatother
+
+\renewcommand{\arraystretch}{1.2}
+\renewcommand{\raggedright}{\leftskip=0pt \rightskip=0pt plus 0cm}
+\newcolumntype{C}[1]{>{\centering\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=UBCblue,
+    citecolor=UBCblue,
+    filecolor=magenta,      
+    urlcolor=blue,
+    allcolors=.
+}
+\setbeamercolor{button}{bg=UBCblue2,fg=white}
+\newcommand\fnote[1]{\captionsetup{font=tiny}\caption*{#1}}
+\newcommand\fnotev[1]{\captionsetup{font=scriptsize}\caption*{#1}}
+\setbeamertemplate{caption}[numbered]
+
+
+%\justifying
+\urlstyle{same}
+%\usefonttheme{serif}
+
+%------------------------
+%------------------------
+
+\date{}
+
+%------------------------
+%------------------------
+%----------------------------------------------------------------------------------------
+%	TITLE PAGE
+%----------------------------------------------------------------------------------------------------------------
+%------------------------
+
+\title[Landlord Responses to Changes in Tenant Protections]{Matt Masten Meeting 2025-03-18} % The short title appears at the bottom of every slide, the full title is only on the title page
+\author[Joe Fish]{Joe Fish}
+
+
+\begin{document}
+
+\begin{frame}
+\titlepage % Print the title page as the first slide
+\end{frame}
+
+\begin{frame}{Meeting Agenda}
+    \begin{itemize}
+        \item Project overview
+        \item Any initial Matt thoughts
+        \item Structural demand models and LATE interpretations
+    \end{itemize}
+    
+\end{frame}
+
+\begin{frame}{Some Facts About Low Income Rental Markets}
+\textbf{Eviction}
+    \begin{itemize}
+        \item Eviction is common:(~8-25 evictions / 100 renter households / year)
+        \begin{itemize}
+            \item Within high evicting neighborhoods, certain buildings will be even more high evicting (upwards of 40\% of tenants evicted)
+        \end{itemize}
+        \item Tenant default is common and does not immediately lead to eviction
+        \begin{itemize}
+            \item Most eviction cases are for nonpayment of rent and for about two months of back rent
+        \end{itemize}
+    \end{itemize}
+\textbf{Prices and Profits}
+\begin{itemize}
+        \item Low Income landlords have \textbf{higher} profit margins than any other kind of landlord
+        \item Rent Prices are often as high as they are in much higher quality neighborhoods; maintenance is much lower 
+        \item market power due to concentration, search frictions and lack of entry likely pervasive
+\end{itemize}
+    
+\end{frame}
+
+\begin{frame}{Motivation}
+
+\begin{itemize}
+    \item Most US cities have awful tenant protections
+    \item Tenants perceived as risky face large barriers to finding housing. Lots of rental listings will have "no eviction, no conviction" clauses, effectively locking them out of large parts of the rental market. This is true for private and public landlords.
+    \item Landlords that rent to risky tenants are providing a service; these landlords are also much more likely to be predatory.
+    \item When advocacy groups push for stronger tenant protections, landlords (public and private) argue that increased tenant protections would make them unable to be effective landlords. Thus, it's ex ante, unclear what the best way to regulate low income landlords is.
+\end{itemize}
+\end{frame}
+
+
+\begin{frame}{Research questions}
+
+\textbf{Big Picture:} \\
+\vspace{0.25cm}
+\begin{enumerate}
+    \item Are slumlords just predatory, or are they providing "housing of last resort" by renting to tenants who would otherwise be screened out by the rest of the market (or a little bit of both) 
+    \item What rationalizes:
+\begin{itemize}
+    \item higher prices for lower quality units
+    \item higher profits for low income landlords
+\end{itemize}
+
+\item What's the correct way to think about the role low income landlords play in the housing market?
+\end{enumerate}
+\end{frame}
+
+% \begin{frame}{Paper's Contribution}
+% \begin{itemize}
+%     \item first paper to give quantitative evidence of importance of market power in low income rental markets
+%     \item 
+% \end{itemize}
+
+    
+% \end{frame}
+
+\begin{frame}{Empirical Setting}
+    Project will be a case study of the Philadelphia rental market.\\
+
+    Philadelphia is ideal place to study as it:
+
+    \begin{itemize}
+        \item is America's biggest poor city
+        \item is one of the few cities with even semi-comprehensive data on the low income rental market
+        \item had a large change to landlord tenant policies in 2022 (lead to a reduction in evictions by about 30\%)
+        \item very comprehensive historical eviction data
+    \end{itemize}
+    
+\end{frame}
+
+
+\begin{frame}{Project Deliverables}
+
+\textbf{Descriptives}\\
+    \begin{itemize}
+        \item Tenant substitution patterns (Anna Ziff's JMP recreation but for more cities)
+        \begin{itemize}
+            \item Key point is that low income rental markets are likely highly segmented
+        \end{itemize}
+        \item Price descriptives (recreate pattern that low income tenants pay more money for worse housing)
+        \begin{itemize}
+            \item How much of a risk premia is needed to rationalize these price differences?
+        \end{itemize}
+    \end{itemize}
+
+\textbf{Model}\\
+\begin{itemize}
+    \item Bargaining model for tenant-landlord relationships
+    \item Search and matching model for low income tenants (version of David Berger's monopsony model)
+\end{itemize}
+\textbf{Empirics}\\
+\begin{itemize}
+    \item Demand estimation
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}{LATEs and Structural Models}
+    \begin{itemize}
+        \item 2SLS with covariates which enter linearly does not generally identify a properly weighted LATE
+        \item Basically every (structural) demand estimation paper does 2SLS with a covariates that enter linearly and an instrument for price
+        \item What, then, are these demand models actually recovering when they instrument for price?
+        \begin{itemize}
+            \item Is this not a problem if identification of price coefficient does not depend on inclusion of other coefficients?
+        \end{itemize}
+    \end{itemize}
+\end{frame}
+
+\end{document}

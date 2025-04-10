@@ -1,0 +1,326 @@
+\documentclass[10pt, xcolor=dvipsnames]{beamer}
+
+\usetheme{metropolis}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{ragged2e}
+\usepackage{bbding}
+%\usepackage{enumitem}
+\usepackage{mathtools}
+\usepackage{indentfirst}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{mathtools}
+\usepackage{preview}
+\usepackage{xcolor}
+\usepackage{color}
+\usepackage{listings}
+\usepackage{float}
+\usepackage[caption = false]{subfig}
+\usepackage{pdfpages}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{makecell}
+\usepackage{bm}
+\usepackage{caption}
+\usepackage{cancel}
+\usepackage{anyfontsize}
+\usepackage{etoolbox}
+\usepackage{mathtools}
+
+\usepackage[flushleft]{threeparttable}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{adjustbox}
+\usepackage{appendixnumberbeamer}
+\usepackage{pifont}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[percent]{overpic}
+
+%\usepackage{biblatex}
+\usepackage[backend=biber,
+style=authoryear,
+citestyle=authoryear]{biblatex} 
+\addbibresource{latex/bibliography.bib}
+
+% \setbeamercolor{titlelike}{parent=structure}
+% \definecolor{UBCblue}{rgb}{0.04706, 0.13725, 0.32}
+% \colorlet{UBCblue2}{UBCblue!70!white}
+% \usecolortheme[named=UBCblue]{structure}
+
+% \makeatletter
+% \setbeamertemplate{footline}
+% {
+%   \leavevmode%
+%   \hbox{%
+%   \begin{beamercolorbox}[wd=.4\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}%
+%     \usebeamerfont{author in head/foot} \insertshortauthor %\hspace*{1em}(\insertshortinstitute)
+%   \end{beamercolorbox}%
+%   \begin{beamercolorbox}[wd=.5\paperwidth,ht=2.25ex,dp=1ex,center]{title in head/foot}%
+%     \usebeamerfont{title in head/foot} \insertshorttitle
+%   \end{beamercolorbox}%
+%   \begin{beamercolorbox}[wd=.1\paperwidth,ht=2.25ex,dp=1ex,center]{date in head/foot}%
+%     \usebeamerfont{date in head/foot}
+%     \insertframenumber{} / \inserttotalframenumber\hspace*{2ex} 
+%   \end{beamercolorbox}}%
+%   \vskip0pt%
+% }
+% \makeatother
+
+% \renewcommand{\arraystretch}{1.2}
+% \renewcommand{\raggedright}{\leftskip=0pt \rightskip=0pt plus 0cm}
+% \newcolumntype{C}[1]{>{\centering\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
+
+% \hypersetup{
+%     colorlinks=true,
+%     linkcolor=UBCblue,
+%     citecolor=UBCblue,
+%     filecolor=magenta,      
+%     urlcolor=blue,
+%     allcolors=.
+% }
+% \setbeamercolor{button}{bg=UBCblue2,fg=white}
+% \newcommand\fnote[1]{\captionsetup{font=tiny}\caption*{#1}}
+% \newcommand\fnotev[1]{\captionsetup{font=scriptsize}\caption*{#1}}
+% \setbeamertemplate{caption}[numbered]
+
+
+% %\justifying
+% \urlstyle{same}
+%\usefonttheme{serif}
+
+%------------------------
+%------------------------
+
+\date{}
+
+%------------------------
+%------------------------
+%----------------------------------------------------------------------------------------
+%	TITLE PAGE
+%----------------------------------------------------------------------------------------------------------------
+%------------------------
+
+\title[Joe Fish Prospectus]{How Should We Think About Low Income Rental Markets} % The short title appears at the bottom of every slide, the full title is only on the title page
+\author[Joe Fish]{Joe Fish}
+
+
+\begin{document}
+
+\begin{frame}
+\titlepage % Print the title page as the first slide
+\end{frame}
+
+\begin{frame}{Dissertation Chapters}
+    \begin{enumerate}
+        \item The Economics of Low-Income Landlords (job market paper)
+        \item Landlord Responses to Changes in Tenant Protections
+        \item Are Large Investors A Source of Declining Rental Affordability: Evidence from Boston, MA and Houston, TX (field paper)
+    \end{enumerate}
+    
+\end{frame}
+
+\begin{frame}{Recap of Field Paper}
+    
+    
+\end{frame}
+
+\begin{frame}{Motivation}
+    \begin{enumerate}
+        \item About 80\% of low income renters both live in private market units \parencite{jchs_2024, nhpd2024profiles}
+        \pause
+        \item Low income landlords are both more punitive (lower threshold to evict) and more profitable \parencite{Desmond_2019, Eisfeldt_2015,Damen_2025}
+        \begin{itemize}
+            \item Suggests room to regulate the worst landlords
+        \end{itemize}
+        \pause
+        \item At the same time, given reliance on private market and lack of funds for subsidized housing, optimal regulation has to be careful about inducing landlord exit
+    \end{enumerate}
+
+\end{frame}
+
+\begin{frame}{Research questions}
+
+\begin{enumerate}
+    \item \textbf{What rationalizes high prices in low income rental markets?}
+    \pause
+    \item What do the exit decisions of low income landlords look like? Specifically, who are the \textbf{marginal} vs \textbf{inframarginal} landlords
+    \pause
+    \item Given knowledge of landlord markups and exit decisions, what's the best way to regulate the low income rental market?
+\end{enumerate}
+
+\end{frame}
+
+\begin{frame}{This Presentation}
+    \begin{enumerate}
+        \item Present stylized facts about the Philadelphia Rental Market
+        \begin{itemize}
+            \item high prices consistent with prior literature
+            \item evidence of market segmentation
+        \end{itemize}
+         \pause
+        \item Very preliminary model to rationalize surprisingly high prices for low income units
+        \pause
+        \begin{itemize}
+            \item Key intuition: Rental market looks more like the labor market than a generic product market $\rightarrow$ search frictions are going to be a large source of market power
+        \end{itemize}
+    \end{enumerate}
+    
+\end{frame}
+
+\begin{frame}{Contributions}
+
+\begin{itemize}
+    \item One of the first datasets to have a comprehensive and representative unit-level rent panel of a major American rental market
+    \item 
+    \item First paper to provide landlord exit thresholds 
+\end{itemize}
+    
+\end{frame}
+
+\begin{frame}{Literature on Evictions and Low-Income Landlords}
+    \textbf{Prices and Profits}
+        \begin{itemize}
+                \item Low Income landlords have \textbf{higher} profit margins than any other kind of landlord \parencite{Desmond_2019, Damen_2025, Eisfeldt_2015}
+                \item Rent Prices are often as high as they are in much higher quality neighborhoods; maintenance is much lower 
+        \end{itemize}
+    \pause 
+    \textbf{Landlord Business Models}
+    \begin{itemize}
+        \item ~9\% of rent goes unpaid (although it's unclear what happens to security deposits) \parencite{collinson2024eviction}
+        \item Landlords allow about two months of back rent before filing to evict (\cite{collinson2024eviction} and Author's calculations)
+        \begin{itemize}
+            \item Intuition for why landlords wait: A large fraction of tenants default and then repay, so it's optimal for landlords to learn about tenant's probability of repayment
+        \end{itemize}
+    \end{itemize}
+    
+\end{frame}
+
+\begin{frame}{Literature On Landlord Market Power}
+TBD
+    
+\end{frame}
+
+
+\section{Data}
+
+\begin{frame}{Data and Institutional Setting}
+\textbf{Philadelphia}
+    \begin{itemize}
+        \item Universe of Eviction Records from 2006-2019
+        \begin{itemize}
+            \item Contain \textbf{contract rents} as well case information (address, amount owed, plaintiff / defendant name, etc.)
+            \item Cases are filtered to non-commercial and non-housing authority
+        \end{itemize}
+        \item Rental listing data from Altos (2011-2019)
+        \item Rental Registry from 2016-2019 (covers about 90\% of rental units in Philadelphia)
+    \end{itemize}
+    \pause
+    Why this is important:\\
+    \begin{itemize}
+        \item This will be one of the few papers to study the low income rental market because data are so sparse, otherwise 
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Distribution of Rent Prices by Data Source}
+    
+\end{frame}
+
+
+
+
+\section{Stylized Facts}
+
+
+% \begin{frame}{Eviction in Low Income Rental Markets}
+% \textbf{Eviction}
+%     \begin{itemize}
+%         \item Eviction is common: (~8-25 evictions / 100 renter households / year)
+%         \item ~9\% of rent goes unpaid
+%         \item Landlords allow about two months of back rent before filing to evict
+%         \begin{itemize}
+%             \item Intuition is a large fraction of tenants default and then repay; landlords learn about tenant's probability of repayment
+%         \end{itemize}
+%         \item Landlords anecdotally say they collect \$.10 for every \$1 in money judgment 
+%         \item Most low income tenants rent from the private market
+%         \begin{itemize}
+%             \item ~20 million severely rent burdened households and about ~5 million subsidized housing units
+%         \end{itemize}
+%     \end{itemize}
+%     \pause
+    
+% \end{frame}
+
+\begin{frame}{Prices in Low Income Rental Markets}
+\textbf{Hedonic Regressions}
+    \begin{itemize}
+    \item Intuitively, we should expect high filing rates (average number of evictions per unit per year) to be negatively correlated with rents
+    \begin{itemize}
+        \item High eviction rates may signal unobserved quality
+        \item High eviction rates may signal lower threshold to evict
+    \end{itemize}
+    \pause
+        \item Unconditionally, eviction rates don't correlate with prices after a ~20\% filing rate
+        \pause
+        \item After controlling for property and neighborhood characteristics, units with \textbf{higher} eviction rates charge \textbf{higher} rents 
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Bin Scatter Eviction Rates vs Rents}
+    
+\end{frame}
+
+\begin{frame}{Hedonic Regressions of Eviction Rates}
+    \begin{center}
+        \include{tables/philly-summary-rent}
+    \end{center}
+\end{frame}
+
+\begin{frame}{Explanations for High Prices}
+    \begin{itemize}
+        \item High prices reflect high default risk
+        \begin{itemize}
+            \item Definitely true, but can't rationalize higher \textbf{profits} shown in related literature
+        \end{itemize}
+    \end{itemize}
+    
+\end{frame}
+
+\begin{frame}{Market Segmentation in Low Income Rental Markets}
+    
+\end{frame}
+
+% \begin{frame}{Share Regressions}
+    
+% \end{frame}
+
+
+\begin{frame}{Rationalizing High Prices}
+    \begin{itemize}
+        \item Default Premia can explain higher prices but not higher profits
+        \item Market Segmentation and lack of entry can explain higher prices but not price heterogeneity
+        \item Market power can explain high prices but empirical estimates of changes in vacancies (quantity decreases) can't rationalize changes in prices
+    \end{itemize}
+
+\end{frame}
+
+\begin{frame}{Models of Landlord Market power}
+
+    
+\end{frame}
+
+\begin{frame}{Search Model}
+    Intuition: In world where one landlord owned all properties in a market, 
+\end{frame}
+
+
+
+
+
+
+
+
+
+\end{document}
