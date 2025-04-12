@@ -4,7 +4,9 @@ library(sf)
 library(tidycensus)
 library(fixest)
 
-philly_lic = fread("/Users/joefish/Desktop/data/philly-evict/business_licenses_clean.csv")
+source('helper-functions.R')
+
+gephilly_lic = fread("/Users/joefish/Desktop/data/philly-evict/business_licenses_clean.csv")
 philly_evict = fread("/Users/joefish/Desktop/data/philly-evict/evict_address_cleaned.csv")
 philly_parcels = fread("/Users/joefish/Desktop/data/philly-evict/parcel_address_cleaned.csv")
 philly_altos = fread("~/Desktop/data/philly-evict/altos_year_bedrooms_philly.csv")
@@ -287,33 +289,104 @@ share_df[,num_units_bins := case_when(
   num_units > 50 ~ "51+",
  TRUE ~ NA_character_
 )]
-share_df[,num_units_owner := sum(num_units), by = .(year,pm.zip,num_units_bins, owner_mailing)]
-share_df[,num_units_zip := sum(num_units), by = .(year,pm.zip,num_units_bins)]
-share_df[,share_units_zip := num_units_owner/num_units_zip]
 share_df[,filing_rate := replace_na(filing_rate,0)]
-share_df[,num_units_evict := sum(num_units[ filing_rate > 0.2 ],na.rm=T), by = .(pm.zip,num_units_bins,year)]
-share_df[,num_units_evict_owner :=  sum(num_units[filing_rate > 0.2],na.rm=T), by = .(year,pm.zip,num_units_bins, owner_mailing)]
-share_df[,share_units_evict := fifelse(filing_rate > 0.2 , num_units_evict_owner / num_units_evict, 0) ]
+share_df[,num_units_owner := sum(num_units), by = .(year,pm.zip, owner_mailing)]
+share_df[,num_units_zip := sum(num_units), by = .(year,pm.zip)]
+share_df[,share_units_zip := num_units_owner/num_units_zip]
 
-share_df[,hhi := sum(share_units_zip^2),
+share_df[,num_units_evict := sum(num_units[ filing_rate > 0.15 ],na.rm=T), by = .(pm.zip,year)]
+share_df[,num_units_evict_owner :=  sum(num_units[filing_rate > 0.15],na.rm=T), by = .(year,pm.zip, owner_mailing)]
+share_df[,share_units_evict := fifelse(filing_rate > 0.15 , num_units_evict_owner / num_units_evict, 0) ]
+
+share_df[,num_units_evict_unit_bins := sum(num_units[filing_rate > 0.15],na.rm=T), by = .(year,pm.zip, num_units_bins)]
+share_df[,num_units_evict_owner_bins := sum(num_units[filing_rate > 0.15],na.rm=T), by = .(year,pm.zip, owner_mailing, num_units_bins)]
+share_df[,share_units_evict_bins := fifelse(filing_rate > 0.15 , num_units_evict_owner_bins / num_units_evict_unit_bins, 0) ]
+
+share_df[,num_units_unit_bins := sum(num_units), by = .(year,pm.zip, num_units_bins)]
+share_df[,num_units_owner_bins := sum(num_units), by = .(year,pm.zip, owner_mailing, num_units_bins)]
+share_df[,share_units_bins := num_units_owner_bins/num_units_unit_bins]
+
+hhi_df = unique(share_df, by = c('year','pm.zip', 'owner_mailing'))
+hhi_df[,hhi := sum((100*share_units_zip)^2),
+       by = .(year,pm.zip)]
+hhi_df[,hhi_evict := sum((100*share_units_evict)^2),
+         by = .(year,pm.zip)]
+
+hhi_df_units = unique(share_df, by = c('year','pm.zip','owner_mailing', 'num_units_bins'))
+hhi_df_units[,hhi := sum((100*share_units_bins)^2),
+       by = .(year,pm.zip,num_units_bins)]
+
+hhi_df_units[,hhi_evict := sum((100*share_units_evict_bins)^2),
          by = .(year,pm.zip,num_units_bins)]
 
-share_df[,hhi_evict := sum(share_units_evict^2),
-         by = .(year,pm.zip,num_units_bins)]
+share_df = merge(
+  share_df %>% select(-contains('hhi')), unique(hhi_df, by = c('year','pm.zip'))[,.(year,pm.zip,hhi, hhi_evict)],
+  by = c('year','pm.zip')
+)
 
-share_df[share_units_evict >0,spatstat.geom::weighted.quantile(share_units_evict, num_units, na.rm =T, probs = seq(0,1,0.1))]
-share_df[,spatstat.geom::weighted.quantile(share_units_zip, num_units, na.rm =T, probs = seq(0,1,0.1))]
+share_df = merge(
+  share_df, unique(hhi_df_units, by = c('year','pm.zip','owner_mailing'))[,.(year,pm.zip,hhi,owner_mailing, hhi_evict)],
+  by = c('year','pm.zip','owner_mailing'), suffixes = c("","_unit_bins")
+)
+
+
+share_df[hhi_evict>0,weighted.mean(hhi_evict, num_units)]
+share_df[,weighted.mean(hhi, num_units)]
+share_df[,weighted.mean(hhi_unit_bins, num_units)]
+share_df[hhi_evict_unit_bins>0,weighted.mean(hhi_evict_unit_bins, num_units)]
+
+share_df[order(share_units_evict), cum_percent := cumsum(share_units_evict*num_units[filing_rate > 0.15])/sum(share_units_evict[num_units[filing_rate > 0.15]]), by = .(year,pm.zip)]
+
+share_df[share_units_evict >0,spatstat.geom::weighted.quantile(share_units_evict, num_units, na.rm =T, probs = seq(0,1,0.1))] %>%
+  round(3)
+
+share_df[share_units_evict >0,spatstat.geom::weighted.quantile(share_units_evict_bins, num_units, na.rm =T, probs = seq(0,1,0.1))] %>%
+  round(3)
+
+share_df[,spatstat.geom::weighted.quantile(share_units_zip, num_units, na.rm =T, probs = seq(0,1,0.1))] %>%
+  round(3)
 share_df[,spatstat.geom::weighted.quantile(hhi, num_units, na.rm =T, probs = seq(0,1,0.1))]
-share_df[,spatstat.geom::weighted.quantile(hhi_evict, num_units, na.rm =T, probs = seq(0,1,0.1))]
+share_df[,spatstat.geom::weighted.quantile(hhi_evict, num_units, na.rm =T, probs = seq(0,1,0.1))] %>%
+  round(3)
+
+share_df[,spatstat.geom::weighted.quantile(hhi_evict_unit_bins, num_units, na.rm =T, probs = seq(0,1,0.1))] %>%
+  round(3)
+
+market_shares <- ggplot(share_df, aes(weight = num_units)) +
+  stat_ecdf(aes( x= (share_units_zip),
+                 color = 'Zip Code')) +
+  stat_ecdf(data = share_df[share_units_evict > 0], aes( x= (share_units_evict),
+                                                         color = 'Zip Code X High-Evicting Units')) +
+  stat_ecdf(aes( x= (share_units_bins),
+                 color = 'Zip Code X Property Size'))+
+  stat_ecdf(data = share_df[share_units_evict_bins > 0],aes( x= (share_units_evict_bins),
+                                                             color = 'Zip Code X High-Evicting Units X Property Size')) +
+  labs(
+    x = 'Share of Units',
+    y = 'Cumulative Density',
+    title = 'Cumulative Distribution of Market Shares',
+    subtitle = "Weighted by Number of Units",
+    color = 'Market Definition'
+  ) +
+  scale_x_continuous(breaks = seq(0,1,0.1))+
+  scale_y_continuous(breaks = seq(0,1,0.1)) +
+  theme_philly_evict()
+
+ggsave(market_shares, file = "figs/market_share_cdf.png",
+       width = 10, height = 6, dpi = 300)
 
 share_df_agg = share_df[,list(
   share_units_zip = mean(share_units_zip,na.rm=T),
   share_units_evict = mean(share_units_evict,na.rm=T),
+  share_units_bins = mean(share_units_bins,na.rm=T),
+  share_units_evict_bins = mean(share_units_evict_bins,na.rm=T),
   num_units_zip = mean(num_units_zip,na.rm=T),
   num_units_evict = mean(num_units_evict,na.rm=T),
   num_unit_bins = first(num_units_bins),
   hhi = mean(hhi,na.rm=T),
-  hhi_evict = mean(hhi_evict,na.rm=T)
+  hhi_evict = mean(hhi_evict,na.rm=T),
+  hhi_evict_unit_bins = mean(hhi_evict_unit_bins,na.rm=T),
+  hhi_unit_bins = mean(hhi_unit_bins,na.rm=T)
 ), by = .(PID = as.numeric(PID))]
 
 share_df_agg[,.N, by = is.na(share_units_evict)]
@@ -360,6 +433,7 @@ analytic_df[,baths_first_pred := case_when(
 
 analytic_df[,share_units_evict_sq := share_units_evict^2]
 analytic_df[,share_units_zip_sq := share_units_zip^2]
+
 analytic_df[,num_rentals := uniqueN(PID), by = .(GEOID,year)]
 analytic_df[,filing_rate_g25 := fifelse(filing_rate > 0.25,1,0)]
 analytic_df[,filing_rate_g50 := fifelse(filing_rate > 0.5,1,0)]
@@ -547,14 +621,14 @@ m0_share <- fixest::feols(
 summary(m0_share)
 
 m1_share <- fixest::feols(
-  log_med_price ~ share_units_evict +
-    i(num_unit_bins, ref = "1") +
+  log_med_price ~ share_units_evict_bins +share_units_evict_bins^2+
+    #i(num_unit_bins, ref = "1") +
     poly(log(num_units_evict),3)+
     poly(log(num_units),3)+
     poly(number_stories,3) +
     poly(year_built,3)
     #poly(beds_imp_first_pred,2) + poly(baths_first_pred,2)|
-    |year^GEOID +quality_grade_fixed+source+type_heater  +
+    |year^zip_code^num_unit_bins +quality_grade_fixed+source+type_heater  +
     view_type + building_code_description_new_fixed+beds_imp_first_pred+baths_first_pred ,
  , data = analytic_df[ share_units_evict>0 & filing_rate < 1 &!is.na(baths_first_pred) & !is.na(share_units_evict)],
   #weights = ~num_units,
