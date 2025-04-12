@@ -137,6 +137,9 @@ citestyle=authoryear]{biblatex}
         \end{itemize}
         \pause
         \item At the same time, given reliance on private market and lack of funds for subsidized housing, optimal regulation has to be careful about inducing landlord exit
+        \begin{itemize}
+            \item Ex ante unclear what optimal regulation looks like, but optimal regulation requries knowing \textbf{extent of market power} and \textbf{landlord exit options}
+        \end{itemize}
     \end{enumerate}
 
 \end{frame}
@@ -170,15 +173,15 @@ citestyle=authoryear]{biblatex}
     
 \end{frame}
 
-\begin{frame}{Contributions}
+% \begin{frame}{Contributions}
 
-\begin{itemize}
-    \item One of the first datasets to have a comprehensive and representative unit-level rent panel of a major American rental market
-    \item 
-    \item First paper to provide landlord exit thresholds 
-\end{itemize}
+% \begin{itemize}
+%     \item One of the first datasets to have a comprehensive and representative unit-level rent panel of a major American rental market
+%     \item 
+%     \item First paper to provide landlord exit thresholds 
+% \end{itemize}
     
-\end{frame}
+% \end{frame}
 
 \begin{frame}{Literature on Evictions and Low-Income Landlords}
     \textbf{Prices and Profits}
@@ -189,7 +192,7 @@ citestyle=authoryear]{biblatex}
     \pause 
     \textbf{Landlord Business Models}
     \begin{itemize}
-        \item ~9\% of rent goes unpaid (although it's unclear what happens to security deposits) \parencite{collinson2024eviction}
+        \item ~9\% of rent goes unpaid \parencite{collinson2024eviction} and about 9\% of tenants are evicted per year in Philadelphia
         \item Landlords allow about two months of back rent before filing to evict (\cite{collinson2024eviction} and Author's calculations)
         \begin{itemize}
             \item Intuition for why landlords wait: A large fraction of tenants default and then repay, so it's optimal for landlords to learn about tenant's probability of repayment
@@ -198,10 +201,26 @@ citestyle=authoryear]{biblatex}
     
 \end{frame}
 
-\begin{frame}{Literature On Landlord Market Power}
-TBD
-    
+\begin{frame}{Literature on Rental Markets}
+    Rental markets are understudied because of poor data availability\\
+    \vspace{0.25cm}
+    \begin{itemize}
+        \item Recently (last ~5 years) private rental data has made granular studies of the rental market feasible
+        \begin{itemize}
+            \item \cite{calderwang2024algorithmic} on algorithmic pricing, \cite{framoutar2024market} on rental market monopoly power, and \cite{gurun-et-al-2022} on institutal landlords as examples
+        \end{itemize}
+        \item However, these private data overwhelmingly sample from the formal, professionally managed, and higher income sectors
+        \item My paper will be one of the only to have unit level data on the low income rental market
+        \begin{itemize}
+            \item \cite{humphries-2024}, which has lease ledger data for a large low income landlord a notable exception
+        \end{itemize}
+    \end{itemize}
 \end{frame}
+
+% \begin{frame}{Literature On Landlord Market Power}
+% TBD
+    
+% \end{frame}
 
 
 \section{Data}
@@ -215,17 +234,26 @@ TBD
             \item Cases are filtered to non-commercial and non-housing authority
         \end{itemize}
         \item Rental listing data from Altos (2011-2019)
+        \begin{itemize}
+            \item Unit level rental listings with information on amenities, beds, baths, etc. 
+        \end{itemize}
         \item Rental Registry from 2016-2019 (covers about 90\% of rental units in Philadelphia)
     \end{itemize}
     \pause
     Why this is important:\\
     \begin{itemize}
-        \item This will be one of the few papers to study the low income rental market because data are so sparse, otherwise 
+        \item This will be one of the few papers to study the low income rental market because data are so sparse 
     \end{itemize}
 \end{frame}
 
 \begin{frame}{Distribution of Rent Prices by Data Source}
-    
+Commercially available rental datasets (\textcolor{altos}{red}) don't cover the low income rental market\\
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.75\linewidth]{figs/density_rent_prices.png}
+        \caption{Rent Prices by Data Source}
+        \label{fig:rent-dist}
+    \end{figure}
 \end{frame}
 
 
@@ -233,6 +261,13 @@ TBD
 
 \section{Stylized Facts}
 
+\begin{frame}{Stylized Facts}
+    \begin{enumerate}
+        \item Hedonic Regressions suggest prices for low income units are higher than what we'd expect, given observable quality
+        \item Rental Markters are generally not consolidated, however, the low income rental market likely is -- largely due to the limited number of landlords who will rent to tenants with eviction histories and poor credit
+        \item I take 1) and 2) as suggestive evidence of landlord market power
+    \end{enumerate}
+\end{frame}
 
 % \begin{frame}{Eviction in Low Income Rental Markets}
 % \textbf{Eviction}
@@ -269,27 +304,36 @@ TBD
 \end{frame}
 
 \begin{frame}{Bin Scatter Eviction Rates vs Rents}
-    
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.75\linewidth]{figs/philadelphia_filing_rate_rent_scatter.png}
+        \caption{Bin Scatter of Eviction Rates by Data Source}
+        \label{fig:bin-scatter}
+    \end{figure}
 \end{frame}
 
-\begin{frame}{Hedonic Regressions of Eviction Rates}
+\begin{frame}{Hedonic Regressions of Rent Prices}
     \begin{center}
-        \include{tables/philly-summary-rent}
+    \Tiny
+        \include{model_tables}
     \end{center}
 \end{frame}
 
-\begin{frame}{Explanations for High Prices}
-    \begin{itemize}
-        \item High prices reflect high default risk
-        \begin{itemize}
-            \item Definitely true, but can't rationalize higher \textbf{profits} shown in related literature
-        \end{itemize}
-    \end{itemize}
+% \begin{frame}{Explanations for High Prices}
+%     \begin{itemize}
+%         \item High prices reflect high default risk
+%         \begin{itemize}
+%             \item Definitely true, but can't rationalize higher \textbf{profits} shown in related literature
+%         \end{itemize}
+%     \end{itemize}
     
-\end{frame}
+% \end{frame}
 
 \begin{frame}{Market Segmentation in Low Income Rental Markets}
-    
+    \begin{itemize}
+        \item The typical renter rents from a landlord who owns a negligble share of their market's units
+        \item Many \textbf{low income} renters rent from a landlord who owns a substantial share of their market's units
+    \end{itemize}
 \end{frame}
 
 % \begin{frame}{Share Regressions}
@@ -298,24 +342,207 @@ TBD
 
 
 \begin{frame}{Rationalizing High Prices}
+\textbf{Default Premia can explain higher prices but not higher profits}, implies need to model market power
     \begin{itemize}
-        \item Default Premia can explain higher prices but not higher profits
-        \item Market Segmentation and lack of entry can explain higher prices but not price heterogeneity
-        \item Market power can explain high prices but empirical estimates of changes in vacancies (quantity decreases) can't rationalize changes in prices
+    \item Most models of rental market power assume competition is differentiated products bertrand \parencite{watson2024rent, framoutar2024market}
+        \item Landlords flex market power with product differentiation and \textbf{quantity restriction}
+        \item Market structure matters to the extent quantities are reduced
     \end{itemize}
 
 \end{frame}
 
-\begin{frame}{Models of Landlord Market power}
-
+\begin{frame}{Motivating the Search Model}
+The rental market looks more like the labor market than a standard product market:\\
+    \begin{itemize}
+        \item Landlords (firms) post vacancies
+        \item Tenants (workers) search for homes (jobs) and apply
+        \begin{itemize}
+            \item Many vacancies get multiple applicants, so tenants have guarantee that they can rent a particular vacant unit
+        \end{itemize}
+        \item Housing has to be consumed every period or households are forced into outside option (unemployment analogy)
+        \item Prices have a certain degree of bargaining
+    \end{itemize}
     
 \end{frame}
 
-\begin{frame}{Search Model}
-    Intuition: In world where one landlord owned all properties in a market, 
+\begin{frame}{Motivating the Search Model}
+Figure is taken from a recent job market paper: When there is a large merger, the merging firm increases prices by about 8\% on their units.
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.5\linewidth]{figs/fern-jmp-prices.png}
+        \caption{Effect of large merger on prices}
+        \label{fig:fern-prices}
+    \end{figure}
 \end{frame}
 
+\begin{frame}{Motivating the Search Model}
+Consistent with model of quantity restriction, when there is a large merger, the merging firm reduces vacancies by about 0.2-0.4 \textit{units} (about a ~5-10\% reduction in own supply)
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.5\linewidth]{figs/fern-jmp-vacancy.png}
+        \caption{Effect of large merger on vacancies}
+        \label{fig:fern-prices}
+    \end{figure}
+\end{frame}
 
+% \begin{frame}{Models of Landlord Market power}
+
+    
+% \end{frame}
+
+\begin{frame}{Search Model}
+\cite{jarosh-search-2024} labor search model, adapted for the rental market 
+    \begin{itemize}
+        \item Standard search and matching model for labor
+        \item Twist is that firms can remove themselves from tenants' outside option
+        \begin{itemize}
+            \item Intuition is landlords can say "you can rent this unit, but if you refuse my offer, I won't show you any other units"
+            \item This is costless in world where vacancies see multiple applications
+        \end{itemize}
+        \item Model delivers market power without firms having to reduce vacancies
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Model Setup}
+    \begin{itemize}
+    \item Discrete time economy
+    \item unit measure of infinitely lived, homogenous renters
+    \item renters are either housed and pay rent ($r$) to receive flow utility ($b$) or are unhoused / consuming some outside housing good $u$
+    \item Common discount factor $0 < \beta < 1$
+    \item housed renters experience exogenous separation shock at rate $\delta$
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Matching}
+    \begin{itemize}
+    \item For each rental vacancy, firms pay a per period cost of $c_i$
+    \item Urn-ball matching function. Each period, $u$ unemployed workers send one application (balls) towards $v$ vacancies (urns).
+    \begin{itemize}
+        \item Due to coordination frictions, some vacancies see $>1$ applications and some see zero. Applications per vacancy are exponentially distributed
+    \end{itemize}
+    \item If a firm gets multiple applicants, they select one at random to follow up with and bargain over rents
+    \begin{itemize}
+        \item Nash bargaining; $0 \leq \alpha \leq 1$
+        \item In this model, firms aren't allowed to have applicants bid up the rents (unclear why this couldn't be allowed, but I don't do it here)
+        
+    \end{itemize}
+    \item Tenants are assumed to search randomly within a market (equivalent to vacancies appearing randomly); no directed search. This will be important later.
+    \item Home finding rate = $\lambda \equiv \frac{v}{u}(1-e^{-\frac{v}{u}})$
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Tenant Value Functions}
+\begin{itemize}
+    \item U = value of outside option (homelessness; living in non-preferred neighborhood); R = rent paid; b = flow utility of outside option; $\eta$ = flow utility of housing
+    \item $f_i$ indicates firm size (market share)
+    \item \begin{equation}
+        U = b + \left(\lambda \sum_{i} f_i(\eta - R_i) + (1-\lambda)U\right)\label{eq:worker-val}
+    \end{equation}
+    \item Value of outside option is equal to flow utility plus probability of being housed in next period times the value of being housed plus the probability of remaining unhoused times the value of being unhoused
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Threat and Market Power}
+    \begin{itemize}
+    \item In eq \ref{eq:worker-val}, firms compete with themselves because the firm's other vacancies enter the worker's outside option
+    \item What firms can do instead is (partially) remove themselves from the tenants' outside option by committing themselves to not renting to the tenant in the future in the event bargaining breaks down.
+    % \begin{itemize}
+    %     \item This commitment works by firm's choosing applicants randomly but removing the tenant in the event they have multiple applicants.
+    %     \item Importantly, this is costless to the firm, since they have multiple applicants. (If the deviating tenant is sole applicant, they get the unit)
+    % \end{itemize}
+    \item Here, I say that this punishment lasts until the tenant's search is over, so landlords need only be able to recognize a tenant's application for a short period of time
+    % \begin{itemize}
+    %     \item Intuitively, one could imagine a property manager making an take it or leave it offer to a tenant with the threat that if they leave it they can't see other units
+    % \end{itemize}
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Threat and Market Power Cont}
+    \begin{itemize}
+         \item Continuation value in event of breakdown:
+        \item define $\underline{\lambda}$ as the probability of being the sole applicant to a vacancy
+        \begin{equation}\label{eq:match-val}
+            U_i = b + \beta \left(\lambda\sum_{j\neq}f_i(\eta - R_j) + \underline{\lambda} f_i(\eta - R_i) + (1-\lambda(1-f_i) - \underline{\lambda} f_i)U_i\right)
+        \end{equation}
+        \item first term is outside option, second term is probability of finding a vacancy at another landlord's unit, third term is probability of being the only applicant at the landlord's unit, and the fourth term is the probability of remaining unhoused
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Firm Value Function}
+    \begin{itemize}
+    \item Bilateral value of match \begin{equation}
+        J_i = R_i + \beta(1 - \delta)J_i
+    \end{equation} 
+    \item Value is equal to the rent paid + the discounted probability of continuing the match the following period 
+    \begin{itemize}
+        \item Value of landlord i of filling vacancy is rent
+    \end{itemize}
+    \item \begin{equation}\label{eq:job-value}
+        V_i = -c_i + \beta(1  - e^{-\frac{u}{v}})J_i
+    \end{equation}
+    \begin{itemize}
+        \item Value of vacancy is fixed cost plus probability firm has at least one application; in equilibrium trade never breaks down and the match is always formed 
+    \end{itemize}
+    \item \begin{equation}\label{eq:surplus-value}
+        S_i \equiv (\eta - R_i) - U_i + J_i
+    \end{equation}
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Firm Value Function Cont.}
+Joint value of surplus, assuming nash bargaining:
+    \begin{itemize}
+        \item Worker Split: \begin{equation}\label{eq:nash-worker}
+            aS_i = (\eta - R_i) - U_i
+        \end{equation}
+        \item Firm Split: \begin{equation}
+            (1-\alpha)S_i = J_i
+        \end{equation}
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Closing the Model}
+    \begin{itemize}
+    \item Assume free entry
+    \begin{itemize}
+        \item Is this correct for housing?
+        \item Is this necessary? Can just close by saying no entry? Some landlords are just lucky?
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Concentration Index}
+    \begin{itemize}
+    \item Let 
+\[
+f^k \equiv \sum_i f_i^k
+\]
+such that 
+\[
+f^1 = 1
+\quad \text{and} \quad 
+f^2 \text{ is the HHI index for rental in our rental market,}
+\]
+with 
+\[
+0 \leq f^2 \leq 1.
+\]
+The following is the relevant concentration index in our environment.
+
+        \item Let \begin{equation}
+            \tau \equiv \alpha \frac{\beta(\lambda - \lambda)}{1 - \beta(1 - \lambda)} \in (0, \alpha).
+        \end{equation}
+        \item Define concentration as
+            \begin{equation}
+                \mathcal{C} \equiv \frac{\sum_{k=2}^{\infty} \tau^{k-2} f^k}{1 + \tau \sum_{k=2}^{\infty} \tau^{k-2} f^k}.
+            \end{equation}
+
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Data (Lol)}
+    
+\end{frame}
 
 
 
