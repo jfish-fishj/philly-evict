@@ -283,7 +283,7 @@ share_df = unique(philly_rentals_long[year <= 2019 & !is.na(PID)], by =c("PID","
 share_df[is.na(owner_mailing),owner_mailing := sample(1:sum(is.na(owner_mailing)), replace = F)]
 share_df[,num_units := (numberofunits)]
 share_df[,num_units_bins := case_when(
-  num_units == 5 ~ "1",
+  num_units == 1 ~ "1",
   num_units <= 5 ~ "2-5",
   num_units <= 50 ~ "6-60",
   num_units > 50 ~ "51+",
@@ -456,11 +456,12 @@ m1 <- fixest::feols(
   log_med_price ~ filing_rate   +poly((num_units),3)
   + poly(year_built,3)+poly(number_stories,3)
    #+ poly(beds_imp_first_pred,3) + poly(baths_first_pred,3)
-  |GEOID^year+quality_grade_fixed+source+
-    building_code_description_new_fixed+beds_imp_first_pred+baths_first_pred+
-    general_construction ,
-  data = analytic_df[source == "evict"& filing_rate < 1 &!is.na(baths_first_pred) ],
-  #weights = ~num_units,
+  |GEOID^year+quality_grade_fixed+
+    building_code_description_new_fixed+
+    beds_imp_first_pred+baths_first_pred
+    #general_construction ,
+ , data = analytic_df[source == "evict"& filing_rate < 2 &!is.na(baths_first_pred) ],
+  #weights = ~(num_units),
   cluster = ~PID,
   combine.quick = F
 )
@@ -496,10 +497,10 @@ m3 = fixest::feols(
 )
 
 m4 = fixest::feols(
-  log_med_price ~ filing_rate  + poly(num_units,2) + poly(year_built,2)+poly(number_stories,2) +
+  log_med_price ~ filing_rate  + poly(log(num_units),3) + poly(year_built,3)+poly(number_stories,3) +
     poly(beds_imp_first_pred,2) + poly(baths_first_pred,2)|
-    GEOID^year+type_heater +quality_grade_fixed +
-    view_type + building_code_description_new_fixed+
+    GEOID^year +quality_grade_fixed +
+     building_code_description_new_fixed+
     general_construction ,
   data = analytic_df[filing_rate < 1& !is.na(baths_first_pred)],
   #weights = ~num_units,
@@ -513,7 +514,7 @@ m5 = fixest::feols(
     GEOID^year+type_heater +quality_grade_fixed +
     view_type + building_code_description_new_fixed+
     general_construction ,
-  data = analytic_df[filing_rate < 0.75& !is.na(baths_first_pred)],
+  data = analytic_df[filing_rate>0 & filing_rate < 1& !is.na(baths_first_pred)],
   #weights = ~num_units,
   cluster = ~PID,
   combine.quick = F
@@ -622,14 +623,13 @@ summary(m0_share)
 
 m1_share <- fixest::feols(
   log_med_price ~ share_units_evict_bins +share_units_evict_bins^2+
-    #i(num_unit_bins, ref = "1") +
+    i(num_unit_bins, ref = "1") +
     poly(log(num_units_evict),3)+
     poly(log(num_units),3)+
     poly(number_stories,3) +
     poly(year_built,3)
     #poly(beds_imp_first_pred,2) + poly(baths_first_pred,2)|
-    |year^zip_code^num_unit_bins +quality_grade_fixed+source+type_heater  +
-    view_type + building_code_description_new_fixed+beds_imp_first_pred+baths_first_pred ,
+    |year^CT_ID_10 +quality_grade_fixed+ building_code_description_new_fixed+beds_imp_first_pred+baths_first_pred ,
  , data = analytic_df[ share_units_evict>0 & filing_rate < 1 &!is.na(baths_first_pred) & !is.na(share_units_evict)],
   #weights = ~num_units,
   cluster = ~PID,

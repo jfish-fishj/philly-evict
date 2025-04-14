@@ -7,10 +7,8 @@
       Model:                       & (1)             & (2)\\  
       \midrule
       \emph{Variables}\\
-      Filing Rate                  & -0.9082$^{***}$ & 0.0122$^{**}$\\   
-                                   & (0.0888)        & (0.0054)\\   
-      Polynomial Imputed Beds      & No              & Yes\\  
-      Polynomial Imputed Baths     & No              & Yes\\  
+      Filing Rate                  & -0.9082$^{***}$ & 0.0110$^{**}$\\   
+                                   & (0.0888)        & (0.0048)\\   
       Polynomial Year Built        & No              & Yes\\  
       Polynomial Number of Stories & No              & Yes\\  
       Polynomial Number of Units   & No              & Yes\\  
@@ -18,15 +16,14 @@
       \emph{Fixed-effects}\\
       Year                         & Yes             & \\  
       Census Block Group-Year      &                 & Yes\\  
-      Heater Type                  &                 & Yes\\  
       Quality Grade                &                 & Yes\\  
-      View Type                    &                 & Yes\\  
       Building Code                &                 & Yes\\  
-      Construction Type            &                 & Yes\\  
+      Beds (Imputed)               &                 & Yes\\  
+      Baths (Imputed)              &                 & Yes\\  
       \midrule
       \emph{Fit statistics}\\
-      Observations                 & 55,848          & 54,315\\  
-      R$^2$                        & 0.25091         & 0.84653\\  
+      Observations                 & 55,848          & 55,848\\  
+      R$^2$                        & 0.25091         & 0.84176\\  
       \midrule \midrule
       \multicolumn{3}{l}{\emph{Clustered (Parcel ID) standard-errors in parentheses}}\\
       \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\

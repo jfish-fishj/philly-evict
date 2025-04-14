@@ -7,11 +7,11 @@
       Model:                                & (1)             & (2)           & (3)             & (4)             & (5)\\  
       \midrule
       \emph{Variables}\\
-      Filing Rate                           & -0.9082$^{***}$ & 0.0122$^{**}$ & -0.8284$^{***}$ & -0.0502$^{***}$ & -0.0661$^{***}$\\   
-                                            & (0.0888)        & (0.0054)      & (0.0164)        & (0.0042)        & (0.0065)\\   
-      Filing Rate $\times$ Eviction Rental  &                 &               &                 &                 & 0.0707$^{***}$\\   
+      Filing Rate                           & -0.9082$^{***}$ & 0.0110$^{**}$ & -0.8284$^{***}$ & -0.0505$^{***}$ & -0.0731$^{***}$\\   
+                                            & (0.0888)        & (0.0048)      & (0.0164)        & (0.0042)        & (0.0065)\\   
+      Filing Rate $\times$ Eviction Rental  &                 &               &                 &                 & 0.0583$^{***}$\\   
                                             &                 &               &                 &                 & (0.0070)\\   
-      Eviction Rental                       &                 &               &                 &                 & -0.0576$^{***}$\\   
+      Eviction Rental                       &                 &               &                 &                 & -0.0590$^{***}$\\   
                                             &                 &               &                 &                 & (0.0017)\\   
       Polynomial Imputed Beds               & No              & Yes           & No              & Yes             & Yes\\  
       Polynomial Imputed Baths              & No              & Yes           & No              & Yes             & Yes\\  
@@ -22,15 +22,17 @@
       \emph{Fixed-effects}\\
       Year                                  & Yes             &               & Yes             &                 & \\  
       Census Block Group-Year               &                 & Yes           &                 & Yes             & Yes\\  
-      Heater Type                           &                 & Yes           &                 & Yes             & Yes\\  
       Quality Grade                         &                 & Yes           &                 & Yes             & Yes\\  
-      View Type                             &                 & Yes           &                 & Yes             & Yes\\  
       Building Code                         &                 & Yes           &                 & Yes             & Yes\\  
-      Construction Type                     &                 & Yes           &                 & Yes             & Yes\\  
+      Beds (Imputed)                        &                 & Yes           &                 &                 & \\  
+      Baths (Imputed)                       &                 & Yes           &                 &                 & \\  
+      Heater Type                           &                 &               &                 & Yes             & Yes\\  
+      View Type                             &                 &               &                 & Yes             & Yes\\  
+      Construction Type                     &                 &               &                 & Yes             & Yes\\  
       \midrule
       \emph{Fit statistics}\\
-      Observations                          & 55,848          & 54,315        & 125,020         & 125,020         & 123,115\\  
-      R$^2$                                 & 0.25091         & 0.84653       & 0.26028         & 0.93107         & 0.93296\\  
+      Observations                          & 55,848          & 55,848        & 125,020         & 125,020         & 123,115\\  
+      R$^2$                                 & 0.25091         & 0.84176       & 0.26028         & 0.93065         & 0.93577\\  
       \midrule \midrule
       \multicolumn{6}{l}{\emph{Clustered (Parcel ID) standard-errors in parentheses}}\\
       \multicolumn{6}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
