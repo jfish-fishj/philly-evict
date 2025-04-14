@@ -460,7 +460,7 @@ m1 <- fixest::feols(
     building_code_description_new_fixed+
     beds_imp_first_pred+baths_first_pred
     #general_construction ,
- , data = analytic_df[source == "evict"& filing_rate < 2 &!is.na(baths_first_pred) ],
+ , data = analytic_df[source == "evict"& filing_rate < 1 &!is.na(baths_first_pred) ],
   #weights = ~(num_units),
   cluster = ~PID,
   combine.quick = F
@@ -578,8 +578,8 @@ model_tables_m0_m1 = etable(
   order = "Filing Rate",
   # add lines for extra controls
   extralines = list(
-    "Polynomial Imputed Beds" = c("No", "Yes"),
-    "Polynomial Imputed Baths" = c("No", "Yes"),
+    # "Polynomial Imputed Beds" = c("No", "Yes"),
+    # "Polynomial Imputed Baths" = c("No", "Yes"),
     "Polynomial Year Built" = c("No", "Yes"),
     "Polynomial Number of Stories" = c("No", "Yes"),
     "Polynomial Number of Units" = c("No", "Yes")
@@ -831,6 +831,8 @@ ggplot(pred_df[], aes(x = share_units_evict, y = preds_norm,group = source, colo
 
 ggplot(analytic_df[year %in% c(2018,2019)], aes( x= med_price, group = source, color = source)) +
   geom_density() +
+  geom_density(data=pa_tract[GEOID %in% analytic_df$CT_ID_10] %>% mutate(med_price = gross_rentE, source ="Census Tract Median" ),
+               aes( color = "Census Tract Median"))+
   labs(
     title = "Density of median rents by data source",
     subtitle = "Philadelphia, 2018-2019",
