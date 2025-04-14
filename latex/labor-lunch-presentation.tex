@@ -107,7 +107,7 @@ citestyle=authoryear]{biblatex}
 %----------------------------------------------------------------------------------------------------------------
 %------------------------
 
-\title[Joe Fish Prospectus]{How Should We Think About Low Income Rental Markets} % The short title appears at the bottom of every slide, the full title is only on the title page
+\title[Joe Fish Prospectus]{How Should We Think About Low Income Rental Markets?} % The short title appears at the bottom of every slide, the full title is only on the title page
 \author[Joe Fish]{Joe Fish}
 
 
@@ -124,6 +124,7 @@ citestyle=authoryear]{biblatex}
         \item About 80\% of low income renters live in private market units \parencite{jchs_2024, nhpd2024profiles}
         \pause
         \item Low income landlords are both more punitive (lower threshold to evict) and more profitable \parencite{Desmond_2019, Eisfeldt_2015,Damen_2025}
+        \item Evictions have large personal and social cost \parencite{desmond-evicted,humphries2025, collison-et-al-2023}
         \begin{itemize}
             \item Suggests room to regulate the worst landlords
         \end{itemize}
@@ -261,6 +262,8 @@ Commercially available rental datasets (\textcolor{red}{altos}) don't cover the 
         \item Hedonic Regressions suggest prices for high evicting rental units are higher than what we'd expect, given observable quality
         \item Rental Markters are generally not consolidated, however, the low income rental market likely is -- largely due to the limited number of landlords who will rent to tenants with eviction histories and poor credit
         \item I take 1) and 2) as suggestive evidence of landlord market power
+        \pause
+        \item Author's Note: If people have more compelling ways to show prices in low income areas / for high evicting units are "too high", please let me know!
     \end{enumerate}
 \end{frame}
 
@@ -330,7 +333,7 @@ Commercially available rental datasets (\textcolor{red}{altos}) don't cover the 
         \pause
         \item In the future, I'd like to use address history data to empirically document substitution patterns for renters with eviction histories
         \pause
-        \item Until then, I segment markets based on zip code and property type, following \parencite{framoutar2024market, calderwang2024algorithmic} and by whether the unit had an above 20\% average filing rate
+        \item Until then, I segment markets based on zip code and property type, following \parencite{framoutar2024market, calderwang2024algorithmic} and by whether the unit had an above 15\% average filing rate
         \pause
         \item I'll show that, if you think because of tenant screening, low income renters substitute largely between high evicting properties, markets can be fairly consolidated
     \end{itemize}
@@ -384,6 +387,9 @@ The rental market looks more like the labor market than a standard product marke
     \item The paper would be much stronger if I had a slide showing exactly what researchers would get wrong if they didn't put search frictions and bargaining into their models.
     \item Currently, the closest I have are some other papers' reduced form estimations of the effects of mergers, which can't easily be rationalized by post-merger quantity restriction
     \item Lastly, I love the intuition and economics behind the search model, but I think the paper would be stronger if the model could be blended with more traditional demand estimation
+    \begin{itemize}
+        \item If people have thoughts on this, let me know!
+    \end{itemize}
 \end{itemize}
     
 \end{frame}
@@ -430,15 +436,15 @@ Consistent with model of quantity restriction, when there is a large merger, the
     \begin{itemize}
     \item Discrete time economy
     \item Unit measure of infinitely lived, homogenous renters
-    \item Renters are either housed and pay rent ($r$) to receive flow utility (\textbf{$\eta$}) or are unhoused / consuming some outside housing good \textbf{$u$} and searching while receiving flow utility \textbf{$b$}
-    \item Common discount factor \textbf{$0 < \beta < 1$}
-    \item Housed / non-searching renters experience exogenous separation shock at rate \textbf{$\delta$}
+    \item Renters are either housed and pay rent ($r$) to receive flow utility (\boldsymbol{$\eta$}) or are unhoused / consuming some outside housing good \textbf{$u$} and searching while receiving flow utility \textbf{$b$}
+    \item Common discount factor \boldsymbol{$0 < \beta < 1$}
+    \item Housed / non-searching renters experience exogenous separation shock at rate \boldsymbol{$\delta$}
 \end{itemize}
 \end{frame}
 
 \begin{frame}{Matching}
     \begin{itemize}
-    \item For each rental vacancy, landlords pay a per period cost of \textbf{$c_i$}
+    \item For each rental vacancy, landlords pay a per period cost of \boldsymbol{$c_i$}
     \item Urn-ball matching function. Each period, \textbf{$u$} unhoused tenants send one application (balls) towards \textbf{$v$} vacancies (urns).
     \begin{itemize}
         \item Due to coordination frictions, some vacancies see $>1$ applications and some see zero. Applications per vacancy are exponentially distributed
@@ -450,14 +456,14 @@ Consistent with model of quantity restriction, when there is a large merger, the
         
     % \end{itemize}
     \item Tenants are assumed to search randomly within a market (equivalent to vacancies appearing randomly); no directed search.
-    \item Home finding rate = \textbf{$\lambda \equiv \frac{v}{u}(1-e^{-\frac{v}{u}})$}
+    \item Home finding rate = \boldsymbol{$\lambda \equiv \frac{v}{u}(1-e^{-\frac{v}{u}})$}
 \end{itemize}
 \end{frame}
 
 \begin{frame}{Tenant Value Functions}
 \begin{itemize}
-    \item \textbf{U} = value of outside option (homelessness; living in non-preferred neighborhood); \textbf{R} = rent paid; \textbf{b} = flow utility of outside option; \textbf{$\eta$} = flow utility of housing
-    \item \textbf{$f_i$} indicates landlord size (market share)
+    \item \textbf{U} = value of outside option (homelessness; living in non-preferred neighborhood); \textbf{R} = rent paid; \textbf{b} = flow utility of outside option; $\boldsymbol{\eta}$ = flow utility of housing
+    \item \boldsymbol{$f_i$} indicates landlord size (market share)
     \item \begin{equation}
         U = b + \beta\left(\lambda \sum_{i} f_i(\eta - R_i) + (1-\lambda)U\right)\label{eq:tenant-val}
     \end{equation}
@@ -483,7 +489,7 @@ Consistent with model of quantity restriction, when there is a large merger, the
 \begin{frame}{Threat and Market Power Cont}
     \begin{itemize}
          \item Continuation value in event of breakdown:
-        \item define \textbf{$\underline{\lambda}$} as the probability of being the sole applicant to a vacancy (in which case landlord will rationally accept applicant, even if punished)
+        \item define \boldsymbol{$\underline{\lambda}$} as the probability of being the sole applicant to a vacancy (in which case landlord will rationally accept applicant, even if punished)
         \begin{equation}\label{eq:match-val}
             U_i = b + \beta \left(\lambda\sum_{j\neq i}f_i(\eta - R_j) + \underline{\lambda} f_i(\eta - R_i) + (1-\lambda(1-f_i) - \underline{\lambda} f_i)U_i\right)
         \end{equation}
