@@ -174,6 +174,7 @@ citestyle=authoryear]{biblatex}
         \item About 80\% of low income renters live in private market units \parencite{jchs_2024, nhpd2024profiles}
         \pause
         \item Low income landlords are both more punitive (lower threshold to evict) and more profitable \parencite{Desmond_2019, Eisfeldt_2015,Damen_2025}
+        \item Evictions have large personal and social cost \parencite{desmond-evicted,humphries2025, collison-et-al-2023}
         \begin{itemize}
             \item Suggests room to regulate the worst landlords
         \end{itemize}
@@ -404,15 +405,15 @@ Commercially available rental datasets (\textcolor{red}{altos}) don't cover the 
 % \end{frame}
 
 
-\begin{frame}{Rationalizing High Prices}
-\textbf{Default Premia can explain higher prices but not higher profits}, implies need to model market power
-    \begin{itemize}
-    \item Most models of rental market power assume competition is differentiated products bertrand \parencite{watson2024rent, framoutar2024market}
-        \item Landlords flex market power with product differentiation and \textbf{quantity restriction}
-        \item Market structure matters to the extent it influences landlords' \textbf{residual demand curves}
-    \end{itemize}
+% \begin{frame}{Rationalizing High Prices}
+% \textbf{Default Premia can explain higher prices but not higher profits}, implies need to model market power
+%     \begin{itemize}
+%     \item Most models of rental market power assume competition is differentiated products bertrand \parencite{watson2024rent, framoutar2024market}
+%         \item Landlords flex market power with product differentiation and \textbf{quantity restriction}
+%         \item Market structure matters to the extent it influences landlords' \textbf{residual demand curves}
+%     \end{itemize}
 
-\end{frame}
+% \end{frame}
 
 \begin{frame}{Motivating the Search Model}
 The rental market looks more like the labor market than a standard product market:\\
@@ -425,6 +426,8 @@ The rental market looks more like the labor market than a standard product marke
         \item Housing has to be consumed every period or households are forced into outside option (unemployment analogy)
         \item Prices have a certain degree of bargaining
     \end{itemize}
+
+    \hyperlink{slide:fern-prices}{\beamergotobutton{Empirics }}
     
 \end{frame}
 
@@ -436,26 +439,6 @@ The rental market looks more like the labor market than a standard product marke
     \item Lastly, I love the intuition and economics behind the search model, but I think the paper would be stronger if the model could be blended with more traditional demand estimation
 \end{itemize}
     
-\end{frame}
-
-\begin{frame}{Motivating the Search Model}
-Figure is taken from a recent job market paper: When there is a large merger, the merging landlord increases prices by about 8\% on their units.
-    \begin{figure}
-        \centering
-        \includegraphics[width=0.5\linewidth]{figs/fern-jmp-prices.png}
-        \caption{Effect of large merger on prices}
-        \label{fig:fern-prices}
-    \end{figure}
-\end{frame}
-
-\begin{frame}{Motivating the Search Model}
-Consistent with model of quantity restriction, when there is a large merger, the merging landlord reduces vacancies by about 0.2-0.4 \textit{units} (about a ~5-10\% reduction in own supply)
-    \begin{figure}
-        \centering
-        \includegraphics[width=0.5\linewidth]{figs/fern-jmp-vacancy.png}
-        \caption{Effect of large merger on vacancies}
-        \label{fig:fern-vacancies}
-    \end{figure}
 \end{frame}
 
 % \begin{frame}{Models of Landlord Market power}
@@ -642,7 +625,28 @@ JNS prove the following relationship between mean rents ($\overline{R}$) and con
 \end{itemize}
 \end{frame}
 
+\section{Appendix}
+\begin{frame}{Motivating the Search Model: Appendix}\label{slide:fern-prices}
+Figure is taken from a recent job market paper: When there is a large merger, the merging landlord increases prices by about 8\% on their units.
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.5\linewidth]{figs/fern-jmp-prices.png}
+        \caption{Effect of large merger on prices}
+        \label{fig:fern-prices}
+    \end{figure}
+    \hyperlink{slide:searchmotivation}{\beamergotobutton{Search }}
+\end{frame}
 
+\begin{frame}{Motivating the Search Model}\label{slide:fern-vacancies}
+Consistent with model of quantity restriction, when there is a large merger, the merging landlord reduces vacancies by about 0.2-0.4 \textit{units} (about a ~5-10\% reduction in own supply)
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.5\linewidth]{figs/fern-jmp-vacancy.png}
+        \caption{Effect of large merger on vacancies}
+        \label{fig:fern-vacancies}
+    \end{figure}
+    \hyperlink{slide:searchmotivation}{\beamergotobutton{Search }}
+\end{frame}
 
 
 
