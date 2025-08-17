@@ -4,9 +4,9 @@ library(sf)
 library(tidycensus)
 library(fixest)
 
-source('helper-functions.R')
+source('r/helper-functions.R')
 
-gephilly_lic = fread("/Users/joefish/Desktop/data/philly-evict/business_licenses_clean.csv")
+philly_lic = fread("/Users/joefish/Desktop/data/philly-evict/business_licenses_clean.csv")
 philly_evict = fread("/Users/joefish/Desktop/data/philly-evict/evict_address_cleaned.csv")
 philly_parcels = fread("/Users/joefish/Desktop/data/philly-evict/parcel_address_cleaned.csv")
 philly_altos = fread("~/Desktop/data/philly-evict/altos_year_bedrooms_philly.csv")
@@ -140,7 +140,7 @@ rent_df = bind_rows(
     select(PID, year, med_price, ymd,num_filings,num_filings_total, source)
 )
 
-rent_df_f = rent_df[year %in% 2006:2019 & med_price > 500 & med_price < 7500]
+rent_df_f = rent_df[year %in% 2006:2022 & med_price > 500 & med_price < 7500]
 
 philly_parcels_first = philly_parcels[,.SD[1], by = "PID"]
 
@@ -159,12 +159,12 @@ philly_rentals_long[,min_units := min(numberofunits), by = .(PID)]
 philly_rentals_long[,max_units := max(numberofunits), by = .(PID)]
 philly_rentals_long[,spread_units := max_units - min_units]
 
-philly_rentals_long_year = philly_rentals_long[year <= 2019,list(num_units = median(numberofunits)),
+philly_rentals_long_year = philly_rentals_long[year <= 2022,list(num_units = median(numberofunits)),
                                                by = .(PID = as.integer(PID))]
 
 philly_parcels_first_sf[,owner := paste(owner_1, owner_2)]
 philly_parcels_first_sf[,owner_mailing := paste(owner, mailing_street)]
-
+philly_parcels_first_sf[,CT_ID_10 := str_sub(GEOID, 1,11)]
 # now merge parcel chars
 rent_df_f_parcels = merge(
   rent_df_f,
@@ -248,12 +248,12 @@ rent_df_f_parcels[,baths_first_fixed := fifelse(
 
 
 
-rent_df_f_parcels[,log_med_price := log(med_price)]
+rent_df_f_parcels[,log_med_rent := log(med_price)]
 analytic_df = (rent_df_f_parcels[
   !is.na(year_built_estimate)
   & !is.na(total_area)
   & !is.na(num_units)
-  & !is.na(log_med_price)
+  & !is.na(log_med_rent)
   & !is.na(num_filings)
   & !is.na(log(num_filings))
   & !is.na(log(num_units))
@@ -382,7 +382,7 @@ share_df_agg = share_df[,list(
   share_units_evict_bins = mean(share_units_evict_bins,na.rm=T),
   num_units_zip = mean(num_units_zip,na.rm=T),
   num_units_evict = mean(num_units_evict,na.rm=T),
-  num_unit_bins = first(num_units_bins),
+  num_units_bins = first(num_units_bins),
   hhi = mean(hhi,na.rm=T),
   hhi_evict = mean(hhi_evict,na.rm=T),
   hhi_evict_unit_bins = mean(hhi_evict_unit_bins,na.rm=T),
@@ -440,49 +440,127 @@ analytic_df[,filing_rate_g50 := fifelse(filing_rate > 0.5,1,0)]
 analytic_df[,filing_rate_zero := fifelse(filing_rate == 0,1,0)]
 # idk run some hedonics
 
+# make total vars per parcel all time
+analytic_df[,num_bed_bath_combos := uniqueN(paste(beds_imp_first, baths_first)), by = PID]
+analytic_df[,total_permits_all := sum(total_permits)/num_bed_bath_combos, by = PID]
+analytic_df[,total_violations_all := sum(total_violations)/num_bed_bath_combos, by = PID]
+analytic_df[,total_complaints_all := sum(total_complaints)/num_bed_bath_combos, by = PID]
+analytic_df[,total_investigations_all := sum(total_investigations)/num_bed_bath_combos, by = PID]
+
+# per unit
+analytic_df[,permits_per_unit := total_permits_all/num_units_imp]
+analytic_df[,violations_per_unit := total_violations_all/num_units_imp]
+analytic_df[,severe_violations_per_unit := sum(
+  (unsafe_violation_count+
+        hazardous_violation_count +imminently_dangerous_violation_count
+  )
+)/num_units_imp, by = PID]
+analytic_df[,complaints_per_unit := total_complaints_all/num_units_imp]
+analytic_df[,investigations_per_unit := total_investigations_all/num_units_imp]
+
+# make dummies for any complaints, permits, etc
+analytic_df[,ever_permit := fifelse(total_permits_all > 0, 1, 0)]
+analytic_df[,ever_violations := fifelse(total_violations_all > 0, 1, 0)]
+analytic_df[,ever_complaints := fifelse(total_complaints_all > 0, 1, 0)]
+analytic_df[,ever_investigations := fifelse(total_investigations_all > 0, 1, 0)]
+
+analytic_df[,any_unsafe_hazordous_dangerous := any(unsafe_violation_count > 1 |
+                                                     hazardous_violation_count > 1 | imminently_dangerous_violation_count > 1
+),
+by = PID]
+
+analytic_df[filing_rate<=1,list(weighted.mean(filing_rate,na.rm =T, w= num_units_imp),.N), by = source]
+analytic_df[filing_rate<=1,list(mean(filing_rate,na.rm =T, w= num_units_imp),.N)]
 
 m0 <- fixest::feols(
-  log_med_price ~filing_rate| year,
-  data = analytic_df[ source == "evict"& filing_rate < 1 & !is.na(baths_first_pred) ],
-  weights = ~num_units,
+  log_med_rent ~ filing_rate + permits_per_unit+violations_per_unit|beds_imp_first+ baths_first+ year,
+  data = analytic_df[ filing_rate <= 1 & !is.na(baths_first) & year <= 2019 ],
+  weights = ~num_units_imp,
+  cluster = ~PID
+)
+
+summary(m0)
+
+analytic_df[,g0_filings := ifelse(filing_rate > 0, 1, 0)]
+analytic_df[,list(mean(permits_per_unit,na.rm =T),mean(complaints_per_unit), mean(violations_per_unit),round(mean(filing_rate),3)),
+            by = ntile(filing_rate, 10)][order(ntile)]
+
+fwlplot::fwlplot(
+  log_med_rent ~ filing_rate + permits_per_unit + violations_per_unit | beds_imp_first + baths_first + year,
+  data = analytic_df[ filing_rate <= 1 & !is.na(baths_first) & year <= 2019 ],
+  weights = ~num_units_imp,
   cluster = ~PID
 )
 
 
-summary(m0)
-
-
 m1 <- fixest::feols(
-  log_med_price ~ filing_rate   +poly((num_units),3)
-  + poly(year_built,3)+poly(number_stories,3)
-   #+ poly(beds_imp_first_pred,3) + poly(baths_first_pred,3)
-  |GEOID^year+quality_grade_fixed+
-    building_code_description_new_fixed+
-    beds_imp_first_pred+baths_first_pred
-    #general_construction ,
- , data = analytic_df[source == "evict"& filing_rate < 1 &!is.na(baths_first_pred) ],
-  #weights = ~(num_units),
+  log_med_rent ~  filing_rate*i(source,ref = "evict") #+ filing_rate_sq*i(source,ref = "evict")
+   #+filing_rate_sq #+  ever_voucher*source
+   + num_units_imp
+   + num_units_imp^2
+    + year_built #* ever_permit
+  + year_built^2
+  + permits_per_unit*i(source,ref = "evict")
+  +violations_per_unit*i(source,ref = "evict")
+  # +i(beds_imp_first_fixed, ref = 0)
+  # +i(baths_first_fixed, ref = 1)
+ # + any_unsafe_hazordous_dangerous*num_units_bins
+ # + permits_per_unit
+  #+ total_investigations_per_unit
+  #+ severe_violations_per_unit
+   +poly(number_stories,3)
+  #+num_units_bins
+  |GEOID + year +month +
+    quality_grade_fixed
+    +building_code_description_new_fixed
+ #+ category_code_description
+    #+beds_imp_first+baths_first
+    #+general_construction ,
+ , data = analytic_df[#source == "evict"&
+                        !(str_detect(str_to_upper(owner_1), "PHILA.+A?UTH|HOUS.+AUTH")|
+                            str_detect(str_to_upper(owner_1), "(REDEVELOPMENT|REDEV|REDEVLOPMENT).+AUTH"))
+                       &year <= 2019 # & year >=2006
+                       &  filing_rate <= 1 &!is.na(baths_first) ],
+  weights = ~(num_units_imp),
   cluster = ~PID,
   combine.quick = F
 )
 summary(m1)
-analytic_df[,resids := log_med_price - predict(m1, newdata = analytic_df)]
+coeftable(m1, keep = "filing|voucher")
+analytic_df[,resids := log_med_rent - predict(m1, newdata = analytic_df)]
 #View(analytic_df[order(desc(abs(resids)))][1:100])
 
 quantile(m1$residuals)
 summary(m1)
 
+fixest::feols(
+  log_med_rent ~ filing_rate ^2 *i(source, ref = "evict")+ filing_rate *i(source, ref = "evict")  #+  ever_voucher*source
+  |GEOID + year + month
+  +beds_imp_first+baths_first
+  , data = analytic_df[source == "evict"&num_units_imp <= 500 &
+    !(str_detect(str_to_upper(owner_1), "PHILA.+A?UTH|HOUS.+AUTH")|
+        str_detect(str_to_upper(owner_1), "(REDEVELOPMENT|REDEV|REDEVLOPMENT).+AUTH")) &
+        year <= 2018 & filing_rate <= 1 &!is.na(baths_first) ],
+  weights = ~(num_units_imp),
+  cluster = ~PID,
+  combine.quick = F
+)
 
+analytic_df[,any_imminently_dangerous_violation := ifelse(hazardous_violation_count > 0, 1, 0)]
+fixest::feols(
+  log_med_rent ~ violations_per_unit|GEOID ^ year + baths_first_pred + beds_imp_first_pred,
 
+  data = analytic_df[year %in% 2014:2018 & filing_rate < 1 & !is.na(baths_first_pred)],
+)
 
 
 m2 = fixest::feols(
-  log_med_price ~ filing_rate + filing_rate_sq + poly(num_units,2) + poly(year_built,2)+poly(number_stories,2) +
+  log_med_rent ~ filing_rate + filing_rate_sq + poly(num_units,2) + poly(year_built,2)+poly(number_stories,2) +
     poly(beds_imp_first_pred,2) + poly(baths_first_pred,2)|
     GEOID^year+type_heater +quality_grade_fixed +
     view_type + building_code_description_new_fixed+
     general_construction ,
-  data = analytic_df[source == "evict" & filing_rate < 1 &   !is.na(baths_first_pred)],
+  data = analytic_df[source == "evict" & year <= 2018 & filing_rate < 1 &   !is.na(baths_first_pred)],
   #weights = ~num_units,
   cluster = ~PID,
   combine.quick = F
@@ -490,32 +568,44 @@ m2 = fixest::feols(
 
 # same thing but full sample
 m3 = fixest::feols(
-  log_med_price ~filing_rate| year,
-  data = analytic_df[ filing_rate < 1 & !is.na(baths_first_pred) ],
+  log_med_rent ~filing_rate +ever_voucher| year +source,
+  data = analytic_df[ filing_rate < 1 & year <= 2018 & !is.na(baths_first_pred) ],
   #weights = ~num_units,
   cluster = ~PID
 )
 
 m4 = fixest::feols(
-  log_med_price ~ filing_rate  + poly(log(num_units),3) + poly(year_built,3)+poly(number_stories,3) +
+  log_med_rent ~ filing_rate*source +ever_voucher*source  + poly(log(num_units),3) + poly(year_built,3)+poly(number_stories,3) +
     poly(beds_imp_first_pred,2) + poly(baths_first_pred,2)|
     GEOID^year +quality_grade_fixed +
      building_code_description_new_fixed+
-    general_construction ,
-  data = analytic_df[filing_rate < 1& !is.na(baths_first_pred)],
-  #weights = ~num_units,
+    general_construction +source,
+  data = analytic_df[filing_rate>0 & filing_rate < 1 & year <= 2018& !is.na(baths_first_pred)],
+  weights = ~num_units,
   cluster = ~PID,
   combine.quick = F
 )
 
 m5 = fixest::feols(
-  log_med_price ~ filing_rate*source  +num_unit_bins+ poly(num_units,2) + poly(year_built,2)+poly(number_stories,2) +
+  log_med_rent ~ filing_rate*source  +num_units_bins+ poly(num_units,2) + poly(year_built,2)+poly(number_stories,2) +
     poly(beds_imp_first_pred,2) + poly(baths_first_pred,2)|
     GEOID^year+type_heater +quality_grade_fixed +
     view_type + building_code_description_new_fixed+
     general_construction ,
-  data = analytic_df[filing_rate>0 & filing_rate < 1& !is.na(baths_first_pred)],
+  data = analytic_df[filing_rate>0 & year <= 2018 & filing_rate < 1& !is.na(baths_first_pred)],
   #weights = ~num_units,
+  cluster = ~PID,
+  combine.quick = F
+)
+
+m6 = fixest::feols(
+  log_med_rent ~ filing_rate + ever_voucher  +num_units_bins+ + poly(year_built,2)+#poly(number_stories,2) +
+    poly(beds_imp_first_pred,2) + poly(baths_first_pred,2)|
+    GEOID^year+type_heater +quality_grade_fixed +source+
+    view_type + building_code_description_new_fixed+
+    general_construction ,
+  data = analytic_df[ year <= 2018  & filing_rate < 1& !is.na(baths_first_pred)],
+  weights = ~num_units,
   cluster = ~PID,
   combine.quick = F
 )
@@ -527,7 +617,7 @@ setFixest_dict(
     "source"= "Data Source",
     "sourceevict"= "Eviction Rental",
     "year" = "Year",
-    "log_med_price" = "Log(Price)",
+    "log_med_rent" = "Log(Price)",
     "bed_bath_pid_ID" = "Unit",
     "ATT" = "ATT",
     "num_listings" = "Listings",
@@ -614,7 +704,7 @@ writeLines(model_tables_all_models, "model_tables_all_models.tex")
 
 # now do share regs
 m0_share <- fixest::feols(
-  log_med_price ~ share_units_evict + share_units_evict_sq | year,
+  log_med_rent ~ share_units_evict + share_units_evict_sq | year,
   data = analytic_df[share_units_evict>0 & filing_rate < 1 & !is.na(baths_first_pred) & !is.na(share_units_evict)],
   cluster = ~PID
 )
@@ -622,16 +712,16 @@ m0_share <- fixest::feols(
 summary(m0_share)
 
 m1_share <- fixest::feols(
-  log_med_price ~ share_units_evict_bins +share_units_evict_bins^2+
-    i(num_unit_bins, ref = "1") +
-    poly(log(num_units_evict),3)+
-    poly(log(num_units),3)+
+  log_med_rent ~ share_units_evict_bins+#share_units_evict_bins^2+
+    i(num_units_bins, ref = "1") +
+    #poly(log(num_units_evict),3)+
+    #poly(log(num_units),3)+
     poly(number_stories,3) +
     poly(year_built,3)
     #poly(beds_imp_first_pred,2) + poly(baths_first_pred,2)|
-    |year^CT_ID_10 +quality_grade_fixed+ building_code_description_new_fixed+beds_imp_first_pred+baths_first_pred ,
- , data = analytic_df[ share_units_evict>0 & filing_rate < 1 &!is.na(baths_first_pred) & !is.na(share_units_evict)],
-  #weights = ~num_units,
+    |year+GEOID +quality_grade_fixed+beds_imp_first_pred+baths_first_pred ,
+ , data = analytic_df[  filing_rate < 1 &!is.na(baths_first_pred) & !is.na(share_units_evict)],
+  weights = ~num_units_imp,
   cluster = ~PID,
   combine.quick = F
 )
@@ -639,16 +729,16 @@ m1_share <- fixest::feols(
 summary(m1_share)
 
 m1_share_alt <- fixest::feols(
-  log_med_price ~ share_units_evict +# share_units_zip_sq+
-    i(num_unit_bins, ref = "1") +
+  log_med_rent ~ share_units_evict +# share_units_zip_sq+
+    i(num_units_bins, ref = "1") +
     log(num_units_zip)+
-    poly(log(num_units),2)+
+    #poly(log(num_units),2)+
     poly(number_stories,2) +
     poly(year_built,2)+
     poly(beds_imp_first_pred,2) + poly(baths_first_pred,2)|
-    GEOID^year+source +quality_grade_fixed+source ,
+    GEOID+year+source +quality_grade_fixed+source ,
   , data = analytic_df[  filing_rate < 1 &!is.na(baths_first_pred) & !is.na(share_units_evict)],
-  #weights = ~num_units,
+  weights = ~num_units,
   cluster = ~PID,
   combine.quick = F
 )
@@ -657,15 +747,15 @@ summary(m1_share_alt)
 
 
 m3_share = fixest::feols(
-  log_med_price ~ share_units_zip +share_units_zip_sq| year,
+  log_med_rent ~ share_units_zip +share_units_zip_sq| year,
   data = analytic_df[ filing_rate < 1 & !is.na(baths_first_pred) ],
   #weights = ~num_units,
   cluster = ~PID
 )
 
 m4_share = fixest::feols(
-  log_med_price ~ share_units_zip +share_units_zip_sq  + poly(year_built,2)+poly(number_stories,2) +
-    poly(beds_imp_first_pred,2) + poly(baths_first_pred,2) +num_unit_bins|
+  log_med_rent ~ share_units_zip +share_units_zip_sq  + poly(year_built,2)+poly(number_stories,2) +
+    poly(beds_imp_first_pred,2) + poly(baths_first_pred,2) +num_units_bins|
     GEOID^year+type_heater +quality_grade_fixed +
     view_type + source+
     general_construction ,
@@ -674,6 +764,10 @@ m4_share = fixest::feols(
   cluster = ~PID,
   combine.quick = F
 )
+
+fixest::feols(violations_per_unit ~ filing_rate,
+              # offset = ~num_units_imp,
+               data = analytic_df[year == 2018])
 
 
 # same thing but residualized plots
@@ -687,14 +781,14 @@ year_resid_filing_reg<- fixest::feols(
 )
 
 year_resid_price_reg<- fixest::feols(
-  log_med_price ~ 1|year,
+  log_med_rent ~ 1|year,
   data = analytic_df[ filing_rate < 1],
   # weights = ~num_units,
   cluster = ~PID
 )
 
 analytic_df[,filings_year_resid := filing_rate - predict(year_resid_filing_reg, newdata = analytic_df) ]
-analytic_df[,prices_year_resid := log_med_price - predict(year_resid_price_reg, newdata = analytic_df) ]
+analytic_df[,prices_year_resid := log_med_rent - predict(year_resid_price_reg, newdata = analytic_df) ]
 
 ggplot(analytic_df[year %in% 2006:2019 & filing_rate < 1  ],
        aes(y = prices_year_resid, x = filings_year_resid)) +
@@ -723,7 +817,7 @@ prop_resid_reg<- fixest::feols(
 )
 
 price_resid_reg<- fixest::feols(
-  log_med_price ~ poly(num_units,2) + poly(year_built,2)+poly(number_stories,2) +
+  log_med_rent ~ poly(num_units,2) + poly(year_built,2)+poly(number_stories,2) +
     poly(beds_imp_first_pred,2) + poly(baths_first_pred,2)|
     GEOID^year+type_heater +quality_grade_fixed +
     view_type + building_code_description_new_fixed+
@@ -735,7 +829,7 @@ price_resid_reg<- fixest::feols(
 )
 
 analytic_df[,filings_prop_resid := filing_rate - predict(prop_resid_reg, newdata = analytic_df) ]
-analytic_df[,prices_prop_resid := log_med_price - predict(price_resid_reg, newdata = analytic_df) ]
+analytic_df[,prices_prop_resid := log_med_rent - predict(price_resid_reg, newdata = analytic_df) ]
 
 ggplot(analytic_df[year %in% 2006:2019 & filing_rate < 1 & abs(prices_prop_resid)<1   ],
        aes(y = prices_prop_resid, x = filings_prop_resid)) +
@@ -752,14 +846,22 @@ ggplot(analytic_df[year %in% 2006:2019 & filing_rate < 1 & abs(prices_prop_resid
 
 
 fwlplot::fwlplot(
-  log_med_price ~
-    filing_rate_sq+filing_rate +source + log(num_units) + poly(year_built,2) |
-    GEOID+year +quality_grade_fixed+building_code_description_new_fixed + zoning ,
-  data = analytic_df[filing_rate<=2 & num_filings_total_source < 1000 ]
+  log_med_rent ~
+    +filing_rate |
+    GEOID+year  ,
+  data = analytic_df[filing_rate<=2 & source == "evict" ]
 )
 
+feols(
+  log_med_rent ~
+    +filing_rate |
+    GEOID^year  ,
+  data = analytic_df[filing_rate<=2 & source == "evict" ]
+)
+
+
 fwlplot::fwlplot(
-  log_med_price ~
+  log_med_rent ~
     filing_rate|year
   ,data = analytic_df[filing_rate<=2 & num_filings_total_source < 1000 ]
 )
@@ -875,7 +977,7 @@ ggplot(analytic_df[year %in% c(2018,2019)], aes( x= med_price, group = source, c
 
 
 fwlplot::fwl_plot(
-  log_med_price ~ share_units_evict + share_units_evict_sq |
+  log_med_rent ~ share_units_evict + share_units_evict_sq |
     year^GEOID+source  + quality_grade_fixed
   , data = analytic_df[
     num_units > 20 &

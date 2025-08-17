@@ -1,0 +1,579 @@
+# %% [markdown]
+# Rental Market Model in Julia: Fixed Point Algorithm with Mixed Strategies
+
+# %%
+using LinearAlgebra, Optim, DataFrames
+using CSV, DataFrames
+using JuMP
+using Ipopt
+
+
+# %%
+# === Model Parameters ===
+valuation = 1600.0
+s = 0.8       # Share of high-type tenants
+n = 1       # Tenant/landlord ratio
+h = 0.9          # share of high-type landlords
+fc_h = 0.0      # Fixed cost for high-type landlords
+fc_l = 0.0       # Fixed cost for low-type landlords
+rH_grid = 0.0:0.2:valuation  # Rent grid for high-type landlords
+rL_grid = 0.0:0.2:valuation  #
+# Initialize low-type fixed cost (to be updated dynamically)
+fc_l_init = 0.0
+
+# %%
+# Matching function
+function g(x)
+    return x > 1e-8 ? (1 - exp(-x)) / x : 1.0
+end
+
+# %%
+# Matching probabilities by type
+function compute_q(x)
+    xHH, xHL, xLH, xLL = x
+    qHH = g(xHH)
+    qHL = g(xHL) * (1 - exp(-xHH))
+    qLH = g(xLH + xLL)
+    qLL = g(xLH + xLL)
+    return qHH, qHL, qLH, qLL
+end
+
+# %%
+# Tenant utility expectations
+function tenant_expected_utility(x, r_H, r_L)
+    qHH, qHL, qLH, qLL = compute_q(x)
+    EU_HH = qHH * (valuation - r_H)
+    EU_HL = qHL * (valuation - r_H)
+    EU_LH = qLH * (valuation - r_L)
+    EU_LL = qLL * (valuation - r_L)
+    return EU_HH, EU_HL, EU_LH, EU_LL
+end
+
+# %%
+
+
+function tenant_best_response(x, r_H, r_L)
+    EU_HH, EU_HL, EU_LH, EU_LL = tenant_expected_utility(x, r_H, r_L)
+    U_h = max(EU_HH, EU_LH)
+    U_l = max(EU_HL, EU_LL)
+    gap = [EU_HH - U_h, EU_HL - U_l, EU_LH - U_h, EU_LL - U_l]
+    return 100 .* gap
+end
+
+function tenant_mass_balance(x, s, n, h)
+    xHH, xHL, xLH, xLL = x
+    eq_high = h * xHH + (1 - h) * xLH - s * n
+    eq_low  = h * xHL + (1 - h) * xLL - (1 - s) * n
+    return 1000 * eq_high, 1000 * eq_low
+end
+
+function inner_solve(r_H, r_L, s, n, h, v)
+    model = Model(Ipopt.Optimizer)
+    register(model, :g, 1, g; autodiff = true)
+    set_optimizer_attribute(model, "max_iter", 6000)
+    set_silent(model)
+
+    @variable(model, 0 <= x[1:4] <= 5, start = 0.5)
+    # Let x[1]=x_HH, x[2]=x_HL, x[3]=x_LH, x[4]=x_LL
+
+    # --- Match probabilities ---
+    @NLexpression(model, q_HH, g(x[1]) )
+    @NLexpression(model, q_HL, g(x[2]) * (1 - exp(-x[1])) )
+    @NLexpression(model, q_LH, g(x[3] + x[4]) )
+    @NLexpression(model, q_LL, g(x[3] + x[4]) )
+
+    # --- Expected utilities ---
+    @NLexpression(model, EU_HH, q_HH * (v - r_H))
+    @NLexpression(model, EU_HL, q_HL * (v - r_H))
+    @NLexpression(model, EU_LH, q_LH * (v - r_L))
+    @NLexpression(model, EU_LL, q_LL * (v - r_L))
+
+    # --- Max utilities by type ---
+    @variable(model, U_h >= 0)
+    @variable(model, U_l >= 0)
+
+    # --- Best response (complementary slackness) ---
+    @NLconstraint(model, x[1] * (EU_HH - U_h) == 0)
+    @NLconstraint(model, x[2] * (EU_HL - U_l) == 0)
+    @NLconstraint(model, x[3] * (EU_LH - U_h) == 0)
+    @NLconstraint(model, x[4] * (EU_LL - U_l) == 0)
+
+    # --- Utility must be at least as high as any option ---
+    @NLconstraint(model, EU_HH <= U_h)
+    @NLconstraint(model, EU_LH <= U_h)
+    @NLconstraint(model, EU_HL <= U_l)
+    @NLconstraint(model, EU_LL <= U_l)
+
+    # --- Tenant mass balance ---
+    @NLconstraint(model, h * x[1] + (1 - h) * x[3] == s * n)
+    @NLconstraint(model, h * x[2] + (1 - h) * x[4] == (1 - s) * n)
+
+    # --- Objective (optional, just to ensure progress) ---
+    @objective(model, Max, U_h + U_l)
+
+    optimize!(model)
+    is_solved_and_feasible(model; dual = true)
+
+    return value.(x)
+end
+# %%
+# Landlord profits
+function profit_high_landlord(r_H, xHH, xHL, fc=fc_h)
+    total_queue = xHH + xHL
+    prob_match = 1 - exp(-total_queue)
+    return r_H * prob_match - fc
+end
+
+function profit_low_landlord(r_L, xLH, xLL, fc=fc_l)
+    total_queue = xLH + xLL
+    prob_match = 1 - exp(-total_queue)
+    return r_L * prob_match - fc
+end
+
+function check_profitable_deviation(r_H, r_L,deviation_size_high=0.01, deviation_size_low=0.01)
+    # perturb rents slightly
+    r_H += deviation_size_high
+    r_L += deviation_size_low
+    #println("Checking profitable deviation: r_H = $r_H, r_L = $r_L")
+    # Solve for new tenant shares
+    x = inner_solve(r_H, r_L, s, n, h, valuation)
+    xHH_new, xHL_new, xLH_new, xLL_new = x
+    #println("New tenant shares: HH = $xHH_new, HL = $xHL_new, LH = $xLH_new, LL = $xLL_new")
+    # Compute new profits
+
+    pi_H = profit_high_landlord(r_H, xHH_new, xHL_new)
+    pi_L = profit_low_landlord(r_L, xLH_new, xLL_new)
+    return pi_H, pi_L, x
+end
+
+# %%
+# Fixed-point equilibrium algorithm
+function fixed_point_solver(rH_grid, rL_grid; tol=1e-5, maxiter=20)
+    function solve_wrapper(r_H, r_L)
+        try
+            x = inner_solve(r_H, r_L, s, n, h, valuation)
+            return x
+        catch
+            #println("⚠️ Error in inner_solve for r_H = $(round(r_H, digits=3))")
+            return nothing
+        end
+    end
+    best_x = x
+    r_L = valuation / 2
+    step_size = valuation / 50  # Adjust step size based on valuation
+    rH_grid = r_L / 2:step_size:valuation  # Adjust rH_grid based on r_L
+    # initialize empty list to store tried r_H r_L pairs
+    tried_r_H_rL = []
+    for iter in 1:maxiter
+        println("\nIteration $iter")
+
+        # Step 1: High-type landlords best respond
+        best_profit_H = -Inf
+        best_r_H = nothing
+        best_x = nothing
+
+        for r_H in rH_grid
+            # Solve for tenant shares given r_H
+            # println("Trying r_H = $(round(r_H, digits=3))")
+            # # if (r_H, r_L) in tried_r_H_rL
+            #     println("Skipping already tried (r_H, r_L) = ($(round(r_H, digits=3)), $(round(r_L, digits=3)))")
+            #     continue
+            # end
+            # Use inner_solve to find optimal tenant shares
+            
+            # Check if the solution is valid
+            # If the solution is valid, compute profit
+            x = solve_wrapper(r_H, r_L)
+            #print(x)
+            if x === nothing
+                println("❌ No valid solution for r_H = $(round(r_H, digits=3))")
+                continue
+            end
+            π_H = profit_high_landlord(r_H, x[1], x[2], fc_h)
+            print("profit for r_H = $(round(r_H, digits=3)) and r_L = $(round(r_L, digits=3)): π_H = $(round(π_H, digits=3))\n")
+            if π_H >= best_profit_H
+                best_profit_H = π_H
+                best_r_H = r_H
+                best_x = x
+            # else
+            #     println("Profit decreased for r_H; skipping further checks")
+            #     tried_r_H_rL = push!(tried_r_H_rL, (r_H, r_L))
+            #     break
+
+            end
+            
+        end
+
+        if best_r_H === nothing
+            println("❌ No valid high-type solution found")
+            return
+        end
+
+        r_H = best_r_H
+
+        # Step 2: Low-type deviation check
+        best_profit_L = -Inf
+        best_r_L = r_L
+        # adjust rL_grid based on r_H
+        rL_grid = r_H / 2:step_size:valuation  # Adjust rL_grid based on r_H
+        # println("Adjusted rL_grid: $rL
+
+        for r_L_candidate in rL_grid
+            # add a try block for inner_solve
+            #println("Trying r_L = $(round(r_L_candidate, digits=3))")
+            best_x = solve_wrapper(r_H, r_L_candidate)
+            if x === nothing
+                println("❌ No valid solution for r_L = $(round(r_L_candidate, digits=3))")
+                continue
+            end
+            π_L = profit_low_landlord(r_L_candidate, best_x[3], best_x[4], fc_l_init)
+            print("profit for r_L = $(round(r_L_candidate, digits=3)) and r_H = $(round(r_H, digits=3)): π_L = $(round(π_L, digits=3))\n")
+            if π_L >= best_profit_L
+                best_profit_L = π_L
+                best_r_L = r_L_candidate
+            # else
+            #     println("Profit decreased for r_L; skipping further checks")
+            #     break
+            end
+        end
+
+        println("r_H = $(round(r_H, digits=3)), r_L = $(round(best_r_L, digits=3))")
+        println("π_H = $(round(best_profit_H, digits=3)), π_L = $(round(best_profit_L, digits=3))")
+        # profit maximizing pairs
+        best_responses = (r_H, best_r_L)
+        # check if the best responses are already tried
+        if (r_H, best_r_L) in tried_r_H_rL
+            println("⚠️ Already tried (r_H, r_L); probably cycling")
+            return r_H, best_r_L, best_x
+        end
+        # append pairs
+        tried_r_H_rL = push!(tried_r_H_rL, (r_H, best_r_L))
+        if abs(r_L - best_r_L) < 0.0002
+            println("✅ Converged at iteration $iter")
+            return r_H, r_L, best_x
+        end
+
+        r_L = best_r_L  # update for next round
+    end
+    println("⚠️ Max iterations reached without convergence")
+    return r_H, r_L, best_x
+end
+
+
+# %%
+# Run and summarize results
+r_H, r_L, x = fixed_point_solver_lowfirst(
+
+    rH_grid,
+    rL_grid; tol=1e-5, maxiter=10
+)
+
+xHH, xHL, xLH, xLL = x
+qHH, qHL, qLH, qLL = compute_q(x)
+share_HH = h * xHH / (s * n)
+share_HL = h * xHL / ((1 - s) * n)
+share_LH = (1 - h) * xLH / (s * n)
+share_LL = (1 - h) * xLL / ((1 - s) * n)
+
+U_h = share_HH * (valuation - r_H) * qHH + share_LH * (valuation - r_L) * qLH
+U_l = share_HL * (valuation - r_H) * qHL + share_LL * (valuation - r_L) * qLL
+
+println("\n=== Equilibrium Summary ===")
+println("High landlord rent: $r_H\nLow landlord rent: $r_L")
+println("Profits: π_H = $(profit_high_landlord(r_H, xHH, xHL)), π_L = $(profit_low_landlord(r_L, xLH, xLL))")
+println("Application Shares: HH = $share_HH, HL = $share_HL, LH = $share_LH, LL = $share_LL")
+println("Utilities: U_h = $U_h, U_l = $U_l")
+
+# check if there's a profitable deviation for high landlord decreasing rent
+pi_H_new, pi_L_new,x = check_profitable_deviation(r_H, r_L, -valuation / 50, 0)
+if pi_H_new > profit_high_landlord(r_H, xHH, xHL)
+    println("There is a profitable deviation: π_H = $pi_H_new, old profit = $(profit_high_landlord(r_H, xHH, xHL))")
+else
+    println("No profitable deviation for high landlord")
+end
+
+# check if there's a profitable deviation for high landlord increasing rent
+pi_H_new, pi_L_new,x = check_profitable_deviation(r_H, r_L, valuation / 50, 0)
+if pi_H_new > profit_high_landlord(r_H, xHH, xHL)
+    println("There is a profitable deviation: π_H = $pi_H_new, old profit = $(profit_high_landlord(r_H, xHH, xHL))")
+else
+    println("No profitable deviation for high landlord")
+end
+
+# repeat for low landlord
+pi_H_new, pi_L_new,x = check_profitable_deviation(r_H, r_H, 0,-valuation / 50)
+if pi_L_new > profit_low_landlord(r_L, xLH, xLL)
+    println("There is a profitable deviation: π_l = $pi_L_new, old profit = $(profit_low_landlord(r_L, xLH, xLL))")
+else
+    println("No profitable deviation for low landlord, π_l = $pi_L_new, old profit = $(profit_low_landlord(r_L, xLH, xLL))")
+end
+
+# check if there's a profitable deviation for low landlord increasing rent
+pi_H_new, pi_L_new,x = check_profitable_deviation(r_H, r_L, 0, valuation / 50)
+if pi_L_new > profit_low_landlord(r_L, xLH, xLL)
+    println("There is a profitable deviation: π_l = $pi_L_new, old profit = $(profit_low_landlord(r_L, xLH, xLL))")
+else
+    println("No profitable deviation for low landlord: π_l = $pi_L_new, old profit = $(profit_low_landlord(r_L, xLH, xLL))")
+end
+
+# loop through different deviations for low landlord and plot graph
+deviation_sizes = -0.5:0.01:0.5
+profits_low = Float64[]
+profits_high = Float64[]
+x_deviation = Float64[]
+for deviation in deviation_sizes
+    pi_H_new, pi_L_new,x = check_profitable_deviation(r_H, r_L, 0, deviation)
+    push!(profits_low, pi_L_new)
+    push!(profits_high, pi_H_new)
+    append!(x_deviation, x)
+end
+
+# plot low profits
+plot()
+plot!(deviation_sizes, profits_low, label="Low Landlord Profit", xlabel="Deviation Size", ylabel="Profit", title="Low Landlord Profit vs Deviation Size")
+# plot high profits
+plot()
+plot!(deviation_sizes, profits_high, label="High Landlord Profit", xlabel="Deviation Size", ylabel="Profit", title="High Landlord Profit vs Deviation Size")
+
+# both profits
+plot()
+plot!(deviation_sizes, profits_low, label="Low Landlord Profit", xlabel="Deviation Size", ylabel="Profit", title="Landlord Profits vs Deviation Size")
+plot!(deviation_sizes, profits_high, label="High Landlord Profit", xlabel="Deviation Size", ylabel="Profit", title="Landlord Profits vs Deviation Size")
+
+# unflatten xs and plot
+x_HH = x_deviation[1:4:end]
+x_HL = x_deviation[2:4:end]
+x_LH = x_deviation[3:4:end]
+x_LL = x_deviation[4:4:end]
+
+plot()
+plot!(deviation_sizes, x_HH, label="x_HH", xlabel="Deviation Size", ylabel="x", title="Tenant Shares vs Deviation Size")
+
+plot()
+plot!(deviation_sizes, x_HL, label="x_HL", xlabel="Deviation Size", ylabel="x", title="Tenant Shares vs Deviation Size")
+
+plot()
+plot!(deviation_sizes, x_LH, label="x_LH", xlabel="Deviation Size", ylabel="x", title="Tenant Shares vs Deviation Size")
+
+plot()
+plot!(deviation_sizes, x_LL, label="x_LL", xlabel="Deviation Size", ylabel="x", title="Tenant Shares vs Deviation Size")
+
+# demean xs relative to deviation == 0
+x_HH_demeaned = x_HH .- x_HH[findfirst(deviation_sizes .== 0)]
+x_HL_demeaned = x_HL .- x_HL[findfirst(deviation_sizes .== 0)]
+x_LH_demeaned = x_LH .- x_LH[findfirst(deviation_sizes .== 0)]
+x_LL_demeaned = x_LL .- x_LL[findfirst(deviation_sizes .== 0)]
+
+# plot demeaned xs
+plot()
+plot!(deviation_sizes, x_HH_demeaned, label="x_HH demeaned", xlabel="Deviation Size", ylabel="x", title="Demeaned Tenant Shares vs Deviation Size")
+plot!(deviation_sizes, x_HL_demeaned, label="x_HL demeaned", xlabel="Deviation Size", ylabel="x", title="Demeaned Tenant Shares vs Deviation Size")
+plot!(deviation_sizes, x_LH_demeaned, label="x_LH demeaned", xlabel="Deviation Size", ylabel="x", title="Demeaned Tenant Shares vs Deviation Size")
+plot!(deviation_sizes, x_LL_demeaned, label="x_LL demeaned", xlabel="Deviation Size", ylabel="x", title="Demeaned Tenant Shares vs Deviation Size")
+
+# demean profits relative to deviation == 0
+profits_low_demeaned = profits_low .- profits_low[findfirst(deviation_sizes .== 0)]
+profits_high_demeaned = profits_high .- profits_high[findfirst(deviation_sizes .== 0)]  
+# plot demeaned profits
+plot()
+plot!(deviation_sizes, profits_low_demeaned, label="Low Landlord Profit demeaned", xlabel="Deviation Size", ylabel="Profit", title="Demeaned Landlord Profits vs Deviation Size")
+plot!(deviation_sizes, profits_high_demeaned, label="High Landlord Profit demeaned", xlabel="Deviation Size", ylabel="Profit", title="Demeaned Landlord Profits vs Deviation Size")
+
+# make 2x2 grid of plots
+using Plots
+plot(layout = (3,1))
+plot!(subplot = 1, deviation_sizes, profits_low_demeaned, label="Low Landlord Profit demeaned", xlabel="Deviation Size", ylabel="Profit", title="Demeaned Landlord Profits vs Deviation Size")
+plot!(subplot = 1, deviation_sizes, profits_high_demeaned, label="High Landlord Profit demeaned", xlabel="Deviation Size", ylabel="Profit", title="Demeaned Landlord Profits vs Deviation Size")
+plot!(subplot = 2, deviation_sizes, x_HH_demeaned, label="x_HH demeaned", xlabel="Deviation Size", ylabel="x", title="Demeaned Tenant Shares vs Deviation Size")
+plot!(subplot = 3, deviation_sizes, x_HL_demeaned, label="x_HL demeaned", xlabel="Deviation Size", ylabel="x", title="Demeaned Tenant Shares vs Deviation Size")
+plot!(subplot = 2, deviation_sizes, x_LH_demeaned, label="x_LH demeaned", xlabel="Deviation Size", ylabel="x", title="Demeaned Tenant Shares vs Deviation Size")
+plot!(subplot = 3, deviation_sizes, x_LL_demeaned, label="x_LL demeaned", xlabel="Deviation Size", ylabel="x", title="Demeaned Tenant Shares vs Deviation Size")
+
+# %% 
+inner_solve(r_H, r_L, s, n+0.5, h, valuation)
+# loop through different values of h 
+
+# %%
+# === Loop through different market tightness values n and collect summary statistics ===
+
+results = DataFrame(
+    n = Float64[],
+    r_H = Float64[],
+    r_L = Float64[],
+    π_H = Float64[],
+    π_L = Float64[],
+    xHH = Float64[],
+    xHL = Float64[],
+    xLH = Float64[],
+    xLL = Float64[],
+    share_HH = Float64[],
+    share_HL = Float64[],
+    share_LH = Float64[],
+    share_LL = Float64[],
+    U_h = Float64[],
+    U_l = Float64[]
+)
+
+for n_val in 0.7:0.1:1.3
+    println("\n=== Solving for n = $n_val ===")
+    try
+        n = n_val  # Update tenant/landlord ratio
+        r_H, r_L, x = fixed_point_solver(rH_grid, rL_grid; tol=1e-5, maxiter=20)
+
+        xHH, xHL, xLH, xLL = x
+        qHH, qHL, qLH, qLL = compute_q(x)
+
+        share_HH = h * xHH / (s * n_val)
+        share_HL = h * xHL / ((1 - s) * n_val)
+        share_LH = (1 - h) * xLH / (s * n_val)
+        share_LL = (1 - h) * xLL / ((1 - s) * n_val)
+
+        U_h = share_HH * (valuation - r_H) * qHH + share_LH * (valuation - r_L) * qLH
+        U_l = share_HL * (valuation - r_H) * qHL + share_LL * (valuation - r_L) * qLL
+
+        # profits
+        r_H_profit = profit_high_landlord(r_H, xHH, xHL)
+        r_L_profit = profit_low_landlord(r_L, xLH, xLL)
+
+        push!(results, (
+            n_val, 
+            r_H, 
+            r_L,
+            r_H_profit,
+            r_L_profit,
+            xHH, xHL, xLH, xLL,
+            share_HH, share_HL, share_LH, share_LL,
+            U_h, U_l
+        ))
+    catch e
+        println("⚠️ Failed to solve for n = $n_val: $(e)")
+        continue
+    end
+end
+
+println("\n=== Market Tightness Loop Complete ===")
+first(results, 10)
+
+# get ratio of profits
+results.ratio_profit = results.π_H ./ results.π_L
+
+# ratio of Utilities
+results.ratio_utility = results.U_h ./ results.U_l
+
+# ratio of rents
+results.ratio_rent = results.r_H ./ results.r_L
+
+
+valuation = 10.0
+s = 0.75       # Share of high-type tenants
+n = 1  # Tenant/landlord ratio
+h = 0.05  # share of high-type landlords
+
+# solve for xs given 1,1, prices
+x_temp = inner_solve(8, 8, s, n, h, valuation)
+
+# match probs landlord perspective
+xHH_temp, xHL_temp, xLH_temp, xLL_temp = x_temp
+
+h_match = 1 - exp(-(xHH_temp + xHL_temp))
+l_match = 1 - exp(-(xLH_temp + xLL_temp))
+
+xHH_temp, xHL_temp, xLH_temp, xLL_temp = x_temp
+qHH_temp, qHL_temp, qLH_temp, qLL_temp = compute_q(x_temp)
+pi_H_temp = profit_high_landlord(8, xHH_temp, xHL_temp)
+pi_L_temp = profit_low_landlord(8, xLH_temp, xLL_temp)
+# calculate Utilities for tenants
+
+U_HH_temp = qHH_temp * (valuation - 2)
+U_HL_temp = qHL_temp * (valuation - 2)
+U_LH_temp = qLH_temp * (valuation - 2)
+U_LL_temp = qLL_temp * (valuation - 2)
+U_h_temp = max(U_HH_temp, U_LH_temp)
+U_l_temp = max(U_HL_temp, U_LL_temp)
+
+
+
+
+function fixed_point_solver_lowfirst(rH_grid, rL_grid; tol=1e-5, maxiter=20)
+    function solve_wrapper(r_H, r_L)
+        try
+            x = inner_solve(r_H, r_L, s, n, h, valuation)
+            return x
+        catch
+            return nothing
+        end
+    end
+
+    r_H = valuation / 2  # Initialize r_H
+    best_x = nothing
+    step_size = valuation / 50
+
+    tried_rH_rL = []
+    rL_grid = valuation / 2:step_size:valuation
+
+    for iter in 1:maxiter
+        println("\nIteration $iter")
+
+        best_profit_L = -Inf
+        best_r_L = nothing
+        best_x = nothing
+
+        # Step 1: Low-type landlords set rent
+        for r_L in rL_grid
+            best_profit_H = -Inf
+            best_r_H = nothing
+
+            # Step 2: High-type landlords best respond to r_L
+            rH_grid = r_L / 2:step_size:valuation  # Ensure high types can undercut or overshoot
+            for r_H_candidate in rH_grid
+                x = solve_wrapper(r_H_candidate, r_L)
+                if x === nothing
+                    continue
+                end
+                π_H = profit_high_landlord(r_H_candidate, x[1], x[2])
+                if π_H > best_profit_H
+                    best_profit_H = π_H
+                    best_r_H = r_H_candidate
+                    best_x = x
+                end
+            end
+
+            if best_r_H === nothing
+                println("❌ No valid high-type solution found for r_L = $(round(r_L, digits=3))")
+                continue
+            end
+
+            π_L = profit_low_landlord(r_L, best_x[3], best_x[4])
+            println("Trying r_L = $(round(r_L, digits=3)), r_H = $(round(best_r_H, digits=3)) → π_L = $(round(π_L, digits=3)), π_H = $(round(best_profit_H, digits=3))")
+
+            if π_L > best_profit_L
+                best_profit_L = π_L
+                best_r_L = r_L
+                r_H = best_r_H
+            end
+        end
+
+        if best_r_L === nothing
+            println("❌ No valid low-type solution found")
+            return
+        end
+
+        if (r_H, best_r_L) in tried_rH_rL
+            println("⚠️ Already tried (r_H, r_L); likely cycling")
+            return r_H, best_r_L, best_x
+        end
+
+        tried_rH_rL = push!(tried_rH_rL, (r_H, best_r_L))
+
+        # Check for convergence
+        if abs(best_r_L - r_L) < tol
+            println("✅ Converged at iteration $iter")
+            return r_H, best_r_L, best_x
+        end
+
+        r_L = best_r_L  # update for next round
+    end
+
+    println("⚠️ Max iterations reached without convergence")
+    return r_H, r_L, best_x
+end

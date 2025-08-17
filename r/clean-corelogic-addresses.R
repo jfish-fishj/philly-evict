@@ -1,14 +1,44 @@
-#### libraries
+#### libraries ####
 library(data.table)
 library(tidyverse)
 library(postmastr)
 library(bit64)
-library(sf)
-library(geosphere)
-library(DescTools)
+library(glue)
+library(janitor)
+print("loaded libraries")
 
-altos = fread("~/Desktop/data/altos/cities/philadelphia_metro_all_years.csv")
+#### directories ####
+print("setting directories")
+input_dir = "~/Desktop/data/corelogic/county-data"
+output_dir = '/Users/joefish/Desktop/data/corelogic/cleaned-addresses'
+fips_code_list = list.files(input_dir) %>% str_extract("(?<=filtered_)[0-9]{5}(?=\\.csv)")
 
+# loop through fips codes
+print("looping through fips codes")
+for(fips_code in fips_code_list){
+  print(glue("processing {fips_code}"))
+#### files ####
+
+input_file = glue("{input_dir}/filtered_{fips_code}.csv")
+output_file = glue("{output_dir}/cleaned_{fips_code}.csv")
+# skip if output file exists
+if(file.exists(output_file)){
+  print(glue("Output file {output_file} exists, skipping"))
+  next
+}
+corelogic_cols = fread(input_file, nrows = 1) %>%
+  select(CLIP, `FIPS CODE`, `APN (PARCEL NUMBER UNFORMATTED)`, `ORIGINAL APN`, RANGE, `CENSUS ID`, TOWNSHIP, `MUNICIPALITY NAME`,
+         `MUNICIPALITY CODE`, `SITUS CORE BASED STATISTICAL AREA (CBSA)`:`SITUS STREET ADDRESS`,
+          `TOTAL VALUE CALCULATED`:`TAX EXEMPT AMOUNT TOTAL`,
+         `FRONT FOOTAGE`:last_col() ) %>%
+  # select(clip, fips_code, apn_parcel_number_unformatted, original_apn, range, census_id, township, municipality_name, municipality_code,
+  #        situs_core_based_statistical_area_cbsa:situs_street_address, total_value_calculated:tax_exempt_amount_total,
+  #        front_footage:last_col()
+  #        ) %>%
+  colnames()
+
+corelogic = fread(input_file, select = corelogic_cols)
+corelogic = corelogic %>% janitor::clean_names()
 
 #### functions ####
 # expand address range. e.g. 123-133 main st becomes 6 rows for 123,125,127, 129,131, 133
@@ -100,7 +130,7 @@ parse_letter <- function(address_num){
 }
 
 # random things I do to clean the address column before parsing
-# these are mostly idiosyncratic to boston altos data.
+# these are mostly idiosyncratic to boston corelogic data.
 misc_pre_processing <- function(address_col){
   address_col %>%
     str_remove_all("1/2") %>%
@@ -216,186 +246,21 @@ standardize_st_name_boston <- function(street_name){
 
 
 #### pre processing ####
+# skip most of the usual parsing bc corelogic comes pre parsed
 
+corelogic[,street_address_lower := str_to_lower(situs_street_address) %>% misc_pre_processing()]
+corelogic[,pm.zip_imp  :=paste0("_",str_pad(situs_zip_code,5,"left","0"))]
+corelogic[,pm.city_imp := str_to_lower(situs_city) %>% str_squish()]
+corelogic[,pm.state_imp := str_to_lower(situs_state) %>% str_squish()]
+corelogic[,pm.uid := .GRP, by = street_address_lower]
+corelogic[,pm.address := street_address_lower]
+corelogic[,pm.house := situs_house_number]
+corelogic[,pm.street := situs_street_name %>% str_to_lower() %>% misc_post_processing()]
+corelogic[,pm.streetSuf := standardize_st_name(situs_mode)]
+corelogic[,pm.preDir := situs_direction] # assumes no suf directional
+corelogic[,pm.sufDir := NA_character_]
+corelogic[,pm.dir_concat := situs_direction]
+corelogic[,n_sn_ss_c := str_squish( str_to_lower(paste(pm.house, pm.preDir, pm.street, pm.streetSuf)))]
 
-altos[,street_address_lower := str_to_lower(street_address) %>% misc_pre_processing()]
-
-
-# setup for MA specific cleaning
-dirs <- pm_dictionary(type = "directional", filter = c("N", "S", "E", "W"), locale = "us")
-pa <- pm_dictionary(type = "state", filter = "PA", case = c("title", "upper","lower"), locale = "us")
-# list of boston n'hoods. done to parse off city. e.g. 123 main st, dorchester ma
-philly <- tibble(city.input = "philadelphia")
-
-
-
-#### cleaning ####
-# this is running on a sample for now until the code looks like it's working
-# goal is that every altos listing should match a parcel
-
-altos_sample = altos %>%
-  #filter(street_address_lower %in% sample(street_address_lower, 25000)) %>%
-  pm_identify(var = street_address_lower)
-
-dropped_ids_og = altos_sample %>% filter(!pm.type %in% c("full", "short")) %>% pull(pm.uid)
-
-
-altos_sample = altos_sample%>%
-  filter(pm.type %in% c("full", "short"))
-
-# workflow is
-"
-prep
-parse unit
-parse postal code
-parse state
-parse city
-parse unit again
-parse house #
-parse street directionals
-parse street suffiix
-parse street name
-post processing
-  parse ranges of house numbers
-  remove letters from house numbers
-recombine
-"
-# altos gets rid of any address that's not an intersection, so save those for later
-altos_adds_sample <- pm_prep(altos_sample, var = "street_address_lower", type = "street")
-
-# dropped pm.uid
-dropped_ids = altos_sample %>% filter(!pm.uid %in% altos_adds_sample$pm.uid) %>% pull(pm.uid)
-# have to parse off unit first for 123 main st boston ma #1
-# otherwise parsing gets all messed up
-# general issue w/ postmastr is that mistakes cascade, so need to check
-# parsing at each step
-altos_adds_sample_units = parse_unit(altos_adds_sample$pm.address)
-altos_adds_sample$pm.address = altos_adds_sample_units$clean_address %>% str_squish()
-altos_adds_sample <- pm_postal_parse(altos_adds_sample, locale = "us")
-
-
-# unit parsing -- 3 rounds
-altos_adds_sample_units_r1 = parse_unit(altos_adds_sample$pm.address)
-# parse units again
-altos_adds_sample_units_r2 = parse_unit(altos_adds_sample_units_r1$clean_address%>% str_squish())
-altos_adds_sample_units_r3 = parse_unit_extra(altos_adds_sample_units_r2$clean_address %>% str_squish())
-altos_adds_sample$pm.address = altos_adds_sample_units_r2$clean_address %>% str_squish()
-altos_adds_sample$pm.unit = altos_adds_sample_units_r3$unit
-# save the unit tibble. rn i don't do anything with this since I don't use the
-# unit number for merging but in theory usefule
-unit_tibble = tibble(
-  address = altos_adds_sample_units$og_address,
-  u1 = altos_adds_sample_units$unit,
-  u2 = altos_adds_sample_units_r1$unit,
-  u3 = altos_adds_sample_units_r2$unit,
-  u4 = altos_adds_sample_units_r3$unit,
-  uid = altos_adds_sample$pm.uid
-) %>%
-  mutate(
-    pm.unit = coalesce(u1, u2, u3, u4)
-  )
-altos_adds_sample = pm_house_parse(altos_adds_sample)
-altos_adds_sample_nums = altos_adds_sample$pm.house %>% parse_letter()
-altos_adds_sample_range = altos_adds_sample_nums$clean_address %>% parse_range()
-new_pm_house = coalesce( altos_adds_sample_range$range1, altos_adds_sample_range$og_address )
-altos_adds_sample$pm.house = new_pm_house %>% as.numeric()
-altos_adds_sample$pm.house2 = altos_adds_sample_range$range2 %>% as.numeric()
-altos_adds_sample$pm.house.letter = altos_adds_sample_nums$letter
-altos_adds_sample_copy1 = copy(altos_adds_sample)
-
-altos_adds_sample = pm_streetDir_parse(altos_adds_sample, dictionary = dirs)
-altos_adds_sample = pm_streetSuf_parse(altos_adds_sample)
-# have to copy pre parsing... bc pm_street_parse will drop a bunch of ids
-altos_adds_sample_copy = copy(altos_adds_sample)
-# okay so postmastr does this annoying thing where if the address is incomplete
-# and is like 123 centre
-# we know from boston context that centre is centre st
-# so we should be able to move that centre from the streetsuffix column to the
-# address column and fix it later
-altos_adds_sample = altos_adds_sample %>%
-  mutate(
-    pm.city = "philadelphia",
-    pm.state = "pa",
-    pm.address = coalesce(pm.address, pm.streetSuf, pm.city, pm.state) %>%
-      str_to_lower() ,
-    pm.address  = case_when(
-      pm.address  == "riv" ~ "river",
-      pm.address  == "ctr" ~ "centre",
-      pm.address  == "pk" ~ "park",
-      pm.address  == "grv"~ "grove",
-      pm.address == "gdn"~ "garden",
-      pm.address == "smt"~ "summit",
-      pm.address == "spg"~ "spring",
-      TRUE ~ pm.address
-    )
-  )
-altos_adds_sample = pm_street_parse(altos_adds_sample, ordinal= T, drop = F)
-altos_adds_sample$pm.street = misc_post_processing(str_to_lower(altos_adds_sample$pm.street))
-
-altos_adds_sample$pm.streetSuf = fifelse(
-  str_detect(altos_adds_sample$pm.street, "\\s(st$)"),
-  "st",
-  altos_adds_sample$pm.streetSuf
-) %>% str_squish()
-altos_adds_sample$pm.street = fifelse(
-  str_detect(altos_adds_sample$pm.street, "\\s(st$)"),
-  str_replace_all(altos_adds_sample$pm.street, "\\sst$", ""),
-  altos_adds_sample$pm.street
-) %>% str_squish()
-# more ids get dropped...
-# View(altos_adds_sample_copy %>% filter(!pm.uid %in% altos_adds_sample$pm.uid ))
-# View(altos_sample %>% filter(pm.uid %in% (altos_adds_sample_copy %>% filter(!pm.uid %in% altos_adds_sample$pm.uid ))$pm.uid)
-#      %>% distinct(street_address, street_address_lower, pm.uid))
-
-# should turn this into a function but whatever
-altos_adds_sample$pm.streetSuf = altos_adds_sample$pm.streetSuf %>%
-  str_replace_all("spark", " pk") %>%
-  str_replace_all("street", " st") %>%
-  str_replace_all("square", " sq") %>%
-  str_replace_all("lane", " ln") %>%
-  str_replace_all("alley", " aly") %>%
-  str_replace_all("way", " way")
-
-# make all components lower case and make composite address column
-altos_adds_sample_c = altos_adds_sample %>%
-  mutate(across(c( pm.sufDir, pm.street, pm.streetSuf, pm.preDir), ~str_squish(str_to_lower(replace_na(.x, ""))))) %>%
-  mutate(
-    n_sn_ss_c = str_squish( str_to_lower(paste(pm.house, pm.preDir, pm.street, pm.streetSuf, pm.sufDir))),
-    pm.dir_concat = coalesce(pm.preDir, pm.sufDir)
-  )
-
-setDT(altos_adds_sample_c)
-setDT(altos_sample)
-
-
-altos_adds_sample_c[,num_st_sfx_id := .GRP, by = .(pm.house, pm.street, pm.streetSuf)]
-
-
-
-
-altos_adds_sample_c$pm.street = misc_post_processing(str_to_lower(altos_adds_sample_c$pm.street))
-
-#### merges with address file ####
-altos_adds_sample_c[,addy_id := .I]
-altos_clean = altos_adds_sample_c %>%
-  # recombine back w/ altos data
-  merge(altos_sample[],
-        by = "pm.uid",
-        all.y = T)
-
-# add the zipcode level data from altos onto the address data
-# then create new id based on old ID + new zip code info
-# eg 123 main st 12345 != 123 main st 99999
-altos_clean[,pm.zip_imp := case_when(
-  str_length(pm.zip) >= 4 ~ paste0("_",str_pad(pm.zip,5,"left","0")),
-  str_length(zip) >= 4 ~ paste0("_",str_pad(zip,5,"left","0")),
-  TRUE ~ NA_character_
-)]
-altos_clean[,num_zips := uniqueN(pm.zip_imp, na.rm = T), by = num_st_sfx_id]
-altos_clean[,num_zips_uid := uniqueN(pm.zip_imp, na.rm = T), by = pm.uid]
-altos_clean[,pm.uid_zip := .GRP, by = .(pm.uid, pm.zip_imp)]
-altos_clean[,.N, by = num_zips_uid]
-altos_clean[,num_listings := .N, by = .(beds, pm.uid)]
-altos_clean[,num_years := uniqueN(year), by = .(beds, pm.uid)]
-
-fwrite(altos_clean, "~/Desktop/data/altos/cities/philadelphia_metro_all_years_clean_addys.csv")
+fwrite(corelogic,output_file )
+}

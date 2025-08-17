@@ -1,0 +1,23 @@
+name: econ_modeling
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - numpy>2.0
+  - pandas>2.0
+  - polars
+  - scipy>=1.7
+  - statsmodels
+  - linearmodels
+  - patsy
+  - sympy
+  - matplotlib
+  - seaborn
+  - scikit-learn
+  - jupyterlab
+  - ipykernel
+  - pymc
+  - arviz
+  - cvxpy
+  - pyomo

@@ -61,19 +61,20 @@ philly_altos_addys = unique(philly_altos_address_agg, by = "n_sn_ss_c")
 
 philly_parcels[,PID := str_pad(parcel_number,9, "left",pad = "0") ]
 philly_parcel_addys = unique(philly_parcels, by = "n_sn_ss_c")
-philly_parcel_rentals_long_addys = unique(rbindlist(list(philly_rentals_long_addys %>%
-                                                           select(pm.address:PID, geocode_x, geocode_y),
-                                                philly_parcel_addys %>%
-                                                  select(pm.address:PID, geocode_x, geocode_y)
-                                                ), fill=T),
-                                          by = "n_sn_ss_c")
+philly_parcel_addys[,pm.zip := as.character(pm.zip)]
+# philly_parcel_addys = unique(rbindlist(list(philly_rentals_long_addys %>%
+#                                                            select(pm.address:PID, geocode_x, geocode_y),
+#                                                 philly_parcel_addys %>%
+#                                                   select(pm.address:PID, geocode_x, geocode_y)
+#                                                 ), fill=T),
+#                                           by = "n_sn_ss_c")
 
 ## num st sfx prefix zip ##
 # merge the philly_altos_address_agg data back
 num_st_sfx_dir_zip_merge = philly_altos_addys %>%
   # merge with address data
   # only let merge with parcels that have units aka residential ones
-  merge(philly_parcel_rentals_long_addys[,.( pm.house, pm.street,pm.zip,
+  merge(philly_parcel_addys[,.( pm.house, pm.street,pm.zip,
                                     pm.streetSuf, pm.sufDir, pm.preDir,PID
                                    )],
     ,by = c("pm.house", "pm.street", "pm.streetSuf", "pm.sufDir", "pm.preDir", "pm.zip")
@@ -101,7 +102,7 @@ unique(num_st_sfx_dir_zip_merge, by = "n_sn_ss_c")[,.N, by = .(num_pids==0)][,pe
   ,per :=N / sum(N)][order(-N),cum_p := cumsum(per)][
     order(-N)][1:20])
 
-(unique(num_st_sfx_dir_zip_merge, by = "n_sn_ss_c")[!pm.street %in% philly_parcel_rentals_long_addys$pm.street,.N, by = pm.street][
+(unique(num_st_sfx_dir_zip_merge, by = "n_sn_ss_c")[!pm.street %in% philly_parcel_addys$pm.street,.N, by = pm.street][
   ,per :=N / sum(N)][order(-N),cum_p := cumsum(per)][
     order(-N)][1:20])
 
@@ -132,7 +133,7 @@ num_st_merge = philly_altos_addys %>%
   ) %>%
   # merge with address data
   # only let merge with parcels that have units aka residential ones
-  merge(philly_parcel_rentals_long_addys[,.( pm.house, pm.street,pm.zip,
+  merge(philly_parcel_addys[,.( pm.house, pm.street,pm.zip,
                                       pm.streetSuf, pm.sufDir, pm.preDir,PID
   )],
   ,by = c("pm.house", "pm.street",'pm.zip')
@@ -175,7 +176,7 @@ num_st_sfx_merge = philly_altos_address_agg  %>%
   ) %>%
   # merge with address data
   # only let merge with parcels that have units aka residential ones
-  merge(philly_parcel_rentals_long_addys[,.( pm.house, pm.street,
+  merge(philly_parcel_addys[,.( pm.house, pm.street,
                                       pm.streetSuf,PID
   )],
   ,by = c("pm.house", "pm.street","pm.streetSuf")
@@ -218,9 +219,13 @@ parcel_sf_subset = philly_parcels_sf_m %>%
                                                                        "SINGLE FAMILY",
                                                                        "APARTMENTS  > 4 UNITS"),PID])
 
+# reproject parcel_sf_subset to be crs4269
+parcel_sf_subset = st_transform(parcel_sf_subset, crs = 4269)
+
 # filter to just be parcels that didn't uniquely merge
 spatial_join = num_st_sfx_merge[num_pids != 1]
 
+# get lat long coords from parcel_sf_subset
 # make altos into shape file
 # note here that altos data is only geocoded to 5 digits or within a meter
 # of precission.
@@ -254,9 +259,11 @@ spatial_join_sf_join[,num_pids_st := uniqueN(PID_2,na.rm = T), by = n_sn_ss_c]
 unique(spatial_join_sf_join, by = "n_sn_ss_c")[,.N, by = .(num_pids_st==0)][,per := round(N/ sum(N),2)][order(N)]
 unique(spatial_join_sf_join, by = "n_sn_ss_c")[,.N, by = num_pids_st][,per := (N / sum(N)) %>% round(2)][order(N)]
 
-spatial_join_sf_join[num_pids_st == 0,.N, by = pm.street][
+(spatial_join_sf_join[num_pids_st == 0,.N, by = pm.street][
   ,per :=N / sum(N)][order(-N),cum_p := cumsum(per)][
-    order(-N)][1:20]
+    order(-N)][1:20])
+
+#View(sample_n(spatial_join_sf_join[num_pids_st == 0][,count :=.N, by = n_sn_ss_c] ,1000))
 
 
 matched_ids = c(
@@ -274,6 +281,7 @@ matched_ids = c(
 unique(num_st_sfx_dir_zip_merge, by = "n_sn_ss_c")[,.N, by = .(n_sn_ss_c %in% (matched_ids))][,per := N / sum(N)][]
 #unique(num_st_sfx_dir_zip_merge, by = "n_sn_ss_c")[,.N, by = .(n_sn_ss_c %in% (matched_new))][,per := N / sum(N)][]
 
+# take some random samples of not merged
 
 #### make philly_altos_address_agg-parcels xwalk ####
 # first start with parcels that merged uniquely
@@ -327,6 +335,7 @@ xwalk[,num_parcels_matched := uniqueN(PID,na.rm = T), by = n_sn_ss_c]
 xwalk[,num_addys_matched := uniqueN(n_sn_ss_c,na.rm = T), by = PID]
 unique(xwalk[], by = "n_sn_ss_c")[,.N, by = num_parcels_matched][,per := round(N / sum(N),4)][order(num_parcels_matched)]
 unique(xwalk[], by = "n_sn_ss_c")[,.N, by = num_addys_matched][,per := round(N / sum(N),4)][order(num_addys_matched)]
+xwalk[,.N, by = num_addys_matched][,per := round(N / sum(N),4)][order(num_addys_matched)]
 
 
 #xwalk = unique(xwalk, by = c("n_sn_ss_c", "PID"))
@@ -339,6 +348,8 @@ xwalk_listing = merge(
   by = "n_sn_ss_c", allow.cartesian = T
 )
 
+xwalk_listing[,.N, by = num_addys_matched][,per := round(N / sum(N),4)][order(num_addys_matched)]
+xwalk_listing[,.N, by = num_parcels_matched][,per := round(N / sum(N),4)][order(num_parcels_matched)]
 
 #### export ####
 fwrite(xwalk, "/Users/joefish/Desktop/data/philly-evict/philly_altos_address_agg_xwalk.csv")

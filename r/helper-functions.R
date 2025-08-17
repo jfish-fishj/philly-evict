@@ -1,7 +1,7 @@
 library(tidyverse)
 library(data.table)
 library(janitor)
-library(sf)
+#library(sf)
 library(spatstat)
 
 theme_philly_evict <- function(){
@@ -111,3 +111,86 @@ StatEcdf <- ggproto("StatEcdf", Stat,
 
                     required_aes = c("x")
 )
+
+Mode <- function(x, na.rm = FALSE) {
+  if(na.rm){
+    x = x[!is.na(x)]
+  }
+
+  ux <- unique(x)
+  return(ux[which.max(tabulate(match(x, ux)))])
+}
+
+impute_units <- function(col){
+  col = col %>%
+    str_remove("\\.0+")
+  case_when(
+    str_detect(col, regex("studio", ignore_case = T)) ~ 0,
+    str_detect(col, regex("(zero|0)[\\s,]?(bd|bed|br[^a-z])", ignore_case = T)) ~ 0,
+    str_detect(col, regex("(one|1)[\\s,]?(bd|bed|br[^a-z])", ignore_case = T)) ~ 1,
+    str_detect(col, regex("(two|2)[\\s,]?(bd|bed|br[^a-z])", ignore_case = T)) ~ 2,
+    str_detect(col, regex("(three|3)[\\s,]?(bd|bed|br[^a-z])", ignore_case = T)) ~ 3,
+    str_detect(col, regex("(four|4)[\\s,]?(bd|bed|br[^a-z])", ignore_case = T)) ~ 4,
+    str_detect(col, regex("(five|5)[\\s,]?(bd|bed|br[^a-z])", ignore_case = T)) ~ 5,
+    TRUE ~ NA_real_
+
+  ) %>% return()
+}
+
+impute_baths <- function(col){
+  col = col %>%
+    str_remove("\\.0+")
+  case_when(
+    str_detect(col, regex("(zero|0)[\\s,]?(bath|ba[^a-z])", ignore_case = T)) ~ 0,
+    str_detect(col, regex("(0.5)[\\s,]?(bath|ba[^a-z])", ignore_case = T)) ~ 0.5,
+    str_detect(col, regex("(one|1)[\\s,]?(bath|ba[^a-z])", ignore_case = T)) ~ 1,
+    str_detect(col, regex("(1.5)[\\s,]?(bath|ba[^a-z])", ignore_case = T)) ~ 1,
+    str_detect(col, regex("(two|2)[\\s,]?(bath|ba[^a-z])", ignore_case = T)) ~ 2,
+    str_detect(col, regex("(2.5)[\\s,]?(bath|ba[^a-z])", ignore_case = T)) ~ 2.5,
+    str_detect(col, regex("(three|3)[\\s,]?(bath|ba[^a-z])", ignore_case = T)) ~ 3,
+    str_detect(col, regex("(four|4)[\\s,]?(bath|ba[^a-z])", ignore_case = T)) ~ 4,
+    str_detect(col, regex("(five|5)[\\s,]?(bath|ba[^a-z])", ignore_case = T)) ~ 5,
+    TRUE ~ NA_real_
+
+  ) %>% return()
+}
+
+
+cities_fips <- tibble(
+  city = c(
+    "austin",
+    #"baltimore",
+    #"boston",
+    "chicago", "cleveland",
+    "dallas", "detroit", "houston", "los_angeles", "miami",
+    "philadelphia"
+  ),
+  county = c(
+    "Travis County, TX",       # Austin
+   # "Baltimore city, MD",      # Independent city
+   # "Suffolk County, MA",      # Boston
+    "Cook County, IL",         # Chicago
+    "Cuyahoga County, OH",     # Cleveland
+    "Dallas County, TX",       # Dallas
+    "Wayne County, MI",        # Detroit
+    "Harris County, TX",       # Houston
+    "Los Angeles County, CA",  # Los Angeles
+    "Miami-Dade County, FL",   # Miami
+    "Philadelphia County, PA"  # Philadelphia
+  ),
+  fips = c(
+    "48453",  # Travis County, TX
+   # "24510",  # Baltimore city, MD
+   # "25025",  # Suffolk County, MA
+    "17031",  # Cook County, IL
+    "39035",  # Cuyahoga County, OH
+    "48113",  # Dallas County, TX
+    "26163",  # Wayne County, MI
+    "48201",  # Harris County, TX
+    "06037",  # Los Angeles County, CA
+    "12086",  # Miami-Dade County, FL
+    "42101"   # Philadelphia County, PA
+  )
+)
+
+
