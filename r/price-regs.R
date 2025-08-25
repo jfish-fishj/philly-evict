@@ -1220,13 +1220,23 @@ setFixest_dict(
     "change_log_rent" = "Change in Log Rent",
     "CT_ID_10" = "Census Tract",
     "filing_rate" = "Filing Rate",
-    "filing_rate_ntile" = "Filing Rate Quintile",
+    "filing_rate_ntile_post_covid" = "Filing Rate Quintile",
+    "filing_rate_ntile_post_covid::2" = "Filing Rate 2nd Quintile",
+    "filing_rate_ntile_post_covid::3" = "Filing Rate 3rd Quintile",
+    "filing_rate_ntile_post_covid::4" = "Filing Rate 4th Quintile",
+    "filing_rate_ntile_post_covid::5" = "Filing Rate 5th Quintile",
     'num_units_bins101+' = "100+ Units",
+    'num_units_bins101+:post_covidTRUE' = "100+ Units (Post-COVID)",
     'num_units_bins51-100' = "51-100 Units",
+    'num_units_bins51-100:post_covidTRUE' = "51-100 Units (Post-COVID)",
     'num_units_bins6-50' = "6-50 Units",
+    'num_units_bins6-50:post_covidTRUE' = "6-50 Units (Post-COVID)",
     'num_units_bins2-5' = "2-5 Units",
+    'num_units_bins2-5:post_covidTRUE' = "2-5 Units (Post-COVID)",
     'num_units_bins1' = "1 Unit",
-    "post_covidTRUE" = "Post-COVID Period"
+    'num_units_bins1:post_covidTRUE' = "1 Unit (Post-COVID)",
+    "post_covidTRUE" = "Post-COVID Period",
+    "corp_ownerTRUE" = "Corporate Owner"
 
 
   )
@@ -1244,6 +1254,9 @@ evict_tables = etable(
   evict_models,
   headers = header_evict,
   digits = 3,digits.stats = 3,
+  keep = "%ost_covid",
+  order = c("%high_filing_post_covid","%filing_rate_ntile_post_covid",
+            "%num_units_bins","%corp_ownerTRUE","%post_covidTRUE"),
   #extralines = append("Wald Stat for Pre-Trends",owner_wald),
   title = "Price Change Regressions",
   drop = "cohort",
@@ -1352,6 +1365,7 @@ rental_aggs[,change_high_filing_parcels_rel2019 := V4 / V4[year == 2019] - 1]
 # export as GT table
 library(gt)
 rental_aggs %>%
+  filter(year <= 2019)%>%
   select(
     Year = year,
     `Total Units` = V1,

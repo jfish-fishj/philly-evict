@@ -4,44 +4,38 @@
    \begin{tabular}{lcccc}
       \tabularnewline \midrule \midrule
       Dependent Variable: & \multicolumn{4}{c}{Log Median Rent}\\
-                                                   & High Evictors  & High Evictors (within Census Tract) & High Evictors (quintiles) & High Evictors (quintiles within Census Tract) \\   
-      Model:                                       & (1)            & (2)                                 & (3)                       & (4)\\  
+                                                  & High Evictors  & High Evictors (within Census Tract) & High Evictors (quintiles) & High Evictors (quintiles within Census Tract) \\   
+      Model:                                      & (1)            & (2)                                 & (3)                       & (4)\\  
       \midrule
       \emph{Variables}\\
-      High Evictors                                & 0.122$^{***}$  & 0.051$^{***}$                       &                           &   \\   
-                                                   & (0.012)        & (0.011)                             &                           &   \\   
-      100+ Units                                   & 1.19           & -0.053                              & 0.865                     & -0.035\\   
-                                                   & (8,691.3)      & (165.8)                             & (8,707.5)                 & (161.6)\\   
-      100+ Units $\times$ Post-COVID Period        & -0.075$^{***}$ & -0.010                              & -0.051$^{**}$             & -0.011\\   
-                                                   & (0.026)        & (0.019)                             & (0.024)                   & (0.021)\\   
-      2-5 Units $\times$ Post-COVID Period         & -0.002         & 0.028$^{***}$                       & 0.017$^{*}$               & 0.031$^{***}$\\   
-                                                   & (0.009)        & (0.008)                             & (0.009)                   & (0.008)\\   
-      51-100 Units $\times$ Post-COVID Period      & -0.046         & -0.032$^{*}$                        & -0.031                    & -0.033$^{**}$\\   
-                                                   & (0.028)        & (0.016)                             & (0.028)                   & (0.017)\\   
-      6-50 Units $\times$ Post-COVID Period        & -0.030$^{*}$   & 0.001                               & -0.006                    & 0.003\\   
-                                                   & (0.015)        & (0.012)                             & (0.017)                   & (0.013)\\   
-      Post-COVID Period $\times$ corp\_ownerTRUE   & 0.002          & 0.012                               & 0.007                     & 0.013\\   
-                                                   & (0.017)        & (0.011)                             & (0.016)                   & (0.011)\\   
-      2-5 Units                                    &                & -0.052                              &                           & -0.123\\   
-                                                   &                & (245.9)                             &                           & (228.2)\\   
-      corp\_ownerTRUE                              &                & 2.13                                &                           & 2.35\\   
-                                                   &                & (722.5)                             &                           & (673.6)\\   
-      Filing Rate Quintile $=$ 2                   &                &                                     & 0.007                     & 0.011\\   
-                                                   &                &                                     & (0.020)                   & (0.019)\\   
-      Filing Rate Quintile $=$ 3                   &                &                                     & 0.105$^{***}$             & 0.046$^{**}$\\   
-                                                   &                &                                     & (0.022)                   & (0.020)\\   
-      Filing Rate Quintile $=$ 4                   &                &                                     & 0.144$^{***}$             & 0.082$^{***}$\\   
-                                                   &                &                                     & (0.019)                   & (0.021)\\   
-      Filing Rate Quintile $=$ 5                   &                &                                     & 0.168$^{***}$             & 0.088$^{***}$\\   
-                                                   &                &                                     & (0.018)                   & (0.019)\\   
+      High Evictors                               & 0.122$^{***}$  & 0.051$^{***}$                       &                           &   \\   
+                                                  & (0.012)        & (0.011)                             &                           &   \\   
+      Filing Rate 2nd Quintile                    &                &                                     & 0.007                     & 0.011\\   
+                                                  &                &                                     & (0.020)                   & (0.019)\\   
+      Filing Rate 3rd Quintile                    &                &                                     & 0.105$^{***}$             & 0.046$^{**}$\\   
+                                                  &                &                                     & (0.022)                   & (0.020)\\   
+      Filing Rate 4th Quintile                    &                &                                     & 0.144$^{***}$             & 0.082$^{***}$\\   
+                                                  &                &                                     & (0.019)                   & (0.021)\\   
+      Filing Rate 5th Quintile                    &                &                                     & 0.168$^{***}$             & 0.088$^{***}$\\   
+                                                  &                &                                     & (0.018)                   & (0.019)\\   
+      100+ Units (Post-COVID)                     & -0.075$^{***}$ & -0.010                              & -0.051$^{**}$             & -0.011\\   
+                                                  & (0.026)        & (0.019)                             & (0.024)                   & (0.021)\\   
+      2-5 Units (Post-COVID)                      & -0.002         & 0.028$^{***}$                       & 0.017$^{*}$               & 0.031$^{***}$\\   
+                                                  & (0.009)        & (0.008)                             & (0.009)                   & (0.008)\\   
+      51-100 Units (Post-COVID)                   & -0.046         & -0.032$^{*}$                        & -0.031                    & -0.033$^{**}$\\   
+                                                  & (0.028)        & (0.016)                             & (0.028)                   & (0.017)\\   
+      6-50 Units (Post-COVID)                     & -0.030$^{*}$   & 0.001                               & -0.006                    & 0.003\\   
+                                                  & (0.015)        & (0.012)                             & (0.017)                   & (0.013)\\   
+      Post-COVID Period $\times$ Corporate Owner  & 0.002          & 0.012                               & 0.007                     & 0.013\\   
+                                                  & (0.017)        & (0.011)                             & (0.016)                   & (0.011)\\   
       \midrule
       \emph{Fixed-effects}\\
-      parcel                                       & Yes            & Yes                                 & Yes                       & Yes\\  
-      year                                         & Yes            &                                     & Yes                       & \\  
-      Census Tract-year                            &                & Yes                                 &                           & Yes\\  
+      parcel                                      & Yes            & Yes                                 & Yes                       & Yes\\  
+      year                                        & Yes            &                                     & Yes                       & \\  
+      Census Tract-year                           &                & Yes                                 &                           & Yes\\  
       \midrule
       \emph{Fit statistics}\\
-      Observations                                 & 51,901         & 51,901                              & 51,901                    & 51,901\\  
+      Observations                                & 51,901         & 51,901                              & 51,901                    & 51,901\\  
       \midrule \midrule
       \multicolumn{5}{l}{\emph{Clustered (parcel) standard-errors in parentheses}}\\
       \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
