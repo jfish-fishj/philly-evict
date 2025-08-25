@@ -4,12 +4,13 @@
 \usepackage{amsmath}
 \usepackage{longtable}
 \usepackage{booktabs}
+\usepackage{color}
 
 %\usepackage{biblatex}
 \usepackage[backend=biber,
 style=authoryear,
 citestyle=authoryear]{biblatex} 
-\addbibresource{latex/bibliograph.bib}
+\addbibresource{latex/bibliography.bib}
 
 \title{Prospectus Proposal}
 \author{Joseph Fish}
@@ -18,13 +19,16 @@ citestyle=authoryear]{biblatex}
 
 \begin{document}
 
-\section{Motivation}
+\section{Field Paper Recap}
+In my field paper, I study whether investor decisions and property acquisitions by large landlords are a meaningful driver of rent prices. Using a novel data set of landlord links and property holdings built by \cite{Gomory_2024} covering the Boston and Houston rental markets, merged with rental listing and building permit data, I present five sets of results. First, I show that failing to take into account shell ownership leads to underestimates of market concentration of more than 10\%. Second, I show that, while shell ownership matters for accurately measuring levels of concentration, I find no evidence that concentration has increased over time. Third, I show that over 90\% of the variation in concentration within a market across time is explained by entry, and only 5\% by mergers. Fourth, I find that, on average, landlords raise prices by 1.7 percentage points after acquiring properties (over 4 percentage points by the fourth year post-acquisition). Fifth, I show that these acquisition effects are largely explained by post-acquisition renovations. Specifically, I estimate precise null effects for properties that are acquired but not subsequently renovated and large effects for those that are subsequently renovated.
 
-80\% low income renters in America rent from the private market \parencite{jchs_2024, nhpd2024profiles}. These rental markets are characterized by surprisingly high prices and supernormal profits \parencite{Desmond_2019, Damen_2025,Eisfeldt_2015}, low maintenance, minimal entry, high search frictions, and high rates of tenant default \parencite{humphries-2024} and eviction \parencite{Gromis-et-al-2022}. The welfare costs to tenants through eviction are substantive \parencite{collison-et-al-2023, graetz-at-al-2023, desmond-evicted, humphries2025} and are compounded by likely monopoly rents in low income housing as well as documented predatory behavior by some low income landlords \parencite{desmond-evicted}. Because of these negative effects on tenants there is obvious scope and justification for regulation of and intervention into the low income rental market.\\
+\section{Job Market Paper Motivation}
+
+80\% low income renters in America rent from the private market \parencite{jchs_2024, nhpd2024profiles}. These rental markets are characterized by surprisingly high prices and supernormal profits \parencite{Desmond_2019, Damen_2025,Eisfeldt_2015}, low maintenance, minimal entry, high search frictions, and high rates of tenant default \parencite{humphries-2024} and eviction \parencite{Gromis-et-al-2022}. The welfare costs to tenants through eviction are substantive \parencite{collison-et-al-2023, graetz-at-al-2023, desmond-evicted, humphries2025} and are compounded by likely monopoly rents in low income housing as well as documented predatory behavior by some low income landlords \parencite{desmond-evicted}. Because of these negative effects on tenants, there is obvious scope and justification for regulation of and intervention into the low income rental market.\\
 
 Despite the aforementioned market failures, because the private market provides the majority of housing to low income renters, regulation has to be careful not to induce widespread exit of low income landlords as this has been linked to increased rent prices \parencite{collinson2024eviction}, declining housing supply \parencite{diamond-2019}, and homelessness \parencite{pinto2024sro}. As such, optimal regulation of the low income rental market is ex-ante unclear and relies on understanding the scope of market power in these markets as well as the exit thresholds for low-income landlords.\\   
 
-This prospectus makes two contributions to the literature on low income housing and, more broadly, to how we should think about market power and landlord decisions in the rental market. In my job market paper, I look at the sources and scope of market power in the low income rental market. I argue that market power is primarily coming from search frictions that tenants face. Additionally, I want to show that search creates additional ways for landlords to exert market power -- specifically, they can
+This prospectus makes two contributions to the literature on low income housing and, more broadly, to how we should think about market power and landlord decisions in the rental market. In my job market paper, I look at the sources and scope of market power in the low income rental market. I argue that market power is primarily coming from search frictions that tenants face. Additionally, I want to show that search creates additional ways for landlords to exert market power -- specifically, large landlords can make tenants' outside options worse by removing themselves from tenants' outside options, essentially making it so that landlords don't compete with themselves.
 % Evictions in America are both remarkably common and remarkably concentrated. Each year, there are around 3.6 million eviction filings. These filings disproportionately occur within certain cities, within certain neighborhoods in those cities, and within certain buildings inside those neighborhoods. In the most extreme cases, like in Tuscon, Arizona, 300 buildings are responsible for over 66\% of eviction filings. In Philadelphia, only around 15\% of rental units will file an eviction in a given year, and about 10\% of all eviction filings come from just 2\% of units, and 25\% come from 10\% of all rental units. \\
 
 % Going further, serial evictions, which are consecutive (serial) filings on the same tenant at the same address, are also concentrated within particular sets of landlords. These filings are typically thought to be ways in which landlords use the court system as debt collectors as they do not result in a change in tenancy, even thought the landlord typically wins a writ of possession. Additionally, statements from the National  Apartment Association (NAA) highlight they think their ability to evict tenants is an important part of why they remain in the low income rental market. Taken together, there is substantial evidence that eviction is an important component of a particular kind of landlord's business model. \\
@@ -34,38 +38,93 @@ This prospectus makes two contributions to the literature on low income housing 
 
 The empirical setting for this project will be Philadelphia, Pennsylvania. Philadelphia is an ideal city for a number of reasons. On the demographic side, Philadelphia is the largest poor city in America, with a high eviction rate, high segregation, and a large Black population, making it a very useful case study for understanding America's low income housing market. On the data side, Philadelphia is unique in that it has a rental registry, meaning I can see exactly which properties are rental units in each year. Other studies have had to rely on owner occupancy exemptions to identify rental properties, which is problematic because it conflates rental units with Airbnbs and vacation homes. \\
 
-Additionally, Philadelphia has very good historical eviction data, and, importantly, the eviction data contain contract rents, which let me see normally hard to observe rent prices for low income units. Finally, on the policy side, Philadelphia had a large change in their tenant protections in 2022, where they now make eviction cases go through mediation, leading to an approximately 30\% decline in eviction filings, relative to a pre-pandemic baseline.
+Additionally, Philadelphia has very good historical eviction data, and, importantly, the eviction data contain contract rents, which let me see normally hard to observe rent prices for low income units. \\
+
+To better show the importance of this data coverage, in figure \ref{fig:rent-dist}, I plot the distirbution of rent prices for a commcerically available rental dataset, (\textcolor{red}{altos}), the \textcolor{green}{Census Tract Median Rent}, and rent prices from the \textcolor{blue}{Eviction filings}. The eviction filings are a much better match to the median renter in Philadelphia than the data provided by Altos.\\
+    \begin{figure}
+        \centering
+        \includegraphics[width=1\linewidth]{figs/density_rent_prices.png}
+        \caption{Rent Prices by Data Source}
+        \label{fig:rent-dist}
+    \end{figure}
+
+Finally, on the policy side, Philadelphia had a large change in their tenant protections in 2022, where they now make eviction cases go through mediation, leading to an approximately 30\% decline in eviction filings, relative to a pre-pandemic baseline.
+
+\clearpage
 
 \section{Stylized Facts about Philadelphia's Low Income Housing Market}
 
-In this section, I lay out a series of motivating empirical facts about Philadelphia's low income housing market. Beginning with a map of Philadelphia (figure \ref{fig:philly-map}), I show that evictions in Philadelphia are geographically very concentrated in the predominately poor and highly segregated neighborhoods of West and North Philadelphia.
+\subsection{Hedonic Regressions}
+In this section, I lay out a series of motivating empirical facts about Philadelphia's low income housing market. Begining with hedonic regressions, I document two facts about prices in high evicting units:
 
+\begin{itemize}
+    \item Unconditionally, eviction rates don't correlate with prices after a ~20\% filing rate
+        \item After controlling for property and neighborhood characteristics, units with \textbf{higher} eviction rates charge \textbf{higher} rents 
+\end{itemize}
 
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=1\linewidth]{figs/evict_filing_rate_hist.png}
-    \caption{Evictions in Philadelphia (2019)}
-    \label{fig:philly-map}
-\end{figure}
-
-Secondly, I show that, when looking across properties, evictions are concentrated in a handful of buildings. To show this, I merged the eviction data, which contain the defendant's address, with the rental registry and the parcel data in Philadelphia. This lets me know which properties are rental units in a given year, as well as the number of rental units that are in each property. Doing this allows me to plot the CDF of eviction filings alongside the CDF of rental units. \\
-
-As figure \ref{fig:philly-evict-parcel} shows, the vast majority of rental units do not file an eviction in a typical year. Of the properties that do file an eviction, most file only one. Collectively, about 10\% of all eviction filings come from just 2\% of units. \\
+In figure \ref{fig:bin-scatter}, I plot the bin scatter for inflation adjusted rent prices as a function of the property level filing rates.\footnote{The filing rate is the historical average number of filings per unit per year. So a building with 100 units that files 20 evictions in a typical year would have a filing rate of 0.2} I find that there is a steep negative relationship between filing rates and prices, however, this relationship turns flat after around 0.2, indicating that prices for a building that evicts 20\% of their tenants are comparable to a building that evicts 80\%.
 
 \begin{figure}[htbp]
-    \centering
-    \includegraphics[width=1\linewidth]{figs/cumulative_evict_dist_parcels.png}
-    \caption{Evictions in Philadelphia}
-    \label{fig:philly-evict-parcel}
-\end{figure}
+        \centering
+        \includegraphics[width=1\linewidth]{figs/philadelphia_filing_rate_rent_scatter.png}
+        \caption{Bin Scatter of Eviction Rates by Data Source}
+        \label{fig:bin-scatter}
+    \end{figure}
 
-Third, in table \ref{tab:philly-rent},I group eviction filings by whether they were filed by one of the top-100 evicting plaintiffs in each year. I show that there are not substantial differences in rent prices between filings by high / low evicting plaintiffs.\\
+Next, in table \ref{tab:rent_regs}, I plot the results from a hedonic regression of prices on observables. In this regression, I subset the data to be only units that had an eviction filing. In the first column, I document that, unconditionally, there is a strong negative relationship between prices and filing rates. However, in column 2, after controlling for a large number of neighborhood and property characteristics, the coefficient on filing rates turns positive.
 
-\begin{table}[htbp]
-    \include{tables/philly-summary-rent}
-    \caption{Philadelphia Rent}
-    \label{tab:philly-rent}
-\end{table}
+\begin{center}
+        \include{model_tables}
+\end{center}
+
+Both of these facts are surpising as, intuitively, higher filing rates should correlate negatively with prices as higher filing rates are likely correlated with bad unobserved quality and households likely dislike high filing rates in and of themselves. These hedononics can't rule out high prices for high evicting units as representing default premia, however, previous literature on higher profits for low income rentals suggests default premia cannot explain everything.
+
+\clearpage
+
+\subsection{Market Segmentation}
+
+In this section, I present some preliminary evidence on market segmentation. In the future, I will do this with the InfoUSA data to empirically document what kinds of properties low income renters are substituting between. In the absence of these data, I segment markets based on zip code and property type, following \parencite{framoutar2024market, calderwang2024algorithmic} and by whether the unit had an above 15\% average filing rate.  I'll show that, if you think because of tenant screening, low income renters substitute largely between high evicting properties, markets can be fairly consolidated.
+
+\begin{figure}[htbp]
+        \centering
+        \includegraphics[width=1\linewidth]{figs/market_share_cdf.png}
+        %\caption{Caption}
+        \label{fig:market-share-cdf}
+    \end{figure}
+
+In figure \ref{fig:market-share-cdf}, I plot the CDF of market shares, that is, the percent of tenants who rent from a landlord who owns X\% or more of the market they rent in. Begining with the zip code and zip code by property type market definitions, I show that the overall rental market is not consolidated. However, if tenants are choosing between units that have at least a 15\% average filing rate within a zip code, around 20\% of tenants will rent from a landlord who owns at least 20\% of the units in their market. 
+
+\subsection{Recap}
+Taken together, I think there's evidence that prices in low income markets are "surpisingly" high and there's sufficient market consolidation that we might be worried about market power. In the next section, I turn to how I want to think about market power in this setting, which is that landlords internalize that their tenants have high search costs and poor outside options, and use that to raise rents.
+% Beginning with a map of Philadelphia (figure \ref{fig:philly-map}), I show that evictions in Philadelphia are geographically very concentrated in the predominately poor and highly segregated neighborhoods of West and North Philadelphia.
+\clearpage
+\include{latex/sketch-of-search-model}
+
+% \begin{figure}[htbp]
+%     \centering
+%     \includegraphics[width=1\linewidth]{figs/evict_filing_rate_hist.png}
+%     \caption{Evictions in Philadelphia (2019)}
+%     \label{fig:philly-map}
+% \end{figure}
+
+% Secondly, I show that, when looking across properties, evictions are concentrated in a handful of buildings. To show this, I merged the eviction data, which contain the defendant's address, with the rental registry and the parcel data in Philadelphia. This lets me know which properties are rental units in a given year, as well as the number of rental units that are in each property. Doing this allows me to plot the CDF of eviction filings alongside the CDF of rental units. \\
+
+% As figure \ref{fig:philly-evict-parcel} shows, the vast majority of rental units do not file an eviction in a typical year. Of the properties that do file an eviction, most file only one. Collectively, about 10\% of all eviction filings come from just 2\% of units. \\
+
+% \begin{figure}[htbp]
+%     \centering
+%     \includegraphics[width=1\linewidth]{figs/cumulative_evict_dist_parcels.png}
+%     \caption{Evictions in Philadelphia}
+%     \label{fig:philly-evict-parcel}
+% \end{figure}
+
+% Third, in table \ref{tab:philly-rent},I group eviction filings by whether they were filed by one of the top-100 evicting plaintiffs in each year. I show that there are not substantial differences in rent prices between filings by high / low evicting plaintiffs.\\
+
+% \begin{table}[htbp]
+%     \include{tables/philly-summary-rent}
+%     \caption{Philadelphia Rent}
+%     \label{tab:philly-rent}
+% \end{table}
 
 
 % Finally, in figure \ref{fig:philly-year}, I show that evictions declined substantially during COVID and have held at lower rates than the pre-pandemic baseline. \\
