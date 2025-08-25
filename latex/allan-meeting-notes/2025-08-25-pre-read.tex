@@ -156,7 +156,57 @@
 \end{frame}
 
 \begin{frame}{Recap of Stylized Facts}
+    High Filing Units charge more, conditional on a bunch of observables
+    \tiny
+    \input{tables/hedonic_filing_rate_cuts}
     
+\end{frame}
+
+\begin{frame}{Recap of Model}
+    \begin{enumerate}
+    \item Each renter chooses a probability distribution over the homes to send out one application. The probability distribution is such that $\pi_t = (\pi_t(1) \dots \pi_t(k))$ with $\sum_{k = 1}^{K} \pi_t(k)=1$
+    \item Each renter chooses one home to apply to, drawn from $\pi_t$
+    \item For type B landlords, if a unit receives multiple applications, it chooses one, breaking ties randomly
+    \item For type A landlords, they first choose randomly between high types and then choose randomly between low types if no high types apply.
+    \item unmatched landlords and tenants produce nothing and get zero payoff
+    \begin{itemize}
+        \item justified because it seems unreasonable to expect landlords and tenants to coordinate application behavior
+    \end{itemize}
+
+\end{enumerate}
+\end{frame}
+
+\begin{frame}{Issues}
+    \begin{itemize}
+        \item Stylized facts not super robust
+        \item Calibration wasn't working correctly; (matching pennies issue in the code)
+        \item Hard to calibrate
+    \end{itemize}
+    
+\end{frame}
+
+\begin{frame}{New Ideas}
+    \begin{itemize}
+        \item Landlord responses to changes in tenant protections
+        \begin{itemize}
+            \item A couple papers that try to do this. I think they're missing how the econ works; the relevant margin isn't landlord exit, it's landlords changing how they manuever vacancies
+        \end{itemize}
+        \item Who sets prices in response to demand shocks; idea is that adjustment is faster in markets with more units / more corporate owned units
+    \end{itemize}
+    
+\end{frame}
+
+\begin{frame}{New Stylized Facts}
+    High Evicting Landlords Increased Prices Post-COVID
+    \tiny
+    \input{tables/covid_price_change_regs}
+    
+\end{frame}
+
+\begin{frame}{New Stylized Facts}
+    High Evicting Landlords Left Market Post-COVID
+    \tiny
+    \input{tables/covid_price_change_regs}
     
 \end{frame}
 
