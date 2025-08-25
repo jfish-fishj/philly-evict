@@ -1,0 +1,55 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{makecell}
+
+\author{Joseph Fish}
+
+
+
+\begin{document}
+
+\begin{table}[htbp]
+   \caption{Price Change Regressions}
+   \centering
+   \resizebox{0.85\textwidth}{!}{%
+   \begin{tabular}{lcccc}
+      \tabularnewline \midrule \midrule
+      Dependent Variable: & \multicolumn{4}{c}{Log Median Rent}\\
+                          & \makecell{High \\ Evictors} 
+                          & \makecell{High Evictors \\ (within Census Tract)} 
+                          & \makecell{High Evictors \\ (quintiles)} 
+                          & \makecell{High Evictors \\ (quintiles within Census Tract)} \\   
+      Model:              & (1)           & (2)                                 & (3)                       & (4)\\  
+      \midrule
+      \emph{Variables}\\
+      High Evictors              & 0.134$^{***}$ & 0.050$^{***}$                       &                           &   \\   
+                                 & (0.014)       & (0.010)                             &                           &   \\   
+      Filing Rate Quintile $=$ 2 &               &                                     & -0.015                    & 0.003\\   
+                                 &               &                                     & (0.022)                   & (0.018)\\   
+      Filing Rate Quintile $=$ 3 &               &                                     & 0.084$^{***}$             & 0.037$^{**}$\\   
+                                 &               &                                     & (0.022)                   & (0.019)\\   
+      Filing Rate Quintile $=$ 4 &               &                                     & 0.129$^{***}$             & 0.071$^{***}$\\   
+                                 &               &                                     & (0.019)                   & (0.021)\\   
+      Filing Rate Quintile $=$ 5 &               &                                     & 0.158$^{***}$             & 0.079$^{***}$\\   
+                                 &               &                                     & (0.019)                   & (0.018)\\   
+      \midrule
+      \emph{Fixed-effects}\\
+      parcel                     & Yes           & Yes                                 & Yes                       & Yes\\  
+      year                       & Yes           &                                     & Yes                       & \\  
+      Census Tract-year          &               & Yes                                 &                           & Yes\\  
+      \midrule
+      \emph{Fit statistics}\\
+      Observations               & 51,901        & 51,901                              & 51,901                    & 51,901\\  
+      \midrule \midrule
+      \multicolumn{5}{l}{\emph{Clustered (parcel) standard-errors in parentheses}}\\
+      \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+   \end{tabular}
+   } % end resizebox
+\end{table}
+
+
+\end{document}

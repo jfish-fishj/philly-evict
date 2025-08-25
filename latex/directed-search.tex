@@ -1,0 +1,121 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{longtable}
+\usepackage{booktabs}
+\title{Directed Search}
+\author{Joseph Fish}
+
+
+
+\date{June 2024}
+
+\begin{document}
+
+\Section{Model in words}
+Directed search model -- so landlords post prices, and tenants direct their search towards the postings they choose. There are two types of tenants, high and low risk, and two types of landlords (A and B) who operate homogeneous units. The key here is that type A landlords will not rent to low type tenants unless they are the only applicant. \\
+
+Each tenant, with probability Pi(K), sends out an application to a single unit. Landlords receive applications and pick one of the tenants. If landlords receive multiple applications, they pick one at random, according to some decision rule (e.g., pick high type tenants first, then low type if no high types apply).
+\Section{Setup}
+\subsection{Renters}
+Two types of renters ($t$, $t \in \{\text{high}, \text{low}\}$. The proportions are fixed at $\gamma$ and $1-\gamma$. There are N total renters
+
+\subsection{Landlords}
+Two types of landlords $l$, $l \in \{\text{A}, \text{B}\}$. The proportions are (for now) fixed at $\tau$ and $1-\tau$. Type A landlords will rent to anyone, and type B landlords will only rent to low type renters if no high type renters apply. There are M total landlords
+
+\subsection{Homes}
+There are a finite number of exogenously supplied homes, each of which can post rent K. 
+\subsection{Applications}
+
+\subsection{One Shot game}
+\begin{enumerate}
+    \item Each renter chooses a probability distribution over the homes to send out one application. The probability distribution is such that $\pi_t = (\pi_t(1) \dots \pi_t(k))$ with $\sum_{k = 1}^{K} \pi_t(k)=1$
+    \item Each renter chooses one home to apply to, drawn from $\pi_t$
+    \item For type B landlords, if a unit receives multiple applications, it chooses one, breaking ties randomly
+    \item For type A landlords, they first choose randomly between high types and then choose randomly between low types if no high types apply.
+    \item unmatched landlords and tenants produce nothing and get zero payoff
+    \begin{itemize}
+        \item justified because it seems unreasonable to expect landlords and tenants to coordinate application behavior
+    \end{itemize}
+
+\end{enumerate}
+
+\subsection{Queue lengths and Strategies}
+I look for symmetric, mixed strategy equilibriums. A strategy profile for a tenant of type $i$ is a vector of probabilities $P_{i} \equiv (P_{Ai}...;P_{Bi})$. A type $l$ landlord has a strategy profile consisting of a rent ($r_{li}$ and a selection rule ($\chi_l \in \{0,1\}$. The selection rule can be indifference or a preference for high over low type tenants. These rules are announced and committed to. \\
+
+Each tenant maximizes utility (flow utility of rental unit minus rent), making a tradeoff between the rent and the probability of obtaining the unit. Define $x_{li}$ as the queue length, or the expected number of applications of a type $i$ tenant to a type $l$ unit. Agents within a type are identical and everyone is risk neutral. The queues are finite in the limit if the ratio $\frac{N}{M}$ is finite. $x_{la}= aNp_{li}$ and $x_{lb}= (1-a)Np_{lb}$  I will refer to $X_{i} \equiv (x_{Ai}...;x_{Bi})$ as a tenant's strategy.\\
+
+The following hold, since tenant's application probabilities must sum to 1:
+
+\begin{equation*}
+    hx_{Ha} + (1-h)x_{La} = na
+\end{equation*}
+
+\begin{equation*}
+    hx_{Hb} + (1-h)x_{Lb} = n(1-a)
+\end{equation*}
+
+Define $q_{li}$ be the probability a tenant of type i gets a unit of type $l$. As M, N $\rightarrow$ $\infty$, these become:
+
+\begin{align*}
+q_{la} &= \left[\chi_l + (1 - \chi_l)e^{-x_{lb}}\right] g(x_{la}); \\
+q_{lb} &= \left(1 - \chi_l + \chi_l e^{-x_{la}}\right) g(x_{lb}), \\
+\end{align*}
+
+where
+
+\begin{align*}
+    g(x) &\equiv \frac{1 - e^{-x}}{x}
+\end{align*}
+
+Note that when not in the limit, the first equation is $(1 - p_{lb})^{(1-a)N}$ (the probability no high types apply) plus $(\chi_l[1- p_{lb})^{(1-a)N}])$. The sum of these equals $\chi_l + (1 - \chi_l)e^{-x_{lb}}$ in the limit. Conditional on choosing a high type applicant, the probability of being chosen is $\left[1 - (1 - p_{la})^{aN} \right] / (aN p_{la})$
+which is $g(x)$ in the limit.
+
+\subsection{Tenant's Problem}
+Tenants maximize expected flow utility net rent, making the tradeoff between lower rent (good) and lower probability of matching (bad).\\
+
+A tenant applies for a unit iff the expected rent is less than or equal to the equilibrium market rent for the tenant. In equilibrium, these two are equal, as high rents are compensated with high probabilities of being the only tenant.\\
+
+% \paragraph{Low type tenant}
+% \begin{align*}
+%     \underset{p_k}{\text{max }} & (v-r_j)[(1 - e^{-(x_{la}+x_{ha})})]
+% \end{align*}
+
+% \paragraph{High type tenant}
+
+
+\subsection{Landlord's Problem}
+Firms maximize expected profit, taking equilibrium rents for discriminating / non-discriminating landlords as given
+
+Rent times P($\geq\text{ one application}$)
+\begin{align*}
+    \underset{r_l}{\text{max }} & r_j[(1 - e^{-(x_{la}+x_{ha})})]
+\end{align*}
+
+% \paragraph{Discriminating Landlord}
+% Rent times P($\geq\text{ one application}$)
+% \begin{align*}
+%     \underset{r_l}{\text{max }} & r_j[(1 + e^{-x_{lb}})(1 - e^{-x_{la}}) + \left(  e^{-x_{la}}\right)(1 - e^{-x_{lb}})]
+% \end{align*}
+
+% In words: rent times the sum of the (P(selecting type high type)* P(at least one high type)) + (P(selecting low type) * P(at least one low type))
+
+\subsection{Equilibrium}
+
+For now, landlords maximize expected profit, tenant's maximize expected utility, there's no entry or exit.
+
+\subsection{Equilibrium Characteristics}
+
+
+\subsection{Comparative Statics}
+\paragraph{Changes in vacancy rates}
+
+\paragraph{Changes in flow utility}
+
+\paragraph{Changes in tenant composition}
+
+\paragraph{Changes in landlord composition}
+
+
+\end{document}
