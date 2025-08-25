@@ -4,12 +4,16 @@
 library(data.table)
 library(stringr)
 library(sf)
+library(tidyverse)
 library(tidycensus)
 library(zipcodeR)   # for zip_code_db
 library(ggplot2)
 library(spatstat.geom)
-
-
+library(fixest)
+setwd(
+  '/Users/joefish/Documents/GitHub/philly-evictions'
+)
+source("r/helper-functions.R")
 # helper: normalize 5-digit ZIP
 normalize_zip <- function(z) str_pad(str_sub(z, 1, 5), width = 5, side = "left", pad = "0")
 
@@ -121,7 +125,7 @@ prep_parcel_building <- function(philly_parcels, philly_bg, philly_building_df, 
 
   parcel_bldg[,num_units_pred := round(predict(units_model, newdata = parcel_bldg))]
   parcel_bldg[,num_units_imp := fifelse(is.na(num_units), num_units_pred,round(num_units))]
-  parcel_bldg[,num_units_imp := fifelse(num_units_imp < 0 , num_units_imp,num_units_imp)]
+  parcel_bldg[,num_units_imp := fifelse(num_units_imp <= 0 , 1, num_units_imp)]
   # pad PID
   parcel_bldg[, PID := str_pad(PID, 9, "left", "0")]
 
@@ -138,7 +142,13 @@ prep_rent_altos <- function(philly_lic, philly_altos) {
   lic <- copy(philly_lic)
   altos <- copy(philly_altos)
 
-  lic <- lic[licensetype == "Rental"]
+  # clean up rentalcategory
+  # first make blanks NA
+  lic[,rentalcategory := fifelse(rentalcategory == "", NA_character_, rentalcategory)]
+  # now within opa_account_num and owner, get modal category (a bit weird cause it's not weighted by years but whatever)
+  lic[, modal_rentalcategory := Mode(rentalcategory,na.rm = T), by = .(opa_account_num, ownercontact1name)]
+
+  lic <- lic[licensetype == "Rental" & modal_rentalcategory %in% c("Residential Dwellings", "Other")]
   lic[, start_year := as.numeric(substr(initialissuedate, 1, 4))]
   lic[, end_year   := as.numeric(substr(expirationdate, 1, 4))]
   lic[, num_years  := end_year - start_year]
@@ -155,17 +165,20 @@ prep_rent_altos <- function(philly_lic, philly_altos) {
   lic_long <- lic_long[year %in% 2016:2024 & n_sn_ss_c != ""]
 
   # Units per PID (median up to 2022)
-  lic_units <- lic_long[year <= 2022,
-                        .(num_units = median(numberofunits, na.rm = TRUE)),
+  lic_long[,numberofunits := as.double(numberofunits)]
+  lic_units <- lic_long[year <= 2024,
+                        list(num_units = median(numberofunits, na.rm = TRUE),
+                             mode_num_units = Mode(numberofunits, na.rm = TRUE),
+                             mean_num_units = mean(numberofunits,na.rm=T)),
                         by = .(PID)]
 
   # Altos rent panel restricted to licensed PIDs
   rent <- as.data.table(altos[PID %in% lic_long$PID])
-  if (!"ymd" %in% names(rent) && all(c("year","month","day") %in% names(rent))) {
-    rent[, ymd := paste0(year, "-", month, "-", day)]
-  }
-  rent[, ymd_char := paste0(year, "-", month, "-", day)]
-  rent <- rent[year %in% 2006:2022 & med_price > 500 & med_price < 7500]
+  # if (!"ymd" %in% names(rent) && all(c("year","month","day") %in% names(rent))) {
+  #   rent[, ymd := paste0(year, "-", month, "-", day)]
+  # }
+  # rent[, ymd_char := paste0(year, "-", month, "-", day)]
+  rent <- rent[year %in% 2006:2024 & med_price > 500 & med_price < 7500]
 
   if ("beds_imp_first" %in% names(rent)) {
     rent[, beds_imp_first_fixed := fifelse(!is.na(beds_imp_first),
@@ -191,8 +204,10 @@ prep_rent_altos <- function(philly_lic, philly_altos) {
   lic_long_min <- lic_long_min[!is.na(PID)]
   rent[,source := "altos"]
   list(
-    rent = rent[, .(PID, bed_bath_pid_ID, beds_imp_first, beds_imp_first_fixed,month, day,ymd_char,source,
-                    baths_first, baths_first_fixed, ymd, year, med_price, num_listings, log_med_price)],
+    rent = rent[, .(PID, bed_bath_pid_ID, beds_imp_first, beds_imp_first_fixed,#ymd_char,
+                    source,year, month,
+                    baths_first, baths_first_fixed, #ymd,
+                     med_price, num_listings, log_med_price)],
     lic_units = lic_units,
     lic_long_min = lic_long_min
   )
@@ -314,7 +329,7 @@ prep_evictions <- function(philly_evict, evict_xwalk, pa_zip_acs, models, bldg_d
   ev_parcel_agg <- ev_m[commercial_alt == FALSE, .(
     num_filings            = sum(housing_auth == FALSE, na.rm = TRUE),
     num_filings_with_houth_auth = .N,
-    med_price              = suppressWarnings(median(ongoing_rent[housing_auth == FALSE], na.rm = TRUE)),
+    med_price              = suppressWarnings(median(ongoing_rent, na.rm = TRUE)),
     pm.zip                 = first(pm.zip),
     ymd                    = as.character(first(d_filing))
   ), by = .(year, PID)]
@@ -324,11 +339,51 @@ prep_evictions <- function(philly_evict, evict_xwalk, pa_zip_acs, models, bldg_d
     num_filings_with_houth_auth = .N,
     med_price              = suppressWarnings(median(ongoing_rent[housing_auth == FALSE], na.rm = TRUE)),
     pm.zip                 = first(pm.zip),
-    ymd                    = as.character(first(d_filing))
+   ymd                    = as.character(first(d_filing))
   ), by = .(year, PID,  beds_imp_first, baths_first)]
 
-  ev_parcel_agg[, source := "evict"]
-  ev_parcel_bed_agg[, source := "evict"]
+
+  # expand ev_parcel_agg
+  grid <- expand_grid(
+                      PID = ev_parcel_agg[!is.na(PID), unique(PID)],
+                      year =ev_parcel_agg[!is.na(year), unique(year)]
+  )
+  ev_parcel_agg = merge(
+    as.data.table(grid),
+    ev_parcel_agg,
+    all.x = T,
+    by = c("PID", "year")
+  )
+  ev_parcel_agg[,num_filings := fifelse(is.na(num_filings), 0, num_filings)]
+  ev_parcel_agg[,num_filings_with_houth_auth := fifelse(is.na(num_filings_with_houth_auth),
+                                                        0
+                                                        , num_filings_with_houth_auth)]
+  ev_parcel_agg[,pm.zip_first := first(pm.zip[!is.na(pm.zip)]), by = PID]
+  ev_parcel_agg[,pm.zip := coalesce(pm.zip,pm.zip_first)]
+  ev_parcel_agg[,pm.zip_first := NULL]
+
+  # repeat for beds agg
+  grid_bed <- expand_grid(PID = ev_parcel_bed_agg[!is.na(PID), unique(PID)],
+                          year = ev_parcel_bed_agg[!is.na(year), unique(year)],
+                          beds_imp_first = unique(ev_parcel_bed_agg$beds_imp_first),
+                          baths_first = unique(ev_parcel_bed_agg$baths_first)
+  )
+
+  ev_parcel_bed_agg = merge(
+    as.data.table(grid_bed),
+    ev_parcel_bed_agg,
+    all.x = T,
+    by = c("PID", "year", "beds_imp_first", "baths_first")
+  )
+
+  ev_parcel_bed_agg[,num_filings := fifelse(is.na(num_filings), 0, num_filings)]
+  ev_parcel_bed_agg[,num_filings_with_houth_auth := fifelse(is.na(num_filings_with_houth_auth),
+                                                        0
+                                                        , num_filings_with_houth_auth)]
+  ev_parcel_bed_agg[,pm.zip_first := first(pm.zip), by = PID]
+  ev_parcel_bed_agg[,pm.zip := coalesce(pm.zip,pm.zip_first)]
+  ev_parcel_bed_agg[,pm.zip_first := NULL]
+
 
   # ZIP-year aggregates + ACS + filter to Philadelphia major city
   ev_zip <- ev_parcel_agg[, .(
@@ -353,26 +408,26 @@ prep_evictions <- function(philly_evict, evict_xwalk, pa_zip_acs, models, bldg_d
 
   # add source column
   ev_parcel_agg[, source := "evict"]
+  ev_parcel_bed_agg[, source := "evict"]
   ev_zip_m[, source := "evict"]
 
   ev_parcel_agg[,ymd_char := ymd]
   ev_parcel_agg[, ymd := as.Date(ymd_char)]
-  ev_parcel_agg[, year := as.integer(substr(ymd_char, 1, 4))]
   ev_parcel_agg[, month := as.integer(substr(ymd_char, 6, 7))]
   ev_parcel_agg[, day := as.integer(substr(ymd_char, 9, 10))]
-  ev_parcel_agg[,num_filings_total := sum(num_filings), by = PID]
+  ev_parcel_agg[,num_filings_total := sum(num_filings,na.rm=T), by = PID]
   ev_parcel_agg[order(year),num_filings_cumsum := cumsum(num_filings), by = PID]
 
   list(
-    ev_pid_year = ev_parcel_agg[, .(PID, year, num_filings,
+    ev_pid_year = ev_parcel_agg[, .(PID, year,month, num_filings,
                              num_filings_with_houth_auth,
                              source,
                              num_filings_total,
                              num_filings_cumsum,
-                              ymd)],
+                              )],
     ev_pid_bed_year = ev_parcel_bed_agg[, .(PID, year, beds_imp_first, baths_first,
                                    source,
-                                   med_price, ymd)],
+                                   med_price, month, )],
     ev_zip_year = ev_zip_m[, .(pm.zip, year, num_filings_zip, med_price_zip,
                                renter_occupiedE, filing_rate_zip)]
   )
@@ -386,17 +441,22 @@ prep_share_metrics <- function(rent_list, parcel_bldg, final_panel,
                                cdf_path = "figs/market_share_cdf.png") {
 
   lic_long_min <- copy(rent_list$lic_long_min)
-
+  lic_long_min = lic_long_min[numberofunits > 0]
   # extend lic long min w/ rent data
   lic_long_min_extend <- final_panel[! PID %in% lic_long_min$PID ,
                                       list(
-                                        numberofunits = median(num_units_imp)
-                                      ), by = .(PID, year, pm.zip) ]
+                                        numberofunits = median(num_units_imp,na.rm=T)
+                                      ), by = .(PID, pm.zip) ]
+
+  lic_long_min_extend = cross_join(lic_long_min_extend, final_panel[,.(year = unique(year))])
 
   lic_long_min <- rbindlist(list(
     lic_long_min,
     lic_long_min_extend
   ),use.names = TRUE, fill = TRUE)
+
+  # drop ones w/ NA units
+  lic_long_min <- lic_long_min[!is.na(numberofunits) & numberofunits > 0]
 
   # owner_mailing (PID-level) from parcel_bldg
   owners <- unique(copy(parcel_bldg)[, .(PID, owner_mailing, zip_code)], by = "PID")
@@ -519,14 +579,16 @@ assemble_panel <- function(parcel_bldg,
   # start by making rent data
   rent <- rbindlist(list(
     altos[,.(PID, beds_imp_first, month, day, source,
-            baths_first, ymd=ymd_char, year, med_price)],
-    ev_pid_bed_year[,.(PID, med_price, ymd, year,  source = "evict",
+            baths_first, #ymd=ymd_char,
+            year, med_price)],
+    ev_pid_bed_year[!is.na(med_price),.(PID, med_price,month, #ymd,
+                                        year,  source = "evict",
                    baths_first, beds_imp_first
                    )]
   ), use.names = T, fill = TRUE)
 
-  rent[,month := as.integer(str_replace(substr(ymd, 6, 7),"-",""))]
-  rent[,day := as.integer(str_replace(str_sub(ymd, -2,-1), "-",""))]
+  #rent[,month := as.integer(str_replace(substr(ymd, 6, 7),"-",""))]
+  #rent[,day := as.integer(str_replace(str_sub(ymd, -2,-1), "-",""))]
   # get list of parcels that exist in either rent or evict data
   valid_parcels = parcel_bldg[PID %in% rent[,unique(PID)] & !is.na(PID), unique(PID)]
 
@@ -563,7 +625,7 @@ assemble_panel <- function(parcel_bldg,
   out[is.na(num_filings_total), num_filings_total := 0L]
   out[is.na(num_filings_cumsum), num_filings_cumsum := 0L]
   # PID-level totals and rates
-  out[, years_per_pid := fifelse(year_built <= 2006,2024 - 2006, 2024 - year_built )]
+  out[, years_per_pid := fifelse(year_built <= 2003,2024 - 2003, 2024 - year_built )]
   out[,years_per_pid_rel06 := years_per_pid - (year - 2006) ]
   out[, filing_rate := fifelse(!is.na(num_units_imp) & num_units_imp > 0 & years_per_pid > 0,
                                num_filings_total / num_units_imp / years_per_pid, NA_real_)]
@@ -610,8 +672,8 @@ build_analytic_df <- function(final_panel, share_df_agg) {
   print(glue::glue("reduced rows from {nrow(dt)} to {nrow(analytic_df)}"))
 
   # Derived features
-  analytic_df[, ymd_char := as.character(ymd)]
-  analytic_df[, month := lubridate::month(ymd_char)]
+  #analytic_df[, ymd_char := as.character(ymd)]
+  #analytic_df[, month := lubridate::month(ymd_char)]
   analytic_df[, filing_rate_sq   := filing_rate^2]
   analytic_df[, filing_rate_cube := filing_rate^3]
   analytic_df[, num_filings_total_sq := num_filings_total^2]
@@ -651,12 +713,13 @@ plot_market_share_cdf <- function(share_df,
 
   # filter share_df so that each zip code is in each series
   # (this is to ensure that the CDFs are comparable across series)
-  valid_zips <- share_df[,any(
-    !is.na(share_units_zip) &
-    (share_units_evict > 0 & is.finite(share_units_evict)) &
-    !is.na(share_units_bins) &
-    (share_units_evict_bins > 0 & is.finite(share_units_evict_bins))
-  ), by = .(year, pm.zip)][V1 == TRUE, unique(pm.zip)]
+  # valid_zips <- share_df[,any(
+  #   !is.na(share_units_zip) &
+  #   (share_units_evict > 0 & is.finite(share_units_evict)) &
+  #   !is.na(share_units_bins) &
+  #   (share_units_evict_bins > 0 & is.finite(share_units_evict_bins))
+  # ), by = .(year, pm.zip)][V1 == TRUE, unique(pm.zip)]
+  valid_zips <- unique(share_df$pm.zip)
 
   DT <- as.data.table(share_df[pm.zip %in% valid_zips])
 
@@ -680,13 +743,13 @@ plot_market_share_cdf <- function(share_df,
   # ---- build series (with their filters & legend labels) ----
   specs <- list(
     list(col = "share_units_zip",
-         filter = quote(!is.na(share_units_zip)),
+         filter = quote(!is.na(share_units_zip) & !is.na(share_units_bins)),
          label = "Zip Code"),
     list(col = "share_units_evict",
          filter = quote(share_units_evict > 0 & is.finite(share_units_evict)),
          label = "Zip Code X High-Evicting Units"),
     list(col = "share_units_bins",
-         filter = quote(!is.na(share_units_bins)),
+         filter = quote(!is.na(share_units_bins) & !is.na(share_units_zip)),
          label = "Zip Code X Property Size"),
     list(col = "share_units_evict_bins",
          filter = quote(share_units_evict_bins > 0 & is.finite(share_units_evict_bins)),
@@ -726,6 +789,22 @@ plot_market_share_cdf <- function(share_df,
   ggsave(gg, file = cdf_path, width = width, height = height, dpi = dpi, bg = "white")
 
   invisible(list(gg = gg, ecdf_data = ecdf_data, path = cdf_path))
+}
+
+# make bldg panel
+make_bldg_panel <- function(analytic_df){
+  unit_vars <- c( "beds_imp_first", "baths_first","med_price", "log_med_rent")
+  rent_panel <- analytic_df[,list(
+    med_price = median(med_price, na.rm = TRUE)
+  ), by = .(PID, year)]
+
+  bldg_panel <- analytic_df %>% select(-c(unit_vars )) %>%
+    distinct(PID, year, .keep_all = T)
+
+  bldg_panel <- merge(bldg_panel,rent_panel, by = c("PID", "year"), all.x = TRUE)
+  bldg_panel <- bldg_panel[!is.na(PID) & !is.na(year)]
+  bldg_panel[,log_med_rent := log(med_price)]
+  return(bldg_panel)
 }
 
 
@@ -773,16 +852,64 @@ evict_list <- prep_evictions(philly_evict, evict_xwalk, pa_zip, models_out, parc
 # 4) Final assembled panel
 final_panel <- assemble_panel(parcel_bldg, rent_list, evict_list)
 
+# 4.5 # get average eviction rates for all plausible rentals
+rentals <- c(
+  rent_list$lic_units$PID,
+  final_panel$PID
+) %>% unique()
+
+# now go back and remove rentals w/ bad license categories
+invalid_rentals <- philly_lic[opa_account_num %in% rentals & (is.na(rentalcategory) |
+                                             !rentalcategory %in% c("Residential Dwellings","","Other")), opa_account_num]
+valid_rentals <- rentals[!rentals %in% rentals]
+rental_panel <- parcel_bldg[PID %in% rentals, .(PID,num_units_imp,num_units, year)]
+rental_panel <- merge(rental_panel, evict_list$ev_pid_year[, .(PID, year,num_filings)],
+                      by = c("PID", "year"), all.x = TRUE)
+# replace missing num_filings with 0
+rental_panel[is.na(num_filings), num_filings := 0L]
+# calculate filing rate
+rental_panel[, filing_rate := num_filings / num_units_imp]
+rental_panel[, filing_rate_alt := num_filings / num_units]
+
+# weighted avg filing rate by year
+rental_panel_agg <- rental_panel[filing_rate <= 1,
+  list(
+    filing_rate = weighted.mean(filing_rate, num_units_imp, na.rm = TRUE),
+    filing_rate_alt = weighted.mean(filing_rate_alt, num_units, na.rm = TRUE),
+    num_units_imp = sum(num_units_imp, na.rm = TRUE),
+    num_units = sum(num_units, na.rm = TRUE)
+), by = year]
+
+rental_panel_agg
+
 share_out   <- prep_share_metrics(rent_list,
                                   parcel_bldg,
                                   final_panel,
-                                  evict_threshold = 0.08,
+                                  evict_threshold = 0.05, # roughly avg filing rate (not filing rate / rental units)
                                   cdf_path = "figs/market_share_cdf.png")
 
 out <- plot_market_share_cdf(share_out$share_df, cdf_path = "figs/market_share_cdf.png")
 
 analytic_df  <- build_analytic_df(final_panel, share_out$share_df_agg)
 
+# override num_units_bin
+analytic_df[, num_units_bins := fifelse(num_units_imp == 1, "1",
+                                        fifelse(num_units_imp <= 5, "2-5",
+                                                fifelse(num_units_imp <= 50, "6-50",
+                                                        fifelse(num_units_imp <= 100, "51-100",
+                                                                fifelse(num_units_imp > 100, "101+", NA_character_)))))]
 
+# now take analytic panel and convert to bldg level
+bldg_panel <- make_bldg_panel(analytic_df)
+# qc chceks
+bldg_panel[,num_filing_rates := uniqueN(filing_rate), by = .(PID)]
+bldg_panel[,.N, by = num_filing_rates]
+# write fils
+outdir <- "/Users/joefish/Desktop/data/philly-evict/processed"
+# make outdir if it doesn't exist
+dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
+fwrite(final_panel, file.path(outdir, "final_panel.csv"), row.names = FALSE)
+fwrite(analytic_df, file.path(outdir, "analytic_df.csv"), row.names = FALSE)
+fwrite(bldg_panel, file.path(outdir, "bldg_panel.csv"), row.names = FALSE)
 # final_panel now contains: rent (Altos) + parcel/building attributes + PID-year eviction counts
 # + ZIP-year eviction rates + num_units from licenses, with your cleaned fields preserved.

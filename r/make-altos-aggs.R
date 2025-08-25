@@ -59,12 +59,7 @@ impute_baths <- function(col){
 
 # make some altos vars
 # first, let's get the number of months a listing has been up for
-altos_dates <- str_match(altos$date, "([0-9]{4})-([0-9]{2})-([0-9]{2})")
-altos[,year := as.numeric(altos_dates[,2])]
-altos[,month := as.numeric(altos_dates[,3])]
-altos[,day := as.numeric(altos_dates[,4])]
 altos[,ym := year + (month-1)/12]
-altos[,ymd := year + (month-1)/12 + (day-1) / 365]
 altos[,price :=as.numeric(price)]
 altos[,beds_txt := impute_units(property_name)]
 altos[,beds_imp := coalesce(beds, beds_txt)]
@@ -109,17 +104,17 @@ sample_ids = altos_m[!is.na(PID) & !is.na(pm.uid_zip), sample(pm.uid_zip, 100)]
 
 # first step is to make a panel of all listings by ID- ym
 altos_m[,num_listings_ym := .N, by = .(bed_bath_pid_ID, ym)]
-altos_m[,num_listings_ymw := .N, by = .(bed_bath_pid_ID, ymd)]
+#altos_m[,num_listings_ymw := .N, by = .(bed_bath_pid_ID, ymd)]
 altos_m[,num_prices_ym := uniqueN(price), by = .(bed_bath_pid_ID, ym)]
 altos_m[,num_prices_ym_round100 := uniqueN(100*round(price/100,0)), by = .(bed_bath_pid_ID, ym)]
-altos_m[,num_prices_ymw := uniqueN(price), by = .(bed_bath_pid_ID, ymd)]
+#altos_m[,num_prices_ymw := uniqueN(price), by = .(bed_bath_pid_ID, ymd)]
 altos_m[,num_years_listed := uniqueN(year), by = .(bed_bath_pid_ID)]
 altos_m[,num_years_listed_PID := uniqueN(year), by = .(PID_replace)]
 altos_m[,listing_id := .GRP, by = .(bed_bath_pid_ID, property_name)]
 # try to get some sense of people who just leave their listings on
-altos_m = altos_m[order(bed_bath_pid_ID, ymd),]
+altos_m = altos_m[order(bed_bath_pid_ID, ym),]
 altos_m[,rep_listing := replace_na(price == lag(price),0), by = listing_id]
-altos_m[,time_gap := c(NA, diff(ymd)), by = listing_id]
+#altos_m[,time_gap := c(NA, diff(ymd)), by = listing_id]
 # have a running variable that resets when a listing changes
 altos_m[,cum_rep_listing :=ifelse(rep_listing == 1, seq_len(.N), 0), by = .(listing_id, rleid(rep_listing))]
 altos_m[,quantile(cum_rep_listing,na.rm = T, probs = seq(0,1,0.01))]
@@ -139,41 +134,41 @@ altos_m = altos_m[cum_rep_listing <= 10 ]
 # what's going to be true is that a bunch have multiple prices listed within the same
 # year-month
 ym_listings = altos_m[,.N, by = num_listings_ym][order(num_listings_ym)]
-ymw_listings = altos_m[,.N, by = num_listings_ymw][order(num_listings_ymw)]
+#ymw_listings = altos_m[,.N, by = num_listings_ymw][order(num_listings_ymw)]
 ym_prices = altos_m[,.N, by = num_prices_ym][order(num_prices_ym)]
 ym_prices_round100 = altos_m[,.N, by = num_prices_ym_round100][order(num_prices_ym_round100)]
-ymw_prices = altos_m[,.N, by = num_prices_ymw][order(num_prices_ymw)]
+#ymw_prices = altos_m[,.N, by = num_prices_ymw][order(num_prices_ymw)]
 
-ym_listings %>%
-  merge(ymw_listings,
-        by.x = "num_listings_ym",
-        by.y = "num_listings_ymw",
-        suffixes = c("_ym_listings","_ymw_listings"),
-        all = TRUE) %>%
-  merge(ym_prices,
-        by.x = "num_listings_ym",
-        by.y = "num_prices_ym",
-        suffixes = c("_ym_price","_ym_prices"),
-        all = TRUE) %>%
-  merge(ym_prices_round100,
-        by.x = "num_listings_ym",
-        by.y = "num_prices_ym_round100",
-        suffixes = c("","_ym_prices_round100"),
-        all = TRUE) %>%
-  merge(ymw_prices,
-        by.x = "num_listings_ym",
-        by.y = "num_prices_ymw",
-        suffixes = c("","_ymw_prices"),
-        all = TRUE) %>%
-  rename(N_ym_price = N)%>%
-  slice(1:15)
-
-unique(altos_m, by ="bed_bath_pid_ID")[,.N, by = num_years_listed][order(num_years_listed)]
-unique(altos_m, by ="PID_replace")[,.N, by = num_years_listed_PID][order(num_years_listed_PID)]
-print("made vars")
+# ym_listings %>%
+#   merge(ymw_listings,
+#         by.x = "num_listings_ym",
+#         by.y = "num_listings_ymw",
+#         suffixes = c("_ym_listings","_ymw_listings"),
+#         all = TRUE) %>%
+#   merge(ym_prices,
+#         by.x = "num_listings_ym",
+#         by.y = "num_prices_ym",
+#         suffixes = c("_ym_price","_ym_prices"),
+#         all = TRUE) %>%
+#   merge(ym_prices_round100,
+#         by.x = "num_listings_ym",
+#         by.y = "num_prices_ym_round100",
+#         suffixes = c("","_ym_prices_round100"),
+#         all = TRUE) %>%
+#   merge(ymw_prices,
+#         by.x = "num_listings_ym",
+#         by.y = "num_prices_ymw",
+#         suffixes = c("","_ymw_prices"),
+#         all = TRUE) %>%
+#   rename(N_ym_price = N)%>%
+#   slice(1:15)
+#
+# unique(altos_m, by ="bed_bath_pid_ID")[,.N, by = num_years_listed][order(num_years_listed)]
+# unique(altos_m, by ="PID_replace")[,.N, by = num_years_listed_PID][order(num_years_listed_PID)]
+# print("made vars")
 
 # sample some
-sample_ids = altos_m[num_prices_ymw > 5 & !is.na(PID), sample(bed_bath_pid_ID, 1)]
+#sample_ids = altos_m[num_prices_ymw > 5 & !is.na(PID), sample(bed_bath_pid_ID, 1)]
 # View(altos_m[bed_bath_pid_ID %in% sample_ids] %>%
 #        relocate(bed_bath_pid_ID,PID,property_name,listing_id,
 #                 date,street_address_lower,cum_rep_listing,rep_listing,landUsage,
@@ -187,9 +182,9 @@ pid_to_check = as.integer64(2000114413001)
 #View(fa[PID == pid_to_check])
 altos_m[,price := as.numeric(price)]
 # dumb thing but uniqueN is much slower for small T, large N
-altos_m[,num_prices := length(unique(price)), by = .(ymd, bed_bath_pid_ID)]
+altos_m[,num_prices := length(unique(price)), by = .(ym, bed_bath_pid_ID)]
 altos_m[,num_prices_year := length(unique(price)), by = .(year, bed_bath_pid_ID)]
-altos_m[,num_addresses := length(unique(address_id)), by = .(ymd, bed_bath_pid_ID)]
+altos_m[,num_addresses := length(unique(address_id)), by = .(ym, bed_bath_pid_ID)]
 altos_m[,change_price_year := price != lag(price), by = .(bed_bath_pid_ID, year)]
 
 # now aggregate to unit level...
@@ -210,9 +205,9 @@ altos_year_bedrooms = altos_m[beds_imp<=6 & baths <= 4,list(
   baths_first = first(baths),
   #num_addresses = uniqueN(address_id),
   #year = first(year),
-  ymd = first(ymd),
-  month = first(month),
-  day = first(day)
+  #ymd = first(ymd),
+  month = first(month)
+  #day = first(day)
 ), by = .(PID,bed_bath_pid_ID, year)]
 
 # now aggregate to building level...
@@ -231,9 +226,9 @@ altos_year_building = altos_m[beds_imp<=6 & baths <= 4,list(
   address_id_first = first(address_id),
   #num_addresses = uniqueN(address_id),
   #year = first(year),
-  ymd = first(ymd),
-  month = first(month),
-  day = first(day)
+ # ymd = first(ymd),
+  month = first(month)
+  #day = first(day)
 ), by = .(PID, year)]
 
 

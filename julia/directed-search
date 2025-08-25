@@ -8,18 +8,7 @@ using JuMP
 using Ipopt
 
 
-# %%
-# === Model Parameters ===
-valuation = 1600.0
-s = 0.8       # Share of high-type tenants
-n = 1       # Tenant/landlord ratio
-h = 0.9          # share of high-type landlords
-fc_h = 0.0      # Fixed cost for high-type landlords
-fc_l = 0.0       # Fixed cost for low-type landlords
-rH_grid = 0.0:0.2:valuation  # Rent grid for high-type landlords
-rL_grid = 0.0:0.2:valuation  #
-# Initialize low-type fixed cost (to be updated dynamically)
-fc_l_init = 0.0
+# 
 
 # %%
 # Matching function
@@ -148,7 +137,7 @@ end
 
 # %%
 # Fixed-point equilibrium algorithm
-function fixed_point_solver(rH_grid, rL_grid; tol=1e-5, maxiter=20)
+function fixed_point_solver( tol=1e-5, maxiter=20)
     function solve_wrapper(r_H, r_L)
         try
             x = inner_solve(r_H, r_L, s, n, h, valuation)
@@ -158,7 +147,7 @@ function fixed_point_solver(rH_grid, rL_grid; tol=1e-5, maxiter=20)
             return nothing
         end
     end
-    best_x = x
+    #x = initial_x
     r_L = valuation / 2
     step_size = valuation / 50  # Adjust step size based on valuation
     rH_grid = r_L / 2:step_size:valuation  # Adjust rH_grid based on r_L
@@ -183,18 +172,18 @@ function fixed_point_solver(rH_grid, rL_grid; tol=1e-5, maxiter=20)
             
             # Check if the solution is valid
             # If the solution is valid, compute profit
-            x = solve_wrapper(r_H, r_L)
+            best_x = solve_wrapper(r_H, r_L)
             #print(x)
-            if x === nothing
+            if best_x === nothing
                 println("❌ No valid solution for r_H = $(round(r_H, digits=3))")
                 continue
             end
-            π_H = profit_high_landlord(r_H, x[1], x[2], fc_h)
+            π_H = profit_high_landlord(r_H, best_x[1], best_x[2], fc_h)
             print("profit for r_H = $(round(r_H, digits=3)) and r_L = $(round(r_L, digits=3)): π_H = $(round(π_H, digits=3))\n")
             if π_H >= best_profit_H
                 best_profit_H = π_H
                 best_r_H = r_H
-                best_x = x
+                #best_x = x
             # else
             #     println("Profit decreased for r_H; skipping further checks")
             #     tried_r_H_rL = push!(tried_r_H_rL, (r_H, r_L))
@@ -222,7 +211,7 @@ function fixed_point_solver(rH_grid, rL_grid; tol=1e-5, maxiter=20)
             # add a try block for inner_solve
             #println("Trying r_L = $(round(r_L_candidate, digits=3))")
             best_x = solve_wrapper(r_H, r_L_candidate)
-            if x === nothing
+            if best_x === nothing
                 println("❌ No valid solution for r_L = $(round(r_L_candidate, digits=3))")
                 continue
             end
@@ -262,10 +251,21 @@ end
 
 # %%
 # Run and summarize results
-r_H, r_L, x = fixed_point_solver_lowfirst(
-
-    rH_grid,
-    rL_grid; tol=1e-5, maxiter=10
+initial_x = [0.5, 0.5, 0.5, 0.5]  # Initial guess for tenant shares
+# === Model Parameters ===
+valuation = 100.0
+s = 0.3       # Share of high-type tenants
+n = 1       # Tenant/landlord ratio
+h = 0.5         # share of high-type landlords
+fc_h = 0.0      # Fixed cost for high-type landlords
+fc_l = 0.0       # Fixed cost for low-type landlords
+rH_grid = 0.0:0.2:valuation  # Rent grid for high-type landlords
+rL_grid = 0.0:0.2:valuation  #
+# Initialize low-type fixed cost (to be updated dynamically)
+fc_l_init = 0.0
+initial_x = [0.5, 0.5, 0.5, 0.5]  # Initial guess for tenant shares
+r_H, r_L, x = fixed_point_solver(
+initial_x; tol=1e-5, maxiter=20
 )
 
 xHH, xHL, xLH, xLL = x
@@ -301,7 +301,7 @@ else
 end
 
 # repeat for low landlord
-pi_H_new, pi_L_new,x = check_profitable_deviation(r_H, r_H, 0,-valuation / 50)
+pi_H_new, pi_L_new,x = check_profitable_deviation(r_H, r_H, 0,-20)
 if pi_L_new > profit_low_landlord(r_L, xLH, xLL)
     println("There is a profitable deviation: π_l = $pi_L_new, old profit = $(profit_low_landlord(r_L, xLH, xLL))")
 else
@@ -445,7 +445,7 @@ for n_val in 0.7:0.1:1.3
             share_HH, share_HL, share_LH, share_LL,
             U_h, U_l
         ))
-    catch e
+    catch
         println("⚠️ Failed to solve for n = $n_val: $(e)")
         continue
     end
@@ -494,86 +494,131 @@ U_l_temp = max(U_HL_temp, U_LL_temp)
 
 
 
-function fixed_point_solver_lowfirst(rH_grid, rL_grid; tol=1e-5, maxiter=20)
+function fixed_point_solver_lowfirst(initial_x; tol=1e-5, maxiter=20)
     function solve_wrapper(r_H, r_L)
         try
             x = inner_solve(r_H, r_L, s, n, h, valuation)
             return x
         catch
+            #println("⚠️ Error in inner_solve for r_H = $(round(r_H, digits=3))")
             return nothing
         end
     end
-
-    r_H = valuation / 2  # Initialize r_H
-    best_x = nothing
-    step_size = valuation / 50
-
-    tried_rH_rL = []
-    rL_grid = valuation / 2:step_size:valuation
-
+    x = initial_x
+    r_H = valuation / 2
+    step_size = valuation / 50  # Adjust step size based on valuation
+    rL_grid = r_H / 2:step_size:valuation  # Adjust rH_grid based on r_L
+    # initialize empty list to store tried r_H r_L pairs
+    tried_r_H_rL = []
     for iter in 1:maxiter
         println("\nIteration $iter")
 
+        # Step 1: High-type landlords best respond
         best_profit_L = -Inf
         best_r_L = nothing
         best_x = nothing
 
-        # Step 1: Low-type landlords set rent
         for r_L in rL_grid
-            best_profit_H = -Inf
-            best_r_H = nothing
-
-            # Step 2: High-type landlords best respond to r_L
-            rH_grid = r_L / 2:step_size:valuation  # Ensure high types can undercut or overshoot
-            for r_H_candidate in rH_grid
-                x = solve_wrapper(r_H_candidate, r_L)
-                if x === nothing
-                    continue
-                end
-                π_H = profit_high_landlord(r_H_candidate, x[1], x[2])
-                if π_H > best_profit_H
-                    best_profit_H = π_H
-                    best_r_H = r_H_candidate
-                    best_x = x
-                end
-            end
-
-            if best_r_H === nothing
-                println("❌ No valid high-type solution found for r_L = $(round(r_L, digits=3))")
+            # Solve for tenant shares given r_H
+            # println("Trying r_H = $(round(r_H, digits=3))")
+            # # if (r_H, r_L) in tried_r_H_rL
+            #     println("Skipping already tried (r_H, r_L) = ($(round(r_H, digits=3)), $(round(r_L, digits=3)))")
+            #     continue
+            # end
+            # Use inner_solve to find optimal tenant shares
+            
+            # Check if the solution is valid
+            # If the solution is valid, compute profit
+            x = solve_wrapper(r_H, r_L)
+            #print(x)
+            if x === nothing
+                println("❌ No valid solution for r_H = $(round(r_H, digits=3))")
                 continue
             end
-
-            π_L = profit_low_landlord(r_L, best_x[3], best_x[4])
-            println("Trying r_L = $(round(r_L, digits=3)), r_H = $(round(best_r_H, digits=3)) → π_L = $(round(π_L, digits=3)), π_H = $(round(best_profit_H, digits=3))")
-
-            if π_L > best_profit_L
+            π_L = profit_low_landlord(r_L, x[1], x[2], fc_h)
+            print("profit for r_H = $(round(r_H, digits=3)) and r_L = $(round(r_L, digits=3)): π_L = $(round(π_L, digits=3))\n")
+            if π_L >= best_profit_L
                 best_profit_L = π_L
                 best_r_L = r_L
-                r_H = best_r_H
+                best_x = x
+            # else
+            #     println("Profit decreased for r_H; skipping further checks")
+            #     tried_r_H_rL = push!(tried_r_H_rL, (r_H, r_L))
+            #     break
+
             end
+            
         end
 
         if best_r_L === nothing
-            println("❌ No valid low-type solution found")
+            println("❌ No valid high-type solution found")
             return
         end
 
-        if (r_H, best_r_L) in tried_rH_rL
-            println("⚠️ Already tried (r_H, r_L); likely cycling")
-            return r_H, best_r_L, best_x
+        r_L = best_r_L
+
+        # Step 2: Low-type deviation check
+        best_profit_H = -Inf
+        best_r_H = r_H
+        # adjust rHL_grid based on r_H
+        rH_grid = r_L / 2:step_size:valuation  # Adjust rHL_grid based on r_H
+        # println("Adjusted rL_grid: $rL
+
+        for r_H_candidate in rH_grid
+            # add a try block for inner_solve
+            #println("Trying r_L = $(round(r_L_candidate, digits=3))")
+            best_x = solve_wrapper(r_H_candidate, r_L)
+            if x === nothing
+                println("❌ No valid solution for r_L = $(round(r_L_candidate, digits=3))")
+                continue
+            end
+            π_H = profit_high_landlord(r_H_candidate, best_x[3], best_x[4], fc_h)
+            print("profit for r_H = $(round(r_H_candidate, digits=3)) and r_L = $(round(r_L, digits=3)): π_H = $(round(π_H, digits=3))\n")
+            if π_H >= best_profit_H
+                best_profit_H = π_H
+                best_r_H = r_H_candidate
+            # else
+            #     println("Profit decreased for r_L; skipping further checks")
+            #     break
+            end
         end
 
-        tried_rH_rL = push!(tried_rH_rL, (r_H, best_r_L))
-
-        # Check for convergence
-        if abs(best_r_L - r_L) < tol
+        println("r_H = $(round(r_H, digits=3)), r_L = $(round(best_r_L, digits=3))")
+        println("π_H = $(round(best_profit_H, digits=3)), π_L = $(round(best_profit_L, digits=3))")
+        # profit maximizing pairs
+        best_responses = (best_r_H, best_r_L)
+        # check if the best responses are already tried
+        if (best_r_H, best_r_L) in tried_r_H_rL
+            println("⚠️ Already tried (r_H, r_L); probably cycling")
+            return best_r_H, best_r_L, best_x
+        end
+        # append pairs
+        tried_r_H_rL = push!(tried_r_H_rL, (r_H, best_r_L))
+        if abs(r_H - best_r_H) < 0.0002
             println("✅ Converged at iteration $iter")
-            return r_H, best_r_L, best_x
+            return r_H, r_L, best_x
+            break
         end
 
-        r_L = best_r_L  # update for next round
+        r_H = best_r_H  # update for next round
     end
-
     println("⚠️ Max iterations reached without convergence")
     return r_H, r_L, best_x
 end
+
+
+initial_x = [0.5, 0.5, 0.5, 0.5]  # Initial guess for tenant shares
+# === Model Parameters ===
+valuation = 1000.0
+s = 0.6       # Share of high-type tenants
+n = 1       # Tenant/landlord ratio
+h = 0.9          # share of high-type landlords
+fc_h = 0.0      # Fixed cost for high-type landlords
+fc_l = 0.0       # Fixed cost for low-type landlords
+rH_grid = 0.0:0.2:valuation  # Rent grid for high-type landlords
+rL_grid = 0.0:0.2:valuation  #
+# Initialize low-type fixed cost (to be updated dynamically)
+fc_l_init = 0.0
+r_H, r_L, x = fixed_point_solver_lowfirst(
+initial_x; tol=1e-5, maxiter=20
+)

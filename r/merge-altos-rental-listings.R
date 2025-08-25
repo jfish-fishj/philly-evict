@@ -17,6 +17,7 @@ philly_rentals[,start_year := as.numeric(substr(initialissuedate,1,4))]
 philly_rentals[,end_year := as.numeric(substr(expirationdate,1,4))]
 philly_rentals[,num_years := end_year - start_year]
 philly_rentals[,id := .I]
+philly_rentals[,pm.zip := as.character(pm.zip)]
 philly_rentals[,pm.zip := coalesce(pm.zip, str_sub(zip,1,5)) %>%
                  str_pad(5, "left", pad = "0")]
 
@@ -43,6 +44,7 @@ philly_parcels_sf_m = philly_parcels_sf %>% select(-matches("PID")) %>%
   merge(philly_parcels[,.(pin, PID)], by.x = "PIN", by.y = "pin")
 
 # now add in the
+philly_altos[,pm.zip := as.character(pm.zip)]
 
 philly_altos[,pm.zip := coalesce(as.character(zip),pm.zip) %>%
                str_pad(5, "left", pad = "0")]

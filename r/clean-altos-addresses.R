@@ -12,7 +12,7 @@ cleaned_cities = list.files(indir, pattern = "_metro_all_years_clean_addys.csv")
 
 
 for(
-  city in cities[!cities %in% cleaned_cities]
+  city in c("philadelphia")
 ){
   print(glue("working on {city}"))
   metro = city %>% str_replace_all(" ", "_") %>% str_to_lower()
