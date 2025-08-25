@@ -1247,12 +1247,13 @@ header_evict = c("High Evictors",
                  "High Evictors (quintiles)",
                  "High Evictors (quintiles within Census Tract)")
 
-evict_models <- list(m3,m4,m5,m6)
+evict_models <- list(#m3,m4,
+                     m5,m6)
 
 
 evict_tables = etable(
   evict_models,
-  headers = header_evict,
+  headers = header_evict[3:4],
   digits = 3,digits.stats = 3,
   keep = "%ost_covid",
   order = c("%high_filing_post_covid","%filing_rate_ntile_post_covid",
@@ -1372,10 +1373,10 @@ rental_aggs %>%
     `Units in High Evictor Buildings` = V2,
     `Total Rentals` = N,
     `Rentals in High Evictor Buildings` = V4,
-    `Change in Total Units Since 2019` = change_units_rel2019,
-    `Change in High Evictor Units Since 2019` = change_high_filing_units_rel2019,
-    `Change in Total Rentals Since 2019` = change_parcels_rel2019,
-    `Change in High Evictor Rentals Since 2019` = change_high_filing_parcels_rel2019
+    # `Change in Total Units Since 2019` = change_units_rel2019,
+    # `Change in High Evictor Units Since 2019` = change_high_filing_units_rel2019,
+    # `Change in Total Rentals Since 2019` = change_parcels_rel2019,
+    # `Change in High Evictor Rentals Since 2019` = change_high_filing_parcels_rel2019
   ) %>%
   gt() %>%
   fmt_number(
@@ -1386,11 +1387,11 @@ rental_aggs %>%
     decimals = 0,
     use_seps = TRUE
   ) %>%
-  fmt_percent(
-    columns = c(`Change in Total Rentals Since 2019`, `Change in High Evictor Rentals Since 2019`,
-                `Change in Total Units Since 2019`, `Change in High Evictor Units Since 2019`),
-    decimals = 1
-  ) %>%
+  # fmt_percent(
+  #   columns = c(`Change in Total Rentals Since 2019`, `Change in High Evictor Rentals Since 2019`,
+  #               `Change in Total Units Since 2019`, `Change in High Evictor Units Since 2019`),
+  #   decimals = 1
+  # ) %>%
   tab_header(
     title = "Philadelphia Rental Housing Stock",
     subtitle = "2015-2024"
