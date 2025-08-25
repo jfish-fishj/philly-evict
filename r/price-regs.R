@@ -1335,7 +1335,55 @@ m8 <- fixest::feols(
 )
 
 etable(m7,m8)
+setDT(philly_rentals_long)
+rental_aggs = philly_rentals_long[,
+                    list(
+                       sum(numberofunits, na.rm = T),
+                      sum(numberofunits[PID %in% bldg_panel[high_filing == T, PID]],na.rm =T)
+                      ,.N,
+                      sum(PID %in% bldg_panel[high_filing == T, PID],na.rm =T)
+                      ),
+                    by = year][year %in% 2015:2024][order(year)]
 
+rental_aggs[,change_units_rel2019 := V1 / V1[year == 2019] - 1]
+rental_aggs[,change_high_filing_units_rel2019 := V2 / V2[year == 2019] - 1]
+rental_aggs[,change_parcels_rel2019 := N / N[year == 2019] - 1]
+rental_aggs[,change_high_filing_parcels_rel2019 := V4 / V4[year == 2019] - 1]
+# export as GT table
+library(gt)
+rental_aggs %>%
+  select(
+    Year = year,
+    `Total Units` = V1,
+    `Units in High Evictor Buildings` = V2,
+    `Total Rentals` = N,
+    `Rentals in High Evictor Buildings` = V4,
+    `Change in Total Units Since 2019` = change_units_rel2019,
+    `Change in High Evictor Units Since 2019` = change_high_filing_units_rel2019,
+    `Change in Total Rentals Since 2019` = change_parcels_rel2019,
+    `Change in High Evictor Rentals Since 2019` = change_high_filing_parcels_rel2019
+  ) %>%
+  gt() %>%
+  fmt_number(
+    columns = c(`Total Units`, `Units in High Evictor Buildings`,
+                `Total Rentals`, `Rentals in High Evictor Buildings`,
 
-
+                ),
+    decimals = 0,
+    use_seps = TRUE
+  ) %>%
+  fmt_percent(
+    columns = c(`Change in Total Rentals Since 2019`, `Change in High Evictor Rentals Since 2019`,
+                `Change in Total Units Since 2019`, `Change in High Evictor Units Since 2019`),
+    decimals = 1
+  ) %>%
+  tab_header(
+    title = "Philadelphia Rental Housing Stock",
+    subtitle = "2015-2024"
+  ) %>%
+  tab_source_note(
+    source_note = "Data from Philadelphia Housing Rental Registry and Eviction Lab"
+  ) %>%
+  as_latex()%>%
+  write_lines("tables/rental_stock_over_time.tex")
 
