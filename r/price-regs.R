@@ -511,6 +511,36 @@ bldg_panel[,num_stories_bin := case_when(
   TRUE ~ NA_character_
 )]
 
+bldg_panel[,total_permits_all := sum(total_permits), by = PID]
+bldg_panel[,total_violations_all := sum(total_violations), by = PID]
+bldg_panel[,total_complaints_all := sum(total_complaints), by = PID]
+bldg_panel[,total_investigations_all := sum(total_investigations), by = PID]
+
+# per unit
+bldg_panel[,permits_per_unit := total_permits_all/num_units_imp]
+bldg_panel[,violations_per_unit := total_violations_all/num_units_imp]
+bldg_panel[,severe_violations_per_unit := sum(
+  (unsafe_violation_count+
+     hazardous_violation_count +imminently_dangerous_violation_count
+  )
+)/num_units_imp, by = PID]
+bldg_panel[,complaints_per_unit := total_complaints_all/num_units_imp]
+bldg_panel[,investigations_per_unit := total_investigations_all/num_units_imp]
+
+# make dummies for any complaints, permits, etc
+bldg_panel[,ever_permit := fifelse(total_permits_all > 0, 1, 0)]
+bldg_panel[,ever_violations := fifelse(total_violations_all > 0, 1, 0)]
+bldg_panel[,ever_complaints := fifelse(total_complaints_all > 0, 1, 0)]
+bldg_panel[,ever_investigations := fifelse(total_investigations_all > 0, 1, 0)]
+
+bldg_panel[,any_unsafe_hazordous_dangerous := any(unsafe_violation_count > 1 |
+                                                     hazardous_violation_count > 1 | imminently_dangerous_violation_count > 1
+),
+by = PID]
+
+
+
+
 # bin filing rates into 0,5,10,20,50+
 bldg_panel[,filing_rate_cuts := cut(
   filing_rate,
@@ -521,15 +551,15 @@ bldg_panel[,filing_rate_cuts := cut(
 bldg_panel[,post_covid := (year >= 2021)]
 # break unit bins into 5 categories
 m1 <- fixest::feols(
-  log_med_rent ~filing_rate_cuts#high_filing*post_covid#i(source,ref = "evict")
+  log_med_rent ~filing_rate_cuts+#*post_covid +
    #+filing_rate_sq #+  ever_voucher*source
-# + num_units_imp
-# + num_units_imp^2
-#+ sfh*source
++ num_units_imp
++ num_units_imp^2
+#+ sfh#*source
  #   + year_built #* ever_permit
  # + year_built^2
  #+ permits_per_unit#*i(source,ref = "evict")
-# +violations_per_unit*i(source,ref = "evict")
+ +severe_violations_per_unit#*i(source,ref = "evict")
  # +i(beds_imp_first_fixed, ref = 0)
  # +i(baths_first_fixed, ref = 1)
  #+ complaints_per_unit#*i(source,ref = "evict")
@@ -539,15 +569,17 @@ m1 <- fixest::feols(
  #+poly(number_stories,3)#*i(source,ref = "evict")
 +log(total_area)
  |GEOID^year+  #num_units_bins+ #month +
- num_units_bins^source+
-  #year_blt_decade+
+ #num_units_bins+#^source+
+  year_blt_decade+
   num_stories_bin+
   #number_of_bedrooms +
   source +
-   quality_grade_fixed +exterior_condition
+   quality_grade_fixed +
+  exterior_condition
    +building_code_description_new_fixed
  , data = bldg_panel[source == "evict" &
-                       #year <= 2019 & year>=2014 &
+                       #year <= 2019 &
+                       #year>=2014 &
                     # &num_units_imp > 50
                     #(last_obs == T) &
                          filing_rate <=1  ],
@@ -555,7 +587,32 @@ weights = ~(num_units_imp),
   cluster = ~PID,
   combine.quick = T
 )
-summary(m1)
+
+
+
+etable(m1, keep = "%filing_rate_cuts",
+       dict = c("filing_rate_cuts" = "Filing Rate Category",
+                "filing_rate_cuts0-10%" = "Filing Rate: 0-10%",
+                "filing_rate_cuts10-20%" = "Filing Rate: 10-20%",
+                "filing_rate_cuts20-30%" = "Filing Rate: 20-30%",
+                "filing_rate_cuts30%+" = "Filing Rate: 30%+",
+                "num_units_imp" = "Number of Units",
+                "num_units_imp^2" = "Number of Units Squared",
+                "severe_violations_per_unit" = "Severe Violations per Unit",
+                "log(total_area)" = "Log Total Area",
+                "source" = "Data Source",
+                "quality_grade_fixed" = "Quality Grade",
+                "exterior_condition" = "Exterior Condition",
+                "building_code_description_new_fixed" = "Building Type",
+                "year_blt_decade" = "Decade Built",
+                "num_stories_bin" = "Number of Stories",
+                "GEOID" = "Census Block Group"
+                ),
+       tex = T
+       ) %>%
+  writeLines("tables/hedonic_filing_rate_cuts.tex")
+
+
 coeftable(m1, keep = "filing|voucher")
 analytic_df[,resids := log_med_rent - predict(m1, newdata = analytic_df)]
 #View(analytic_df[order(desc(abs(resids)))][1:100])
