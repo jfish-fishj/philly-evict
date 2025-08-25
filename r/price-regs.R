@@ -573,7 +573,7 @@ m1 <- fixest::feols(
   year_blt_decade+
   num_stories_bin+
   #number_of_bedrooms +
-  source +
+  #source +
    quality_grade_fixed +
   exterior_condition
    +building_code_description_new_fixed
