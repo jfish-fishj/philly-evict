@@ -2,7 +2,7 @@
 \centering
 \begin{tabular}{lc}
    \tabularnewline \midrule \midrule
-   Dependent Variable:     & Log Median Rent\\  
+   Dependent Variable:     & log\_med\_rent\\    
    Model:                  & (1)\\  
    \midrule
    \emph{Variables}\\
@@ -17,15 +17,16 @@
    Census Block Group-year & Yes\\  
    Decade Built            & Yes\\  
    Number of Stories       & Yes\\  
-   %Data Source             & Yes\\  
    Quality Grade           & Yes\\  
    Exterior Condition      & Yes\\  
-   %Building Type           & Yes\\  
+   Building Type           & Yes\\  
    \midrule
    \emph{Fit statistics}\\
    Observations            & 131,719\\  
+   R$^2$                   & 0.84311\\  
+   Within R$^2$            & 0.00949\\  
    \midrule \midrule
-   \multicolumn{2}{l}{\emph{Clustered (parcel) standard-errors in parentheses}}\\
+   \multicolumn{2}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
    \multicolumn{2}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
 \end{tabular}
 \par\endgroup

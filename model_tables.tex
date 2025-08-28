@@ -4,26 +4,29 @@
    \begin{tabular}{lcc}
       \tabularnewline \midrule \midrule
       Dependent Variable: & \multicolumn{2}{c}{Log(Price)}\\
-      Model:                       & (1)             & (2)\\  
+      Model:                       & (1)            & (2)\\  
       \midrule
       \emph{Variables}\\
-      Filing Rate                  & -0.9082$^{***}$ & 0.0110$^{**}$\\   
-                                   & (0.0888)        & (0.0048)\\   
-      Polynomial Year Built        & No              & Yes\\  
-      Polynomial Number of Stories & No              & Yes\\  
-      Polynomial Number of Units   & No              & Yes\\  
+      Filing Rate                  & -1.987$^{***}$ &   \\   
+                                   & (0.3812)       &   \\   
+      Polynomial Year Built        & No             & Yes\\  
+      Polynomial Number of Stories & No             & Yes\\  
+      Polynomial Number of Units   & No             & Yes\\  
       \midrule
       \emph{Fixed-effects}\\
-      Year                         & Yes             & \\  
-      Census Block Group-Year      &                 & Yes\\  
-      Quality Grade                &                 & Yes\\  
-      Building Code                &                 & Yes\\  
-      Beds (Imputed)               &                 & Yes\\  
-      Baths (Imputed)              &                 & Yes\\  
+      beds\_imp\_first             & Yes            & \\  
+      baths\_first                 & Yes            & \\  
+      Year                         & Yes            & \\  
+      Census Block Group-Year      &                & Yes\\  
+      year\_blt\_decade            &                & Yes\\  
+      num\_stories\_bin            &                & Yes\\  
+      Quality Grade                &                & Yes\\  
+      exterior\_condition          &                & Yes\\  
+      Building Code                &                & Yes\\  
       \midrule
       \emph{Fit statistics}\\
-      Observations                 & 55,848          & 55,848\\  
-      R$^2$                        & 0.25091         & 0.84176\\  
+      Observations                 & 201,343        & 131,719\\  
+      R$^2$                        & 0.47013        & 0.84311\\  
       \midrule \midrule
       \multicolumn{3}{l}{\emph{Clustered (Parcel ID) standard-errors in parentheses}}\\
       \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\

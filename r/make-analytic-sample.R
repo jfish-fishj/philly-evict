@@ -270,6 +270,7 @@ prep_evictions <- function(philly_evict, evict_xwalk, pa_zip_acs, models, bldg_d
   ev <- copy(philly_evict)
   xw <- copy(evict_xwalk)
 
+
   # Business entity keyword screen
   business_words <- c(
     "LLC","L\\.L\\.C\\.","LLCS","LIMITED PARTNERSHIP","LTD","L\\.T\\.D\\.","LTDS",
@@ -304,8 +305,8 @@ prep_evictions <- function(philly_evict, evict_xwalk, pa_zip_acs, models, bldg_d
                   total_area, number_of_bathrooms, number_of_bedrooms, type_heater)]  ,
       by = "PID"
     )
-  # keep ev_m w/ rents in [300,10000]
-  ev_m = ev_m[ongoing_rent >= 300 & ongoing_rent <= 10000]
+  # keep ev_m w/ rents in [300,10000] and year >= 2003
+  ev_m = ev_m[ongoing_rent >= 300 & ongoing_rent <= 10000 & year >= 2003]
 
   ev_m[,beds_imp_first := predict(models$bed_reg, newdata = ev_m)]
   # fix ev_m beds_imp_first
@@ -331,6 +332,7 @@ prep_evictions <- function(philly_evict, evict_xwalk, pa_zip_acs, models, bldg_d
     num_filings_with_houth_auth = .N,
     med_price              = suppressWarnings(median(ongoing_rent, na.rm = TRUE)),
     pm.zip                 = first(pm.zip),
+    month                  = first(month),
     ymd                    = as.character(first(d_filing))
   ), by = .(year, PID)]
 
@@ -339,6 +341,7 @@ prep_evictions <- function(philly_evict, evict_xwalk, pa_zip_acs, models, bldg_d
     num_filings_with_houth_auth = .N,
     med_price              = suppressWarnings(median(ongoing_rent[housing_auth == FALSE], na.rm = TRUE)),
     pm.zip                 = first(pm.zip),
+    month                  = first(month),
    ymd                    = as.character(first(d_filing))
   ), by = .(year, PID,  beds_imp_first, baths_first)]
 
@@ -416,6 +419,7 @@ prep_evictions <- function(philly_evict, evict_xwalk, pa_zip_acs, models, bldg_d
   ev_parcel_agg[, month := as.integer(substr(ymd_char, 6, 7))]
   ev_parcel_agg[, day := as.integer(substr(ymd_char, 9, 10))]
   ev_parcel_agg[,num_filings_total := sum(num_filings,na.rm=T), by = PID]
+  ev_parcel_agg[,num_filings_total_preCOVID := sum(num_filings[year < 2020],na.rm=T), by = PID]
   ev_parcel_agg[order(year),num_filings_cumsum := cumsum(num_filings), by = PID]
 
   list(
@@ -423,11 +427,12 @@ prep_evictions <- function(philly_evict, evict_xwalk, pa_zip_acs, models, bldg_d
                              num_filings_with_houth_auth,
                              source,
                              num_filings_total,
-                             num_filings_cumsum,
+                             num_filings_total_preCOVID,
+                             num_filings_cumsum
                               )],
     ev_pid_bed_year = ev_parcel_bed_agg[, .(PID, year, beds_imp_first, baths_first,
                                    source,
-                                   med_price, month, )],
+                                   med_price, month )],
     ev_zip_year = ev_zip_m[, .(pm.zip, year, num_filings_zip, med_price_zip,
                                renter_occupiedE, filing_rate_zip)]
   )
@@ -578,7 +583,7 @@ assemble_panel <- function(parcel_bldg,
 
   # start by making rent data
   rent <- rbindlist(list(
-    altos[,.(PID, beds_imp_first, month, day, source,
+    altos[,.(PID, beds_imp_first, month, source,
             baths_first, #ymd=ymd_char,
             year, med_price)],
     ev_pid_bed_year[!is.na(med_price),.(PID, med_price,month, #ymd,
@@ -599,6 +604,7 @@ assemble_panel <- function(parcel_bldg,
   out <- merge(out, ev_pid_year[,.(year,PID,num_filings,
                                    num_filings_with_houth_auth,
                                    num_filings_cumsum,
+                                   num_filings_total_preCOVID,
                                    num_filings_total )],
                by = c("PID","year"), all.x = TRUE)
 
@@ -623,12 +629,15 @@ assemble_panel <- function(parcel_bldg,
   out[is.na(num_filings), num_filings := 0L]
   out[is.na(num_filings_with_houth_auth), num_filings_with_houth_auth := 0L]
   out[is.na(num_filings_total), num_filings_total := 0L]
+  out[is.na(num_filings_total_preCOVID), num_filings_total_preCOVID := 0L]
   out[is.na(num_filings_cumsum), num_filings_cumsum := 0L]
   # PID-level totals and rates
   out[, years_per_pid := fifelse(year_built <= 2003,2024 - 2003, 2024 - year_built )]
   out[,years_per_pid_rel06 := years_per_pid - (year - 2006) ]
   out[, filing_rate := fifelse(!is.na(num_units_imp) & num_units_imp > 0 & years_per_pid > 0,
                                num_filings_total / num_units_imp / years_per_pid, NA_real_)]
+  out[, filing_rate_preCOVID := fifelse(!is.na(num_units_imp) & num_units_imp > 0 & years_per_pid > 0 & year_built<= 2019,
+                                        num_filings_total_preCOVID / num_units_imp / 17, NA_real_)] # 2003-2019
 
   out[, filing_rate_cumulative := fifelse(!is.na(num_units_imp) & num_units_imp > 0 & years_per_pid_rel06 > 0,
                                num_filings_cumsum / num_units_imp / years_per_pid_rel06, NA_real_)]
@@ -904,12 +913,20 @@ bldg_panel <- make_bldg_panel(analytic_df)
 # qc chceks
 bldg_panel[,num_filing_rates := uniqueN(filing_rate), by = .(PID)]
 bldg_panel[,.N, by = num_filing_rates]
-# write fils
+
+# last couple things, make the rental listing by year data
+
+
+# write files
 outdir <- "/Users/joefish/Desktop/data/philly-evict/processed"
 # make outdir if it doesn't exist
 dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
 fwrite(final_panel, file.path(outdir, "final_panel.csv"), row.names = FALSE)
 fwrite(analytic_df, file.path(outdir, "analytic_df.csv"), row.names = FALSE)
 fwrite(bldg_panel, file.path(outdir, "bldg_panel.csv"), row.names = FALSE)
+fwrite(rent_list$lic_long_min, file.path(outdir, "license_long_min.csv"), row.names = FALSE)
+fwrite(parcel_bldg, file.path(outdir, "parcel_building.csv"), row.names = FALSE)
+fwrite(parcel_bldg[year == 2024], file.path(outdir, "parcel_building_2024.csv"), row.names = FALSE)
+fwrite(share_out$share_df_agg, file.path(outdir, "market_share_details.csv"), row.names = FALSE)
 # final_panel now contains: rent (Altos) + parcel/building attributes + PID-year eviction counts
 # + ZIP-year eviction rates + num_units from licenses, with your cleaned fields preserved.
