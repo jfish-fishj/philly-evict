@@ -391,8 +391,35 @@ bldg_panel[,filing_rate_post_covid := filing_rate * post_covid]
 bldg_panel[,num_source := uniqueN(source), by = PID]
 bldg_panel[,num_source_year := uniqueN(source), by = .(PID, year)]
 bldg_panel[,num_corp_owner := uniqueN(corp_owner), by = PID]
+
+# get mean price by filing rate quintile by year
+mean_price_quintile = bldg_panel[filing_rate <= 1,list(
+mean_price = weighted.mean(med_price, w = num_units_imp, na.rm = T),
+log_med_rent =weighted.mean(log_med_rent, w = num_units_imp, na.rm = T),
+           mean_filing_rate = mean(filing_rate, na.rm = T),
+           n = .N
+), by = .(year, filing_rate_ntile= high_filing)]
+
+# index each t 2017
+mean_price_quintile[,log_med_rent_2017 := log_med_rent - log_med_rent[year == 2017], by = filing_rate_ntile]
+mean_price_quintile[,med_price_2017 := mean_price / mean_price[year == 2017], by = filing_rate_ntile]
+# plot
+mean_price_quintile[  year %in% c(2014:2023)] %>%
+  ggplot(aes(x = (year), y = med_price_2017,group =factor(filing_rate_ntile),  color = factor(filing_rate_ntile))) +
+  geom_line() +
+  scale_x_continuous(breaks = seq(2014, 2023, by = 1)) +
+  labs(
+    title = "Median Rent by High/Low Filing Rate Buildings",
+    x = "Year",
+    y = "Log Median Rent",
+    color = "Filing Rate"
+  ) +
+  theme_minimal()
+
+ggsave("figs/mean_price_quintile.png", width = 8, height = 6, bg = "white")
+
 m1 <- fixest::feols(
-  log_med_rent ~high_filing_post_covid + num_units_bins * post_covid + corp_owner * post_covid
+  log_med_rent ~i(high_filing,ref = FALSE) * i(year, ref = 2019) + num_units_bins * post_covid + corp_owner * post_covid
   |PID + year
   , data = bldg_panel[#source == "evict" &
     year %in% c(2018,2019,2022,2023) &
