@@ -7,7 +7,7 @@ library(fixest)
 source('r/helper-functions.R')
 indir = "/Users/joefish/Desktop/data/philly-evict/processed"
 analytic_df = fread(file.path(indir, "analytic_df.csv"))
-bldg_df = fread(file.path(indir, "bldg_panel.csv"))
+bldg_panel = fread(file.path(indir, "bldg_panel.csv"))
 rent_list = fread(file.path(indir, "license_long_min.csv"))
 parcels = fread(file.path(indir, "parcel_building_2024.csv"))
 
@@ -411,7 +411,7 @@ mean_price_quintile[  year %in% c(2014:2023)] %>%
   labs(
     title = "Median Rent by High/Low Filing Rate Buildings",
     x = "Year",
-    y = "Log Median Rent",
+    y = "% Change in Rent",
     color = "Filing Rate"
   ) +
   theme_minimal()

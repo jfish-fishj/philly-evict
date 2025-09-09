@@ -201,7 +201,7 @@ prep_rent_altos <- function(philly_lic, philly_altos) {
   # drop NA PID
   rent <- rent[!is.na(PID)]
   lic_units <- lic_units[!is.na(PID)]
-  lic_long_min <- lic_long_min[!is.na(PID)]
+  lic_long_min <- lic_long_min[!is.na(PID)] %>% distinct(PID, year,.keep_all = T)
   rent[,source := "altos"]
   list(
     rent = rent[, .(PID, bed_bath_pid_ID, beds_imp_first, beds_imp_first_fixed,#ymd_char,
@@ -218,29 +218,27 @@ prep_rent_altos <- function(philly_lic, philly_altos) {
 ## 2) Impute futures
 ## =========================
 build_models <- function(rent_df, bldg_df){
-  analytic_df <- merge(rent_df, bldg_df, by = c("PID"), all.x = TRUE)
+  drop_cols = intersect(colnames(rent_df), colnames(bldg_df))
+  drop_cols = drop_cols[drop_cols != "PID"]
+  analytic_df <- merge(rent_df, bldg_df %>% select(-!!drop_cols), by = c("PID"), all.x = TRUE)
   analytic_df = analytic_df[!is.na(num_units_imp) & !is.na(med_price) &
                             !is.na(beds_imp_first) & !is.na(baths_first) &
                             !is.na(year_built) & !is.na(number_stories) &
                             !is.na(building_code_description_new_fixed) &
                             !is.na(quality_grade_fixed) & !is.na(general_construction) &
                             !is.na(GEOID) & !is.na(market_value) &
-                            !is.na(total_area) & !is.na(number_of_bathrooms) &
-                            !is.na(number_of_bedrooms) &
-                            !is.na(type_heater)]
+                            !is.na(total_area)]
   analytic_df[,log_med_price := log(med_price)]
   bed_reg <- fixest::feols(
-    beds_imp_first ~ log_med_price + log_med_price^2 + log_med_price^3+
+    beds_imp_first ~ log_med_price*year + log_med_price^2*year + log_med_price^3*year+
       #building_code_description_new_fixed +
       num_units_imp + num_units_imp^2 + num_units_imp^3+
       year_built + year_built^2 +
       number_stories + number_stories^2 +
-      number_of_bathrooms + number_of_bathrooms^2 +
-      number_of_bedrooms + number_of_bedrooms^2 +
       log(market_value) +
-      #building_code_description_new_fixed+
+      building_code_description_new_fixed+
       log(total_area)|
-      CT_ID_10+ quality_grade_fixed   ,
+      CT_ID_10+ quality_grade_fixed    ,
     data = analytic_df, combine.quick = FALSE
   )
 
@@ -249,12 +247,10 @@ build_models <- function(rent_df, bldg_df){
       num_units_imp + num_units_imp^2 + num_units_imp^3 +
       year_built + year_built^2 +
       number_stories + number_stories^2 +
-      number_of_bathrooms + number_of_bathrooms^2 +
-      number_of_bedrooms + number_of_bedrooms^2 +
       log(market_value) +
-      #building_code_description_new_fixed+
+      building_code_description_new_fixed+
       log(total_area)|
-      CT_ID_10+quality_grade_fixed   ,
+      CT_ID_10+quality_grade_fixed+year   ,
     data = analytic_df, combine.quick = FALSE
   )
   return(list(
@@ -662,7 +658,7 @@ build_analytic_df <- function(final_panel, share_df_agg) {
   dt[,log_med_rent := log(med_price)]
   # Filter as in your analytic_df block (add a safe guard for log() domain)
   analytic_df <- dt[
-    !is.na(year_built_estimate) &
+    !is.na(year_built) &
       !is.na(total_area) &
       !is.na(num_units_imp) &
       !is.na(log_med_rent) &
@@ -670,7 +666,7 @@ build_analytic_df <- function(final_panel, share_df_agg) {
       !is.na(quality_grade_fixed) &
       !is.na(zoning) &
       !is.na(building_code_description_new_fixed) &
-      total_area < 1e6 &
+     # total_area < 1e6 &
       !is.na(GEOID) &
       med_price > 300 &
       med_price <= 10000 &
@@ -803,8 +799,29 @@ plot_market_share_cdf <- function(share_df,
 # make bldg panel
 make_bldg_panel <- function(analytic_df){
   unit_vars <- c( "beds_imp_first", "baths_first","med_price", "log_med_rent")
+  # hedonically adjust rents by number of beds
+  analytic_df[,num_beds_round := round(beds_imp_first) %>% fifelse(. < 0,0,.)]
+  analytic_df[,num_beds_round := fifelse(num_beds_round > 5, 5, num_beds_round)]
+  bed_reg <- feols(log(med_price) ~ i(num_beds_round, ref = 1), data = analytic_df[source == "altos"])
+  bed_reg_coef_df = as.data.table(coef(bed_reg), keep.rownames = TRUE) %>%
+    mutate(num_beds = as.numeric(str_extract(V1, "[\\d\\.]+")) ) %>%
+    filter(!is.na(num_beds))
+  # deflate rents to 1-bed equivalent
+  analytic_df <- merge(analytic_df %>% select(-matches("V2")),
+                       bed_reg_coef_df[,.(num_beds, V2)],
+                       by.x = "num_beds_round",
+                       by.y = "num_beds",
+                       all.x = TRUE,
+                       suffixes = c("","_bed_adj"))
+  analytic_df[,med_price_adj := fifelse(num_beds_round==1,med_price, med_price / exp(V2))]
+
   rent_panel <- analytic_df[,list(
-    med_price = median(med_price, na.rm = TRUE)
+    med_price = median(med_price_adj, na.rm = TRUE),
+    med_price_unadj = median(med_price, na.rm = TRUE),
+    num_diff_beds = uniqueN(beds_imp_first),
+    med_beds = median(beds_imp_first, na.rm = TRUE),
+    min_beds = min(beds_imp_first, na.rm = TRUE),
+    max_beds = max(beds_imp_first, na.rm = TRUE)
   ), by = .(PID, year)]
 
   bldg_panel <- analytic_df %>% select(-c(unit_vars )) %>%
@@ -813,6 +830,7 @@ make_bldg_panel <- function(analytic_df){
   bldg_panel <- merge(bldg_panel,rent_panel, by = c("PID", "year"), all.x = TRUE)
   bldg_panel <- bldg_panel[!is.na(PID) & !is.na(year)]
   bldg_panel[,log_med_rent := log(med_price)]
+  bldg_panel[,log_med_rent_unadj := log(med_price_unadj)]
   return(bldg_panel)
 }
 
@@ -857,6 +875,8 @@ models_out <- build_models( rent_list$rent,parcel_bldg[year == 2023])
 # 3) Evictions (returns bed-bath-PID-year and ZIP-year products)
 evict_list <- prep_evictions(philly_evict, evict_xwalk, pa_zip, models_out, parcel_bldg[year == 2023])
 
+# check that imputed beds/baths aren't getting weird
+(evict_list$ev_pid_bed_year)[!is.na(med_price),mean(beds_imp_first,na.rm=T), by = year][order(year)]
 
 # 4) Final assembled panel
 final_panel <- assemble_panel(parcel_bldg, rent_list, evict_list)
@@ -913,7 +933,9 @@ bldg_panel <- make_bldg_panel(analytic_df)
 # qc chceks
 bldg_panel[,num_filing_rates := uniqueN(filing_rate), by = .(PID)]
 bldg_panel[,.N, by = num_filing_rates]
-
+# number of beds baths over time
+bldg_panel[,num_med_beds := uniqueN(med_beds), by = .(PID)]
+bldg_panel[,.N, by = num_med_beds]
 # last couple things, make the rental listing by year data
 
 
