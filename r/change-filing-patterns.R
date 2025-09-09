@@ -69,13 +69,12 @@ bldg_panel[,quantile(change_rent_annualized, probs = seq(0,1, by=0.1), na.rm=TRU
 bldg_panel[,num_sources:=uniqueN(source), by = PID]
 
 
-es_filing = feols(log_med_rent ~ high_filing_2019*i(year,ref = 2019)|PID   ,
+es_filing = feols(log_med_rent ~ high_filing_2019*i(year,ref = 2019)|PID+year   ,
                  weights = ~num_units_imp,
                   data = bldg_panel[
                    year %in% 2011:2023  & max_change_rent_annualized <= 0.5
                                  ])
 summary(es_filing, cluster = "PID")
-make_es_plot(es_filing, ref_year = 2019)
 
 make_es_plot <- function(model,ref_year=2018){
   # extract model using broom::tidy
@@ -106,8 +105,8 @@ make_es_plot <- function(model,ref_year=2018){
     theme_philly_evict() +
     labs(
       title = "Event Study: High Filing Rate Buildings vs Low Filing Rate Buildings",
-      subtitle = paste0("High filing rate buildings defined as those with pre-COVID filing rate > 10%. Reference year = ", ref_year),
-      caption = "Data: Philadelphia eviction filings and rental licenses. Author: Joe Fishman (@fishmanj)",
+      subtitle = paste0("High filing rate buildings defined as those with pre-COVID filing rate > 10%.\nReference year = ", ref_year),
+      caption = "Data: Philadelphia eviction filings and rental licenses",
       x = "Year",
       y = "Estimated Coefficient (log points)"
     ) +
@@ -120,6 +119,21 @@ make_es_plot <- function(model,ref_year=2018){
     )
 }
 
+make_es_plot(es_filing, ref_year = 2019)
+ggsave("figs/event_study_high_filing_2019.png", width=10, height=10, bg = "white")
+
+# repeat but add controls for neighborhood and building characteristics
+es_filing_controls = feols(log_med_rent ~ high_filing_2019*i(year,ref = 2019)
+                           |PID +pm.zip^year  ,
+                            weights = ~num_units_imp,
+                           cluser = ~PID,
+                            data = bldg_panel[
+                              year %in% 2011:2023 & max_change_rent_annualized <= 0.5
+                            ])
+
+summary(es_filing_controls, cluster = "PID")
+make_es_plot(es_filing_controls, ref_year = 2019)
+ggsave("figs/event_study_high_filing_2019_nhood_trends.png", width=10, height=10, bg = "white")
 
 filing_rates_pre_post_covid = bldg_panel[filing_rate <= 1,list(
   pre_covid = mean(filing_rate2019[year < 2020], na.rm=TRUE),
