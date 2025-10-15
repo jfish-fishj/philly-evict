@@ -218,10 +218,10 @@ old_demand_instruments = [c for c in submarket_sample.columns if c.startswith("d
 submarket_sample = submarket_sample.drop(columns=old_demand_instruments)
 # demand_instruments0: per-year percent change in total_tax (log of positive tax base)
 # add random noise tp prevent perfect collinearity
-#submarket_sample["demand_instruments0"] = submarket_sample["prices"] #+ np.random.normal(0, 1, size=submarket_sample["prices"].shape)    
+submarket_sample["demand_instruments0"] = submarket_sample["prices"] #+ np.random.normal(0, 1, size=submarket_sample["prices"].shape)    
 #submarket_sample["demand_instruments0"] = submarket_sample["z_cnt_1to3km"]
-submarket_sample["demand_instruments0"] = submarket_sample["z_mean_1to3km_log_taxable_value_per_unit"]
-submarket_sample["demand_instruments1"] = submarket_sample["z_sum_1to3km_year_blt_decade"]
+# submarket_sample["demand_instruments0"] = submarket_sample["z_mean_1to3km_log_taxable_value"]
+# submarket_sample["demand_instruments2"] = submarket_sample["z_sum_1to3km_year_blt_decade"]
 
 # # # now add polynomials of these -- continue numbering
 # submarket_sample["demand_instruments3"] = submarket_sample["demand_instruments0"] ** 2
@@ -306,7 +306,7 @@ est_final["quality_grade_fixed_coarse"] = est_final["quality_grade"].str.replace
 # pyblp will automatically pick up demand instruments named demand_instruments{k}
 X1 = blp.Formulation(
     "0 + prices  + log_market_value + log_total_area + year_built",
-    absorb="C(zip_code)+ C(year)  + C(building_code_description_new_fixed)+C(quality_grade_fixed_coarse)"  # product and market fixed effects,
+    absorb="C(census_tract)*C(year)  + C(building_code_description_new_fixed)+C(quality_grade_fixed_coarse)"  # product and market fixed effects,
 )
 problem2 = blp.Problem(
     X1,est_final
@@ -699,7 +699,7 @@ from scipy.stats import norm
 pvals = 2.0 * (1.0 - norm.cdf(np.abs(tvals)))
 
 x1_names = _safe_names_from_formulation(problem2)
-
+x1_names = ["price", "log market value", "log total area", "year built"]  # manually set for clarity
 coef_tab = pd.DataFrame({
     "Variable": x1_names,
     "Estimate": coef,
