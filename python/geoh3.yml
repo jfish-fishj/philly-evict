@@ -1,0 +1,17 @@
+name: h3-geo
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - h3>=4.1              # core H3
+  - pandas
+  - numpy
+  - shapely>=2.0
+  - geopandas
+  - pyproj
+  - rtree                # spatial index (optional but handy)
+  - pyogrio              # fast I/O for shapefiles/GeoPackages/GeoJSON
+  - libspatialindex      # needed by rtree
+  - pip
+  - pip:
+      - h3pandas>=0.3    # pandas/geopandas .h3 accessor

@@ -20,8 +20,8 @@ philly_parcels_sf_m = philly_parcels_sf %>% select(-matches("PID")) %>%
 philly_infousa_dt[,pm.zip := as.numeric(pm.zip)]
 philly_parcels[,pm.zip := as.numeric(pm.zip)]
 
-philly_infousa_dt[,GEOID.longitude := as.numeric(GE_LONGITUDE_2010)]
-philly_infousa_dt[,GEOID.latitude := as.numeric(GE_LATITUDE_2010)]
+philly_infousa_dt[,GEOID.longitude := as.numeric(ge_longitude_2010)]
+philly_infousa_dt[,GEOID.latitude := as.numeric(ge_latitude_2010)]
 
 
 philly_infousa_dt_address_agg = philly_infousa_dt[!is.na(pm.house) & !is.na(n_sn_ss_c) & n_sn_ss_c!="",list(

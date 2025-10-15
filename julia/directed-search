@@ -617,6 +617,7 @@ fc_h = 0.0      # Fixed cost for high-type landlords
 fc_l = 0.0       # Fixed cost for low-type landlords
 rH_grid = 0.0:0.2:valuation  # Rent grid for high-type landlords
 rL_grid = 0.0:0.2:valuation  #
+
 # Initialize low-type fixed cost (to be updated dynamically)
 fc_l_init = 0.0
 r_H, r_L, x = fixed_point_solver_lowfirst(

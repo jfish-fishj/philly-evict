@@ -6,15 +6,15 @@ library(fixest)
 
 source('r/helper-functions.R')
 indir = "/Users/joefish/Desktop/data/philly-evict/processed"
-analytic_df = fread(file.path(indir, "analytic_df.csv"))
+#analytic_df = fread(file.path(indir, "analytic_df.csv"))
 bldg_panel = fread(file.path(indir, "bldg_panel.csv"))
-rent_list = fread(file.path(indir, "license_long_min.csv"))
-parcels = fread(file.path(indir, "parcel_building_2024.csv"))
+#rent_list = fread(file.path(indir, "license_long_min.csv"))
+#parcels = fread(file.path(indir, "parcel_building_2024.csv"))
 
 
 
-analytic_df[,high_filing := ifelse(filing_rate > 0.1, 1, 0)]
-bldg_panel[,high_filing := ifelse(filing_rate > 0.1, 1, 0)]
+#analytic_df[,high_filing := ifelse(filing_rate > 0.1, 1, 0)]
+bldg_panel[,high_filing := ifelse(filing_rate_preCOVID > 0.1, 1, 0)]
 bldg_panel[,filing_rate_year := num_filings / num_units_imp]
 bldg_panel[,high_filing_year := ifelse(filing_rate_year > 0.1, 1, 0)]
 bldg_panel[,last_obs := year == max(year) | year == 2019, by = PID]
@@ -100,10 +100,10 @@ m1 <- fixest::feols(
    quality_grade_fixed +
   exterior_condition
    +building_code_description_new_fixed
- , data = bldg_panel[source == "evict" &
+ , data = bldg_panel[#source == "evict" &
                        #year <= 2019 &
                        #year>=2014 &
-                    # &num_units_imp > 50
+                     num_units_imp > 5 &
                     #(last_obs == T) &
                          filing_rate <=1  ],
 weights = ~(num_units_imp),
@@ -356,7 +356,7 @@ m4_share = fixest::feols(
 
 
 
-bldg_panel[,high_filing := filing_rate > 0.15]
+#bldg_panel[,high_filing := filing_rate > 0.15]
 bldg_panel[,post_covid := year >= 2021]
 bldg_panel[,placebo := year >= 2018 & year <= 2019]
 bldg_panel[,high_filing_uniqueN := uniqueN(high_filing), by = PID]
@@ -364,7 +364,8 @@ bldg_panel[,.N, by = high_filing_uniqueN][order(high_filing_uniqueN)]
 bldg_panel[,corp_owner := str_detect(owner, "CORP|LLC|INC|ASSOC|PARTNERSHIP|COMPANY|CORPORATION")]
 (bldg_panel[,mean(med_price,na.rm=T), by = .(year,source)][order(source,year)][,yoy_change :=
                                                                          round(V1/data.table::shift(V1,1, type = "lag") - 1,2), by = .(source)][order(source,year)])
-bldg_panel[,filing_rate_ntile := ntile(filing_rate, 5)]
+bldg_panel[,filing_rate_ntile := ntile(filing_rate_preCOVID, 5)]
+bldg_panel[,high_filing_preCOVID := filing_rate_preCOVID > 0.15]
 pre_post_covid = bldg_panel[year %in% c(2018, 2019, 2022,2023),list(
   high_filing = first(high_filing),
   log_med_rent = mean(log_med_rent),
@@ -398,58 +399,74 @@ mean_price = weighted.mean(med_price, w = num_units_imp, na.rm = T),
 log_med_rent =weighted.mean(log_med_rent, w = num_units_imp, na.rm = T),
            mean_filing_rate = mean(filing_rate, na.rm = T),
            n = .N
-), by = .(year, filing_rate_ntile= high_filing)]
+), by = .(year, filing_rate_ntile= high_filing_preCOVID)]
 
 # index each t 2017
 mean_price_quintile[,log_med_rent_2017 := log_med_rent - log_med_rent[year == 2017], by = filing_rate_ntile]
 mean_price_quintile[,med_price_2017 := mean_price / mean_price[year == 2017], by = filing_rate_ntile]
+mean_price_quintile[,mean_price_2019 := mean_price / mean_price[year == 2019], by = filing_rate_ntile]
 # plot
-mean_price_quintile[  year %in% c(2014:2023)] %>%
-  ggplot(aes(x = (year), y = med_price_2017,group =factor(filing_rate_ntile),  color = factor(filing_rate_ntile))) +
+mean_price_quintile[  year %in% c(2011:2023) & !is.na(filing_rate_ntile)] %>%
+  ggplot(aes(x = (year), y = mean_price_2019,group =factor(filing_rate_ntile),  color = factor(filing_rate_ntile))) +
   geom_line() +
-  scale_x_continuous(breaks = seq(2014, 2023, by = 1)) +
+  scale_x_continuous(breaks = seq(2011, 2023, by = 1)) +
   labs(
-    title = "Median Rent by High/Low Filing Rate Buildings",
+    title = "Mean Rent by High/Low Filing Rate Buildings, Indexed to 2019",
+    #subtitle = "Minimum 5 units in building",
     x = "Year",
     y = "% Change in Rent",
-    color = "Filing Rate"
+    color = "Filing Rate > 15%"
   ) +
-  theme_minimal()
+  theme_philly_evict()
 
 ggsave("figs/mean_price_quintile.png", width = 8, height = 6, bg = "white")
 
+bldg_panel[,change_log_med_rent := log_med_rent - data.table::shift(log_med_rent), by = PID]
+bldg_panel[,year_gap := year - data.table::shift(year), by = PID]
+bldg_panel[,change_log_med_rent_annualized := change_log_med_rent / year_gap]
+bldg_panel[,high_filing_preCOVID := filing_rate_preCOVID > 0.15]
 m1 <- fixest::feols(
-  log_med_rent ~i(high_filing,ref = FALSE) * i(year, ref = 2019) + num_units_bins * post_covid + corp_owner * post_covid
-  |PID + year
+  log_med_rent ~ high_filing_preCOVID : i(year, ref = 2019) #+ num_units_bins * post_covid + corp_owner * post_covid
+  | year + high_filing + PID #+ CT_ID_10^year
   , data = bldg_panel[#source == "evict" &
-    year %in% c(2018,2019,2022,2023) &
-      filing_rate <=1  ],
+    year %in% 2013:2023 #& abs(change_log_med_rent_annualized) <= 0.15 #&
+      #filing_rate <=0.75
+      &num_units_imp >5  ],
   weights = ~(num_units_imp),
   cluster = ~PID,
   combine.quick = T
 )
+summary(m1)
+coefplot(m1)
 
 m2 <- fixest::feols(
-  log_med_rent ~high_filing_post_covid + num_units_bins * post_covid + corp_owner * post_covid
-  |PID + CT_ID_10^year
+  log_med_rent ~ high_filing_preCOVID : i(year, ref = 2019) #+ num_units_bins * post_covid + corp_owner * post_covid
+  | year + high_filing + PID + CT_ID_10^year
   , data = bldg_panel[#source == "evict" &
-    year %in% c(2018,2019,2022,2023) &
-      filing_rate <=1  ],
+    year %in% 2011:2023 #& abs(change_log_med_rent_annualized) <= 0.15 #&
+    #filing_rate <=0.75
+    &num_units_imp >=1  ],
   weights = ~(num_units_imp),
   cluster = ~PID,
   combine.quick = T
 )
 summary(m2)
+coefplot(m2)
 
+summary(m2)
 m3 <- fixest::feols(
-  log_med_rent ~high_filing_post_covid + num_units_bins * post_covid + corp_owner * post_covid
-  |PID + year
-  , data = pre_post_covid[#source == "evict" &
-    filing_rate <=1  ],
+  log_med_rent ~ high_filing_preCOVID : i(year, ref = 2019) #+ num_units_bins * post_covid + corp_owner * post_covid
+  | year + high_filing + PID + market_id
+  , data = bldg_panel[#source == "evict" &
+    year %in% 2011:2023  ],
   weights = ~(num_units_imp),
   cluster = ~PID,
   combine.quick = T
 )
+
+m3
+coefplot(m3)
+
 
 m4 <- fixest::feols(
   log_med_rent ~high_filing_post_covid + num_units_bins * post_covid + corp_owner * post_covid

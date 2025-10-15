@@ -92,6 +92,7 @@ clean_name <- function(name){
     str_replace_all("([^\\s])&([^\\s])", "\\1 AND \\2") %>%
     str_replace_all("([^\\s]),([^\\s])", "\\1 , \\2") %>%
     str_replace_all("&", "AND") %>%
+    str_replace_all("|", " | ") %>%
     # strip punctuation
     str_replace_all("[[:punct:]]"," ") %>%
     str_squish() %>%

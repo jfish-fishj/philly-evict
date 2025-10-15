@@ -193,6 +193,126 @@ cities_fips <- tibble(
   )
 )
 
+# Comprehensive list of business entity terms (with abbreviations, plurals, and variations)
+business_words <- c(
+  "LLC", "L\\.L\\.C\\.", "LLCS",
+  "LIMITED PARTNERSHIP", "LTD", "L\\.T\\.D\\.", "LTDs",
+  "INC", "INC\\.", "INCS", "INCORPORATED",
+  "CORP", "CORPORATION", "CORPS",
+  "L\\.P\\.", "LP", "LPS",
+  "LLP", "LLPS",
+  "CO", "CO\\.", "COMPANY", "COMPANIES",
+  "HOLDING", "HOLDINGS",
+  "PARTNERSHIP", "PARTNERSHIPS", "PARTNER", "PARTNERS",
+  "ASSOC", "ASSOCS", "ASSOCIATES", "ASSOCIATION", "ASSOCIATIONS",
+  "ENTERPRISE", "ENTERPRISES",
+  "VENTURE", "VENTURES",
+  "GROUP", "GROUPS",
+  "SOLUTIONS", "STRATEGIES",
+  "BROS", "BROTHERS",
+  "FIRM", "FIRMS",
+  "TRUST", "TRUSTS",
+  "HOUS","HOUSING","APARTMENTS","APTS?","REAL",
+  "ESTATE","REALTY","MANAGEMENT","MGMT",
+  "DEV","DEVELOPMENT","DEVELOPS","DEVELOPERS",
+  "THE"
+)
+
+# Standardization function
+# Create regex pattern (case insensitive)
+business_regex <- regex(str_c("\\b(", str_c(business_words, collapse = "|"), ")\\b", collapse = "|"), ignore_case = T)
+
+
+# Function to fix common spelling errors and variations
+fix_spellings <- function(x) {
+  x %>%
+    str_replace_all("\\bA\\s?SSOCS\\b", "ASSOCIATES") %>%
+    str_replace_all("\\bA\\s?A?SSOC[A-Z]+$", "ASSOCIATES") %>%
+    str_replace_all("\\bASSOCI ATES\\b", "ASSOCIATES") %>%
+    str_replace_all("\\bASSOC\\b", "ASSOCIATION") %>%
+    str_replace_all("\\bASS\\sOC\\b", "ASSOCIATION") %>%
+    str_replace_all("\\bAUTH\\b", "AUTHORITY") %>%
+    str_replace_all("\\DEVEL\\b", "DEVELOP") %>%
+    str_replace_all("\\REDEVEL\\b", "REDEVELOP") %>%
+    str_replace_all("I AT", "IAT") %>%
+    str_replace_all("\\bCOR\\s?P\\b", "CORPORATION") %>%
+    str_replace_all("\\bCORPORAT ?ION\\b", "CORPORATION") %>%
+
+    str_replace_all("\\bTERR\\b", "TERRACE") %>%
+    str_replace_all("\\bAP T\\b", "APARTMENTS") %>%
+    str_replace_all("\\bAPTS?\\b", "APARTMENTS") %>%
+    str_replace_all("\\bAPART\\b", "APARTMENTS") %>%
+    str_replace_all("\\bMGR\\b", "MANAGER") %>%
+    str_replace_all("\\bPRTNRS\\b", "PARTNER") %>%
+    str_replace_all("\\bPROP\\b", "PROPERTIES") %>%
+    str_replace_all("\\bINV\\b", "INVESTMENTS") %>%
+    str_replace_all("\\bREALTY\\b", "REAL ESTATE") %>%
+    str_replace_all("\\bMGMT\\b", "MANAGEMENT") %>%
+    str_replace_all("\\bDEVELOPS?\\b", "DEVELOPMENT") %>%
+    str_replace_all("\\bDEV\\b", "DEVELOPMENT") %>%
+    str_replace_all("\\bBLDG?\\b", "BUILDING") %>%
+    str_replace_all("\\bHLDGS?\\b", "HOLDINGS") %>%
+    str_replace_all("\\bMANO R\\b", "MANOR") %>%
+    str_replace_all("\\bTR\\b", "TRUST") %>%
+    str_replace_all("\\bGARDE ?N ?S\\b", "GARDENS") %>%
+    str_replace_all("\\bPARTNRS\\b", "PARTNERS") %>%
+    str_replace_all("\\bDUPLE X\\b", "DUPLEX") %>%
+    str_replace_all("\\bPRTNRS?\\b", "PARTNERS") %>%
+    str_replace_all("\\bPA?RTN?R\\b", "PARTNER") %>%
+    str_replace_all("\\bPTSHP\\b", "PARTNERSHIP") %>%
+    str_replace_all("\\ESQ\\b", "ESQUIRE") %>%
+    str_replace_all("\\bINVESTMNTS?\\b", "INVESTMENT") %>%
+    str_replace_all("\\bSCATTERED SITES?\\b", "SCATTERED HOUSING") %>%
+    str_replace_all("\\bOWNERS?\\b", " ") %>%
+    str_replace_all("\\bPHILA\\b", "PHILADELPHIA") %>%
+    fifelse(
+      str_detect(.,"(PHILA.+HOU\\s?S|HOUS.+ AUTH?|PHILA.+AUTH|ADELPHIA HOUSE)"),
+      "PHILADELPHIA HOUSING AUTHORITY", .) %>%
+    str_squish() %>%
+    str_trim() %>%
+    return()
+}
+
+clean_name <- function(name){
+  name %>%
+    # replace & with AND
+    str_replace_all("([^\\s])&([^\\s])", "\\1 AND \\2") %>%
+    str_replace_all("([^\\s]),([^\\s])", "\\1 , \\2") %>%
+    str_replace_all("&", "AND") %>%
+    str_replace_all("|", " | ") %>%
+    # strip punctuation
+    str_replace_all("[[:punct:]]"," ") %>%
+    str_squish() %>%
+    str_remove_all("((AND)?\\s?(ALL OTHER OCCUPANTS?|ALL OTHERS?|ALL OCCUPANTS?))") %>%
+    str_remove_all("((AND)?\\s?(ALL OCCSUPS?|ALL OCCUPS?))") %>%
+    str_remove_all("((AND)?\\s?(ALL OCCS?|ALL OTHER OCCS?))") %>%
+    fix_spellings() %>%
+    str_squish() %>%
+    return()
+}
+
+make_business_short_name <- function(x){
+  x %>%
+    # remove business words or middle initials
+    str_remove_all(regex(pattern, ignore_case = TRUE)) %>%
+    # remove leading "the"
+    str_remove("^THE\\s") %>%
+    # remove trailing roman numerals
+    str_remove("\\b(VI{0,3}|IV|IX|XI{0,3}|II|I|III)[\\b$]") %>%
+    str_remove("\\b([0-9+])$") %>%
+    str_squish() %>%
+    return()
+}
+
+make_person_short_name <- function(x){
+  x %>%
+    # remove middle initials, e.g, joe d fish -> joe fish
+    str_remove_all("\\b[A-Z]\\b") %>%
+    # remove jr, sr, other titles
+    str_remove_all("\\b(JR|SR|MR|DR|II|III|IV)\\b") %>%
+    str_squish() %>%
+    return()
+}
 
 
 

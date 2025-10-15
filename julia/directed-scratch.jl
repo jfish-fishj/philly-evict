@@ -109,7 +109,7 @@ rH_grid = r_L / 2:step_size:valuation  # Adjust rL_grid based on r_H
 
 dπH_drH = FiniteDiff.finite_difference_derivative(
     r -> high_landlord_profit(r, r_L_fixed, s, n, h, v),
-    r_H_guess
+    75.0
 )
 
 dπL_drL = FiniteDiff.finite_difference_derivative(r -> low_landlord_profit(r,r_H_fixed, s, n, h, v), 

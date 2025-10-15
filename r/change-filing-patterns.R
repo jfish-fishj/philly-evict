@@ -124,11 +124,11 @@ ggsave("figs/event_study_high_filing_2019.png", width=10, height=10, bg = "white
 
 # repeat but add controls for neighborhood and building characteristics
 es_filing_controls = feols(log_med_rent ~ high_filing_2019*i(year,ref = 2019)
-                           |PID +pm.zip^year  ,
+                           |PID +CT_ID_10^year  ,
                             weights = ~num_units_imp,
                            cluser = ~PID,
                             data = bldg_panel[
-                              year %in% 2011:2023 & max_change_rent_annualized <= 0.5
+                              year %in% 2011:2023 & num_units_imp <= 500 & max_change_rent_annualized <= 0.5
                             ])
 
 summary(es_filing_controls, cluster = "PID")

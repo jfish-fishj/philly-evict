@@ -1,0 +1,27 @@
+name: pyblp-env
+channels:
+  - conda-forge
+dependencies:
+  - python=3.9
+  # numerics / data
+  - numpy>=1.21
+  - scipy>=1.7
+  - pandas>=1.3
+  - statsmodels>=0.13
+  - scikit-learn>=1.0
+  - pyarrow        # fast parquet/arrow IO
+  - numba          # optional JIT for speedups
+  - tqdm
+  # viz / notebooks
+  - matplotlib>=3.5
+  - seaborn>=0.11
+  - jupyterlab
+  - ipykernel
+  # IO helpers
+  - openpyxl
+  - xlrd
+  - requests
+  - setuptools
+  - pip
+  - pip:
+      - pyblp>=1.1

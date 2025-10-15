@@ -26,7 +26,7 @@ na_blank <- function(DT, cols) {
 ## =========================
 ## 1) Parcels + Buildings
 ## =========================
-prep_parcel_building <- function(philly_parcels, philly_bg, philly_building_df, lic_units) {
+prep_parcel_building <- function(philly_parcels, philly_bg, philly_building_df,occ_df, lic_units) {
   philly_parcels <- copy(philly_parcels)
   philly_building_df <- copy(philly_building_df)
 
@@ -114,20 +114,38 @@ prep_parcel_building <- function(philly_parcels, philly_bg, philly_building_df, 
     lic_units <- lic_units[!is.na(PID)]
     parcel_bldg <- merge(parcel_bldg, lic_units, by = "PID", all.x = TRUE)
   }
+  occ_df[, PID := str_pad(PID, 9, "left", "0")]
+  # use max occupancy to get num units
+  occ_df_max = occ_df[,list(num_households = max(num_households, na.rm = T)), by = .(PID)]
+  # merge occ df w/ parcel_bldg
+  parcel_bldg = merge(
+    parcel_bldg,
+    occ_df[,.(num_units_imp, PID, year)],
+    by = c("PID","year"),
+    all.x = T
+  )
+  print(glue::glue("After merging lic and occ, NAs in num_households:{sum(is.na(parcel_bldg$num_households))}, num_units: {sum(is.na(parcel_bldg$num_units))}"))
 
   # imput missing number of units
   # impute units for those w/ missing units
-  units_model <- feols(num_units ~total_area + total_area^2 + total_livable_area + total_livable_area^2+
-                         year_built + year_built^2 + number_stories + number_stories^2 |
-                         quality_grade_fixed  + building_code_description_new_fixed +
-                         general_construction + GEOID,
-                       data = parcel_bldg, combine.quick = FALSE)
-
-  parcel_bldg[,num_units_pred := round(predict(units_model, newdata = parcel_bldg))]
-  parcel_bldg[,num_units_imp := fifelse(is.na(num_units), num_units_pred,round(num_units))]
-  parcel_bldg[,num_units_imp := fifelse(num_units_imp <= 0 , 1, num_units_imp)]
-  # pad PID
-  parcel_bldg[, PID := str_pad(PID, 9, "left", "0")]
+  # parcel_bldg[,num_stories_mean := mean(number_stories,na.rm=T), by = building_code_description_new_fixed]
+  # parcel_bldg[,num_stories_imp := coalesce(number_stories, num_stories_mean)]
+  # units_model <- feols(num_units ~total_area + total_area^2 + total_livable_area + total_livable_area^2
+  #                      #  year_built + year_built^2 +
+  #                      + num_stories_imp + num_stories_imp^2 + num_households + num_households^2
+  #                      |quality_grade_fixed  + building_code_description_new_fixed +
+  #                        general_construction + GEOID,
+  #                      data = parcel_bldg[], combine.quick = FALSE)
+  #
+  #
+  # parcel_bldg[,num_units_pred := round(predict(units_model, newdata = parcel_bldg))]
+  # parcel_bldg[,num_units_imp := fifelse(is.na(num_units), num_units_pred,round(num_units))]
+  # parcel_bldg[,num_units_imp := fifelse(num_units_imp <= 0 , 1, num_units_imp)]
+  # # where there's a >50 unit gap between reported and predicted, use predicted
+  # parcel_bldg[,num_units_imp := fifelse(!is.na(num_units) & (num_units_pred - num_units) > 50,
+  #                                       num_units_pred, num_units_imp)]
+  # # pad PID
+  # parcel_bldg[, PID := str_pad(PID, 9, "left", "0")]
 
   return(parcel_bldg[])
 }
@@ -265,22 +283,18 @@ build_models <- function(rent_df, bldg_df){
 prep_evictions <- function(philly_evict, evict_xwalk, pa_zip_acs, models, bldg_df) {
   ev <- copy(philly_evict)
   xw <- copy(evict_xwalk)
+  # clean some names
+  ev[,clean_defendant_name := clean_name(defendant)]
+  # flag commercial
+  ev[,commercial_alt := str_detect(clean_defendant_name, business_regex)]
 
-
-  # Business entity keyword screen
-  business_words <- c(
-    "LLC","L\\.L\\.C\\.","LLCS","LIMITED PARTNERSHIP","LTD","L\\.T\\.D\\.","LTDS",
-    "INC","INC\\.","INCS","INCORPORATED","CORP","CORPORATION","CORPS","L\\.P\\.","LP","LPS",
-    "LLP","LLPS","CO","CO\\.","COMPANY","COMPANIES","HOLDING","HOLDINGS","PARTNERSHIP",
-    "PARTNERSHIPS","PARTNER","PARTNERS","ASSOC","ASSOCS","ASSOCIATES","ASSOCIATION",
-    "ASSOCIATIONS","ENTERPRISE","ENTERPRISES","VENTURE","VENTURES","GROUP","GROUPS",
-    "SOLUTIONS","STRATEGIES","BROS","BROTHERS","FIRM","FIRMS","TRUST","TRUSTS",
-    "HOUS","HOUSING","APARTMENTS","APTS?","REAL","ESTATE","REALTY","MANAGEMENT","MGMT",
-    "DEV","DEVELOPMENT","DEVELOPS","DEVELOPERS","THE"
-  )
-  pattern <- str_c("\\b(", str_c(business_words, collapse = "|"), ")\\b")
-
-  ev[, commercial_alt := str_detect(str_to_upper(defendant), pattern)]
+  ev[,dup := .N, by = .(n_sn_ss_c, plaintiff,clean_defendant_name,d_filing)][,dup := dup > 1]
+  ev = ev[commercial == "f" &
+            commercial_alt == F &
+            dup == F &
+            year >= 2000 &
+            total_rent <= 5e4 &
+            !is.na(n_sn_ss_c)]
 
   # Join to PID (limit to unique parcel matches)
 
@@ -290,7 +304,7 @@ prep_evictions <- function(philly_evict, evict_xwalk, pa_zip_acs, models, bldg_d
   ev_m <- merge(ev, xw1, by = "n_sn_ss_c")
 
   # Housing authority flag
-  ev_m[, housing_auth := str_detect(str_to_upper(plaintiff), "PHILA.+A?UTH|HOUS.+AUTH")]
+  ev_m[, housing_auth := str_detect(str_to_upper(plaintiff), "(PHILA.+A?UTH|HOUS.+AUTH|COMMON.+PENN)")]
   ev_m[,log_med_price := log(ongoing_rent)]
 
   # impute chars
@@ -442,10 +456,10 @@ prep_share_metrics <- function(rent_list, parcel_bldg, final_panel,
                                cdf_path = "figs/market_share_cdf.png") {
 
   lic_long_min <- copy(rent_list$lic_long_min)
-  lic_long_min = lic_long_min[numberofunits > 0]
-  # extend lic long min w/ rent data
-  lic_long_min_extend <- final_panel[! PID %in% lic_long_min$PID ,
-                                      list(
+  lic_long_min = lic_long_min[numberofunits > 0 & !PID %in% final_panel$PID ]
+  # extend rent data w/ lic long min w/
+  lic_long_min_extend <- final_panel[#! PID %in% lic_long_min$PID
+                                      ,list(
                                         numberofunits = median(num_units_imp,na.rm=T)
                                       ), by = .(PID, pm.zip) ]
 
@@ -482,12 +496,11 @@ prep_share_metrics <- function(rent_list, parcel_bldg, final_panel,
 
   # Units & bins
   setnames(share_df, "numberofunits", "num_units")
-  # bins of 1, 2-5, 6-50, 51-100, 100 +
-  share_df[, num_units_bins := fifelse(num_units == 1, "1",
-                                       fifelse(num_units <= 5, "2-5",
-                                               fifelse(num_units <= 50, "6-50",
-                                                       fifelse(num_units <= 100, "51-100",
-                                                               fifelse(num_units > 100, "101+", NA_character_)))))]
+  # bins of 1, 2-5, 6-50, 51+
+  share_df[, num_units_bins := cut(num_units,
+                                       breaks = c(-Inf, 1, 5, 50, Inf),
+                                       labels = c("1", "2-5", "6-50", "51+"),
+                                       right = TRUE)]
   # share_df[, num_units_bins := fifelse(num_units == 1, "1",
   #                                      fifelse(num_units <= 5, "2-5",
   #                                              fifelse(num_units <= 50, "6-50",
@@ -502,20 +515,24 @@ prep_share_metrics <- function(rent_list, parcel_bldg, final_panel,
   share_df[, num_units_owner := sum(num_units), by = .(year, pm.zip, owner_mailing)]
   share_df[, num_units_zip   := sum(num_units), by = .(year, pm.zip)]
   share_df[, share_units_zip := num_units_owner / num_units_zip]
+  share_df[, share_units_zip_naive := num_units / num_units_zip]
 
   # High-evicting aggregates
   share_df[, num_units_evict        := sum(num_units[high_evict], na.rm = TRUE), by = .(pm.zip, year)]
   share_df[, num_units_evict_owner  := sum(num_units[high_evict], na.rm = TRUE), by = .(year, pm.zip, owner_mailing)]
   share_df[, share_units_evict      := fifelse(high_evict, num_units_evict_owner / num_units_evict, 0)]
+  share_df[, share_units_evict_naive      := fifelse(high_evict, num_units_evict / num_units_evict, 0)]
 
   # By unit bin
   share_df[, num_units_evict_unit_bins  := sum(num_units[high_evict], na.rm = TRUE), by = .(year, pm.zip, num_units_bins)]
   share_df[, num_units_evict_owner_bins := sum(num_units[high_evict], na.rm = TRUE), by = .(year, pm.zip, owner_mailing, num_units_bins)]
   share_df[, share_units_evict_bins     := fifelse(high_evict, num_units_evict_owner_bins / num_units_evict_unit_bins, 0)]
+  share_df[, share_units_evict_bins_naive     := fifelse(high_evict, num_units / num_units_evict_unit_bins, 0)]
 
   share_df[, num_units_unit_bins  := sum(num_units), by = .(year, pm.zip, num_units_bins)]
   share_df[, num_units_owner_bins := sum(num_units), by = .(year, pm.zip, owner_mailing, num_units_bins)]
   share_df[, share_units_bins     := num_units_owner_bins / num_units_unit_bins]
+  share_df[, share_units_bins_naive     := num_units / num_units_unit_bins]
 
   # HHIs (zip market; and zip×bin markets)
   hhi_df <- unique(share_df, by = c("year","pm.zip","owner_mailing"))
@@ -539,12 +556,18 @@ prep_share_metrics <- function(rent_list, parcel_bldg, final_panel,
     suffixes = c("", "_unit_bins")
   )
 
+
   # PID-level aggregation for merge with analytic_df
   share_df_agg <- share_df[, .(
     share_units_zip       = mean(share_units_zip,       na.rm = TRUE),
     share_units_evict     = mean(share_units_evict,     na.rm = TRUE),
     share_units_bins      = mean(share_units_bins,      na.rm = TRUE),
     share_units_evict_bins= mean(share_units_evict_bins,na.rm = TRUE),
+    # add naive columns
+    share_units_zip_naive       = mean(share_units_zip_naive,       na.rm = TRUE),
+    share_units_evict_naive     = mean(share_units_evict_naive,     na.rm = TRUE),
+    share_units_bins_naive      = mean(share_units_bins_naive,      na.rm = TRUE),
+    share_units_evict_bins_naive= mean(share_units_evict_bins_naive,na.rm = TRUE),
     num_units_zip         = mean(num_units_zip,         na.rm = TRUE),
     num_units_evict       = mean(num_units_evict,       na.rm = TRUE),
     num_units_bins         = first(num_units_bins),
@@ -563,6 +586,126 @@ prep_share_metrics <- function(rent_list, parcel_bldg, final_panel,
   )
 }
 
+# occupancy rate adjust shares
+adjust_share_metrics <- function(occ_df,parcel_data, apartment_vac = 0.05, rental_vac = 0.09){
+  # we take the year X PID unit vars and adjust them for the occupancy rates implied by
+  # infoUSA data
+  # im going to assume that average occupancy rates for apartments is 95%
+  # so im going to normalize the occupancy rates in the infoUSA to be accordant
+  # with a 95% occupancy rate, and then do changes based on that normalized number
+  # merge parcel data onto occ_df
+  occ_df[,PID := as.numeric(PID)]
+  parcel_data[,PID := as.numeric(PID)]
+  # occ_df = merge(occ_df, parcel_data[,.(PID, year_built, num_units_imp,
+  #                                       building_code_description_new_fixed,
+  #                                       total_area,
+  #                                       total_livable_area,
+  #                                       pm.zip,
+  #                                       quality_grade_fixed)],
+  #                by = "PID", all.x = TRUE)
+  # reg occupancy rates on chars
+  occ_df[, num_units_bins := cut(
+    num_units_imp,
+    breaks = c(-Inf, 1, 5, 50, Inf),
+    labels = c("1", "2-5", "6-50", "51+"),
+    right = TRUE
+  )]
+  occ_df[,year_blt_decade := floor(year_built / 10) * 10]
+  #occ_df[,quality_grade_fixed_coarse := str_remove_all(quality_grade_fixed, "\\+|-")]
+  # homogeneous by year but whatever
+  occ_df[,occupancy_rate_trimmed := pmin(pmax(occupancy_rate,0.25),1)]
+  occ_df_grid <- (occ_df[,
+                        weighted.mean(occupancy_rate_trimmed, w= num_units_imp, na.rm=TRUE),
+                        by = .(num_units_bins)][
+                          order(num_units_bins)])
+  setnames(occ_df_grid, "V1", "mean_occ_rate")
+  #
+  # adj the occ_df_grid so that it has a mean rental vac rate = input
+  non_apartment_vac = (rental_vac * (occ_df[,sum(num_units_imp,na.rm=T)]) -  (occ_df[num_units_imp >= 6,sum(num_units_imp,na.rm=T)] * apartment_vac)) /
+    occ_df[num_units_imp < 6,sum(num_units_imp,na.rm=T) ]
+  # merge back on
+  occ_df = merge(occ_df, occ_df_grid, by = c("num_units_bins"), all.x = TRUE)
+  occ_df[num_units_imp ==1, mean_occ_rate := (1 - non_apartment_vac)]
+  # normalize to 95% for apartments, 91% for rentals overall and whatever else is implied by those two
+  occ_df[,adj_occ_rate := occupancy_rate_trimmed ]
+  # occ_df[, adj_occ_rate := fifelse(num_units_bins %in% c("1","2-5"), occupancy_rate_trimmed * (1 - non_apartment_vac) / mean_occ_rate,
+  #                                 fifelse(num_units_bins %in% c("6-50","51+","51-100","101+"),
+  #                                         occupancy_rate_trimmed * (1 - apartment_vac) / mean_occ_rate,
+  #                                         NA_real_))]
+  # now rescale adj_occ_rate to equal the population averages again
+  # the issue is occupancy rates cant go > 1, so there's a certain amount of fudge going on here...
+  # occ_df[, adj_occ_rate := case_when(
+  #   num_units_bins %in% c("1","2-5") ~ adj_occ_rate / (1 - non_apartment_vac)  ,
+  #   num_units_bins %in% c("6-50","51+", "51-100","100+") ~ adj_occ_rate / (1 - apartment_vac)  ,
+  #   TRUE ~ NA_real_
+  # )]
+  occ_df[num_units_imp ==1, adj_occ_rate := (1 - non_apartment_vac)]
+  # retrim the adj occ rate
+  occ_df[, adj_occ_rate := pmin(pmax(adj_occ_rate,0.25),1)]
+  occ_df[,adj_num_units_imp := round(num_units_imp * adj_occ_rate)]
+  occ_df[adj_num_units_imp == 0, adj_num_units_imp := 1]
+  # check num units, adj_num_units_imp
+  occ_df[, list(
+    num_units_imp = sum(num_units_imp, na.rm = TRUE),
+    adj_num_units_imp = sum(adj_num_units_imp, na.rm = TRUE),
+    mean_occ_rate = weighted.mean(mean_occ_rate,w = num_units_imp, na.rm = TRUE),
+    adj_occ_rate = weighted.mean(adj_occ_rate, w = num_units_imp ,na.rm = TRUE)
+  ), by = num_units_bins][,implied_vac_rate := 1 - adj_num_units_imp / num_units_imp][] %>%
+    print()
+
+  occ_df[, list(
+    num_units_imp = sum(num_units_imp, na.rm = TRUE),
+    adj_num_units_imp = sum(adj_num_units_imp, na.rm = TRUE),
+    mean_occ_rate = weighted.mean(mean_occ_rate,w = num_units_imp, na.rm = TRUE),
+    adj_occ_rate = weighted.mean(adj_occ_rate, w = num_units_imp ,na.rm = TRUE)
+  ), by = num_units_imp >5 ][,implied_vac_rate := 1 - adj_num_units_imp / num_units_imp][]
+
+  occ_df[, list(
+    num_units_imp = sum(num_units_imp, na.rm = TRUE),
+    adj_num_units_imp = sum(adj_num_units_imp, na.rm = TRUE),
+    mean_occ_rate = weighted.mean(mean_occ_rate,w = num_units_imp, na.rm = TRUE),
+    adj_occ_rate = weighted.mean(adj_occ_rate, w = adj_num_units_imp ,na.rm = TRUE)
+  ) ][,implied_vac_rate := 1 - adj_num_units_imp / num_units_imp][]
+
+  # make some share aggs by zip-year, zip-unit-year zip-high-filing-year, zip-unit-high-filing-year
+  # dont do by owner
+#  occ_df[,high_evict := filing_rate > 0.1]
+  occ_df[,num_units_zip := sum(adj_num_units_imp, na.rm = TRUE), by = .(year, pm.zip_parcels)]
+  occ_df[,share_units_zip := adj_num_units_imp / num_units_zip]
+ # occ_df[,num_units_zip_evict := sum(adj_num_units_imp[high_evict], na.rm = TRUE), by = .(year, pm.zip)]
+ # occ_df[,share_units_zip_evict := fifelse(high_evict, adj_num_units_imp / num_units_zip_evict, 0)]
+  occ_df[,num_occupied_units_zip_unit := sum(adj_num_units_imp,na.rm=T), by = .(year, pm.zip_parcels, num_units_bins)]
+  occ_df[,total_num_units_zip_unit := sum(num_units_imp,na.rm=T), by = .(year, pm.zip_parcels, num_units_bins)]
+  occ_df[,share_units_zip_unit := adj_num_units_imp / num_occupied_units_zip_unit]
+  occ_df[,mean_occ_rate_zip := weighted.mean(adj_occ_rate, w = adj_num_units_imp, na.rm = TRUE), by = .(year, pm.zip_parcels)]
+  occ_df[,mean_occ_rate_zip_units := weighted.mean(adj_occ_rate, w = adj_num_units_imp, na.rm = TRUE), by = .(year, pm.zip_parcels, num_units_bins)]
+  occ_df[,change_adj_occ_rate := adj_occ_rate - lag(adj_occ_rate), by = PID]
+  occ_df[,change_share_units_zip := share_units_zip - lag(share_units_zip), by = PID]
+
+  #occ_df[,num_units_zip_unit_evict := sum(adj_num_units_imp[high_evict], na.rm = TRUE), by = .(year, pm.zip, num_units_bins)]
+ # occ_df[,share_units_zip_unit_evict := fifelse(high_evict, adj_num_units_imp / num_units_zip_unit_evict, 0)]
+  share_df = occ_df %>%
+    select(PID,
+           year,
+           share_units_zip,
+           adj_num_units_imp,
+           adj_occ_rate,
+           occupancy_rate,
+        #   share_units_zip_evict,
+           share_units_zip_unit,
+       #    share_units_zip_unit_evict,
+           num_units_zip,
+         #  num_units_zip_evict,
+       num_occupied_units_zip_unit,
+       change_adj_occ_rate,
+       change_share_units_zip,
+         mean_occ_rate_zip,
+       mean_occ_rate_zip_units
+        #   num_units_zip_unit_evict
+    )
+  occ_df%>%
+  return()
+}
 
 ## =========================
 ## 4) Final Merge Orchestrator
@@ -654,7 +797,7 @@ assemble_panel <- function(parcel_bldg,
 # =========================
 build_analytic_df <- function(final_panel, share_df_agg) {
 
-  dt <- copy(final_panel)
+  dt <- (final_panel)
   dt[,log_med_rent := log(med_price)]
   # Filter as in your analytic_df block (add a safe guard for log() domain)
   analytic_df <- dt[
@@ -686,12 +829,14 @@ build_analytic_df <- function(final_panel, share_df_agg) {
   # Merge share_df_agg
   # drop_cols <- grep("share_units|^num_units_.*|^hhi", names(analytic_df), value = TRUE)
   # if (length(drop_cols)) analytic_df[, (drop_cols) := NULL]
-  analytic_df <- merge(analytic_df, share_df_agg, by = "PID", all.x = TRUE, suffixes = c("", "_share"))
+  analytic_df[,PID := as.numeric(PID)]
+  share_df_agg[,PID := as.numeric(PID)]
+  analytic_df <- merge(analytic_df, adj_shares, by = c("PID","year"), all.x = TRUE, suffixes = c("", "_share"))
   #analytic_df[,multi_source := uniqueN(source) > 1L, by = .(PID)]
 
   # More derived fields
-  analytic_df[, share_units_evict_sq := share_units_evict^2]
-  analytic_df[, share_units_zip_sq   := share_units_zip^2]
+  # analytic_df[, share_units_evict_sq := share_units_evict^2]
+  # analytic_df[, share_units_zip_sq   := share_units_zip^2]
 
   analytic_df[, num_rentals := uniqueN(PID), by = .(GEOID, year)]
   analytic_df[, filing_rate_g25 := fifelse(filing_rate > 0.25, 1L, 0L)]
@@ -835,15 +980,224 @@ make_bldg_panel <- function(analytic_df){
 }
 
 
+
+#' Make BLP-style instruments (data.table) — patched for by= assignment
+#'
+#' @param DT            data.table with product-level rows.
+#' @param market        Column name (string) for market IDs.
+#' @param product_id    Optional product ID column (string). Only used for naming if desired.
+#' @param firm          Optional firm/owner column (string). If given, creates same-firm vs other-firm instruments.
+#' @param nest          Optional nest column (string).  If given, creates same-nest vs other-nest instruments.
+#' @param cont_vars     Character vector of continuous variable names to instrument (exogenous x's).
+#' @param cat_vars      Character vector of categorical variable names.
+#' @param add_market_means Logical; also add market means for cont_vars (Hausman-style).
+#' @param moments       Integer vector of powers (>=2) for higher-moment sums on cont_vars, e.g., c(2,3).
+#' @param add_counts    Logical; if TRUE, add rival counts per market / firm / nest.
+#' @param interaction_pairs Optional list of 2-length character vectors of existing column names to multiply.
+#' @param prefix        Prefix for instrument columns (default "z").
+#'
+#' @return Invisibly returns the character vector of new column names; DT is modified in place.
+make_blp_instruments <- function(
+    DT,
+    market,
+    product_id = NULL,
+    firm = NULL,
+    nest = NULL,
+    cont_vars = character(),
+    cat_vars = character(),
+    add_market_means = TRUE,
+    moments = integer(),
+    add_counts = TRUE,
+    interaction_pairs = NULL,
+    prefix = "z"
+) {
+  stopifnot(data.table::is.data.table(DT))
+  stopifnot(is.character(market), length(market) == 1)
+
+  # Validate columns exist
+  cols_needed <- c(market, product_id, firm, nest, cont_vars, cat_vars)
+  cols_needed <- cols_needed[nzchar(cols_needed)]
+  miss <- setdiff(cols_needed, names(DT))
+  if (length(miss)) stop("Missing columns in DT: ", paste(miss, collapse = ", "))
+
+  # Shorthands
+  mkt <- market; frm <- firm; nst <- nest
+  pfx <- function(...) paste(c(prefix, ...), collapse = "_")
+
+  # data.table helpers w/ fallback (avoid NA minus NA propagation)
+  has_fcoalesce <- "fcoalesce" %in% getNamespaceExports("data.table")
+  fco <- if (has_fcoalesce) data.table::fcoalesce else function(x, y) { x[is.na(x)] <- y[is.na(x)]; x }
+
+  new_cols <- character()
+
+  # ------------------------
+  # Continuous variables
+  # ------------------------
+  if (length(cont_vars)) {
+    for (v in cont_vars) {
+      # ∑ rivals' v within market: sum(x) - own x
+      nm_all <- pfx("sum_others", v)
+      DT[, (nm_all) := {
+        x <- fco(get(v), 0)
+        sum(x) - x
+      }, by = .(get(mkt))]
+      new_cols <- c(new_cols, nm_all)
+
+      # Same-firm / Other-firm splits
+      if (!is.null(frm)) {
+        nm_sf <- pfx("sum_samefirm", v)
+        nm_of <- pfx("sum_otherfirm", v)
+        DT[, (nm_sf) := {
+          x <- fco(get(v), 0)
+          sum(x) - x
+        }, by = .(get(mkt), get(frm))]
+        DT[, (nm_of) := get(nm_all) - get(nm_sf)]
+        new_cols <- c(new_cols, nm_sf, nm_of)
+      }
+
+      # Same-nest / Other-nest splits
+      if (!is.null(nst)) {
+        nm_sn <- pfx("sum_samenest", v)
+        nm_on <- pfx("sum_othernest", v)
+        DT[, (nm_sn) := {
+          x <- fco(get(v), 0)
+          sum(x) - x
+        }, by = .(get(mkt), get(nst))]
+        DT[, (nm_on) := get(nm_all) - get(nm_sn)]
+        new_cols <- c(new_cols, nm_sn, nm_on)
+      }
+
+      # Market means (Hausman-style)
+      if (isTRUE(add_market_means)) {
+        nm_mm <- pfx("mean_market", v)
+        DT[, (nm_mm) := mean(get(v), na.rm = TRUE), by = .(get(mkt))]
+        new_cols <- c(new_cols, nm_mm)
+      }
+
+      # Higher moments
+      mp <- unique(moments[moments >= 2])
+      if (length(mp)) {
+        for (p in mp) {
+          nm_all_p <- pfx(sprintf("sum_others_%spow", p), v)
+          DT[, (nm_all_p) := {
+            x <- fco(get(v), 0)
+            xp <- x^p
+            sum(xp) - xp
+          }, by = .(get(mkt))]
+          new_cols <- c(new_cols, nm_all_p)
+
+          if (!is.null(frm)) {
+            nm_sf_p <- pfx(sprintf("sum_samefirm_%spow", p), v)
+            nm_of_p <- pfx(sprintf("sum_otherfirm_%spow", p), v)
+            DT[, (nm_sf_p) := {
+              x <- fco(get(v), 0)
+              xp <- x^p
+              sum(xp) - xp
+            }, by = .(get(mkt), get(frm))]
+            DT[, (nm_of_p) := get(nm_all_p) - get(nm_sf_p)]
+            new_cols <- c(new_cols, nm_sf_p, nm_of_p)
+          }
+          if (!is.null(nst)) {
+            nm_sn_p <- pfx(sprintf("sum_samenest_%spow", p), v)
+            nm_on_p <- pfx(sprintf("sum_othernest_%spow", p), v)
+            DT[, (nm_sn_p) := {
+              x <- fco(get(v), 0)
+              xp <- x^p
+              sum(xp) - xp
+            }, by = .(get(mkt), get(nst))]
+            DT[, (nm_on_p) := get(nm_all_p) - get(nm_sn_p)]
+            new_cols <- c(new_cols, nm_sn_p, nm_on_p)
+          }
+        }
+      }
+    }
+  }
+
+  # ------------------------
+  # Categorical variables (same-level rival counts)
+  # ------------------------
+  if (length(cat_vars)) {
+    for (cv in cat_vars) {
+      # market same-level rivals
+      nm <- pfx("cnt_samelevel", cv)
+      DT[, (nm) := .N - 1L, by = .(get(mkt), get(cv))]
+      new_cols <- c(new_cols, nm)
+
+      # split by firm
+      if (!is.null(frm)) {
+        nm_sf <- pfx("cnt_samelevel_samefirm", cv)
+        nm_of <- pfx("cnt_samelevel_otherfirm", cv)
+        DT[, (nm_sf) := .N - 1L, by = .(get(mkt), get(frm), get(cv))]
+        DT[, (nm_of) := get(nm) - get(nm_sf)]
+        new_cols <- c(new_cols, nm_sf, nm_of)
+      }
+
+      # split by nest
+      if (!is.null(nst)) {
+        nm_sn <- pfx("cnt_samelevel_samenest", cv)
+        nm_on <- pfx("cnt_samelevel_othernest", cv)
+        DT[, (nm_sn) := .N - 1L, by = .(get(mkt), get(nst), get(cv))]
+        DT[, (nm_on) := get(nm) - get(nm_sn)]
+        new_cols <- c(new_cols, nm_sn, nm_on)
+      }
+    }
+  }
+
+  # ------------------------
+  # Raw rival counts (irrespective of category)
+  # ------------------------
+  if (isTRUE(add_counts)) {
+    nm_cnt_all <- pfx("cnt_others")
+    DT[, (nm_cnt_all) := .N - 1L, by = .(get(mkt))]
+    new_cols <- c(new_cols, nm_cnt_all)
+
+    if (!is.null(frm)) {
+      nm_cnt_sf <- pfx("cnt_samefirm")
+      nm_cnt_of <- pfx("cnt_otherfirm")
+      DT[, (nm_cnt_sf) := .N - 1L, by = .(get(mkt), get(frm))]
+      DT[, (nm_cnt_of) := get(nm_cnt_all) - get(nm_cnt_sf)]
+      new_cols <- c(new_cols, nm_cnt_sf, nm_cnt_of)
+    }
+    if (!is.null(nst)) {
+      nm_cnt_sn <- pfx("cnt_samenest")
+      nm_cnt_on <- pfx("cnt_othernest")
+      DT[, (nm_cnt_sn) := .N - 1L, by = .(get(mkt), get(nst))]
+      DT[, (nm_cnt_on) := get(nm_cnt_all) - get(nm_cnt_sn)]
+      new_cols <- c(new_cols, nm_cnt_sn, nm_cnt_on)
+    }
+  }
+
+  # ------------------------
+  # Optional interactions (after everything exists)
+  # ------------------------
+  if (length(interaction_pairs)) {
+    for (pr in interaction_pairs) {
+      if (length(pr) != 2L) next
+      a <- pr[[1]]; b <- pr[[2]]
+      if (!all(c(a, b) %in% names(DT))) next
+      nm <- pfx("int", a, b)
+      DT[, (nm) := get(a) * get(b)]
+      new_cols <- c(new_cols, nm)
+    }
+  }
+
+  invisible(unique(new_cols))
+}
+
+
+
+
 ## run stuff ####
 # -- Inputs you already load earlier in your script:
 philly_lic = fread("/Users/joefish/Desktop/data/philly-evict/business_licenses_clean.csv")
 philly_evict = fread("/Users/joefish/Desktop/data/philly-evict/evict_address_cleaned.csv")
 philly_parcels = fread("/Users/joefish/Desktop/data/philly-evict/parcel_address_cleaned.csv")
+philly_occ = fread("~/Desktop/data/philly-evict/processed/infousa_parcel_occupancy_vars.csv")
 philly_altos = fread("~/Desktop/data/philly-evict/altos_year_bedrooms_philly.csv")
 philly_bg = read_sf("~/Desktop/data/philly-evict/philly_bg.shp")
 philly_building_df = fread("~/Desktop/data/philly-evict/open-data/building_data.csv")
 evict_xwalk = fread("~/Desktop/data/philly-evict/philly_evict_address_agg_xwalk.csv")
+ass = fread("~/Desktop/data/philly-evict/assessments.csv")
 pa_zip <- get_acs(
   geography = "zcta",
   variables = c(
@@ -862,22 +1216,66 @@ pa_zip <- get_acs(
   #county = "Philadelphia"
 )
 
+pa_zip2022 <- get_acs(
+  geography = "zcta",
+  variables = c(
+    "meddhinc"=  "B19013_001", # median household income
+    "housing_units"=  "B25001_001",
+    "renter_occupied"=  "B25003_003",
+    "owner_occupied"=  "B25003_002",
+    "gross_rent"="B25064_001",
+    "contract_rent" = "B25058_001"
+
+  ),
+  year = 2022,
+  survey = "acs5",
+  #state = "PA",
+  output = "wide"
+  #county = "Philadelphia"
+)
+
+# dec_2000 = load_variables(2000, "sf1", cache = TRUE)
+# dec_2000_sf3 = load_variables(2000, "sf3", cache = TRUE)
+# dec_vars_2010 = load_variables(2010, "sf1", cache = TRUE)
+#
+# # from 2000; 2010 censuses get block + block group level counts of number of housing units
+# # number of rental units and number of units by structure
+# bg_2000 = get_decennial(
+#   geography = "block group",
+#   variables = c(
+#     total_housing_units = "H001001",
+#     total_renter_occupied = "H003002",
+#     total_owner_occupied = "H003001",
+#     total_1_unit_detached = "H004003",
+#     total_1_unit_attached = "H004004",
+#     total_2_units = "H004005",
+#     total_3_4_units = "H004006",
+#     total_5_9_units = "H004007",
+#     total_10_19_units = "H004008",
+#     total_20_plus_units = "H004009"
+#   ),
+#   year = 2000,
+#   state = "PA",
+#   county = "Philadelphia",
+#   output = "wide"
+# )
+
 
 # 1) Rent/Altos + Licenses
 rent_list <- prep_rent_altos(philly_lic, philly_altos)
 
 # 2) Parcels + Buildings
-parcel_bldg <- prep_parcel_building(philly_parcels, philly_bg, philly_building_df,rent_list$lic_units)
+parcel_bldg <- prep_parcel_building(philly_parcels, philly_bg, philly_building_df,philly_occ,rent_list$lic_units)
 
 # 2.5) model for imputing beds and baths
-models_out <- build_models( rent_list$rent,parcel_bldg[year == 2023])
+models_out <- build_models( rent_list$rent,parcel_bldg[year == 2019])
 
 # 3) Evictions (returns bed-bath-PID-year and ZIP-year products)
-evict_list <- prep_evictions(philly_evict, evict_xwalk, pa_zip, models_out, parcel_bldg[year == 2023])
+evict_list <- prep_evictions(philly_evict, evict_xwalk, pa_zip, models_out, parcel_bldg[year == 2019])
 
 # check that imputed beds/baths aren't getting weird
 (evict_list$ev_pid_bed_year)[!is.na(med_price),mean(beds_imp_first,na.rm=T), by = year][order(year)]
-
+(evict_list$ev_pid_year)[,sum(num_filings), by = year][order(year)]
 # 4) Final assembled panel
 final_panel <- assemble_panel(parcel_bldg, rent_list, evict_list)
 
@@ -918,37 +1316,465 @@ share_out   <- prep_share_metrics(rent_list,
                                   cdf_path = "figs/market_share_cdf.png")
 
 out <- plot_market_share_cdf(share_out$share_df, cdf_path = "figs/market_share_cdf.png")
+out
+# adjust occupancy rates
+#final_panel <- adjust_share_metrics(share_out, philly_occ, apartment_vac = 0.05, other_vac = 0.10)
+adj_shares <- adjust_share_metrics( philly_occ, parcel_bldg[year == 2019 ], apartment_vac = 0.05, rental_vac = 0.10)
 
-analytic_df  <- build_analytic_df(final_panel, share_out$share_df_agg)
+
+analytic_df  <- build_analytic_df(final_panel, adj_shares)
 
 # override num_units_bin
-analytic_df[, num_units_bins := fifelse(num_units_imp == 1, "1",
-                                        fifelse(num_units_imp <= 5, "2-5",
-                                                fifelse(num_units_imp <= 50, "6-50",
-                                                        fifelse(num_units_imp <= 100, "51-100",
-                                                                fifelse(num_units_imp > 100, "101+", NA_character_)))))]
+analytic_df[, num_units_bins := cut(
+  num_units_imp,
+  breaks = c(-Inf, 1, 5, 50, Inf),
+  labels = c("1", "2-5", "6-50", "51+"),
+  right = TRUE
+)]
 
 # now take analytic panel and convert to bldg level
 bldg_panel <- make_bldg_panel(analytic_df)
+bldg_panel[,max_abs_change_occ_rate := max(change_adj_occ_rate,na.rm =T), by = PID]
 # qc chceks
 bldg_panel[,num_filing_rates := uniqueN(filing_rate), by = .(PID)]
 bldg_panel[,.N, by = num_filing_rates]
 # number of beds baths over time
 bldg_panel[,num_med_beds := uniqueN(med_beds), by = .(PID)]
 bldg_panel[,.N, by = num_med_beds]
+bldg_panel[,total_market_share_zip :=   sum(share_units_zip,na.rm=T), by = .(pm.zip, year)]
+bldg_panel[,total_market_share_units_bins := sum(share_units_zip_unit,na.rm=T), by = .(pm.zip,num_units_bins, year)]
+
+bldg_panel[,quantile(total_market_share_zip,na.rm=T)]
+bldg_panel[,quantile(total_market_share_units_bins,na.rm=T)]
+
+bldg_panel[,sum(total_market_share_units_bins >1,na.rm=T)]
 # last couple things, make the rental listing by year data
+# make blp instruments
+# DT has: market_id, product_id, firm_id, group_id, price, size, quality (categorical)
+
+bldg_panel[,log_total_area := log(total_area)]
+bldg_panel[,market_id := .GRP, by = .(pm.zip,num_units_bins, year)]
+bldg_panel[,owner_grp := .GRP, by = .(owner_mailing)]
+
+# make pct change in assessed value vars
+ass[,PID := as.numeric(parcel_number)]
+ass[,taxable_value := as.numeric(taxable_land + taxable_building)]
+ass[order(year),change_taxable_value := taxable_value - data.table::shift(taxable_value), by = PID]
+# pct change
+ass[,pct_change_taxable_value := change_taxable_value / data.table::shift(taxable_value), by = PID]
+
+# where there are huge changes in taxable values, set all to NA for that parcel
+ass[,min_change_taxable_value := min(change_taxable_value, na.rm = TRUE), by = PID]
+ass[,max_change_taxable_value := max(change_taxable_value, na.rm = TRUE), by = PID]
+ass[,range_change_taxable_value := max_change_taxable_value - min_change_taxable_value]
+
+# fix NAs and infinites
+ass[!is.finite(pct_change_taxable_value), pct_change_taxable_value := NA_real_]
+ass[,min_pct_change_taxable_value := min(pct_change_taxable_value, na.rm = TRUE), by = PID]
+ass[,max_pct_change_taxable_value := max(pct_change_taxable_value, na.rm = TRUE), by =PID]
+ass[,range_pct_change_taxable_value := max_pct_change_taxable_value - min_pct_change_taxable_value]
+
+ass[,quantile(range_change_taxable_value,na.rm=T, probs = seq(0,1,0.01))]
+
+ass[,quantile(range_pct_change_taxable_value,na.rm=T, probs = seq(0,1,0.01))] %>% round(3)
+
+ass[,log_taxable_value := log(taxable_value)]
+# drop infinites
+ass[,log_taxable_value := fifelse(is.finite(log_taxable_value), log_taxable_value, NA_real_)]
+ass[order(PID,year),change_log_taxable_value := log_taxable_value - data.table::shift(log_taxable_value), by = PID]
+# drop infinit
+ass[,change_log_taxable_value := fifelse(is.finite(change_log_taxable_value), change_log_taxable_value, NA_real_)]
+# drop ones that have huge swings in assessed value
+# ass[
+#   abs(min_pct_change_taxable_value) >= 3 |
+#   abs(max_pct_change_taxable_value) >= 3
+# ,  c("taxable_value", "change_taxable_value",
+#      "pct_change_taxable_value") := NA_real_]
+
+# make some lags
+ass[order(year), taxable_value_lag1 := data.table::shift(taxable_value), by = PID]
+ass[order(year), taxable_value_lag2 := data.table::shift(taxable_value, 2), by = PID]
+# for chnages and pct changes
+ass[order(year), change_taxable_value_lag1 := data.table::shift(change_taxable_value), by = PID]
+ass[order(year), pct_change_taxable_value_lag1 := data.table::shift(pct_change_taxable_value), by = PID]
+ass[,max_abs_change_log_taxable_value := max(abs(change_log_taxable_value),na.rm=T), by = PID]
+ass[,.N, by = max_abs_change_log_taxable_value>= 2]
+# set assessent changes > 1 to NA
+ass = ass %>%
+  mutate(across(contains('taxable'), ~fifelse(max_abs_change_log_taxable_value >= 2, NA_real_, .x ) ) )
+
+# merge on assessment data
+bldg_panel_m = merge(bldg_panel %>% mutate(PID = as.numeric(PID)) %>% select(-contains("value"), -contains("exempt"), -contains("taxable")),
+                     ass %>%
+                       select(-parcel_number, - contains("range"), matches("min|max")), by = c("PID", "year"), all.x = T)
+
+# per unit
+bldg_panel_m[,change_taxable_value_per_unit := change_taxable_value / num_units_imp]
+bldg_panel_m[,log_taxable_value_per_unit := log(taxable_value / num_units_imp)]
+bldg_panel_m[,high_evict := filing_rate >= 0.1]
+bldg_panel_m = bldg_panel_m %>%
+  mutate(across(contains("permit"), ~as.numeric(.x)))
+
+bldg_panel_m = bldg_panel_m %>%
+  mutate(across(contains("violation"), ~as.numeric(.x)))
+
+# drop instruments
+bldg_panel_m = bldg_panel_m %>%
+  select(-matches("^z_"))
+
+make_blp_instruments(
+  bldg_panel_m,
+  market      = "market_id",
+  product_id  = "PID",
+  firm        = "owner_grp",
+  nest        = "high_evict",
+  cont_vars   = c(
+                  "imminently_dangerous_violation_count",
+                  "hazardous_violation_count" ,
+                  "total_violations",
+                  "building_permit_count",
+                  "general_permit_count",
+                  "total_permits",
+                  "mechanical_permit_count",
+                  "zoning_permit_count"  ,
+                  "plumbing_permit_count",
+                  "log_taxable_value",
+                  "change_log_taxable_value",
+                  "change_taxable_value_per_unit"
+                  ),
+  cat_vars    = c("quality_grade_fixed"),
+  add_market_means = F,
+  moments     = 1,  # also add ∑ x_j^2 instruments
+  add_counts  = TRUE,
+  #interaction_pairs = list(c("z_sum_otherfirm_num_units_imp", "z_cnt_otherfirm")),
+  prefix      = "z"
+)
+
+## =========================
+## Spatial rivals (1–3 km band) helpers
+## =========================
+suppressPackageStartupMessages({
+  require(data.table)
+  require(geodist)     # fast geodesic distances
+})
 
 
+
+# Add 1–3 km rival-band sums/means for selected variables, within market
+# Creates:
+#   z_cnt_1to3km                 (rival count in band)
+#   z_sum_1to3km_<var>           (sum of var among rivals in band)
+#   z_mean_1to3km_<var>          (mean of var among rivals in band)
+add_spatial_rival_band <- function(
+    DT,
+    market,
+    cont_vars,
+    lat = "parcel_lat",
+    lon = "parcel_long",
+    dmin_km = 1,
+    dmax_km = 3,
+    prefix = "z"
+) {
+  stopifnot(is.data.table(DT))
+  stopifnot(is.character(market), length(market) == 1)
+
+  # Prepare output column names
+  band_tag <- "1to3km"
+  cnt_col  <- paste(prefix, "cnt", band_tag, sep = "_")
+  to_make  <- c(cnt_col, unlist(lapply(cont_vars, function(v)
+    c(paste(prefix, "sum",  band_tag, v, sep = "_"),
+      paste(prefix, "mean", band_tag, v, sep = "_"))
+  )))
+
+  # pre-create with NA to avoid reallocation
+  for (nm in to_make) if (!(nm %in% names(DT))) DT[, (nm) := NA_real_]
+
+  # Work market-by-market to keep matrices manageable
+  DT[, .I, by = market][, {
+    idx <- I
+    sub  <- DT[idx]
+
+    # coordinates must be numeric & finite to compute distances
+    latv <- suppressWarnings(as.numeric(sub[[lat]]))
+    lonv <- suppressWarnings(as.numeric(sub[[lon]]))
+    ok   <- is.finite(latv) & is.finite(lonv)
+
+    if (!any(ok)) {
+      # nothing we can do; leave NA for this market
+      NULL
+    } else {
+      # distance matrix in meters
+      coords <- cbind(lonv[ok], latv[ok])
+      colnames(coords) <- c("lon", "lat")
+      dmat_m <- geodist::geodist(coords, measure = "geodesic")
+      # convert to km and build 1–3 km band mask (exclude self)
+      dmat_km <- dmat_m / 1000
+      W <- (dmat_km > dmin_km) & (dmat_km <= dmax_km)
+      diag(W) <- FALSE
+
+      # row counts
+      cnt <- rowSums(W)
+      # write counts back to the right rows
+      DT[idx[ok], (cnt_col) := as.numeric(cnt)]
+
+      # For each var: sums & means over rivals in the band
+      for (v in cont_vars) {
+        x_all <- suppressWarnings(as.numeric(sub[[v]]))
+        xv    <- x_all[ok]               # values aligned to W’s columns
+        okx   <- is.finite(xv)           # which rivals have non-missing x
+
+        # Exclude NA rivals from contributing:
+        W2 <- W
+        if (any(!okx)) W2[, !okx] <- FALSE
+
+        cnt_nonmiss <- rowSums(W2)       # rivals in band with non-missing x
+        xv0 <- xv
+        xv0[!okx] <- 0                   # safe for multiplication
+
+        sums  <- as.numeric(W2 %*% matrix(xv0, ncol = 1))
+        means <- ifelse(cnt_nonmiss > 0, sums / cnt_nonmiss, NA_real_)
+
+        nm_sum  <- paste(prefix, "sum",  band_tag, v, sep = "_")
+        nm_mean <- paste(prefix, "mean", band_tag, v, sep = "_")
+
+        DT[idx[ok], (nm_sum)  := sums]
+        DT[idx[ok], (nm_mean) := means]
+      }
+      NULL
+    }
+  }, by = market]
+
+  invisible(to_make)
+}
+
+# Ensure we have usable lat/long and build spatial rival-band (1–3 km) instruments
+# If you already have lat/lon columns with different names, the helper will try to auto-map them.
+# Otherwise it will still create parcel_lat/parcel_long (blank strings) to match your spec.
+
+# Choose which variables you want spatial sums/means for (can reuse your cont_vars)
+spatial_vars <- c(
+  # "imminently_dangerous_violation_count",
+  # "hazardous_violation_count",
+  # "total_violations",
+  # "building_permit_count",
+  # "general_permit_count",
+  # "total_permits",
+  # "mechanical_permit_count",
+  # "zoning_permit_count",
+  # "plumbing_permit_count",
+  "log_taxable_value",
+  'year_blt_decade',
+  "change_log_taxable_value",
+  "log_taxable_value_per_unit"
+)
+
+# If your market is zip x size bin x year (your market_id), we already created it:
+# bldg_panel_m[, market_id := .GRP, by = .(pm.zip,num_units_bins, year)]
+# Run the spatial band adder:
+# turn SHAPE into lat / long; format is  -75.1486628430591|39.9300970916323
+bldg_panel_m[, c("parcel_long", "parcel_lat") := tstrsplit(SHAPE, "\\|")]
+bldg_panel_m[, parcel_long := as.numeric(parcel_long)]
+bldg_panel_m[, parcel_lat  := as.numeric(parcel_lat)]
+bldg_panel_m[,log_market_value := log(market_value)]
+bldg_panel_m[,num_unit_bins_year := .GRP, by = .(num_units_bins, year)]
+
+temp = bldg_panel_m[num_units_imp > 5 & !is.na(parcel_long) & !is.na(parcel_long) & year >= 2016]
+add_spatial_rival_band(
+  bldg_panel_m, # subset to where it makes sense
+  market   = "num_unit_bins_year",
+  cont_vars= spatial_vars,
+  lat      = "parcel_lat",   # will auto-create/auto-fill if missing
+  lon      = "parcel_long",  # will auto-create/auto-fill if missing
+  dmin_km  = 1,
+  dmax_km  = 3,
+  prefix   = "z"
+)
+feols(share_units_zip_unit ~1|
+         market_id +census_tract|
+        log_med_rent ~ poly(z_sum_1to3km_log_taxable_value,1) +
+        poly(z_mean_1to3km_log_taxable_value,1)+
+        poly(z_sum_1to3km_log_taxable_value_per_unit,1),
+      data = bldg_panel_m[num_units_imp <= 500 &
+                            num_units_imp > 5 &
+                            year %in% 2012:2019&
+                            !is.na(z_mean_1to3km_log_taxable_value) &
+                            !is.na(z_sum_1to3km_log_taxable_value_per_unit)])
+
+feols(share_units_zip_unit ~ log_med_rent + log_market_value+log_total_area +poly(num_units_imp,2)|
+        census_tract^year + year_blt_decade+census_tract^year + building_code_description_new_fixed + quality_grade_fixed,
+      data = bldg_panel_m[num_units_imp <= 500 & num_units_imp > 5 & year %in% 2012:2019])
+
+feols(log_med_rent ~poly(z_sum_1to3km_log_taxable_value,2)
+    |   census_tract^year + year_blt_decade+census_tract^year + building_code_description_new_fixed + quality_grade_fixed,
+    data = bldg_panel_m[num_units_imp <= 500 & num_units_imp > 5& year %in% 2012:2019 & year_built >= 2010])
+
+
+# (Optional) sanity checks
+bldg_panel_m[, summary(z_cnt_1to3km)]
+bldg_panel_m[, lapply(.SD, function(x) quantile(x, na.rm = TRUE)),
+             .SDcols = patterns("^z_sum_1to3km_|^z_mean_1to3km_")]
+
+
+
+bldg_panel_m[year == 2019,quantile(z_sum_otherfirm_change_log_taxable_value,na.rm=T)]
+bldg_panel_m[year == 2019,quantile(change_log_taxable_value,na.rm=T)]
 # write files
 outdir <- "/Users/joefish/Desktop/data/philly-evict/processed"
 # make outdir if it doesn't exist
 dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
 fwrite(final_panel, file.path(outdir, "final_panel.csv"), row.names = FALSE)
 fwrite(analytic_df, file.path(outdir, "analytic_df.csv"), row.names = FALSE)
-fwrite(bldg_panel, file.path(outdir, "bldg_panel.csv"), row.names = FALSE)
+fwrite(bldg_panel_m, file.path(outdir, "bldg_panel.csv"), row.names = FALSE)
 fwrite(rent_list$lic_long_min, file.path(outdir, "license_long_min.csv"), row.names = FALSE)
 fwrite(parcel_bldg, file.path(outdir, "parcel_building.csv"), row.names = FALSE)
 fwrite(parcel_bldg[year == 2024], file.path(outdir, "parcel_building_2024.csv"), row.names = FALSE)
 fwrite(share_out$share_df_agg, file.path(outdir, "market_share_details.csv"), row.names = FALSE)
+fwrite(share_out$share_df, file.path(outdir, "market_share_all_zips.csv"), row.names = FALSE)
+fwrite(evict_list$ev_pid_bed_year, file.path(outdir, "evict_pid_bed_year.csv"), row.names = FALSE)
+fwrite(evict_list$ev_pid_year, file.path(outdir, "evict_pid_year.csv"), row.names = FALSE)
+fwrite(rent_list$rent, file.path(outdir, "rent_altos.csv"), row.names = FALSE)
+fwrite(rent_list$lic_units, file.path(outdir, "rent_licenses.csv"), row.names = FALSE)
+fwrite(evict_list$ev_zip_year, file.path(outdir, "evict_zip_year.csv"), row.names = FALSE)
+# write adj shares
+fwrite(adj_shares, file.path(outdir, "adjusted_market_shares.csv"), row.names = FALSE)
 # final_panel now contains: rent (Altos) + parcel/building attributes + PID-year eviction counts
 # + ZIP-year eviction rates + num_units from licenses, with your cleaned fields preserved.
+bldg_panel_m[,change_log_med_rent := log_med_rent - data.table::shift(log_med_rent), by = PID]
+bldg_panel_m[,change_years := year - data.table::shift(year), by = PID]
+bldg_panel_m[,change_log_med_rent_per_year := change_log_med_rent / change_years]
+bldg_panel_m[,quantile(change_log_med_rent_per_year,na.rm=T)]
+bldg_panel_m[,existed_in_2018 := any(year == 2018), by = PID]
+
+# min max shares
+bldg_panel_m[,min_share_units_zip := min(share_units_zip, na.rm = TRUE), by = PID]
+bldg_panel_m[,max_share_units_zip := max(share_units_zip, na.rm = TRUE), by = PID]
+bldg_panel_m[,range_share_units_zip := max_share_units_zip - min_share_units_zip]
+
+# check how much the adjustment is doing
+bldg_panel_m[year %in% 2016:2019,list(
+  num_units = sum(num_units,na.rm=T) ,
+  num_units_imp = sum(num_units_imp,na.rm=T) ,
+  adj_num_units_imp = sum(adj_num_units_imp,na.rm=T)
+), by = num_units_bins ][,implied_occ := adj_num_units_imp / num_units_imp][order(num_units_bins)][]
+
+View(bldg_panel_m[PID %in% sample(PID[num_units_imp>=5], 10)] %>% relocate( num_units_imp,
+                                                                            adj_num_units_imp,
+                                                                            log_med_rent,
+                                                                            source,
+                                                                            share_units_zip_unit,
+                                                                            PID, year,contains("occupancy_ra")))
+
+bldg_panel_m[,num_sources := uniqueN(source), by = PID]
+
+bldg_panel_m[ num_units_imp >= 10 &
+                year %in% 2016:2019 ,quantile(change_log_taxable_value,na.rm=T, probs = seq(0,1,0.01))]
+# try to instrument for prices given market + PID fixed effects
+sample_df = bldg_panel_m[ num_units_imp > 5&
+                           year %in% 2011:2019
+                           #abs(change_log_med_rent_per_year) <= 0.5
+                         & abs(change_log_taxable_value )<= 1.5]
+
+
+sample_df[,num_years := .N, by = PID]
+sample_df[,quantile(num_years)]
+
+feols(log_med_rent ~
+        # z_sum_otherfirm_building_permit_count+
+        # z_sum_others_general_permit_count +
+        #num_filings+
+       z_sum_otherfirm_imminently_dangerous_violation_count +
+        log_taxable_value +#+ change_log_taxable_value^2
+        z_sum_otherfirm_change_log_taxable_value
+       # z_sum_othernest_change_log_taxable_value
+      |PID +market_id + month,
+      cluster = ~PID,
+      data = sample_df[])
+
+fwlplot::fwl_plot(log_med_rent ~
+        # z_sum_otherfirm_building_permit_count+
+        # z_sum_others_general_permit_count +
+          log_taxable_value
+        #z_sum_otherfirm_imminently_dangerous_violation_count +
+        #log_taxable_value +#+ change_log_taxable_value^2
+        #z_sum_otherfirm_change_log_taxable_value
+      # z_sum_othernest_change_log_taxable_value
+      |PID + market_id + month,
+      cluster = ~PID,
+      data = sample_df)
+
+# make annualized change in rent
+sample_df[,annualized_change_log_med_rent := change_log_med_rent / change_years]
+sample_df[,annualized_change_shares := change_share_units_zip / change_years]
+# annualized occ rate change
+sample_df[,annualized_change_adj_occ_rate := change_adj_occ_rate / change_years]
+sample_df[,quantile(annualized_change_adj_occ_rate,na.rm=T, probs = seq(0,1,0.01))]
+sample_df[,num_units_imp_cuts := cut(num_units_imp, breaks = c(-Inf,1,5,10,50,100,200, Inf),
+                                 labels = c("1","2-5","6-10","11-50","51-100","101-200","200+"))]
+share_resid_reg <- feols(share_units_zip_unit~ 1|market_id + PID,
+      cluster=~PID,
+      data = sample_df[abs(annualized_change_log_med_rent) <= 0.25 & year_built <= 2000
+                       ])
+rent_resid_reg <- feols(log_med_rent ~ 1|market_id + PID,
+      cluster=~PID,
+      data = sample_df[abs(annualized_change_log_med_rent) <= 0.25 & year_built <= 2000
+                       ])
+sample_df[,share_units_zip_unit_resid :=share_units_zip_unit- predict(share_resid_reg,newdata = sample_df)]
+sample_df[,log_med_rent_resid :=log_med_rent - predict(rent_resid_reg,newdata = sample_df)]
+
+ggplot(sample_df[abs(annualized_change_log_med_rent) <= 0.25 & year_built <= 2000 & abs(log_med_rent_resid)<=0.1],
+       aes(x = log_med_rent_resid, y = share_units_zip_unit_resid)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(color = "blue") +
+  theme_minimal()
+
+ggplot(sample_df[abs(annualized_change_log_med_rent) <= 0.25 & year_built <= 2000 & annualized_change_adj_occ_rate != 0],
+       aes(x = annualized_change_log_med_rent, y = annualized_change_adj_occ_rate)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(color = "blue") +
+  theme_minimal()
+
+# in reg form
+fwlplot::fwl_plot(adj_occ_rate ~ log_med_rent +log(market_value)|census_tract^year ,
+
+      cluster=~PID,
+      data = sample_df[abs(annualized_change_log_med_rent) <= 0.25 & abs(annualized_change_adj_occ_rate)>=0.05
+      ])
+
+
+feols(share_units_zip_unit ~ adj_occ_rate+log_med_rent|market_id +PID,
+
+      cluster=~PID,
+      data = sample_df[abs(annualized_change_log_med_rent) <= 0.25 & year_built <= 2000
+                       ])
+
+
+feols(share_units_zip_unit_resid ~ log_med_rent_resid,
+
+      cluster=~PID,
+      data = sample_df[abs(annualized_change_log_med_rent) <= 0.25 & year_built <= 2000 & abs(log_med_rent_resid)<=0.2 & abs(share_units_zip_unit_resid)<=0.2
+                       ])
+
+
+
+fwlplot::fwl_plot(share_units_zip ~log_med_rent+log(market_value)|census_tract^year,
+      data =sample_df[abs(annualized_change_log_med_rent) <= 0.25 & year_built <= 2000])
+
+philly_occ[,mean(occupancy_rate,nabuilding_code_description_new_fixed.rm=T), by = cut(num_households, breaks = c(-Inf,1,5,50, Inf),
+                                                        labels = c("1","2-5","6-50","51+"))][order(V1)]
+philly_occ[,change_occupancy_rate %>% mean(na.rm=T), by = cut(num_households, breaks = c(-Inf,1,5,50, Inf),
+                                                                    labels = c("1","2-5","6-50","51+"))][order(V1)]
+bldg_df_m[order(year),change_occupancy_rate := adj_occ_rate - data.table::shift(adj_occ_rate), by = PID]
+bldg_df_m[,median(change_occupancy_rate,na.rm=T),by = num_units_bins]
+bldg_df_m[year %in% 2016:2019,mean(1-adj_occ_rate,na.rm = T),by = num_units_bins]
+feols(log_med_rent ~ log_taxable_value|PID + pm.zip^year^num_units_bins + month,
+      #weights = ~num_units_imp,
+                  data =bldg_df_m[num_units_imp > 10 & year %in% 2016:2019])
+
+sample_df %>%
+  select(matches("z.+others.+(viol|permit|value)"), log_med_rent) %>%
+  cor(use = "pairwise.complete.obs") %>%
+  # grab just log_mes_rent row
+  .["log_med_rent", ] %>%
+  sort(decreasing = TRUE)
+
+

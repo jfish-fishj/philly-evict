@@ -11,6 +11,7 @@ philly_parcels = fread("/Users/joefish/Desktop/data/philly-evict/parcel_address_
 #rgdal::ogrInfo(system.file("/Users/joefish/Desktop/data/philly-evict/opa_properties_public.gdb", package="sf"))
 philly_parcels_sf = read_sf("/Users/joefish/Desktop/data/philly-evict/philly_parcels_sf/DOR_Parcel.shp")
 
+source("~/Documents/GitHub/philly-evictions/r/helper-functions.R")
 
 
 philly_rentals = philly_lic[licensetype == "Rental"]
@@ -42,14 +43,31 @@ philly_rentals_long = philly_rentals_long[year %in% 2016:2024 & n_sn_ss_c != ""]
 
 # now add in the
 
+# clean some names
+philly_evict[,clean_defendant_name := clean_name(defendant)]
+# flag commercial
+philly_evict[,commercial_alt := str_detect(clean_defendant_name, business_regex)]
 philly_evict[,pm.zip := (pm.zip) %>%
                str_pad(5, "left", pad = "0")]
 
 philly_evict[,dup := .N, by = .(n_sn_ss_c, plaintiff,defendant,d_filing)][,dup := dup > 1]
-philly_evict_address_agg = philly_evict[commercial =="f" & dup == F & year >= 2000 & !is.na(n_sn_ss_c),list(
-  num_evict = .N
-), by = .(year, n_sn_ss_c, pm.house, pm.street,pm.zip,
-          pm.streetSuf, pm.sufDir, pm.preDir, longitude, latitude)]
+philly_evict_address_agg = philly_evict[commercial == "f" &
+                                          commercial_alt == F &
+                                          dup == F &
+                                          year >= 2000 &
+                                          total_rent <= 5e4 &
+                                          !is.na(n_sn_ss_c), list(num_evict = .N), by = .(
+                                            year,
+                                            n_sn_ss_c,
+                                            pm.house,
+                                            pm.street,
+                                            pm.zip,
+                                            pm.streetSuf,
+                                            pm.sufDir,
+                                            pm.preDir,
+                                            longitude,
+                                            latitude
+                                          )]
 
 philly_rentals_long_addys = unique(philly_rentals_long, by = "n_sn_ss_c")
 philly_evict_addys = unique(philly_evict_address_agg, by = "n_sn_ss_c")
@@ -368,8 +386,7 @@ philly_rentals_evict_m[,num_evict := fifelse(is.na(num_evict), 0, num_evict)]
 # parcels agg
 parcels_agg = philly_rentals_evict_m[rentalcategory!= "Hotel",list(
   num_evict = sum(num_evict),
-  num_units = first(numberofunits),
-  med_rent = median()
+  num_units = first(numberofunits)
   #num_addys = uniqueN(n_sn_ss_c)
 ), by = .(year, PID)]
 
@@ -465,7 +482,7 @@ ggplot(parcels_agg_wide[],
        aes(x = replace_na(num_evict_2019,0), y = replace_na(num_evict_2023,0))) +
   geom_point() +
   geom_abline()+
-  #geom_smooth() +
+  geom_smooth() +
   labs(
     x = "Number of evictions (2019)",
     y = "Number of evictions (2023)",
