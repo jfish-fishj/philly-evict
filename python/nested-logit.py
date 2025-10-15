@@ -755,7 +755,7 @@ by_bin = (
 
 own_by_product = (
     el_df.join(est_final[["num_units_cuts", "product_ids"]], how="left")["own_elasticity"]
-          .describe()[["count","mean","std","min","25%","50%","75%","max"]]
+          .describe()[["count","mean","std","min","25\%","50\%","75\%","max"]]
           .reset_index()
           .rename(columns={"product_ids":"Product", "own_elasticity":"Elasticity"})
 )
@@ -765,7 +765,7 @@ own_el_table =own_by_product
 write_latex_table(
     own_el_table,
     OUT_DIR / "own_elasticities_summary.tex",
-    caption="Own-Price Elasticities: Overall and by Size Bin",
+    caption="Own-Price Elasticities",
     label="tab:own_elasticities",
     index=False
 )
