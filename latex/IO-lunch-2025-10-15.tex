@@ -28,7 +28,7 @@
 \usepackage{anyfontsize}
 \usepackage{etoolbox}
 \usepackage{mathtools}
-
+\usepackage{subcaption}
 \usepackage[flushleft]{threeparttable}
 \usepackage{booktabs}
 \usepackage{caption}
@@ -314,9 +314,10 @@ Commercially available rental datasets (\textcolor{red}{altos}) don't cover the 
 
 \begin{frame}{Evidence of Price Effects}
     Here, I run an event study comparing prices of buildings with a $>10\%$ filing rate per year; there's no "treatment", so you should think of it as a price index.
+    \small
     \begin{figure}
         \centering
-        \includegraphics[width=0.75\linewidth]{figs/event_study_.png}
+        \includegraphics[width=0.65\linewidth]{figs/event_study_high_filing_preCOVID.png}
         \caption{Event Study Results}
         \label{fig:placeholder}
     \end{figure}
@@ -325,9 +326,10 @@ Commercially available rental datasets (\textcolor{red}{altos}) don't cover the 
 
 \begin{frame}{Evidence of Price Effects}
     I repeat by previous price index, but I allow for census tract by year trends.
+    \small
     \begin{figure}
         \centering
-        \includegraphics[width=0.75\linewidth]{figs/event_study_high_filing_2019_nhood_trends.png}
+        \includegraphics[width=0.65\linewidth]{figs/event_study_high_filing_preCOVID_m2.png}
         \caption{Event Study Results: Neighborhood Trends}
         \label{fig:placeholder}
     \end{figure}
@@ -344,6 +346,24 @@ Commercially available rental datasets (\textcolor{red}{altos}) don't cover the 
         \item Exit ≈ quality upgrading (condo conversion), so policy effects propagate via reallocation across quality tiers
     \end{itemize}
 \end{itemize}
+    
+\end{frame}
+
+\begin{frame}{Toy Model Intuition}
+    If the mechanism is exit, the probability of exit will depend on how good the landlord's outside option is relative to how high the cost shock was:
+
+    \begin{figure}[t]
+          \centering
+          \begin{subfigure}{0.48\textwidth}
+            \includegraphics[width=\linewidth]{img1}
+            \caption{Philadelphia}\label{fig:left}
+          \end{subfigure}\hfill
+          \begin{subfigure}{0.48\textwidth}
+            \includegraphics[width=\linewidth]{figs/}
+            \caption{San Francisco}\label{fig:right}
+          \end{subfigure}
+          \caption{Two images side by side.}\label{fig:pair}
+\end{figure}
     
 \end{frame}
 
@@ -413,12 +433,15 @@ Commercially available rental datasets (\textcolor{red}{altos}) don't cover the 
 
 \begin{frame}{Toy Model Nested Logit}
     \begin{itemize}
-        \item Discount rate $\delta =1$
+        \item Two period model with discount rate $\delta =1$
         \item Exogenous initial continuum of landlords $i \in [0,1]$ that each produce one unit of housing
         \item Low nest ($L$) and high nest ($H$); each landlord is active in one nest
         \item Market size $M$ is exogenous and normalized to $J=n_l +n_h$
         \item At t=1, \textbf{low tier landlords} draw costs $\kappa_i>0$, and a quality upgrading cost $\phi_i>0$ from a joint CDF $F(\kappa,\phi)$ with correlation = $\rho$
         \item \textbf{low tier landlords} can now pay an upgrade cost $\phi_i$ to enter the high tier (and avoid paying $\kappa_i$), or continue and make low tier flow profits
+        \begin{itemize}
+            \item Normalize marginal cost = 0, so $\pi_g=p_g$
+        \end{itemize}
     \end{itemize}    
 \end{frame}
 
@@ -478,14 +501,29 @@ Given a draw $(\kappa_i,\phi_i)$:
 \pi_i^{H} &= p_H-\phi_i.
 \end{align*}
 
-For simplicity, assume $\pi_h = \pi_l$
-Then the landlord upgrades iff $\kappa_i \geq \phi_i$
-\begin{align*}
-\boxed{\;\kappa_i  \;\ge\; \phi_i }.
-\end{align*}
+%For simplicity, assume $\pi_h = \pi_l$
+Then the landlord upgrades iff $\kappa_i \geq \phi_i + (\pi_h - \pi_l)$\\
+Define the set of landlords that upgrade as \[
+\mathcal{U}(\Delta)\;\equiv\;\big\{\, i \in \mathcal{I}\;:\; \kappa_i \geq \phi_i+ (\pi_h - \pi_l) \,\big\}
+\]
+\pause
+Intuitively, when $\rho$ is negative, you see more exit as higher cost shocks have better outside options. \\
 
-Intuitively, when $\rho$ is negative, you see more exit as higher cost shocks have better outside options. Further, for a given amount of exit, the price effect is higher when the rental market is more segmented.
+Further, for a given amount of exit, the price effect is higher when the rental market is more segmented.
 
+\end{frame}
+
+\begin{frame}{Brief Recap}
+    \begin{itemize}
+        \item Philadelphia's eviction overhaul seems to have worked
+        \pause
+        \item There's preliminary evidence of price pass-through for high evicting buildings
+        \pause
+        \item Toy model suggests price pass-through depends on degree of exit (which depends on landlord outside options), as well as market segmentation
+        \pause
+        \item For landlords that don't want to exit, I might want to build in whether they adjust on other margins
+    \end{itemize}
+    
 \end{frame}
 
 \section{Evidence of Market Segmentation}
@@ -494,7 +532,7 @@ Intuitively, when $\rho$ is negative, you see more exit as higher cost shocks ha
     Infutor data let me track households as they move. Intuitively, if people at high evicting properties are more likely to move to high evicting properties, this is evidence of market segmentation. Formally, I regress:
 
     \begin{align*}
-        FilingRate_{destination} = \beta_0 +\beta_1FilingRate_{origin} + \beta_2OriginControls + \beta_3DestinationControls 
+        FilingRate_{destination} = &\beta_0 +\mathbf{\beta_1FilingRate_{origin}} + \\&\beta_2OriginControls + \beta_3DestinationControls 
     \end{align*}
     where Origin/Destination controls will include census tract fixed effects, property size fixed effects, and log(rent)
 \end{frame}
@@ -507,13 +545,19 @@ Intuitively, when $\rho$ is negative, you see more exit as higher cost shocks ha
 \begin{frame}{Evidence of Market Segmentation: Nested Logit}
     \begin{itemize}
         \item Consider a renter's choice set as all the units in a zip code by building type by year (1 unit; 2-4 units, 5-50 units; 51+ units, following \cite{framoutar2024market, calderwang2024algorithmic})
+        \begin{itemize}
+            \item Because of issues with choice probabilities sometimes near zero, I drop buildings with fewer than 5 units
+        \end{itemize}
+        \pause
         \item Renters first choose a nest (n) (high / low evicting), then choose a market (j), and finally a product (i) (building) within that market
+        \pause
         \item Household utility is then \begin{align}
             U_{ijt}
               &= \alpha p_{jt} + x_{jt}\beta^{\mathrm{ex}} + \xi_{jt}
                  + \bar{\epsilon}_{h(j)ti} + (1-\rho)\,\tilde{\epsilon}_{ijt} \tag{6} \\[6pt]
                  \end{align}
         \item Where $x_{jt}$ are product characteristics including log(market value),log(total area), year built, and fixed effects for quality grade, building type, and census tract by year
+        \pause
         \item Outside good is renting a unit within the market, which does not appear in my data (typical outside good share is ~70\%).
     \end{itemize}
     
@@ -537,7 +581,7 @@ Intuitively, when $\rho$ is negative, you see more exit as higher cost shocks ha
         \item I instrument for $\rho$ using the number of products in the nest
         \item For this presentation, I treat price as exogeneous.
         \begin{itemize}
-            \item Obviosly this isn't ideal, however, the instruments I tried were all very weak, and I'll show my elasticities are reasonable. If people have thoughts on the weak instruments issue, let me know!
+            \item Obviously this isn't ideal, however, the instruments I tried were all very weak, and I'll show my estimates are reasonable. If people have thoughts on the weak instruments issue, let me know!
         \end{itemize}
     \end{itemize}
     
@@ -557,7 +601,12 @@ Intuitively, when $\rho$ is negative, you see more exit as higher cost shocks ha
 \end{frame}
 
 \begin{frame}{Conclusion}
-    
+    \begin{itemize}
+        \item Cities want to regulate landlord conduct, but are likely concerned about potential price hikes
+        \item Philadelphia successfully regulated conduct, and may have induced some price increases
+        \item Toy model suggests that landlords most likely to respond are those that have good outside options and price effects are largest when markets are segmented
+        \item 
+    \end{itemize}
 \end{frame}
 
 \begin{frame}{Thanks}
