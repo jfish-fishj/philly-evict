@@ -253,9 +253,9 @@ Commercially available rental datasets (\textcolor{red}{altos}) don't cover the 
 \begin{frame}{Evictions in Philadelphia}
     \begin{figure}
         \centering
-        \includegraphics[width=0.5\linewidth]{figs/pa_}
-        \caption{Caption}
-        \label{fig:placeholder}
+        \includegraphics[width=0.75\linewidth]{figs/pa_zip_filing_rate_2019.png}
+        \caption{Filing Rates by Philadelphia Zip Code}
+        \label{fig:philly-zip}
     \end{figure}
 \end{frame}
 
@@ -453,14 +453,24 @@ Now, prices in the low nest, depend on $\rho$ and on the degree of market segmen
 \section{Evidence of Market Segmentation}
 
 \begin{frame}{Evidence of Market Segmentation}
-    
+    Infutor data let me track households as they move. Intuitively, if people at high evicting properties are more likely to move to high evicting properties, this is evidence of market segmentation. Formally, I regress:
+
+    \begin{align*}
+        FilingRate_{destination} = \beta_0 +\beta_1FilingRate_{origin} + \beta_2OriginControls + \beta_3DestinationControls 
+    \end{align*}
+    where Origin/Destination controls will include census tract fixed effects, property size fixed effects, and log(rent)
 \end{frame}
 
 \begin{frame}{Evidence of Market Segmentation: Cont.}
-    put table with gravity eq about here
+    \input{tables/evict_persist}
 \end{frame}
 
 \begin{frame}{Evidence of Market Segmentation: Nested Logit}
+    \begin{itemize}
+        \item Consider a renter's choice set as all the units in a zip code by building type by year (1 unit; 2-4 units, 5-50 units; 51+ units, following \cite{framoutar2024market, calderwang2024algorithmic})
+        \item Renters first choose a nest (n) (high / low evicting), then choose a market (j), and finally a product (i) (building) within that market
+        \item Household utility is then $u_{nji} = $
+    \end{itemize}
     
 \end{frame}
 
@@ -468,7 +478,16 @@ Now, prices in the low nest, depend on $\rho$ and on the degree of market segmen
     
 \end{frame}
 
-\begin{frame}{Evidence of Market Segmentation: Nested Logit}
+\begin{frame}{Nested Logit Results}
+
+\end{frame}
+
+\begin{frame}{Nested Logit Elasticities}
+    \include{output/pyblp_summaries/own_elasticities_summary}
+\end{frame}
+
+\begin{frame}{Nested Logit Diversion Ratios}
+
 \end{frame}
 
 % \begin{frame}{Landlord Behavior post-COVID}
