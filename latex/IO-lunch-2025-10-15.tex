@@ -1,39 +1,6 @@
 \documentclass[10pt, xcolor=dvipsnames]{beamer}
 
-% There are many different themes available for Beamer. A comprehensive
-% list with examples is given here:
-% http://deic.uab.es/~iblanes/beamer_gallery/index_by_theme.html
-% You can uncomment the themes below if you would like to use a different
-% one:
-%\usetheme{AnnArbor}
-%\usetheme{Antibes}
-%\usetheme{Bergen}
-%\usetheme{Berkeley}
-%\usetheme{Berlin}
-%\usetheme{Boadilla}
-%\usetheme{boxes}
-%\usetheme{CambridgeUS}
-%\usetheme{Copenhagen}
-%\usetheme{Darmstadt}
-%\usetheme{default}
-%\usetheme{Frankfurt}
-%\usetheme{Goettingen}
-%\usetheme{Hannover}
-%\usetheme{Ilmenau}
-%\usetheme{JuanLesPins}
-%\usetheme{Luebeck}
-%\usetheme{Frankfurt}
-\usetheme{Madrid}
-%\usetheme{Malmoe}
-%\usetheme{Marburg}
-%\usetheme{Montpellier}
-%\usetheme{PaloAlto}
-%\usetheme{Pittsburgh}
-%\usetheme{Rochester}
-%\usetheme{Singapore}
-%\usetheme{Szeged}
-%\usetheme{Warsaw}
-
+\usetheme{metropolis}
 \usepackage[utf8]{inputenc}
 \usepackage[english]{babel}
 \usepackage{ragged2e}
@@ -60,10 +27,8 @@
 \usepackage{cancel}
 \usepackage{anyfontsize}
 \usepackage{etoolbox}
-\usepackage{amsmath}
-\usepackage{amssymb}
 \usepackage{mathtools}
-%\usepackage{natbib}
+
 \usepackage[flushleft]{threeparttable}
 \usepackage{booktabs}
 \usepackage{caption}
@@ -74,11 +39,11 @@
 \usepackage{amssymb}
 \usepackage[percent]{overpic}
 
+%\usepackage{biblatex}
 \usepackage[backend=biber,
 style=authoryear,
 citestyle=authoryear]{biblatex} 
 \addbibresource{latex/bibliography.bib}
-
 
 \setbeamercolor{titlelike}{parent=structure}
 \definecolor{UBCblue}{rgb}{0.04706, 0.13725, 0.32}
@@ -116,14 +81,21 @@ citestyle=authoryear]{biblatex}
     urlcolor=blue,
     allcolors=.
 }
+
 \setbeamercolor{button}{bg=UBCblue2,fg=white}
 \newcommand\fnote[1]{\captionsetup{font=tiny}\caption*{#1}}
 \newcommand\fnotev[1]{\captionsetup{font=scriptsize}\caption*{#1}}
+\def\house{\hbox{\kern3pt \vbox to13pt{}% 
+   \pdfliteral{q 0 0 m 0 5 l 5 10 l 10 5 l 10 0 l 7 0 l 7 5 l 3 5 l 3 0 l f
+               1 j 1 J -2 5 m 5 12 l 12 5 l S Q }%
+   \kern 13pt}}
 \setbeamertemplate{caption}[numbered]
+\setbeamertemplate{itemize item}{\Tiny \house}
+\metroset{progressbar=frametitle,numbering=fraction}
+% %\justifying
+% \urlstyle{same}
+%\usefonttheme{serif}
 
-
-%\justifying
-\urlstyle{same}
 %\usefonttheme{serif}
 
 %------------------------
@@ -160,7 +132,7 @@ citestyle=authoryear]{biblatex}
         \pause
         \item At the same time, given reliance on private market and lack of funds for subsidized housing, optimal regulation has to be careful about inducing landlord exit
         \begin{itemize}
-            \item Ex ante unclear what optimal regulation looks like, but optimal regulation requires knowing \textbf{landlord exit options}
+            \item Optimal regulation requires the distribution of exit/upgrade options across landlords
         \end{itemize}
     \end{enumerate}
 
@@ -191,24 +163,58 @@ citestyle=authoryear]{biblatex}
 \begin{frame}{Existing Literature}
     \textbf{Rent Control}
     \begin{itemize}
-        \item 
+        \item Studies on price effects \cite{diamond-2019, Jofre_Monseny_2023, Kholodilin_2024}
+        \item Studies on housing quality \cite{Gyourko_1990 }
     \end{itemize}
     \textbf{Tenant Protections}
     \begin{itemize}
         \item \cite{humphries-2024}: Looks at how landlords respond to a change in tenant protections in NYC; finds price pass through onto tenants
+        \item \cite{abramson_2021, Asquith_2019, Corbae_2024}
     \end{itemize}
-    \textbf{Occupational Discrimination}
     
 \end{frame}
 
-\begin{frame}{Stylized Facts on Eviction in Philadelphia}
+
+\section{Data}
+
+\begin{frame}{Data}
+\textbf{Eviction Data}
     \begin{itemize}
-        \item Eviction is relatively infrequent
-        \item A small share of properties have very high eviction rates
+        \item Universe of Eviction Records from 2006-2025
+        \begin{itemize}
+            \item Contain \textbf{contract rents} as well case information (address, amount owed, plaintiff / defendant name, etc.)
+            \item Cases are filtered to non-commercial and non-housing authority
+        \end{itemize}
     \end{itemize}
-    
+\pause
+\textbf{Rental listing data from Altos (2011-2023)}
+\begin{itemize}
+    \item Unit level rental listings with information on amenities, beds, baths, etc.
+\end{itemize}
+\textbf{ Rental Registry}
+\begin{itemize}
+    \item Covers near-universe of rental listings
+    \item Importantly, landlords need to be on the rental listing to file evictions
+\end{itemize}
+\textbf{Address History Data from Infutor}
+    \pause
+Why this is important:\\
+    \begin{itemize}
+        \item This will be one of the few papers to study the low income rental market because data are so sparse 
+    \end{itemize}
 \end{frame}
 
+\begin{frame}{Distribution of Rent Prices by Data Source}
+Commercially available rental datasets (\textcolor{red}{altos}) don't cover the low income rental market\\
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.75\linewidth]{figs/density_rent_prices.png}
+        \caption{Rent Prices by Data Source}
+        \label{fig:rent-dist}
+    \end{figure}
+\end{frame}
+
+\section{Setting and Context}
 \begin{frame}{Common Ways of Regulating Eviction}
     \textbf{Filing Fees}
     \begin{itemize}
@@ -229,6 +235,31 @@ citestyle=authoryear]{biblatex}
     
 \end{frame}
 
+\begin{frame}{Stylized Facts on Eviction in Philadelphia}
+    \begin{itemize}
+        \item Eviction is relatively infrequent
+        \item A small share of properties have very high eviction rates
+    \end{itemize}
+
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.75\linewidth]{figs/empirical_cdf_filing_rate_preCOVID.png}
+        \caption{Empirical CDF of Filing Rate (pre-COVID)}
+        \label{fig:ecdf-filings}
+    \end{figure}
+    
+\end{frame}
+
+\begin{frame}{Evictions in Philadelphia}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.5\linewidth]{figs/pa_}
+        \caption{Caption}
+        \label{fig:placeholder}
+    \end{figure}
+\end{frame}
+
+
 \begin{frame}{Philadelphia's Eviction Diversion Program}
     \begin{itemize}
         \item Law required all landlords to apply and be approved for the Eviction Diversion Program and participate in good faith for at least 30 days before filing an eviction in court
@@ -240,10 +271,30 @@ citestyle=authoryear]{biblatex}
 \end{frame}
 
 \begin{frame}{Effectiveness of Philadelphia's Eviction Diversion Program}
-    
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.75\linewidth]{figs/num_eviction_filings_by_year.png}
+        \caption{Eviction Filings by Year}
+        \label{fig:evict-year}
+    \end{figure}
 \end{frame}
 
 \begin{frame}{Changes in landlord response by unit size}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.75\linewidth]{figs/change_in_avg_annual_eviction_filing_rates_pre_post_COVID_by_num_units.png}
+        \caption{Change in filing behavior by number of units}
+        \label{fig:change-evict-units}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Evidence of Price Effects}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.5\linewidth]{figs/mean_price_quintile.png}
+        \caption{Price Changes over Time}
+        \label{fig:price-high-filing}
+    \end{figure}
     
 \end{frame}
 
@@ -366,7 +417,7 @@ Intuitively, price response will be worse in a world where more marginal landlor
         \begin{align*}
             p_g - c_g \;=\; \frac{s_j}{\alpha\big[1 - \sigma(1-s_{j|g}) - (1-\sigma)(1-S_g)\big]}.
         \end{align*}
-Plugging the symmetric shares $s_j=\tfrac{1}{J}$, $s_{j|g}=\tfrac{1}{n_g}$, $S_g=\tfrac{n_g}{J}$ yields the \emph{capacity-consistent} closed form:
+plugging the symmetric shares $s_j=\tfrac{1}{J}$, $s_{j|g}=\tfrac{1}{n_g}$, $S_g=\tfrac{n_g}{J}$ yields the \emph{capacity-consistent} closed form:
 \begin{align*}
 \boxed{
 \,p_g - c_g
@@ -397,13 +448,12 @@ For simplicity, assume $\pi_h = \pi_l$
 
 Now, prices in the low nest, depend on $\rho$ and on the degree of market segmentation $\sigma$
 
-    
 \end{frame}
 
 \section{Evidence of Market Segmentation}
 
 \begin{frame}{Evidence of Market Segmentation}
-    - gravity equation for infutor moves
+    
 \end{frame}
 
 \begin{frame}{Evidence of Market Segmentation: Cont.}
@@ -421,21 +471,21 @@ Now, prices in the low nest, depend on $\rho$ and on the degree of market segmen
 \begin{frame}{Evidence of Market Segmentation: Nested Logit}
 \end{frame}
 
-\begin{frame}{Landlord Behavior post-COVID}
+% \begin{frame}{Landlord Behavior post-COVID}
     
-\end{frame}
+% \end{frame}
 
-\begin{frame}{Landlord Exit / Entry Model}
+% \begin{frame}{Landlord Exit / Entry Model}
     
-\end{frame}
+% \end{frame}
 
-\begin{frame}{Landlord Exit / Entry Model: Calibration}
+% \begin{frame}{Landlord Exit / Entry Model: Calibration}
     
-\end{frame}
+% \end{frame}
 
-\begin{frame}{Landlord Exit / Entry Model: Counterfactual}
+% \begin{frame}{Landlord Exit / Entry Model: Counterfactual}
     
-\end{frame}
+% \end{frame}
     
 
 
