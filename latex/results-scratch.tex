@@ -51,5 +51,146 @@
    } % end resizebox
 \end{table}
 
+% =========================================================
+% Nested-Logit Two-Nest Model with Unit Capacity & Correlated Costs
+% =========================================================
+\small
+
+% ---------- Environment & Normalizations ----------
+\textbf{Environment.}
+Two nests $g\in\{L,H\}$ (low/high), \emph{no outside option}, market size $M$.
+Continuum of potential landlords; each \emph{active} landlord supplies exactly one unit if they operate.
+Let $n_g$ be the number (measure) of active sellers in nest $g$ and $J\equiv n_L+n_H$ the total number of active products.
+We \emph{normalize demand to capacity}:
+\begin{align*}
+\boxed{\,M=J\,}
+\quad\Rightarrow\quad 
+\text{each product’s expected quantity } q_j \;=\; M s_j \;=\; J\cdot \tfrac{1}{J}\;=\;1.
+\end{align*}
+Costs: producing in $L$ costs $c_L+\kappa_i$ (idiosyncratic add-on $\kappa_i\ge 0$); producing in $H$ costs $c_H$ after paying a one-time \emph{upgrade} cost $\phi_i\ge 0$ at $t=1$.
+\emph{Key change:} the pair $(\kappa_i,\phi_i)$ is jointly distributed with CDF $H(\kappa,\phi)$ and correlation $\rho=\mathrm{Corr}(\kappa,\phi)$.
+Discount factor set to $\delta=1$.
+
+% ---------- Nested-Logit Demand (No Outside) ----------
+\medskip
+\textbf{Nested-logit demand (no outside option).}
+Product $j$ in nest $g(j)$ has mean utility $\delta_j$; price coefficient $\alpha>0$; nest correlation (segmentation) $\sigma\in[0,1)$.
+Within-nest shares and inclusive values:
+\begin{align*}
+s_{j|g} \;=\;
+\frac{\exp\!\left(\frac{\delta_j-\alpha p_j}{1-\sigma}\right)}
+{\sum_{k\in g}\exp\!\left(\frac{\delta_k-\alpha p_k}{1-\sigma}\right)},
+\qquad
+I_g \;=\; (1-\sigma)\,\log\!\sum_{k\in g}\exp\!\left(\frac{\delta_k-\alpha p_k}{1-\sigma}\right).
+\end{align*}
+Nest shares (no outside):
+\begin{align*}
+S_g \;=\;\frac{e^{I_g}}{e^{I_L}+e^{I_H}},
+\qquad
+s_j \;=\; S_{g(j)}\,s_{j|g(j)},
+\qquad
+S_L+S_H \;=\; 1.
+\end{align*}
+\emph{Symmetric-within-nest specialization} (identical products in a nest) implies
+\begin{align*}
+\boxed{\,s_j=\tfrac{1}{J},\;\; s_{j|g}=\tfrac{1}{n_g},\;\; S_g=\tfrac{n_g}{J}\,}.
+\end{align*}
+
+% ---------- Bertrand Pricing & Markups ----------
+\medskip
+\textbf{Bertrand pricing (markup system).}
+Stacking products, first-order conditions under nested-logit can be written
+\begin{align*}
+\boxed{\; \mathbf p \;=\; \mathbf c \;+\; \frac{1}{\alpha}\big(\mathbf I-\mathbf\Omega(\sigma,\mathbf s)\big)^{-1}\mathbf s \;}
+\end{align*}
+where $\mathbf\Omega(\sigma,\mathbf s)$ is the diversion matrix determined by nested-logit (own/within-nest terms scale with $\sigma$, cross-nest with $1-\sigma$).
+
+For a product $j\in g$, the \emph{own-share derivative} under nested logit (no outside) is
+\begin{align*}
+\frac{\partial s_j}{\partial p_j}
+= -\alpha\, s_j\Big[\,1 - \sigma\,(1 - s_{j|g}) - (1-\sigma)\,(1 - S_g)\,\Big].
+\end{align*}
+With symmetry in nest $g$ (common price $p_g$), the optimal \emph{per-product markup} is
+\begin{align*}
+p_g - c_g \;=\; \frac{s_j}{\alpha\big[1 - \sigma(1-s_{j|g}) - (1-\sigma)(1-S_g)\big]}.
+\end{align*}
+Plugging the symmetric shares $s_j=\tfrac{1}{J}$, $s_{j|g}=\tfrac{1}{n_g}$, $S_g=\tfrac{n_g}{J}$ yields the \emph{capacity-consistent} closed form:
+\begin{align*}
+\boxed{
+\,p_g - c_g
+\;=\;
+\frac{1}{\alpha\,J\Big(1 - \sigma\!\big(1-\tfrac{1}{n_g}\big) - (1-\sigma)\!\big(1-\tfrac{n_g}{J}\big)\Big)}\;,\quad g\in\{L,H\}.
+}
+\end{align*}
+Because $M=J$ and $s_j=1/J$, each seller’s quantity is $1$, so \emph{per-seller operating profit equals the markup}:
+\begin{align*}
+\boxed{\,\Pi_g(n_L,n_H) \;=\; p_g - c_g\,}.
+\end{align*}
+
+% ---------- Landlord Decisions with Correlated Costs ----------
+\medskip
+\textbf{Landlord choice (upgrade vs stay in L) with $(\kappa_i,\phi_i)$ correlated.}
+Given a draw $(\kappa_i,\phi_i)$:
+\begin{align*}
+\pi_i^{L} &= (p_L - c_L) - \kappa_i, 
+&
+\pi_i^{H} &= -\phi_i + (p_H - c_H).
+\end{align*}
+Define the \emph{profit-gap} between nests
+\begin{align*}
+\Delta \;\equiv\; (p_L - c_L) - (p_H - c_H).
+\end{align*}
+A landlord chooses $H$ iff $\pi_i^{H}\ge \pi_i^{L}$, i.e.
+\begin{align*}
+\boxed{\;\kappa_i - \phi_i \;\ge\; \Delta\; }.
+\end{align*}
+Let $Z_i\equiv \kappa_i-\phi_i$ with CDF $G_Z$. Then the nest sizes are
+\begin{align*}
+\boxed{\,n_H \;=\; 1 - G_Z(\Delta), \qquad n_L \;=\; G_Z(\Delta),\qquad J=n_L+n_H\,}.
+\end{align*}
+
+% ---------- Equilibrium (Fixed Point) ----------
+\medskip
+\textbf{Equilibrium (fixed point in $(n_L,n_H,p_L,p_H)$).}
+A symmetric equilibrium satisfies
+\begin{align*}
+\text{(i)}\;& p_g - c_g \;=\; \frac{1}{\alpha\,J\Big(1 - \sigma(1-\tfrac{1}{n_g}) - (1-\sigma)(1-\tfrac{n_g}{J})\Big)},\quad g\in\{L,H\},\\[4pt]
+\text{(ii)}\;& \Delta \;=\; (p_L - c_L) - (p_H - c_H),\\[4pt]
+\text{(iii)}\;& n_L \;=\; G_Z(\Delta),\;\; n_H=1-n_L,\;\; J=n_L+n_H \; (=M).
+\end{align*}
+These equations jointly pin down $(n_L^\ast,n_H^\ast)$ and $(p_L^\ast,p_H^\ast)$.
+
+% ---------- Parametric Note (helps intuition about $\rho$) ----------
+\medskip
+\textbf{Parametric note (optional, for intuition).}
+If $(\kappa,\phi)$ are jointly normal with means $(\mu_\kappa,\mu_\phi)$, standard deviations $(\sigma_\kappa,\sigma_\phi)$ and correlation $\rho$, then
+\begin{align*}
+Z=\kappa-\phi \sim \mathcal N\!\Big(\mu_\kappa-\mu_\phi,\; \sigma_\kappa^2+\sigma_\phi^2 - 2\rho\,\sigma_\kappa\sigma_\phi\Big).
+\end{align*}
+Hence
+\begin{align*}
+n_H
+=1-\Phi\!\left(\frac{\Delta-(\mu_\kappa-\mu_\phi)}{\sqrt{\sigma_\kappa^2+\sigma_\phi^2 - 2\rho\,\sigma_\kappa\sigma_\phi}}\right).
+\end{align*}
+Holding $\Delta$ fixed, \emph{higher} $\rho$ \emph{reduces} $\mathrm{Var}(Z)$, compressing the tails and typically \emph{dampening} upgrading if $\Delta>(\mu_\kappa-\mu_\phi)$ (and \emph{amplifying} it if the reverse holds).
+
+% ---------- Comparative Statics (Directional Signs) ----------
+\medskip
+\textbf{Comparative statics (signs).}
+\begin{align*}
+\text{Shock to L (higher }\kappa\text{ on average)}:\;& 
+\mu_\kappa\uparrow \Rightarrow Z\uparrow \Rightarrow n_H^\ast\uparrow,\ n_L^\ast\downarrow \Rightarrow p_L^\ast\uparrow\ \text{(via }n_L).\\
+\text{Upgrade cost level }(\mu_\phi)\uparrow:\;&
+Z\downarrow \Rightarrow n_H^\ast\downarrow,\ n_L^\ast\uparrow \Rightarrow p_L^\ast \text{ adjusts via markup system}.\\
+\text{Correlation } \rho=\mathrm{Corr}(\kappa,\phi):\;&
+\rho\uparrow \Rightarrow \mathrm{Var}(Z)\downarrow.\ \text{For a given }\Delta,\ \text{upgrading dampened if }\Delta>(\mu_\kappa-\mu_\phi),\\
+&\text{and amplified if }\Delta<(\mu_\kappa-\mu_\phi).\ \text{Intuition: high-}\kappa\text{ types also have high }\phi.\\
+\text{Segmentation } \sigma\uparrow:\;&
+\text{own-nest diversion stronger} \Rightarrow \text{markups more sensitive to }n_g \Rightarrow \text{a given fall in }n_L \text{ yields larger }\Delta p_L^\ast.
+\end{align*}
+\normalsize
+
+
+
 
 \end{document}
