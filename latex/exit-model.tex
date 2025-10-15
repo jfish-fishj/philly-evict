@@ -1,0 +1,278 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,amsthm,mathtools,bm}
+\usepackage{geometry}
+\usepackage{setspace}
+\usepackage{hyperref}
+\geometry{margin=1in}
+\onehalfspacing
+
+\title{Exit Model with Unit Output, Quality-Scaled Productivity, and Endogenous Entry}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note restates the stationary Hopenhayn-style industry model under the convention that \emph{each active landlord produces exactly one unit per period}, while idiosyncratic productivity $x$ scales the \emph{effective price} via a quality shifter $\phi(x)$. Operating costs can be taken as \emph{constant} (independent of $x$). We derive the stopping problem, stationary cross-section per unit entry, free-entry and market-clearing conditions, and clarify how aggregate quantity and prices are determined when $Q$ equals the mass of active landlords.
+\end{abstract}
+
+\section{Primitives}
+
+Time is discrete and we seek a stationary equilibrium. A landlord is characterized by
+\[
+x\in\mathcal{X},\qquad \theta\in\Theta,\qquad \kappa\in\mathcal{K},\qquad S\in\mathcal{S},
+\]
+where:
+\begin{itemize}
+\item $x$ is idiosyncratic productivity evolving on a finite grid $\mathcal{X}$ with Markov transition $P$ (Rouwenhorst discretization of a stationary AR(1)).
+\item $\theta$ is a cost-sensitivity parameter; $\kappa$ is a property-specific cost shifter (e.g., policy shock exposure).
+\item $S$ is the outside option (scrap value) received upon exit.
+\end{itemize}
+
+\paragraph{Unit output and quality-scaled price.}
+Each active landlord supplies \emph{one unit} per period. Idiosyncratic productivity scales the \emph{revenue per unit} through a quality shifter
+\[
+\phi:\mathcal{X}\to\mathbb{R}_{+},\qquad \text{e.g.\ } \phi(x)=\exp(\gamma (x-\bar x)) \text{ (possibly mean-one normalized)}.
+\]
+Given the market price level $p$, a landlord with state $x$ receives effective revenue $p\,\phi(x)$.
+
+\paragraph{Costs.}
+Operating cost per period is
+\[
+c(x;\,\cdot)\equiv c_0 + \theta\,\kappa,
+\]
+with $c_0\ge 0$ a constant. (If desired, $c$ can include additional fixed/variable components; the implementation allows either constant or $x$-dependent costs.)
+
+\paragraph{Demand.}
+Inverse demand maps aggregate quantity $Q$ into the common price level $p$:
+\begin{equation}
+p \;=\; \mathcal{P}(Q), \qquad \text{with log-linear } \mathcal{P}(Q)=a\,e^{bQ},\; a>0,\; b<0.
+\end{equation}
+Because output per active firm is one, \emph{aggregate quantity equals the mass of active landlords}.
+
+\paragraph{Discounting and hazard.}
+Let $\beta\in(0,1)$ be the discount factor and $\delta\in[0,1)$ an exogenous per-period exit hazard (optional, in addition to optimal stopping).
+
+\section{Per-Firm Value with Stopping}
+
+With price level $p$ fixed, a landlord of type $(\theta,\kappa,S)$ solves
+\begin{align}
+V(x;\theta,\kappa,S\mid p)
+&= \max\Big\{\, S,\;\; \underbrace{p\,\phi(x) - \big(c_0+\theta\kappa\big)}_{\pi(x,\theta,\kappa;p)}
+\;+\; \beta(1-\delta)\,\mathbb{E}\!\left[V(x';\theta,\kappa,S\mid p)\mid x\right] \Big\}.
+\label{eq:Bellman}
+\end{align}
+Define the \emph{continuation set}
+\begin{equation}
+\mathcal{C}_{\theta,\kappa,S}(p)
+=\Big\{x\in\mathcal{X}:\; p\,\phi(x) - (c_0+\theta\kappa) + \beta(1-\delta)\,(PV)(x)\;\ge\; S\Big\},
+\end{equation}
+with indicator $C(x;\theta,\kappa,S\mid p)\in\{0,1\}$ and $(PV)(x)\equiv\sum_{x'}P(x,x')V(x')$.
+The Bellman operator is a $\beta(1-\delta)$-contraction on $(\mathbb{R}^{|\mathcal{X}|},\|\cdot\|_\infty)$, guaranteeing a unique fixed point $V^\star$.
+
+\section{Stationary Cross-Section per Unit Entry}
+
+For fixed $(\theta,\kappa,S)$ at price $p$, the controlled transition kernel among \emph{continuing} states is
+\begin{equation}
+A(p;\theta,\kappa,S)
+\;=\; (1-\delta)\,\mathrm{Diag}\!\Big(C(\cdot;\theta,\kappa,S\mid p)\Big)\,P
+\;\in\; \mathbb{R}^{K_x\times K_x}.
+\end{equation}
+Let $w(\cdot\,;\theta,\kappa,S)$ be the \emph{entrant} mass over $x$ for this type (a slice of the joint weight tensor over $(x,\theta,\kappa,S)$).
+The expected \emph{lifetime visitation measure} per unit entry is the unique solution of
+\begin{equation}
+\mu(\cdot\,;\theta,\kappa,S\mid p)
+\;=\;
+\big(I - A(p;\theta,\kappa,S)\big)^{-1}\,w(\cdot\,;\theta,\kappa,S).
+\label{eq:lifetime}
+\end{equation}
+
+Because each active firm produces \emph{one unit} per period, the per-unit-entry \emph{lifetime supply} contributed by $(\theta,\kappa,S)$ is simply
+\begin{equation}
+\bar q(\theta,\kappa,S\mid p)
+\;=\;
+\sum_{x\in\mathcal{X}} \mu(x;\theta,\kappa,S\mid p).
+\end{equation}
+Aggregating across entrant types,
+\begin{equation}
+\bar q(p)
+\;=\;
+\sum_{x,\theta,\kappa,S} \mu(x;\theta,\kappa,S\mid p)
+\qquad\text{(expected \emph{number of active periods} per entrant).}
+\label{eq:qbar}
+\end{equation}
+
+\paragraph{Exit composition.}
+Per unit entry, the probability of immediate exit at $t=0$ is
+\[
+\text{stop-now}(p) \;=\; \sum_{\theta,\kappa,S}\sum_{x}\big(1-C(x;\theta,\kappa,S\mid p)\big)\,w(x;\theta,\kappa,S),
+\]
+and total exit probability equals one:
+\[
+1 \;=\; \text{stop-now}(p) \;+\; \delta \sum_{\theta,\kappa,S}\sum_{x} C(x;\theta,\kappa,S\mid p)\,\mu(x;\theta,\kappa,S\mid p).
+\]
+
+\section{Free Entry and Market Clearing}
+
+Let the \emph{expected entrant value} at price $p$ be
+\begin{equation}
+\bar V_{\text{ent}}(p)
+\;=\;
+\sum_{x,\theta,\kappa,S} W_4(x,\theta,\kappa,S)\,V^\star(x;\theta,\kappa,S\mid p),
+\end{equation}
+where $W_4$ is the joint entrant weight tensor over $(x,\theta,\kappa,S)$ (constructed deterministically from the marginals and an optional copula for dependence).
+
+\paragraph{Free entry.} With fixed entry cost $F_e$,
+\begin{equation}
+\bar V_{\text{ent}}(p^\star) \;=\; F_e.
+\label{eq:FE}
+\end{equation}
+
+\paragraph{Market clearing.} Since each active landlord supplies one unit, aggregate quantity equals the mass of active landlords:
+\begin{equation}
+Q^\star \;=\; m^\star\,\bar q(p^\star),
+\label{eq:MC1}
+\end{equation}
+where $m^\star$ is the stationary entry flow (mass of entrants per period). Demand inversion determines $Q^\star$ from $p^\star$,
+\begin{equation}
+Q^\star \;=\; \mathcal{P}^{-1}(p^\star)
+\;=\; \frac{\ln(p^\star/a)}{b}\quad\text{(log-linear)},
+\label{eq:Qfromp}
+\end{equation}
+hence
+\begin{equation}
+m^\star \;=\; \frac{Q^\star}{\bar q(p^\star)}.
+\label{eq:mfromQqbar}
+\end{equation}
+
+\paragraph{Equilibrium.}
+A stationary competitive equilibrium is $(p^\star,Q^\star,m^\star)$ such that:
+(i) $V^\star$ solves \eqref{eq:Bellman}; (ii) free entry \eqref{eq:FE} holds;
+(iii) demand \eqref{eq:Qfromp} holds; (iv) market clearing \eqref{eq:MC1} holds.
+Under standard conditions, $p\mapsto \bar V_{\text{ent}}(p)$ is (weakly) increasing and $\mathcal{P}^{-1}$ is strictly decreasing, yielding a unique $p^\star$.
+
+\section{Implementation Notes (Mapping to Code)}
+
+\begin{itemize}
+\item \textbf{Grids and transitions.} $\mathcal{X}$ and $P$ are built via Rouwenhorst. To avoid explosive tails when using $\phi(x)=\exp(\cdot)$, it is convenient to use a mean-one normalization or a narrower support for $x$.
+\item \textbf{Costs.} The baseline cost is constant: $c_0+\theta\kappa$. Setting $c_0$ higher (or increasing $\delta$) reduces lifetime values and helps free-entry bracketing.
+\item \textbf{Profit tensor.} Flow profit used in the DP is $\pi(x,\theta,\kappa;p)=p\,\phi(x)-(c_0+\theta\kappa)$.
+\item \textbf{Supply accounting.} Because output per active period is one, $\bar q(p)$ is computed as the \emph{sum} of lifetime visits $\mu$ (no multiplication by a $y(x)$ term).
+\item \textbf{Entrant distribution $W_4$.} Built deterministically from marginal CDF bin widths for $(x,\theta,\kappa,S)$; optional dependence (e.g., between $\kappa$ and $S$, or between $\theta$ and $S$) is incorporated with a Gaussian copula in CDF space. This removes Monte Carlo noise from the free-entry equation.
+\item \textbf{Numerics.} The free-entry equation is solved by bisection on $(0,a)$ using a function-value tolerance; the value problem uses damped value iteration with optional Howard improvement and warm starts across price evaluations.
+\end{itemize}
+
+\section{Calibration Hints}
+
+With constant $c_0$ and a convex $\phi(x)$ (e.g.\ exponential), high-$x$ states can generate large values even at low $p$. If the free-entry residual $F(p)\equiv\bar V_{\text{ent}}(p)-F_e$ is positive on $(0,a)$, increase $F_e$, increase $c_0$, increase $\delta$, or attenuate/normalize $\phi(x)$ (e.g.\ smaller slope $\gamma$ or narrower $x$ support). If $F(p)<0$ throughout, reverse these adjustments.
+\section{Cost-Shifter Shock $\kappa$ and the Role of $\mathrm{Corr}(\theta,S)$}
+\label{sec:kshock-thetaS}
+
+This section studies how an exogenous \emph{policy shock} to the per-period cost shifter $\kappa$ moves the stationary equilibrium, and how its effects depend on the cross-sectional dependence between the cost sensitivity $\theta$ and the outside option $S$.
+
+\subsection{Shock specification}
+
+We consider two convenient implementations that map directly into the code:
+
+\paragraph{(A) Common (average) $\kappa$ shock.}
+A deterministic, market-wide shift $\kappa_t\equiv \bar\kappa$ (e.g., a policy fee or compliance cost) raises per-period costs uniformly by $\theta\bar\kappa$. In the stationary analysis we set $\kappa=\bar\kappa$ for all firms and ask for the new equilibrium $(p^\star,Q^\star,m^\star)$.\footnote{%
+This corresponds in code to a one-point $\mathcal{K}$ grid, $K_\kappa=1$, and replacing $\kappa_i$ with $\bar\kappa$ in the profit tensor.}
+
+\paragraph{(B) Idiosyncratic $\kappa_i$ shock.}
+A distributional shift $\kappa_i\sim H_\kappa'$ (more dispersion and/or higher mean) induces heterogeneous cost impacts $\theta\kappa_i$ across landlords. This is implemented as a richer $\mathcal{K}$ grid with entrant weights $W_4$ over $(x,\theta,\kappa,S)$.
+
+In both cases, the per-period profit under price $p$ becomes
+\[
+\pi(x,\theta,\kappa;p) \;=\; p\,\phi(x) - \big(c_0 + \theta\kappa\big),
+\]
+so $\kappa$ enters \emph{multiplicatively} with $\theta$ in the cost term. The stopping rule is
+\[
+\text{continue}(x;\theta,\kappa,S\mid p)
+\quad\Longleftrightarrow\quad
+p\,\phi(x) - (c_0+\theta\kappa) + \beta(1-\delta)(PV)(x) \;\ge\; S.
+\]
+
+\subsection{Incumbent and entrant margins}
+
+Fix $p$ and a type $(\theta,\kappa,S)$. Let $C(\cdot;\theta,\kappa,S\mid p)$ be the continuation indicator and
+\(
+A=(1-\delta)\,\mathrm{Diag}(C)\,P
+\)
+the controlled kernel. Given the entrant mass over $x$, $w(\cdot;\theta,\kappa,S)$, the lifetime visitation measure per unit entry is
+\(
+\mu = (I-A)^{-1}w
+\),
+and the per-unit-entry supply is
+\(
+\bar q(\theta,\kappa,S\mid p)=\sum_x \mu(x;\theta,\kappa,S\mid p)
+\).
+Aggregating with $W_4$ yields $\bar q(p)$.
+
+A higher $\kappa$ (or a mean-preserving spread of $\kappa$) shifts the cutoff set $\mathcal{C}_{\theta,\kappa,S}(p)$ \emph{inward}, shrinking $\mu$ for affected types and raising the stop-now probability. Formally, for any $x$,
+\[
+\frac{\partial}{\partial\kappa}\Big[\,\pi(x,\theta,\kappa;p) + \beta(1-\delta)(PV)(x) - S\,\Big] = -\theta \;<\; 0 \quad\text{when }\theta>0,
+\]
+so, holding $p$ fixed, continuation weakly decreases and $\bar q(p)$ weakly falls.
+
+On entry, the expected value $\bar V_{\text{ent}}(p)$ falls because both flow profits and continuation values decline for higher $\kappa$ realisations; therefore, at a given $p$, $F(p)=\bar V_{\text{ent}}(p)-F_e$ shifts \emph{down}.
+
+\subsection{Equilibrium effects (comparative statics)}
+
+Let $p^\star(\cdot)$ denote the free-entry solution to $\bar V_{\text{ent}}(p)=F_e$ and let $Q^\star(\cdot)$ be given by demand inversion, with $m^\star=Q^\star/\bar q(p^\star)$.
+
+\begin{itemize}
+\item \textbf{Common shock (A).} Increasing $\bar\kappa$ lowers $\bar V_{\text{ent}}(p)$ pointwise in $p$; thus the free-entry price $p^\star$ must \emph{rise} to restore $\bar V_{\text{ent}}(p^\star)=F_e$. The market-clearing quantity $Q^\star$ falls (downward-sloping demand), while $m^\star$ moves according to the balance between the demand contraction and the drop in supply per entrant $\bar q(p^\star)$:
+\[
+\frac{d m^\star}{d\bar\kappa}
+\;=\;
+\frac{1}{\bar q(p^\star)}\frac{dQ^\star}{dp}\frac{dp^\star}{d\bar\kappa}
+\;-\;
+\frac{Q^\star}{\bar q(p^\star)^2}\,\frac{\partial \bar q}{\partial p}(p^\star)\,\frac{dp^\star}{d\bar\kappa}
+\;-\;
+\frac{Q^\star}{\bar q(p^\star)^2}\,\underbrace{\frac{\partial \bar q}{\partial \bar\kappa}(p^\star)}_{\;<\,0}.
+\]
+The last term is negative; the first two share the sign of $dp^\star/d\bar\kappa>0$ but are dampened by $\partial\bar q/\partial p\ge 0$ (continuation improves in $p$).
+
+\item \textbf{Idiosyncratic shock (B).} Raising the mean and/or dispersion of $\kappa_i$ strengthens \emph{selection}: high-$\theta$ types disproportionately exit (or never operate) because the marginal impact of $\kappa$ is $-\theta$. This reduces $\bar q(p)$ both mechanically (more exits) and via composition (surviving types skew toward lower $\theta$), while $\bar V_{\text{ent}}(p)$ falls through both channels. Hence $p^\star$ rises and $Q^\star$ falls as in (A), with potentially larger effects if the right tail of $\kappa$ thickens.
+\end{itemize}
+
+\subsection{Dependence between $\theta$ and $S$}
+\label{sec:thetaS}
+
+Let the $(\theta,S)$ dependence be parameterized by a copula with correlation $\rho_{\theta S}\in[-1,1]$ at entry (implemented in $W_4$). The sign of $\rho_{\theta S}$ controls which margin amplifies the shock:
+
+\begin{description}
+\item[Positive $\rho_{\theta S}>0$ (high-$\theta$ types have high $S$).]
+A cost shock $\uparrow\kappa$ raises costs most for high-$\theta$ types who also have a \emph{more attractive} outside option $S$. Their stopping thresholds are already high, so the shock triggers \emph{disproportionate immediate exit} (stop-now) and thins the right tail of $\theta$ among incumbents. Consequences:
+\[
+\downarrow \bar V_{\text{ent}}(p) \quad \text{and} \quad \downarrow \bar q(p) \;\;\Longrightarrow\;\; \uparrow p^\star,\; \downarrow Q^\star.
+\]
+The effects are \emph{amplified} relative to the independence benchmark because the shock loads on types with both high marginal cost and low continuation value.
+
+\item[Negative $\rho_{\theta S}<0$ (high-$\theta$ types have low $S$).]
+High-cost types face \emph{worse} outside options, making them relatively stickier on the margin. For a given $\kappa$ shock, there is less immediate exit and a smaller contraction in $\bar q(p)$; the rise in $p^\star$ and fall in $Q^\star$ are therefore \emph{attenuated} relative to the case $\rho_{\theta S}\ge 0$.
+
+\item[Zero correlation $\rho_{\theta S}=0$.]
+This yields the baseline effect sized by the marginals of $\theta$ and $S$ and the shape of $\phi(x)$ and $P$; selection works through $\theta$ only.
+\end{description}
+
+\paragraph{Selection accounting.}
+Per unit entry, the exit probability decomposes as
+\[
+1 \;=\; \underbrace{\text{stop-now}(p)}_{\text{threshold exits at }t=0}
+\;+\; \underbrace{\delta\,\mathbb{E}\big[ C(\cdot;\theta,\kappa,S\mid p)\cdot \text{lifetime visits}\big]}_{\text{hazard exits over life}}.
+\]
+A positive $\rho_{\theta S}$ raises the stop-now share under $\uparrow\kappa$; a negative $\rho_{\theta S}$ shifts weight toward hazard exits (slower, over time). In both cases the total remains one per unit entry; the incidence differs across margins and thus across incumbent composition.
+
+\subsection{Implications for measurement and counterfactuals}
+
+\begin{itemize}
+\item \textbf{Incumbent diagnostics.} After a $\kappa$ shock, the incumbent distribution tilts toward lower $\theta$ and (under $\rho_{\theta S}>0$) toward lower $S$. These shifts are visible in the code’s diagnostics for means/quantiles and for $\mathrm{corr}(\theta,S)$ among incumbents.
+
+\item \textbf{Counterfactual decomposition.} The code can implement (A) by setting $K_\kappa=1$ and $\kappa=\bar\kappa$, and (B) by changing the $\kappa$ grid and the joint $W_4$. The dependence parameter $\rho_{\theta S}$ enters only through the construction of $W_4$; the DP and equilibrium solver are unchanged.
+
+\item \textbf{Welfare and incidence.} With $\rho_{\theta S}>0$, selection prunes high-cost/high-$S$ units first; consumer prices rise more and quantities fall more than under $\rho_{\theta S}\le 0$, even holding the $\kappa$ shock fixed. This differential response across $\rho_{\theta S}$ provides a natural identification margin for the joint distribution of $(\theta,S)$.
+\end{itemize}
+
+\end{document}
