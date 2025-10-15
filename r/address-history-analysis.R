@@ -9,7 +9,7 @@ philly_parcels = fread("~/Desktop/data/philly-evict/processed/parcel_building_20
 info_usa_xwalk = fread("/Users/joefish/Desktop/data/philly-evict/philly_infousa_dt_address_agg_xwalk.csv")
 philly_rent_df = fread("~/Desktop/data/philly-evict/processed/bldg_panel.csv")
 philly_rentals = fread("~/Desktop/data/philly-evict/processed/license_long_min.csv")
-
+philly_occ = fread("~/Desktop/data/philly-evict/processed/infousa_parcel_occupancy_vars.csv")
 # Merge infousa with parcel data
 parcel_cols = intersect(philly_rent_df %>% colnames(), philly_parcels %>% colnames())
 
@@ -31,7 +31,7 @@ philly_infousa_dt_m = merge(
 )
 
 philly_infousa_dt_m = philly_infousa_dt_m %>%
-  merge(philly_evict_df, by = "PID", all.x = T)
+  merge(philly_occ, c("PID", "year"), all.x = T)
 
 # merge on parcel chars
 philly_parcels[,PID := as.numeric(PID)]
@@ -86,26 +86,64 @@ philly_infousa_dt_m_movers = philly_infousa_dt_m_movers %>% janitor::clean_names
 philly_infousa_dt_m_movers[,imputed_rent := mean(log_med_rent, na.rm=TRUE), by = pid]
 philly_infousa_dt_m_movers[,imputed_prev_rent := mean(prev_log_med_rent, na.rm=TRUE), by = pid]
 
-feols(filing_rate ~ prev_evict ,#|num_units_bins + prev_num_units_bins+ct_id_10 + prev_ct_id_10,
+m1 <- feols(filing_rate ~ prev_evict ,#|num_units_bins + prev_num_units_bins+ct_id_10 + prev_ct_id_10,
       cluster = ~pid,
-      data = philly_infousa_dt_m_movers[(filing_rate  <= 0.5 & prev_evict <= 0.5) ])
+      data = philly_infousa_dt_m_movers[(filing_rate  <= 1 & prev_evict <= 1) ])
 
-feols(filing_rate ~ prev_evict|num_units_bins + prev_num_units_bins+ct_id_10 + prev_ct_id_10,
+m2 <- feols(filing_rate ~ prev_evict|num_units_bins + prev_num_units_bins+ct_id_10 + prev_ct_id_10,
       cluster = ~pid,
-      data = philly_infousa_dt_m_movers[filing_rate <= 0.5 & prev_evict <= 0.5])
+      data = philly_infousa_dt_m_movers[filing_rate <= 1 & prev_evict <= 1])
 
-feols(filing_rate ~ prev_evict +imputed_rent + imputed_prev_rent|num_units_bins   + prev_num_units_bins+ct_id_10 + prev_ct_id_10,
+m3 <- feols(filing_rate ~ prev_evict +imputed_rent + imputed_prev_rent|num_units_bins   + prev_num_units_bins+ct_id_10 + prev_ct_id_10,
       cluster = ~pid,
       data = philly_infousa_dt_m_movers[filing_rate <= 0.5 & prev_evict <= 0.5   ])
 
-feols(filing_rate ~ prev_evict + log_med_rent + prev_log_med_rent|num_units_bins   + prev_num_units_bins+ct_id_10 + prev_ct_id_10,
+m4 <- feols(filing_rate ~ prev_evict + log_med_rent + prev_log_med_rent|num_units_bins   + prev_num_units_bins+ct_id_10 + prev_ct_id_10,
+      cluster = ~pid,
+      data = philly_infousa_dt_m_movers[filing_rate <= 1 & prev_evict <=1  ])
+
+philly_infousa_dt_m_movers[,high_filing := filing_rate > 0.1]
+philly_infousa_dt_m_movers[,high_filing_prev := prev_evict > 0.1]
+
+feols(high_filing ~ high_filing_prev|num_units_bins + prev_num_units_bins+ct_id_10 + prev_ct_id_10,
       cluster = ~pid,
       data = philly_infousa_dt_m_movers[filing_rate <= 0.5 & prev_evict <= 0.5  ])
+
+m5 <- feols(high_filing ~ high_filing_prev + log_med_rent + prev_log_med_rent|num_units_bins + prev_num_units_bins+ct_id_10 + prev_ct_id_10,
+      cluster = ~pid,
+      data = philly_infousa_dt_m_movers[filing_rate <= 0.5 & prev_evict <= 0.5 & num_units_imp > 1 & prev_num_units_imp > 1 ])
 
 feols(log_med_rent ~ prev_evict+ prev_log_med_rent +filing_rate|num_units_bins + prev_num_units_bins+ct_id_10 + prev_ct_id_10,
       cluster = ~pid,
       data = philly_infousa_dt_m_movers[filing_rate <= 0.5 & prev_evict <= 0.5  ])
 
+# set default style
+def_style = style.df(depvar.title = "", fixef.title = "",
+                     fixef.suffix = " fixed effect", yesNo = c("Yes","No"))
+
+fixest::setFixest_etable(
+  digits = 4, fitstat = c("n")
+)
+
+setFixest_dict(
+  num_units_bins = "Units (current)",
+  prev_num_units_bins = "Units (previous)",
+  ct_id_10 = "Census Tract (current)",
+  prev_ct_id_10 = "Census Tract (previous)",
+  prev_evict = "Previous Eviction Filing Rate",
+  imputed_rent = "Imputed Rent (current)",
+  imputed_prev_rent = "Imputed Rent (previous)",
+  log_med_rent = "Rent (current)",
+  prev_log_med_rent = "Rent (previous)"
+)
+
+etable(list(m1, m2,  m4),
+       title = "Effect of Previous Eviction Filing Rate on Current Filing Rate",
+       #style = def_style,
+       label = "tab:evict_persist",
+       drop = "Constant",
+       tex = T
+) %>% writeLines("/Users/joefish/Documents/GitHub/philly-evictions/tables/evict_persist.tex")
 
 # get eviction rate of prev move
 philly_infousa_dt_m_movers[prev_num_units_imp >= 1 & num_units_imp >= 1

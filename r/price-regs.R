@@ -393,10 +393,14 @@ bldg_panel[,num_source := uniqueN(source), by = PID]
 bldg_panel[,num_source_year := uniqueN(source), by = .(PID, year)]
 bldg_panel[,num_corp_owner := uniqueN(corp_owner), by = PID]
 
+pid_resid_reg <- feols(log_med_rent ~1|PID, data = bldg_panel)
+bldg_panel[,price_resid := (log_med_rent) -(predict(pid_resid_reg, newdata = bldg_panel))]
+
 # get mean price by filing rate quintile by year
 mean_price_quintile = bldg_panel[filing_rate <= 1,list(
+mean_price_adj = weighted.mean(price_resid, w = num_units_imp, na.rm = T),
 mean_price = weighted.mean(med_price, w = num_units_imp, na.rm = T),
-log_med_rent =weighted.mean(log_med_rent, w = num_units_imp, na.rm = T),
+log_med_rent =weighted.mean(price_resid, w = num_units_imp, na.rm = T),
            mean_filing_rate = mean(filing_rate, na.rm = T),
            n = .N
 ), by = .(year, filing_rate_ntile= high_filing_preCOVID)]
@@ -405,14 +409,17 @@ log_med_rent =weighted.mean(log_med_rent, w = num_units_imp, na.rm = T),
 mean_price_quintile[,log_med_rent_2017 := log_med_rent - log_med_rent[year == 2017], by = filing_rate_ntile]
 mean_price_quintile[,med_price_2017 := mean_price / mean_price[year == 2017], by = filing_rate_ntile]
 mean_price_quintile[,mean_price_2019 := mean_price / mean_price[year == 2019], by = filing_rate_ntile]
+mean_price_quintile[,mean_price_adj_2019 := mean_price_adj - mean_price_adj[year == 2019] , by = filing_rate_ntile]
 # plot
 mean_price_quintile[  year %in% c(2011:2023) & !is.na(filing_rate_ntile)] %>%
   ggplot(aes(x = (year), y = mean_price_2019,group =factor(filing_rate_ntile),  color = factor(filing_rate_ntile))) +
-  geom_line() +
+  geom_line(aes(linetype = "Raw Means")) +
+  #geom_line(aes(y = mean_price_adj_2019, linetype = "Repeat Rent Index")) +
   scale_x_continuous(breaks = seq(2011, 2023, by = 1)) +
+  #scale_y_continuous(labels = scales::percent_format(accuracy = 1), breaks = seq(0,3,0.5)) +
   labs(
-    title = "Mean Rent by High/Low Filing Rate Buildings, Indexed to 2019",
-    #subtitle = "Minimum 5 units in building",
+    title = "Mean Rent by High/Low Filing Rate Buildings",
+    subtitle = "Indexed to 2019; Weighted by Number of Units",
     x = "Year",
     y = "% Change in Rent",
     color = "Filing Rate > 15%"

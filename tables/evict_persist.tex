@@ -1,0 +1,29 @@
+\begin{table}[htbp]
+   \caption{\label{tab:evict_persist} Effect of Previous Eviction Filing Rate on Current Filing Rate}
+   \centering
+   \begin{tabular}{lccc}
+      \tabularnewline \midrule \midrule
+      Dependent Variable: & \multicolumn{3}{c}{filing\_rate}\\
+      Model:                        & (1)            & (2)            & (3)\\  
+      \midrule
+      \emph{Variables}\\
+      Previous Eviction Filing Rate & 0.1696$^{***}$ & 0.0701$^{***}$ & 0.0522$^{***}$\\   
+                                    & (0.0051)       & (0.0055)       & (0.0151)\\   
+      Rent (current)                &                &                & -0.0551$^{***}$\\   
+                                    &                &                & (0.0070)\\   
+      Rent (previous)               &                &                & 0.0021\\   
+                                    &                &                & (0.0047)\\   
+      \midrule
+      \emph{Fixed-effects}\\
+      Units (current)               &                & Yes            & Yes\\  
+      Units (previous)              &                & Yes            & Yes\\  
+      Census Tract (current)        &                & Yes            & Yes\\  
+      Census Tract (previous)       &                & Yes            & Yes\\  
+      \midrule
+      \emph{Fit statistics}\\
+      Observations                  & 125,685        & 88,035         & 7,998\\  
+      \midrule \midrule
+      \multicolumn{4}{l}{\emph{Clustered (pid) standard-errors in parentheses}}\\
+      \multicolumn{4}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+   \end{tabular}
+\end{table}
