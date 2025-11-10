@@ -36,20 +36,20 @@
 \end{frame}
 
 ------------------------------------------------
-\begin{frame}{Introduction}
-  \begin{itemize}
-    \item In this talk, I use administrative data and a stylized bargaining model to study how landlords and tenants interact in low income rental markets.
-    \pause
-    \item I will emphasize:
-      \begin{itemize}
-        \item How \textcolor{maintGreen}{maintenance bargaining} works in practice.
-        \item How \textcolor{evictRed}{retaliation via eviction filings} can shape that bargaining.
-      \end{itemize}
-    \pause
-    \item The goal is to connect \textbf{equilibrium facts} about maintenance and eviction to a simple \textbf{landlord–tenant bargaining model}.
-  \end{itemize}
-  % Suggestion: you might later tighten this to a 2–3 bullet “elevator pitch.”
-\end{frame}
+% \begin{frame}{Introduction}
+%   \begin{itemize}
+%     \item In this talk, I use administrative data and a stylized bargaining model to study how landlords and tenants interact in low income rental markets.
+%     \pause
+%     \item I will emphasize:
+%       \begin{itemize}
+%         \item How \textcolor{maintGreen}{maintenance bargaining} works in practice.
+%         \item How \textcolor{evictRed}{retaliation via eviction filings} can shape that bargaining.
+%       \end{itemize}
+%     \pause
+%     \item The goal is to connect \textbf{equilibrium facts} about maintenance and eviction to a simple \textbf{landlord–tenant bargaining model}.
+%   \end{itemize}
+%   % Suggestion: you might later tighten this to a 2–3 bullet “elevator pitch.”
+% \end{frame}
 
 %------------------------------------------------
 \begin{frame}{Motivation}
@@ -58,13 +58,13 @@
     \item there's been a recent focus on landlord market power on \textbf{*posted prices*} % <put some cites>
       \begin{itemize}
         \item these papers have a traditional quantity restriction mechanism, usually with landlords holding units vacant for longer
-        \item scale and concentration matter for rationalizing these effects
+        \item landlord scale and concentration matter for rationalizing these effects
       \end{itemize}
     \pause
     \item however, many of the most important parts of a landlord-tenant relationship are \textbf{*bargained*} over
       \begin{itemize}
         \item maintenance requests, lease renewals, evictions
-        \item ex ante reasons to think this bargaining process is particularly important for explaining the low income rental market
+        \item large frictions, particularly in the low income segment, means that the structure of the bargaining process will be important
       \end{itemize}
   \end{itemize}
   % Suggestion: later you might standardize capitalization (“maintenance”, “ex ante”) and maybe break the first bullet into two sentences for readability.
@@ -73,23 +73,25 @@
 %------------------------------------------------
 \begin{frame}{Research Question}
   \begin{center}
-    \Large im going to try and convince you that bargaining is an important feature of the rental market
+    \Large I'm going to try and convince you that bargaining is an important feature of the rental market
   \end{center}
-  % Suggestion: consider “I'm going to try to convince you that bargaining is an important feature of the rental market.”
 \end{frame}
 
 %------------------------------------------------
 \begin{frame}{This Presentation}
   \begin{itemize}
-    \item overview of landlord tenant law in philadelphia as a framework for how this "bargaining" process works
+    \item overview of landlord tenant law in Philadelphia as a framework for how this "bargaining" process works
     \pause
     \item stylized facts on equilibrium bargaining
       \begin{itemize}
-        \item high evicting landlords do less maintence, conditional on property characteristics \textbf{*and*} contract rents
-        \item landlords retaliate
+        \item high evicting landlords do less maintenance, conditional on property characteristics \textbf{*and*} contract rents
+        \item landlord-tenant bargaining breaks down
+        \begin{itemize}
+            \item landlords retaliate against tenants who make formal complaints about forgone maintenance
+        \end{itemize}
       \end{itemize}
     \pause
-    \item stylized bargaining model to rationalize facts
+    \item plea-bargaining style model to rationalize facts
   \end{itemize}
 \end{frame}
 
@@ -98,22 +100,25 @@
   \begin{itemize}
     \item plea bargains
     \item divorce law
-    \item bargaining with asymetric information
+    \item bargaining with asymmetric information
+    \item quality regulation
+    \item landlord tenant law
   \end{itemize}
-  % Suggestion: you could later add one explicit example/cite under each bullet to orient the audience.
 \end{frame}
 
+\section{Data and Context}
+
 %------------------------------------------------
-\begin{frame}{Overview of Low Income Rental Market}
+\begin{frame}{Overview of Low Income Rental Markets}
   \begin{itemize}
     \item tenant default is common; % <put that humphries cite about here>
       \begin{itemize}
-        \item most cases involve non-payment of rent; median case is for \(\sim\)2 months back rent
+        \item $\sim$95\% of cases involve non-payment of rent; median case is for \(\sim\)2 months back rent
         \item \(\sim 8\%\) of tenants have attorneys; \(\sim 80\%\) of landlords are
         \item outcome data is spotty, but in general tenants lose (\(\sim 95\%\) of cases)
       \end{itemize}
     \pause
-    \item low income landlords generally have \textbf{*higher*} profit margins
+    \item low income landlords generally have \textbf{*higher*} profit margins \parencite{Desmond_2019,Damen_2025}
       \begin{itemize}
         \item this is largely explained by lower costs, which will motivate my bargaining model
       \end{itemize}
@@ -147,43 +152,52 @@
 
 %------------------------------------------------
 \begin{frame}{Data}
-  \begin{itemize}
-    \item Administrative data on evictions, complaints, and permits.
-    \item Property characteristics and rent prices.
-    \item Linked to tenants/landlords where possible.
-  \end{itemize}
+\textbf{Eviction Data}
+    \begin{itemize}
+        \item Universe of Eviction Records from 2006-2025
+        \begin{itemize}
+            \item Contain \textbf{contract rents} as well case information (address, amount owed, plaintiff / defendant name, etc.)
+            \item Cases are filtered to non-commercial and non-housing authority
+        \end{itemize}
+    \end{itemize}
+\pause
+\textbf{Rental listing data from Altos (2011-2023)}
+\begin{itemize}
+    \item Unit level rental listings with information on amenities, beds, baths, etc.
+\end{itemize}
+\textbf{ Rental Registry}
+\begin{itemize}
+    \item Covers near-universe of rental listings
+    \item Importantly, landlords need to be on the rental listing to file evictions
+\end{itemize}
+\textbf{Complaint Data}
+\begin{itemize}
+    \item 311 complaints made to the Licenses and Inspections Department in Philadelphia
+    \item contains date of complaint, type of complaint (utilities shut off, vacant house, uncollected trash, etc), worker assigned to complaint, and eventual outcome (investigated; substantiated)
+\end{itemize}
+% Why this is important:\\
+%     \begin{itemize}
+%         \item This will be one of the few papers to study the low income rental market because data are so sparse 
+%     \end{itemize}
 \end{frame}
 
 %------------------------------------------------
-\begin{frame}{Data (Cont.)}
-  \begin{itemize}
-    \item Construction of the building-by-year-quarter panel.
-    \item Key variables:
-      \begin{itemize}
-        \item eviction filings,
-        \item maintenance permits,
-        \item complaints,
-        \item contract rent.
-      \end{itemize}
-  \end{itemize}
-\end{frame}
 
 ------------------------------------------------
-\begin{frame}{Summary Statistics on Evictions}
-  \begin{table}[H]
-    \centering
-    \begin{tabular}{lccc}
-      \toprule
-      & Mean & SD & N \\
-      \midrule
-      % Fill in with actual variables
-      Eviction indicator & & & \\
-      Back rent (months) & & & \\
-      % ...
-      \bottomrule
-    \end{tabular}
-    \caption{Summary Statistics on Evictions}
-  \end{table}
+\section{Stylized Facts}
+\begin{frame}{Eviction in Philadelphia}
+    \begin{itemize}
+        \item Eviction is relatively infrequent
+        \item A small share of properties have very high eviction rates
+    \end{itemize}
+
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.75\linewidth]{figs/empirical_cdf_filing_rate_preCOVID.png}
+        \caption{Empirical CDF of Filing Rate (pre-COVID)}
+        \label{fig:ecdf-filings}
+    \end{figure}
+    
 \end{frame}
 
 %------------------------------------------------
@@ -223,90 +237,30 @@
 \end{frame}
 
 %------------------------------------------------
-\begin{frame}{Summary Table on Rent Prices}
-  \begin{table}[H]
-    \centering
-    \begin{tabular}{lccc}
-      \toprule
-      & Mean & SD & N \\
-      \midrule
-      % Fill in with actual variables
-      Contract rent & & & \\
-      Implied rent per square foot & & & \\
-      % ...
-      \bottomrule
-    \end{tabular}
-    \caption{Summary Statistics on Rent Prices}
-  \end{table}
+\begin{frame}{Distribution of Rent Prices by Data Source}
+Commercially available rental datasets (\textcolor{red}{altos}) don't cover the low income rental market\\
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.75\linewidth]{figs/density_rent_prices.png}
+        \caption{Rent Prices by Data Source}
+        \label{fig:rent-dist}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Rent Price Hedonics}
+  \include{tables/hedonic_filing_rate_cuts}
 \end{frame}
 
 %------------------------------------------------
 \begin{frame}{landlord maintenance}
   landlords do less maintenance, even conditional on rent prices 
 
-  \medskip
-  \textcolor{maintGreen}{Baseline specification:}
-  \begin{align}
-    \text{count permits}_{it}
-      &= \beta_0
-       + \beta_1 \,\text{high\_evicting}_i
-       + \beta_2 \,\text{Property Characteristics}_{it}
-       + \beta_3 \,\text{rent price}_{it}
-       + \varepsilon_{it}.
-  \end{align}
-
-  \medskip
-  \begin{itemize}
-    \item \(\beta_1 < 0\) captures that high evicting landlords do less maintenance conditional on observables.
-  \end{itemize}
-
-  \medskip
-  \begin{table}[H]
-    \centering
-    \begin{tabular}{lccc}
-      \toprule
-      & (1) & (2) & (3) \\
-      \midrule
-      high\_evicting & & & \\
-      % ...
-      \bottomrule
-    \end{tabular}
-    \caption{Regressions of Maintenance Permits on High-Evicting Indicator}
-  \end{table}
-
-  \medskip
+  % \include{tab}
   \hyperlink{permits-other}{\beamergotobutton{Other permit types}}
   % Suggestion: you might later standardize capitalization and spelling (“maintenance”).
 \end{frame}
 
-%------------------------------------------------
-\begin{frame}[label=permits-other]{Other Permit Types}
-  \begin{itemize}
-    \item Heterogeneity across different permit categories (e.g.\ electrical, plumbing, structural).
-    \item Compare coefficients on high\_evicting for:
-      \begin{itemize}
-        \item health/safety-related permits,
-        \item cosmetic/non-safety permits.
-      \end{itemize}
-  \end{itemize}
-  \pause
-  \begin{table}[H]
-    \centering
-    \begin{tabular}{lcc}
-      \toprule
-      Permit type & Coef. on high\_evicting & SE \\
-      \midrule
-      % Fill in with actual estimates
-      Structural & & \\
-      Electrical & & \\
-      Plumbing   & & \\
-      % ...
-      \bottomrule
-    \end{tabular}
-    \caption{Maintenance by Permit Type}
-  \end{table}
-\end{frame}
-
+\section{Complaints and Retaliation}
 %------------------------------------------------
 \begin{frame}{overview of complaint process}
   \begin{enumerate}
@@ -314,7 +268,7 @@
     \pause
     \item if landlord does not fix complaint, tenant can file a 311 complaint with the Licenses and Inspections Department
       \begin{itemize}
-        \item while complaint has been lodged, tenant is allowed to withold rent \textbf{*by putting it in an escrow account*}
+        \item while complaint has been lodged, tenant is allowed to withhold rent \textbf{*by putting it in an escrow account*}
         \item \textbf{*if tenant is current with rent*}, they cannot be retaliated against (e.g., the landlord cannot file an eviction against them)
       \end{itemize}
     \pause
@@ -673,6 +627,35 @@
     \item Map reduced-form estimates more tightly to model parameters.
     \item Explore counterfactual landlord responses to changes in Philadelphia tenant protections.
   \end{itemize}
+\end{frame}
+
+\section{Appendix}
+%------------------------------------------------
+\begin{frame}[label=permits-other]{Other Permit Types}
+  \begin{itemize}
+    \item Heterogeneity across different permit categories (e.g.\ electrical, plumbing, structural).
+    \item Compare coefficients on high\_evicting for:
+      \begin{itemize}
+        \item health/safety-related permits,
+        \item cosmetic/non-safety permits.
+      \end{itemize}
+  \end{itemize}
+  \pause
+  \begin{table}[H]
+    \centering
+    \begin{tabular}{lcc}
+      \toprule
+      Permit type & Coef. on high\_evicting & SE \\
+      \midrule
+      % Fill in with actual estimates
+      Structural & & \\
+      Electrical & & \\
+      Plumbing   & & \\
+      % ...
+      \bottomrule
+    \end{tabular}
+    \caption{Maintenance by Permit Type}
+  \end{table}
 \end{frame}
 
 \end{document}
