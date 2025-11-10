@@ -286,10 +286,10 @@ build_fml <- function(y, x_string, fe_vec) {
 # ============================================================
 # 8) DEFINE SAMPLES
 # ============================================================
-base_keep <- permits[total_livable_area > 1 & total_livable_area < 5e6 & !is.na(PID)]
-dt_full <- base_keep[]
-dt_pre  <- base_keep[year <= 2019]
-dt_post <- base_keep[year >  2021]
+# base_keep <- permits[total_livable_area > 1 & total_livable_area < 5e6 & !is.na(PID)]
+# dt_full <- base_keep[]
+# dt_pre  <- base_keep[year <= 2019]
+# dt_post <- base_keep[year >  2021]
 rm(permits); gc()
 
 # ============================================================
@@ -353,12 +353,12 @@ library(lpdid)
 
 # prepare panel for lpdid
 #DTlp <- copy(dt_pre)
-DTlp = permits[year <= 2019]#[PID %in% sample(PID, 1000)]
+DTlp = base_keep[year <= 2019]#[PID %in% sample(PID, 1000)]
 DTlp[, year_quarter := as.factor(year_quarter)]  # time FE handled internally
 # convert year_quarter to time index
 DTlp[,t_idx := as.integer(as.factor(year_quarter))]
 horiz <- 0:4  # 1 year in quarters
-DTlp_sample = DTlp[PID %in% sample(PID , 100000)]
+DTlp_sample = DTlp[]
 # any complaint as treatment
 fit_lp_comp <- lpdid(
   df       = DTlp_sample,
@@ -475,8 +475,8 @@ fit_lp_retaliatory <- lpdid(
   treat_status          = "retaliatory",
   unit_index         = "PID",
   time_index          = "t_idx",
-  nonabsorbing_lag          = 6,
-  window = c(-4,4),
+  nonabsorbing_lag          = 12,
+  window = c(-4,8),
   #ylags      = 1,                             # include ∆y lag
   #covariates = REG_CONTROLS,                  # optional level covariates
   cluster    = "PID"                          # cluster by PID
@@ -490,9 +490,9 @@ p_lp_retaliatory <- ggplot(irf_retaliatory, aes(x = h, y = beta)) +
   geom_errorbar(aes(ymin = lo, ymax = hi), width = 0.15) +
   scale_x_continuous(breaks = -4:4) +
   #scale_y_continuous(limits = c(-0.03, 0.09), breaks = seq(-0.03, 0.09,0.01)) +
-  labs(x = "Horizon h (quarters)", y = "Effect on Δ^h per_no_grace",
-       subtitle = "6-quarter fade out",
-       title = "Local Projections DiD (Pre-COVID): Retaliatory Status") +
+  labs(x = "Horizon h (quarters)", y = "Effect on Δ^h",
+       subtitle = "Local Projections DiD (Pre-COVID): 6-quarter fade out",
+       title = "Percent of Cases for <= 1 month backrent") +
   theme_philly_evict()
 
 print(p_lp_retaliatory)
@@ -1109,7 +1109,7 @@ permits[,any_no_grace := fifelse(is.na(any_no_grace), 0L, any_no_grace)]
 permits[,sum_no_grace := fifelse(is.na(sum_no_grace), 0L, sum_no_grace)]
 permits[,per_no_grace := fifelse(num_evictions > 0, sum_no_grace / num_evictions, 0)]
 grace_model <- feols(per_no_grace ~lead_severe_4 +
-       lead_severe_3 + lead_severe_2 + lead_severe_1 +
+       lead_severe_3 + lead_severe_2  +
         filed_severe + lag_severe_1 + lag_severe_2 + lag_severe_3 + lag_severe_4 | year_quarter + PID,
       data = permits[year <= 2019], cluster = ~PID)
 
@@ -1119,7 +1119,38 @@ out_ng <- make_no_grace_block(ev_m_par)
 print(out_ng$etable)
 print(out_ng$plot)
 
+grace_coef_df = grace_model %>%
+  broom::tidy() %>%
+  filter(str_detect(term, "^(lag_severe_|lead_severe_|filed_severe$)")) %>%
+  mutate(timing = case_when(
+    str_detect(term, "lag_severe_") ~ -as.integer(str_extract(term, "\\d+$")),
+    str_detect(term, "lead_severe_") ~ as.integer(str_extract(term, "\\d+$")),
+    str_detect(term, "filed_severe") ~ 0L
+  )) %>%
+  # add row at t= -1
+  bind_rows(tibble(
+    term = "lag_severe_-1",
+    estimate = 0,
+    std.error = 0,
+    timing = 1L
+  )) %>%
+  arrange(timing)
 
+grace_plt <- ggplot(grace_coef_df, aes(x = timing, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
+                    ymax = estimate + 1.96 * std.error), width = 0.2) +
+  scale_y_continuous() +
+  scale_x_reverse(breaks = -H:H) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(title = "Distributed Lag Model:\nEffect on Percent of Cases for <= 1 month back rent",
+       x = "Quarters relative to severe complaint",
+       y = "Coefficient") +
+  theme_philly_evict()
+grace_plt
+
+
+ggsave("figs/grace_plt.png", grace_plt, width=8, height=10, dpi=300, bg = "white")
 # group all non-severe into one category for regressions
 dt_pre[,non_severe := as.numeric(filed_vacant_property_complaint |
                       filed_zoning_complaint |
@@ -1227,4 +1258,158 @@ ggplot(coef_df, aes(x = timing, y = estimate, color = family)) +
        caption = "Severe complaints: heat, fire, drainage, property maintenance. \nNon-severe complaints: building, emergency service, zoning, trash/weeds, license business,",
        x = "Quarters relative to complaint", y = "Coefficient") +
   theme_philly_evict()
+
+
+#### maintence stuff ####
+permits[,quality_grade_coarse := fifelse(
+  quality_grade_fixed %in% c("A+","A","A-"), "A",
+  fifelse(quality_grade_fixed %in% c("B+","B","B-"), "B",
+          fifelse(quality_grade_fixed %in% c("C+","C","C-"), "C",
+                  fifelse(quality_grade_fixed %in% c("D+","D","D-"), "D",
+                          fifelse(quality_grade_fixed %in% c("F+","F","F-"), "F", "Unknown")))))
+]
+# Row; SFH; Apartment; Large Apartment; Other
+permits[,building_code_description_new_fixed_coarse :=case_when(
+  str_detect(building_code_description_new_fixed, "ROW|TWIN") ~ "Row",
+  str_detect(building_code_description_new_fixed, "HIGH RISE") ~ "High Rise Apartment",
+  str_detect(building_code_description_new_fixed, "LOW|MID") ~ "Mid Size Apartment",
+  str_detect(building_code_description_new_fixed, "APARTMENT") ~ "Other Apartment",
+  TRUE ~ "Other"
+)]
+permits[,filed_permit := total_permits > 0]
+permits[,violated := total_violations > 0]
+permits_qm <- feols(filed_permit ~ quality_grade_coarse + log(num_units_imp_alt)|t_idx, data = permits, cluster = ~PID)
+evicts_qm <- feols(filed_eviction ~ quality_grade_coarse + log(num_units_imp_alt)|t_idx, data = permits, cluster = ~PID)
+complaints_qm <- feols(filed_complaint ~ quality_grade_coarse + log(num_units_imp_alt)|t_idx, data = permits, cluster = ~PID)
+complaints_sever_qm <- feols(filed_severe ~ quality_grade_coarse + log(num_units_imp_alt)|t_idx, data = permits, cluster = ~PID)
+violations_qm <- feols(violated ~ quality_grade_coarse + log(num_units_imp_alt)|t_idx, data = permits, cluster = ~PID)
+
+setFixest_dict(
+  c(
+    "quality_grade_coarseB" = "Quality B vs A",
+    "quality_grade_coarseC" = "Quality C vs A",
+    "quality_grade_coarseD" = "Quality D vs A",
+    "quality_grade_coarseF" = "Quality F vs A",
+    "quality_grade_coarseUnknown" = "Quality Unknown vs A",
+    "t_idx" = "Time FE",
+    "log(num_units_imp_alt)" = "Log(Number of Units)",
+    "permits_qm" = "Permit Filed",
+    "evicts_qm" = "Eviction Filed",
+    "complaints_qm" = "Any Complaint Filed",
+    "complaints_sever_qm" = "Severe Complaint Filed",
+    "violations_qm" = "Violation Recorded"
+  )
+)
+# row means
+row_means <- permits[,list(
+  permit_rate    = mean(filed_permit/num_units_imp_alt, na.rm=TRUE),
+  eviction_rate  = mean(filed_eviction/num_units_imp_alt, na.rm=TRUE),
+  complaint_rate = mean(filed_complaint/num_units_imp_alt, na.rm=TRUE),
+  severe_rate    = mean(filed_severe/num_units_imp_alt, na.rm=TRUE),
+  violation_rate = mean(violated/num_units_imp_alt, na.rm=TRUE)
+)]
+
+# rows as char vector
+row_means_vec = list("per unit mean" =c(
+#'Mean',
+row_means$permit_rate,
+row_means$eviction_rate,
+row_means$complaint_rate,
+row_means$severe_rate
+))
+
+etable(permits_qm, evicts_qm, complaints_qm, complaints_sever_qm,
+       se.below = TRUE, digits = 3, extralines = row_means_vec, tex = T) %>%
+  writeLines("tables/quality_grade_effects.tex")
+
+# maintence regs
+permits[,total_filings := sum(num_evictions), by=PID]
+permits[,filing_rate := total_filings / num_units_imp_alt]
+permits[,filing_rate_cuts := cut(
+  filing_rate,
+  breaks = c(-Inf,0,0.01,0.02,0.05,0.1, Inf),
+  labels = c("0","(0,1%]","(1%,2%]","(2%,5%]","(5%,10%]","10%+"),
+  ordered_result = TRUE
+)]
+
+permits_agg <- permits[year <= 2019, list(
+  total_permits = sum(total_permits),
+  total_plumbing_permit_count = sum(plumbing_permit_count,na.rm = T),
+  total_electrical_permit_count = sum(electrical_permit_count,na.rm = T),
+  total_mechanical_permit_count = sum(mechanical_permit_count,na.rm = T),
+  total_filings = sum(num_evictions),
+  quality_grade_fixed = first(quality_grade_fixed),
+  building_code_description_new_fixed = first(building_code_description_new_fixed),
+  total_area = first(total_area),
+  year_built = first(year_built),
+  num_units_imp_alt = first(num_units_imp_alt),
+  GEOID = first(GEOID),
+  CT_ID_10 = first(CT_ID_10)
+), by=.(PID = as.integer(PID))]
+
+permits_agg[,filing_rate := total_filings / num_units_imp_alt / 12]
+permits_agg[,high_filing := filing_rate > 0.1]
+permits_agg[,year_built_decade := floor(year_built / 10) * 10]
+maintence <- fepois(total_permits ~ high_filing  + log(num_units_imp_alt)  ,
+       data = permits_agg, cluster = ~PID)
+
+maintence_prop_chars <- fepois(total_permits ~ high_filing  + log(num_units_imp_alt) + log(total_area)|GEOID + building_code_description_new_fixed + quality_grade_fixed +year_built_decade,
+                        data = permits_agg, cluster = ~PID)
+
+rentals_data <- fread(rentals_panel)
+rentals_inf_adj <- feols(log_med_rent ~ year, data = rentals_data)
+rentals_data[,rent_inf_adj := log_med_rent - predict(rentals_inf_adj, newdata = rentals_data)]
+rent_agg = rentals_data[,list(
+  avg_rent_inf_adj = mean(rent_inf_adj, na.rm=TRUE),
+  log_med_rent = mean(log_med_rent, na.rm=TRUE),
+  source = first(source)
+), by=.(PID)]
+
+permits_agg = merge(
+permits_agg,
+rent_agg, by="PID", all.x=TRUE
+)
+
+maintence_prop_chars_rent <- fepois(total_permits ~ high_filing  + log(num_units_imp_alt) + log(total_area)  +  log_med_rent  |GEOID + building_code_description_new_fixed + quality_grade_fixed +year_built_decade,
+                        data = permits_agg, cluster = ~PID)
+
+mechanical_prop_chars_rent <- fepois(total_mechanical_permit_count ~ high_filing  + log(num_units_imp_alt) + log(total_area)  +  log_med_rent  |GEOID + building_code_description_new_fixed + quality_grade_fixed +year_built_decade,
+                                    data = permits_agg, cluster = ~PID)
+
+electrical_prop_chars_rent <- fepois(total_electrical_permit_count ~ high_filing  + log(num_units_imp_alt) + log(total_area)  +  log_med_rent  |GEOID + building_code_description_new_fixed + quality_grade_fixed +year_built_decade,
+                                  data = permits_agg, cluster = ~PID)
+
+setFixest_dict(
+  c(
+    "high_filingTRUE" = "High Filing Rate",
+    "log(num_units_imp_alt)" = "Log(Number of Units)",
+    "log(total_area)" = "Log(Total Area)",
+    "log_med_rent" = "Log(Median Rent)",
+    "GEOID" = "Census Block Group FE",
+    "building_code_description_new_fixed" = "Building Type FE",
+    "quality_grade_fixed" = "Quality Grade FE",
+    "year_built_decade" = "Year Built Decade FE"
+  )
+)
+
+permit_means <- permits_agg[,list(
+  permit_rate = mean(total_permits / num_units_imp_alt, na.rm=TRUE),
+  mechanical_permit_rate = mean(total_mechanical_permit_count / num_units_imp_alt, na.rm=TRUE),
+  electrical_permit_rate = mean(total_electrical_permit_count / num_units_imp_alt, na.rm=TRUE)
+)]
+
+row_means_permit_vec = list("per unit mean" =c(
+  # 'Mean',
+  permit_means$permit_rate,
+  permit_means$permit_rate,
+  permit_means$permit_rate,
+  permit_means$mechanical_permit_rate,
+  permit_means$electrical_permit_rate
+))
+
+etable(list(maintence, maintence_prop_chars, maintence_prop_chars_rent,mechanical_prop_chars_rent, electrical_prop_chars_rent),
+       extralines = row_means_permit_vec,
+       tex = T,
+       se.below = TRUE, digits = 3) %>%
+  writeLines("tables/maintence_effects.tex")
 

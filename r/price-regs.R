@@ -169,7 +169,7 @@ m2 <- fixest::feols(
       # num_units_imp > 1 &
       #(last_obs == T) &
       filing_rate <=1  ],
-  weights = ~(num_units_imp),
+  #weights = ~(num_units_imp),
   cluster = ~PID,
   combine.quick = T
 )
@@ -182,9 +182,9 @@ etable(m1, keep = "%filing_rate_cuts",
                 "filing_rate_cuts10-20%" = "Filing Rate: 10-20%",
                 "filing_rate_cuts20-30%" = "Filing Rate: 20-30%",
                 "filing_rate_cuts30%+" = "Filing Rate: 30%+",
-                "filing_rate_cutsQ1" = "Filing Rate: Q1",
-                "filing_rate_cutsQ3" = "Filing Rate: Q3",
-                "filing_rate_cutsQ4" = "Filing Rate: Q4",
+                "filing_rate_cuts_q:Q1" = "Filing Rate: Q1",
+                "filing_rate_cuts_q:Q3" = "Filing Rate: Q3",
+                "filing_rate_cuts_q:Q4" = "Filing Rate: Q4",
                 "year_built" = "Year Built",
                 "num_units_imp" = "Number of Units",
                 "num_units_imp^2" = "Number of Units Squared",

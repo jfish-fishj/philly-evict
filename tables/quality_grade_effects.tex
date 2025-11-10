@@ -1,0 +1,32 @@
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variables: & filed\_permit  & filed\_eviction  & filed\_complaint  & filed\_severe\\   
+   Model:               & (1)            & (2)              & (3)               & (4)\\  
+   \midrule
+   \emph{Variables}\\
+   Quality B vs A       & -0.051$^{***}$ & 0.002            & -0.008$^{***}$    & -0.0002\\   
+                        & (0.003)        & (0.004)          & (0.003)           & (0.002)\\   
+   Quality C vs A       & -0.053$^{***}$ & 0.013$^{***}$    & 0.006$^{**}$      & 0.008$^{***}$\\   
+                        & (0.003)        & (0.004)          & (0.003)           & (0.002)\\   
+   Quality D vs A       & -0.053$^{***}$ & 0.014$^{***}$    & 0.005$^{*}$       & 0.008$^{***}$\\   
+                        & (0.003)        & (0.004)          & (0.003)           & (0.002)\\   
+   Quality Unknown vs A & -0.032$^{***}$ & -0.005           & 0.003             & -0.005$^{**}$\\   
+                        & (0.004)        & (0.004)          & (0.003)           & (0.002)\\   
+   Log(Number of Units) & 0.018$^{***}$  & 0.034$^{***}$    & 0.023$^{***}$     & 0.019$^{***}$\\   
+                        & (0.0004)       & (0.0009)         & (0.0005)          & (0.0005)\\   
+   per unit mean        & 0.009          & 0.012            & 0.021             & 0.011\\  
+   \midrule
+   \emph{Fixed-effects}\\
+   Time FE              & Yes            & Yes              & Yes               & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations         & 11,056,896     & 11,056,896       & 11,056,896        & 11,056,896\\  
+   R$^2$                & 0.01215        & 0.02403          & 0.00917           & 0.00904\\  
+   Within R$^2$         & 0.01179        & 0.02238          & 0.00664           & 0.00802\\  
+   \midrule \midrule
+   \multicolumn{5}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

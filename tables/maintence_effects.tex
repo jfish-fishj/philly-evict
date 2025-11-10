@@ -1,0 +1,36 @@
+\begingroup
+\centering
+\begin{tabular}{lccccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variables: & \multicolumn{3}{c}{total\_permits} & total\_mechanical\_permit\_count & total\_electrical\_permit\_count\\
+   Model:                & (1)            & (2)            & (3)            & (4)            & (5)\\  
+   \midrule
+   \emph{Variables}\\
+   Constant              & -0.123$^{***}$ &                &                &                &   \\   
+                         & (0.011)        &                &                &                &   \\   
+   High Filing Rate      & -0.383$^{***}$ & -0.080$^{***}$ & -0.073$^{***}$ & -0.183$^{***}$ & -0.076$^{**}$\\   
+                         & (0.027)        & (0.021)        & (0.024)        & (0.041)        & (0.034)\\   
+   Log(Number of Units)  & 0.717$^{***}$  & 0.086$^{***}$  & 0.090$^{***}$  & -0.061         & 0.076$^{*}$\\   
+                         & (0.010)        & (0.029)        & (0.034)        & (0.040)        & (0.044)\\   
+   Log(Total Area)       &                & 0.515$^{***}$  & 0.517$^{***}$  & 0.557$^{***}$  & 0.594$^{***}$\\   
+                         &                & (0.023)        & (0.025)        & (0.033)        & (0.030)\\   
+   Log(Median Rent)      &                &                & 0.329$^{***}$  & 0.463$^{***}$  & 0.291$^{***}$\\   
+                         &                &                & (0.028)        & (0.037)        & (0.037)\\   
+   per unit mean         & 0.738          & 0.738          & 0.738          & 0.068          & 0.129\\  
+   \midrule
+   \emph{Fixed-effects}\\
+   Census Block Group FE &                & Yes            & Yes            & Yes            & Yes\\  
+   Building Type FE      &                & Yes            & Yes            & Yes            & Yes\\  
+   Quality Grade FE      &                & Yes            & Yes            & Yes            & Yes\\  
+   Year Built Decade FE  &                & Yes            & Yes            & Yes            & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations          & 153,568        & 146,847        & 95,511         & 84,490         & 94,513\\  
+   Squared Correlation   & 0.05273        & 0.61338        & 0.69422        & 0.73904        & 0.70930\\  
+   Pseudo R$^2$          & 0.15772        & 0.39938        & 0.45806        & 0.37866        & 0.41336\\  
+   BIC                   & 707,851.9      & 497,508.1      & 346,502.4      & 66,566.1       & 114,563.1\\  
+   \midrule \midrule
+   \multicolumn{6}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{6}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
