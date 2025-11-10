@@ -1,0 +1,678 @@
+\documentclass[10pt, xcolor=dvipsnames]{beamer}
+
+\usetheme{metropolis}
+
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{ragged2e}
+\usepackage{bbding}
+\usepackage{mathtools}
+\usepackage{indentfirst}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{preview}
+\usepackage{xcolor}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+% If you are using biblatex in your main project, you can adapt this:
+% \usepackage[style=authoryear]{biblatex}
+% \addbibresource{references.bib}
+
+% % Some helpful color shortcuts (feel free to tweak)
+\definecolor{evictRed}{RGB}{180,30,50}
+\definecolor{maintGreen}{RGB}{20,120,60}
+\definecolor{phillyBlue}{RGB}{0,76,153}
+
+\title[Landlord–Tenant Bargaining]{Landlord–Tenant Bargaining, Maintenance, and Retaliation}
+\author[Joe Fish]{Joe Fish}
+\date{} % leave blank for now
+
+\begin{document}
+
+%------------------------------------------------
+\begin{frame}
+  \titlepage
+\end{frame}
+
+------------------------------------------------
+\begin{frame}{Introduction}
+  \begin{itemize}
+    \item In this talk, I use administrative data and a stylized bargaining model to study how landlords and tenants interact in low income rental markets.
+    \pause
+    \item I will emphasize:
+      \begin{itemize}
+        \item How \textcolor{maintGreen}{maintenance bargaining} works in practice.
+        \item How \textcolor{evictRed}{retaliation via eviction filings} can shape that bargaining.
+      \end{itemize}
+    \pause
+    \item The goal is to connect \textbf{equilibrium facts} about maintenance and eviction to a simple \textbf{landlord–tenant bargaining model}.
+  \end{itemize}
+  % Suggestion: you might later tighten this to a 2–3 bullet “elevator pitch.”
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{Motivation}
+  \textbf{*big picture*}
+  \begin{itemize}
+    \item there's been a recent focus on landlord market power on \textbf{*posted prices*} % <put some cites>
+      \begin{itemize}
+        \item these papers have a traditional quantity restriction mechanism, usually with landlords holding units vacant for longer
+        \item scale and concentration matter for rationalizing these effects
+      \end{itemize}
+    \pause
+    \item however, many of the most important parts of a landlord-tenant relationship are \textbf{*bargained*} over
+      \begin{itemize}
+        \item maintenance requests, lease renewals, evictions
+        \item ex ante reasons to think this bargaining process is particularly important for explaining the low income rental market
+      \end{itemize}
+  \end{itemize}
+  % Suggestion: later you might standardize capitalization (“maintenance”, “ex ante”) and maybe break the first bullet into two sentences for readability.
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{Research Question}
+  \begin{center}
+    \Large im going to try and convince you that bargaining is an important feature of the rental market
+  \end{center}
+  % Suggestion: consider “I'm going to try to convince you that bargaining is an important feature of the rental market.”
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{This Presentation}
+  \begin{itemize}
+    \item overview of landlord tenant law in philadelphia as a framework for how this "bargaining" process works
+    \pause
+    \item stylized facts on equilibrium bargaining
+      \begin{itemize}
+        \item high evicting landlords do less maintence, conditional on property characteristics \textbf{*and*} contract rents
+        \item landlords retaliate
+      \end{itemize}
+    \pause
+    \item stylized bargaining model to rationalize facts
+  \end{itemize}
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{Related Literature}
+  \begin{itemize}
+    \item plea bargains
+    \item divorce law
+    \item bargaining with asymetric information
+  \end{itemize}
+  % Suggestion: you could later add one explicit example/cite under each bullet to orient the audience.
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{Overview of Low Income Rental Market}
+  \begin{itemize}
+    \item tenant default is common; % <put that humphries cite about here>
+      \begin{itemize}
+        \item most cases involve non-payment of rent; median case is for \(\sim\)2 months back rent
+        \item \(\sim 8\%\) of tenants have attorneys; \(\sim 80\%\) of landlords are
+        \item outcome data is spotty, but in general tenants lose (\(\sim 95\%\) of cases)
+      \end{itemize}
+    \pause
+    \item low income landlords generally have \textbf{*higher*} profit margins
+      \begin{itemize}
+        \item this is largely explained by lower costs, which will motivate my bargaining model
+      \end{itemize}
+    \item \textbf{*equilibrium has to rationalize higher profits and lower maintenance*}
+  \end{itemize}
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{Overview of Philadelphia Rental Market}
+  \begin{itemize}
+    \item Basic facts about the size and composition of the Philadelphia rental market.
+    \item Distribution of landlord types (small vs large owners, geographic concentration).
+    \item Heterogeneity in neighborhood characteristics and housing quality.
+  \end{itemize}
+  % Suggestion: later you can swap these placeholders for concrete numbers/figures.
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{Overview of Philadelphia Rental Market (cont.)}
+  \begin{itemize}
+    \item Institutional details specific to Philadelphia:
+      \begin{itemize}
+        \item licensing and inspection regime,
+        \item local eviction court process,
+        \item complaint and enforcement mechanisms.
+      \end{itemize}
+    \pause
+    \item These details will matter for interpreting the empirical results and for the modeling choices.
+  \end{itemize}
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{Data}
+  \begin{itemize}
+    \item Administrative data on evictions, complaints, and permits.
+    \item Property characteristics and rent prices.
+    \item Linked to tenants/landlords where possible.
+  \end{itemize}
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{Data (Cont.)}
+  \begin{itemize}
+    \item Construction of the building-by-year-quarter panel.
+    \item Key variables:
+      \begin{itemize}
+        \item eviction filings,
+        \item maintenance permits,
+        \item complaints,
+        \item contract rent.
+      \end{itemize}
+  \end{itemize}
+\end{frame}
+
+------------------------------------------------
+\begin{frame}{Summary Statistics on Evictions}
+  \begin{table}[H]
+    \centering
+    \begin{tabular}{lccc}
+      \toprule
+      & Mean & SD & N \\
+      \midrule
+      % Fill in with actual variables
+      Eviction indicator & & & \\
+      Back rent (months) & & & \\
+      % ...
+      \bottomrule
+    \end{tabular}
+    \caption{Summary Statistics on Evictions}
+  \end{table}
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{Summary Statistics on Maintenance}
+  \begin{table}[H]
+    \centering
+    \begin{tabular}{lccc}
+      \toprule
+      & Mean & SD & N \\
+      \midrule
+      % Fill in with actual variables
+      Count of maintenance permits & & & \\
+      Major structural repairs      & & & \\
+      % ...
+      \bottomrule
+    \end{tabular}
+    \caption{Summary Statistics on Maintenance}
+  \end{table}
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{Summary Statistics on Complaints}
+  \begin{table}[H]
+    \centering
+    \begin{tabular}{lccc}
+      \toprule
+      & Mean & SD & N \\
+      \midrule
+      % Fill in with actual variables
+      Complaint rate & & & \\
+      Severe complaints share & & & \\
+      % ...
+      \bottomrule
+    \end{tabular}
+    \caption{Summary Statistics on Complaints}
+  \end{table}
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{Summary Table on Rent Prices}
+  \begin{table}[H]
+    \centering
+    \begin{tabular}{lccc}
+      \toprule
+      & Mean & SD & N \\
+      \midrule
+      % Fill in with actual variables
+      Contract rent & & & \\
+      Implied rent per square foot & & & \\
+      % ...
+      \bottomrule
+    \end{tabular}
+    \caption{Summary Statistics on Rent Prices}
+  \end{table}
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{landlord maintenance}
+  landlords do less maintenance, even conditional on rent prices 
+
+  \medskip
+  \textcolor{maintGreen}{Baseline specification:}
+  \begin{align}
+    \text{count permits}_{it}
+      &= \beta_0
+       + \beta_1 \,\text{high\_evicting}_i
+       + \beta_2 \,\text{Property Characteristics}_{it}
+       + \beta_3 \,\text{rent price}_{it}
+       + \varepsilon_{it}.
+  \end{align}
+
+  \medskip
+  \begin{itemize}
+    \item \(\beta_1 < 0\) captures that high evicting landlords do less maintenance conditional on observables.
+  \end{itemize}
+
+  \medskip
+  \begin{table}[H]
+    \centering
+    \begin{tabular}{lccc}
+      \toprule
+      & (1) & (2) & (3) \\
+      \midrule
+      high\_evicting & & & \\
+      % ...
+      \bottomrule
+    \end{tabular}
+    \caption{Regressions of Maintenance Permits on High-Evicting Indicator}
+  \end{table}
+
+  \medskip
+  \hyperlink{permits-other}{\beamergotobutton{Other permit types}}
+  % Suggestion: you might later standardize capitalization and spelling (“maintenance”).
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}[label=permits-other]{Other Permit Types}
+  \begin{itemize}
+    \item Heterogeneity across different permit categories (e.g.\ electrical, plumbing, structural).
+    \item Compare coefficients on high\_evicting for:
+      \begin{itemize}
+        \item health/safety-related permits,
+        \item cosmetic/non-safety permits.
+      \end{itemize}
+  \end{itemize}
+  \pause
+  \begin{table}[H]
+    \centering
+    \begin{tabular}{lcc}
+      \toprule
+      Permit type & Coef. on high\_evicting & SE \\
+      \midrule
+      % Fill in with actual estimates
+      Structural & & \\
+      Electrical & & \\
+      Plumbing   & & \\
+      % ...
+      \bottomrule
+    \end{tabular}
+    \caption{Maintenance by Permit Type}
+  \end{table}
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{overview of complaint process}
+  \begin{enumerate}
+    \item tenant makes complaint to landlord
+    \pause
+    \item if landlord does not fix complaint, tenant can file a 311 complaint with the Licenses and Inspections Department
+      \begin{itemize}
+        \item while complaint has been lodged, tenant is allowed to withold rent \textbf{*by putting it in an escrow account*}
+        \item \textbf{*if tenant is current with rent*}, they cannot be retaliated against (e.g., the landlord cannot file an eviction against them)
+      \end{itemize}
+    \pause
+    \item landlord has 35 days to fix issue, following inspection
+    \item After 35 days, L+I should reinspect. If the property is still in violation, L+I should refer the case to the City Solicitor for court
+    \item if violation is severe enough, tenant is evicted \textbf{*by the court*}
+  \end{enumerate}
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{landlord retaliation: specification}
+  \textbf{LpDiD math about here}
+
+  \medskip
+  \textcolor{evictRed}{Local projection / event–study setup:}
+  \begin{align}
+    Y_{it}
+      &= \sum_{k=-6}^{6} \beta_k \,\mathbf{1}\{q = k\}_{it}
+       + \alpha_i + \lambda_t + \varepsilon_{it},
+      \label{eq:lpdid}
+  \end{align}
+  where:
+  \begin{itemize}
+    \item \(Y_{it}\) is an indicator for whether a building filed an eviction in a year-quarter,
+    \item \(\mathbf{1}\{q = k\}_{it}\) is an indicator for \(k\) quarters relative to the complaint,
+    \item \(\alpha_i\) are building fixed effects, \(\lambda_t\) are time fixed effects.
+  \end{itemize}
+
+  \medskip
+  assumption is that effects fade out after 6 quarters
+
+  % Suggestion: you might later explicitly note the omitted baseline period and how you normalize \(\beta_k\).
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{landlord retaliation results}
+  Probability of landlord retaliation increases \(\sim 200\%\) following a complaint
+
+  \medskip
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{figs/retaliation_event_study.pdf}
+    \caption{Event-study of Eviction Probability Around Complaints}
+  \end{figure}
+
+  \medskip
+  \hyperlink{dlags}{\beamergotobutton{Distributed lag results}}
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}[label=dlags]{Distributed Lag Results}
+  \begin{itemize}
+    \item Estimate distributed lag model of complaints on eviction filings:
+  \end{itemize}
+  \begin{align}
+    Y_{it}
+      &= \sum_{\ell=0}^{6} \theta_\ell \,\text{Complaint}_{i,t-\ell}
+       + \alpha_i + \lambda_t + \varepsilon_{it},
+  \end{align}
+  \begin{itemize}
+    \item Focus on dynamic pattern of retaliation over time.
+    \item Check robustness to alternative lag lengths and functional forms.
+  \end{itemize}
+
+  \medskip
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{figs/retaliation_distributed_lags.pdf}
+    \caption{Distributed Lag Effects of Complaints on Eviction Filings}
+  \end{figure}
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{landlord retaliation: grace period}
+  Next, I repeat the same specification, but I look at the percentage of cases that are filed for one or fewer months backrent.
+
+  \medskip
+  Intuition: since a large fraction of tenants default, one margin landlords can move to legally retaliate is to give tenants less grace
+
+  \medskip
+  \begin{align}
+    \text{PctShortBackRent}_{it}
+      &= \sum_{k=-6}^{6} \gamma_k \,\mathbf{1}\{q = k\}_{it}
+       + \alpha_i + \lambda_t + u_{it}.
+  \end{align}
+
+  \medskip
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{figs/short_backrent_event_study.pdf}
+    \caption{Share of Evictions with \(\leq 1\) Month Back Rent}
+  \end{figure}
+\end{frame}
+
+%================================================
+% Stylized Bargaining Model
+%================================================
+
+%------------------------------------------------
+\begin{frame}{Environment: Landlord--Tenant Maintenance Bargaining}
+  \begin{itemize}
+    \item Parties: risk–neutral landlord \(L\) vs.\ risk–neutral tenant \(T\).
+    \item Object of bargaining: a maintenance level \(m \ge 0\) (repairs, upkeep).
+      \begin{itemize}
+        \item Tenant likes maintenance; landlord dislikes it.
+        \item Utilities are linear in \(m\).
+      \end{itemize}
+    \item Landlord makes a take–it–or–leave–it maintenance offer \(m\).
+    \pause
+    \item If bargaining fails, tenant files a complaint and
+          landlord fully commits to retaliation (filing for eviction)
+          whenever the tenant falls behind on rent.
+    \item If an eviction case occurs, each side pays some cost:
+      \begin{align*}
+        c_L &> 0 &&\text{(landlord's cost in an eviction case)}, \\
+        c_T &> 0 &&\text{(tenant's cost in an eviction case)}.
+      \end{align*}
+  \end{itemize}
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{Information and Default Risk}
+  \begin{itemize}
+    \item Tenant privately knows the probability that they will default on rent:
+      \begin{align*}
+        p \in (a,b) \subset (0,1).
+      \end{align*}
+    \item Interpret \(p\) as the tenant's private information about the path of
+          their future income.
+    \item A tenant with belief \(p\) is a type-\(p\) tenant.
+    \item Landlord does not observe \(p\); instead:
+      \begin{align*}
+        p \sim F(\cdot)
+        \quad \text{with density} \quad f(\cdot),
+      \end{align*}
+      where \(f(p)>0\) on \((a,b)\) and \(f\) is continuous and differentiable.
+    \item Assume landlord can fully commit to retaliating (filing for eviction)
+          whenever the tenant falls behind on rent.
+  \end{itemize}
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{Timing of the Game}
+  \begin{enumerate}
+    \item Landlord chooses a maintenance offer \(m\) (a level of upkeep).
+    \item Tenant observes \(m\) and (given type \(p\)) chooses:
+      \begin{align*}
+        &\text{Accept maintenance } m
+        \quad \text{or} \quad
+        \text{File a complaint (reject the offer).}
+      \end{align*}
+    \pause
+    \item If the tenant files a complaint, the landlord commits to retaliation:
+      \begin{itemize}
+        \item If the tenant later defaults on rent, an eviction case occurs.
+        \item If the tenant does not default on rent, the landlord must pay
+              a transfer \(\tau\) to the tenant (e.g.\ remedial maintenance,
+              concessions).
+      \end{itemize}
+  \end{enumerate}
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{Payoffs When Bargaining Fails}
+  After filing a complaint and landlord's commitment to retaliation:
+
+  \begin{itemize}
+    \item If the tenant defaults on rent (probability \(p\)):
+      \begin{align*}
+        \Pi_T^{\text{evict}}(p) &= -c_T, \\
+        \Pi_L^{\text{evict}}(p) &= -c_L.
+      \end{align*}
+    \item If the tenant does \emph{not} default on rent (probability \(1-p\)):
+      \begin{align*}
+        \Pi_T^{\text{no default}} &= \tau, \\
+        \Pi_L^{\text{no default}} &= -\tau.
+      \end{align*}
+  \end{itemize}
+
+  \vspace{0.5em}
+  So the tenant's expected payoff from filing a complaint (rejecting \(m\))
+  given type \(p\) is
+  \begin{align*}
+    U_T^{\text{complain}}(p)
+      &= (1-p)\tau + p(-c_T) \\
+      &= (1-p)\tau - p c_T.
+  \end{align*}
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{Tenant's Acceptance Condition}
+  \begin{itemize}
+    \item Normalize utilities so that
+      \begin{align*}
+        U_T^{\text{accept}}(m) = m
+      \end{align*}
+      (tenant likes maintenance one-for-one).
+    \item From the previous slide, if tenant files a complaint and landlord
+          commits to retaliation, a type-\(p\) tenant gets
+      \begin{align*}
+        U_T^{\text{complain}}(p)
+          &= (1-p)\tau - p c_T.
+      \end{align*}
+    \item Type-\(p\) tenant accepts maintenance \(m\) iff
+      \begin{align*}
+        m &\ge (1-p)\tau - p c_T.
+      \end{align*}
+  \end{itemize}
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{Borderline Type and Acceptance Region}
+  Define the \emph{borderline type} \(q(m)\) as the tenant type that is
+  indifferent between accepting maintenance \(m\) and filing a complaint:
+  \begin{align*}
+    m
+      &= (1-q(m))\tau - q(m)c_T.
+  \end{align*}
+
+  Solving for \(q(m)\):
+  \begin{align*}
+    m &= \tau - q(m)(\tau + c_T), \\
+    q(m) &= \frac{\tau - m}{\tau + c_T}.
+  \end{align*}
+
+  \vspace{0.75em}
+  Acceptance rule:
+  \begin{align*}
+    \text{Tenant of type }p\text{ accepts maintenance }m
+      \quad\Longleftrightarrow\quad
+      p \ge q(m).
+  \end{align*}
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{Probability of Maintenance Being Performed}
+  For a given maintenance offer \(m\):
+  \begin{itemize}
+    \item Tenants with \(p \ge q(m)\) accept maintenance \(m\).
+    \item Tenants with \(p < q(m)\) file a complaint and trigger the
+          retaliation regime.
+  \end{itemize}
+
+  \vspace{0.5em}
+  Thus:
+  \begin{align*}
+    \Pr(\text{maintenance performed} \mid m)
+      &= \Pr\{p \ge q(m)\} \\
+      &= 1 - F\big(q(m)\big), \\
+    \Pr(\text{complaint and retaliation} \mid m)
+      &= F\big(q(m)\big).
+  \end{align*}
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{Landlord's Payoffs}
+  Let \(k(m)\) denote the landlord's cost of providing maintenance \(m\),
+  with \(k'(m) > 0\) and \(k''(m) \ge 0\).
+
+  \vspace{0.5em}
+  \begin{itemize}
+    \item If maintenance \(m\) is accepted:
+      \begin{align*}
+        \Pi_L^{\text{maint}}(m)
+          &= -k(m).
+      \end{align*}
+    \item If tenant files a complaint and landlord commits to retaliation,
+          then for a type-\(p\) tenant:
+      \begin{align*}
+        \Pi_L^{\text{complain}}(p)
+          &= (1-p)(-\tau) + p(-c_L) \\
+          &= -\big[(1-p)\tau + p c_L\big].
+      \end{align*}
+  \end{itemize}
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{Landlord's Expected Payoff from Maintenance Offer \(m\)}
+  Using the acceptance region \(p \ge q(m)\) and density \(f(\cdot)\):
+
+  \begin{align*}
+    A(m)
+      &= \mathbb{E}[\Pi_L \mid \text{offer } m] \\
+      &= \big[1 - F\big(q(m)\big)\big]\Pi_L^{\text{maint}}(m)
+         + \int_{a}^{q(m)} \Pi_L^{\text{complain}}(p)\, f(p)\, dp.
+  \end{align*}
+
+  Substituting the payoff expressions:
+  \begin{align*}
+    A(m)
+      &= \big[1 - F\big(q(m)\big)\big]\big(-k(m)\big)
+         + \int_{a}^{q(m)} \big[-(1-p)\tau - p c_L\big] f(p)\, dp \\
+      &= -\big[1 - F\big(q(m)\big)\big] k(m)
+         - \int_{a}^{q(m)} \big[(1-p)\tau + p c_L\big] f(p)\, dp.
+  \end{align*}
+
+  \vspace{0.5em}
+  The landlord chooses \(m\) to maximize \(A(m)\), trading off:
+  \begin{itemize}
+    \item Higher maintenance cost \(k(m)\) when tenants accept, vs.
+    \item Greater probability of complaints, retaliation, and eviction costs
+          when tenants reject.
+  \end{itemize}
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{Comparative Statics: Shifting Default Risk Up or Down}
+  Consider a shift in the distribution of tenant default risk \(p\):
+  \begin{align*}
+    p &\sim F(\cdot) \quad\leadsto\quad p \sim G(\cdot),
+  \end{align*}
+  where \(G\) is an upward shift of \(F\) (all types more likely to default).
+
+  \vspace{0.5em}
+  Formally, for some \(\varepsilon > 0\),
+  \begin{align*}
+    G(x) &= F(x - \varepsilon),
+  \end{align*}
+  so the mean of \(p\) increases but higher moments are unchanged.
+
+  \vspace{0.75em}
+  In equilibrium:
+  \begin{itemize}
+    \item The landlord offers \textbf{lower maintenance}:
+      \begin{align*}
+        m^* &\downarrow,
+      \end{align*}
+      because the complaint/retaliation path is now worse for tenants.
+    \item The \textbf{probability maintenance is performed} stays the same:
+      \begin{align*}
+        r^* &= 1 - F(q^*)
+      \end{align*}
+      is preserved by adjusting the cutoff \(q^*\).
+  \end{itemize}
+\end{frame}
+
+% (You can add additional comparative statics slides here if desired.)
+
+%================================================
+% Recap
+%================================================
+
+% %------------------------------------------------
+\begin{frame}{Recap}
+  in equilibrium:
+  \begin{itemize}
+    \item low income landlords have higher profits
+    \item high evicting landlords do less maintenance
+    \item landlords retaliate against tenants that file complaints
+  \end{itemize}
+
+  \vspace{0.5em}
+  \pause
+  \textcolor{phillyBlue}{Next steps:}
+  \begin{itemize}
+    \item Map reduced-form estimates more tightly to model parameters.
+    \item Explore counterfactual landlord responses to changes in Philadelphia tenant protections.
+  \end{itemize}
+\end{frame}
+
+\end{document}
