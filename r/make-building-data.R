@@ -5,31 +5,82 @@ library(postmastr)
 library(bit64)
 library(glue)
 library(janitor)
-library(glue)
+
 print("loaded libraries")
+
+#### ---------- SETTINGS ----------- ####
+# Choose: "year", "quarter", or "month"
+agg_level <- "quarter"   # <- change here
+
+# Optional: period domain bounds (used if you want to override min/max from data)
+domain_start <- as.Date("2005-01-01")
+domain_end   <- as.Date("2025-12-31")
 
 #### directories ####
 print("setting directories")
-input_dir = "~/Desktop/data/philly-evict/open-data"
+input_dir  = "~/Desktop/data/philly-evict/open-data"
 output_dir = "~/Desktop/data/philly-evict/open-data"
 
 setwd(input_dir)
-permits = fread("permits.csv")
-complaints = fread("complaints.csv")
-violations = fread("violations.csv")
+permits        = fread("permits.csv")
+complaints     = fread("complaints.csv")
+violations     = fread("violations.csv")
 investigations = fread("case_investigations.csv")
-parcels = fread("/Users/joefish/Desktop/data/philly-evict/parcel_address_cleaned.csv")
+parcels        = fread("/Users/joefish/Desktop/data/philly-evict/parcel_address_cleaned.csv")
 
+# ---------- Helpers: date -> period ----------
+as_date_safe <- function(x) {
+  # Try to coerce to Date; if not, take first 10 chars
+  # Works for "YYYY-MM-DD ...", "YYYY/MM/DD", etc.
+  y <- suppressWarnings(as.IDate(x))
+  if (all(is.na(y))) {
+    y <- suppressWarnings(as.IDate(substr(x, 1, 10)))
+  }
+  return(as.Date(y))
+}
 
+to_period <- function(date_vec, level = c("year","quarter","month")) {
+  level <- match.arg(level)
+  d <- as_date_safe(date_vec)
+  mm <- as.integer(format(d, "%m"))
+  yy <- format(d, "%Y")
+  q  <- ((mm - 1L) %/% 3L) + 1L
+  out <-
+    switch(level,
+           "year"    = yy,
+           "quarter" = paste0(yy, "-Q", q),
+           "month"   = format(d, "%Y-%m"))
+  return(out)
+}
 
-# make parcel by year level aggregates of each data set
-#### permit aggs ####
-permits[,year := as.numeric(str_sub(permitissuedate,1,4))]
+# Build a complete sequence of period labels for a domain
+period_seq <- function(start_date, end_date, level = c("year","quarter","month")) {
+  level <- match.arg(level)
+  start_date <- as.Date(start_date)
+  end_date   <- as.Date(end_date)
+  if (level == "year") {
+    yrs <- seq(as.integer(format(start_date,"%Y")), as.integer(format(end_date,"%Y")))
+    return(as.character(yrs))
+  } else if (level == "quarter") {
+    # monthly seq, then label by quarter and unique
+    months <- seq(from = as.Date(format(start_date,"%Y-%m-01")),
+                  to   = as.Date(format(end_date,  "%Y-%m-01")),
+                  by = "1 month")
+    labs <- to_period(months, "quarter")
+    return(unique(labs))
+  } else {
+    months <- seq(from = as.Date(format(start_date,"%Y-%m-01")),
+                  to   = as.Date(format(end_date,  "%Y-%m-01")),
+                  by = "1 month")
+    return(format(months, "%Y-%m"))
+  }
+}
+
+# ---------- PERMITS ----------
+permits[, period := to_period(permitissuedate, agg_level)]
 
 clean_permit_type <- function(permit_type) {
-  # Convert to upper case, trim whitespace
   pt <- toupper(trimws(permit_type))
-
   dplyr::case_when(
     pt %in% c("ELECTRICAL", "EP_ELECTRL") ~ "Electrical",
     pt %in% c("MECHANICAL", "BP_MECH") ~ "Mechanical",
@@ -45,28 +96,28 @@ clean_permit_type <- function(permit_type) {
     pt %in% c("GENERAL", "GENERAL PERMIT MINOR") ~ "General",
     pt %in% c("OPERATIONS", "OPS PERMIT") ~ "Operations",
     pt %in% c("TANK TEST") ~ "Tank Test",
-    pt %in% c("L_FFORM") ~ "L_FFORM",  # unsure category
-    TRUE ~ pt  # keep original if no match
+    pt %in% c("L_FFORM") ~ "L_FFORM",
+    TRUE ~ pt
   )
 }
-permits[,permit_standardized := clean_permit_type(permittype)]
+permits[, permit_standardized := clean_permit_type(permittype)]
+valid_permits <- permits[ , .N, by = permit_standardized][order(-N)][N > 10000, permit_standardized]
 
-valid_permits <- permits[,.N, by = permit_standardized][order(-N)][N > 10000,permit_standardized]
-permits_agg_long = permits[permit_standardized %in% valid_permits,list(
-  num_permits = .N
-), by = .(parcel_number = opa_account_num, year,permit_standardized)]
+permits_agg_long <- permits[
+  permit_standardized %in% valid_permits,
+  .(num_permits = .N),
+  by = .(parcel_number = opa_account_num, period, permit_standardized)
+]
+permits_agg_long[ , total_permits := sum(num_permits), by = .(parcel_number, period)]
 
-permits_agg_long[,total_permits := sum(num_permits), by = .(parcel_number, year)]
-permits_agg = pivot_wider(permits_agg_long,
-                          names_from = permit_standardized,
-                          values_from = num_permits,
-                          values_fill = 0) %>%
-  janitor::clean_names()
-setDT(permits_agg)
+permits_agg <- pivot_wider(
+  permits_agg_long,
+  names_from  = permit_standardized,
+  values_from = num_permits,
+  values_fill = 0
+) |> janitor::clean_names() |> as.data.table()
 
-#### complaint aggs ####
-complaints[,year := as.numeric(str_sub(complaintdate,1,4))]
-# standardize permits
+# ---------- COMPLAINTS ----------
 complaint_lookup <- tribble(
   ~raw, ~clean,
   "EMERGENCY",                                                "Emergency/Service",
@@ -208,115 +259,137 @@ complaint_lookup <- tribble(
   "COMMISSIONER SPECIALS",                                    "Administrative"
 )
 
-# Helper: clean a vector using the table (case-insensitive, trims)
-
 clean_complaint_type <- function(x, lookup = complaint_lookup) {
-  # lookup: data.frame/tibble/data.table with columns `raw` and `clean`
-  key_dt <- as.data.table(lookup)[
-    , .(key = toupper(trimws(raw)), clean)
-  ]
-  inp <- data.table(i = seq_along(x), raw = x)[
-    , key := toupper(trimws(raw))
-  ]
-  # Left-join by normalized key, preserving input order (order of i)
-  res <- key_dt[inp, on = .(key), nomatch = NA
-  ][order(i)][
-    , ifelse(is.na(clean), raw, clean)]
+  key_dt <- as.data.table(lookup)[ , .(key = toupper(trimws(raw)), clean)]
+  inp <- data.table(i = seq_along(x), raw = x)[ , key := toupper(trimws(raw))]
+  res <- key_dt[inp, on = .(key), nomatch = NA][order(i)][ , ifelse(is.na(clean), raw, clean)]
   return(res)
 }
 
-complaints[,complaint_type_standaridzed := clean_complaint_type(complaintcodename)]
-valid_complaints <- complaints[,.N, by = complaint_type_standaridzed][order(-N)][N > 10000,complaint_type_standaridzed]
-complaints_agg_long = complaints[complaint_type_standaridzed %in% valid_complaints,list(
-  num_complaints = .N
-), by = .(parcel_number = opa_account_num, year, complaint_type_standaridzed)]
+complaints[, period := to_period(complaintdate, agg_level)]
+complaints[, complaint_type_standaridzed := clean_complaint_type(complaintcodename)]
+valid_complaints <- complaints[ , .N, by = complaint_type_standaridzed][order(-N)][N > 10000, complaint_type_standaridzed]
 
-complaints_agg_long[,total_complaints := sum(num_complaints), by = .(parcel_number, year)]
-complaints_agg = pivot_wider(complaints_agg_long,
-                          names_from = complaint_type_standaridzed,
-                          values_from = num_complaints,
-                          values_fill = 0) %>%
-  janitor::clean_names()
+complaints_agg_long <- complaints[
+  complaint_type_standaridzed %in% valid_complaints,
+  .(num_complaints = .N),
+  by = .(parcel_number = opa_account_num, period, complaint_type_standaridzed)
+]
+complaints_agg_long[ , total_complaints := sum(num_complaints), by = .(parcel_number, period)]
 
-setDT(complaints_agg)
+complaints_agg <- pivot_wider(
+  complaints_agg_long,
+  names_from  = complaint_type_standaridzed,
+  values_from = num_complaints,
+  values_fill = 0
+) |> janitor::clean_names() |> as.data.table()
 
-#### violation aggs ####
-violations[,year := as.numeric(str_sub(violationdate,1,4))]
-# standardize violations
-violations[,violation_standardized := fifelse(
-  caseprioritydesc == "",
-  "OTHER",
-  toupper(trimws(caseprioritydesc))
-  )]
-valid_violations <- violations[,.N, by = violation_standardized][order(-N)][N > 10000,violation_standardized]
-violations_agg_long = violations[violation_standardized %in% valid_violations,list(
-  num_violations = .N
-), by = .(parcel_number = opa_account_num, year, violation_standardized)]
-violations_agg_long[,total_violations := sum(num_violations), by = .(parcel_number, year)]
-violations_agg = pivot_wider(violations_agg_long,
-                          names_from = violation_standardized,
-                          values_from = num_violations,
-                          values_fill = 0) %>%
-  janitor::clean_names()
-setDT(violations_agg)
-
-#### investigation aggs ####
-# works same as violations so just reuse that code
-investigations[,year := as.numeric(str_sub(investigationcompleted,1,4))]
-investigations[,investigation_standardized := fifelse(
-  casepriority == "",
-  "OTHER",
-  toupper(trimws(casepriority))
+# ---------- VIOLATIONS ----------
+violations[, period := to_period(violationdate, agg_level)]
+violations[, violation_standardized := fifelse(
+  caseprioritydesc == "", "OTHER", toupper(trimws(caseprioritydesc))
 )]
-valid_investigations <- investigations[,.N, by = investigation_standardized][order(-N)][N > 10000,investigation_standardized]
-investigations_agg_long = investigations[investigation_standardized %in% valid_investigations,list(
-  num_investigations = .N
-), by = .(parcel_number = opa_account_num, year, investigation_standardized)]
-investigations_agg_long[,total_investigations := sum(num_investigations), by = .(parcel_number, year)]
-investigations_agg = pivot_wider(investigations_agg_long,
-                          names_from = investigation_standardized,
-                          values_from = num_investigations,
-                          values_fill = 0) %>%
-  janitor::clean_names()
-setDT(investigations_agg)
+valid_violations <- violations[ , .N, by = violation_standardized][order(-N)][N > 10000, violation_standardized]
 
-#### merge together ####
-parcel_grid = expand_grid(
+violations_agg_long <- violations[
+  violation_standardized %in% valid_violations,
+  .(num_violations = .N),
+  by = .(parcel_number = opa_account_num, period, violation_standardized)
+]
+violations_agg_long[ , total_violations := sum(num_violations), by = .(parcel_number, period)]
+
+violations_agg <- pivot_wider(
+  violations_agg_long,
+  names_from  = violation_standardized,
+  values_from = num_violations,
+  values_fill = 0
+) |> janitor::clean_names() |> as.data.table()
+
+# ---------- INVESTIGATIONS ----------
+investigations[, period := to_period(investigationcompleted, agg_level)]
+investigations[, investigation_standardized := fifelse(
+  casepriority == "", "OTHER", toupper(trimws(casepriority))
+)]
+valid_investigations <- investigations[ , .N, by = investigation_standardized][order(-N)][N > 10000, investigation_standardized]
+
+investigations_agg_long <- investigations[
+  investigation_standardized %in% valid_investigations,
+  .(num_investigations = .N),
+  by = .(parcel_number = opa_account_num, period, investigation_standardized)
+]
+investigations_agg_long[ , total_investigations := sum(num_investigations), by = .(parcel_number, period)]
+
+investigations_agg <- pivot_wider(
+  investigations_agg_long,
+  names_from  = investigation_standardized,
+  values_from = num_investigations,
+  values_fill = 0
+) |> janitor::clean_names() |> as.data.table()
+
+# ---------- Build parcel x period grid ----------
+# Determine min/max dates across data (fallback to domain bounds)
+mind <- min(
+  as_date_safe(permits$permitissuedate),
+  as_date_safe(complaints$complaintdate),
+  as_date_safe(violations$violationdate),
+  as_date_safe(investigations$investigationcompleted),
+  na.rm = TRUE
+)
+maxd <- max(
+  as_date_safe(permits$permitissuedate),
+  as_date_safe(complaints$complaintdate),
+  as_date_safe(violations$violationdate),
+  as_date_safe(investigations$investigationcompleted),
+  na.rm = TRUE
+)
+
+if (!is.finite(mind)) mind <- domain_start
+if (!is.finite(maxd)) maxd <- domain_end
+
+all_periods <- period_seq(start_date = min(domain_start, mind),
+                          end_date   = max(domain_end,   maxd),
+                          level = agg_level)
+
+parcel_grid <- expand_grid(
   parcel_number = unique(parcels$parcel_number),
-  year = 2005:2025
-) %>% as.data.table()
+  period = all_periods
+) |> as.data.table()
 
-# rename across each dataframe, appending a suffix to each column
-permits_agg = permits_agg %>%
-  rename_with(~paste0(.x, "_permit_count"), -c(parcel_number, year, total_permits))
+# ---------- Suffix & merges ----------
+permits_agg <- permits_agg |>
+  rename_with(~paste0(.x, "_permit_count"), -c(parcel_number, period, total_permits))
 
-complaints_agg = complaints_agg %>%
-  rename_with(~paste0(.x, "_complaint_count"), -c(parcel_number, year, total_complaints))
+complaints_agg <- complaints_agg |>
+  rename_with(~paste0(.x, "_complaint_count"), -c(parcel_number, period, total_complaints))
 
-violations_agg = violations_agg %>%
-  rename_with(~paste0(.x, "_violation_count"), -c(parcel_number, year, total_violations))
+violations_agg <- violations_agg |>
+  rename_with(~paste0(.x, "_violation_count"), -c(parcel_number, period, total_violations))
 
-investigations_agg = investigations_agg %>%
-  rename_with(~paste0(.x, "_investigation_count"), -c(parcel_number, year, total_investigations))
+investigations_agg <- investigations_agg |>
+  rename_with(~paste0(.x, "_investigation_count"), -c(parcel_number, period, total_investigations))
 
-building_data = parcel_grid %>%
-  merge(permits_agg, by = c("parcel_number", "year"), all.x = TRUE) %>%
-  merge(complaints_agg, by = c("parcel_number", "year"), all.x = TRUE) %>%
-  merge(violations_agg, by = c("parcel_number", "year"), all.x = TRUE) %>%
-  merge(investigations_agg, by = c("parcel_number", "year"), all.x = TRUE)
+building_data <- parcel_grid |>
+  merge(permits_agg,        by = c("parcel_number","period"), all.x = TRUE) |>
+  merge(complaints_agg,     by = c("parcel_number","period"), all.x = TRUE) |>
+  merge(violations_agg,     by = c("parcel_number","period"), all.x = TRUE) |>
+  merge(investigations_agg, by = c("parcel_number","period"), all.x = TRUE)
 
-# fill NAs w/ zeros
-building_data <- building_data %>%
+# Fill NAs with zeros
+building_data <- building_data |>
   mutate(across(total_permits:last_col(), ~replace_na(.x, 0)))
 
-building_data[,list(
-  total_permits = sum(total_permits, na.rm = TRUE),
-  total_complaints = sum(total_complaints, na.rm = TRUE),
-  total_violations = sum(total_violations, na.rm = TRUE),
+# Optional: summary by period for quick QC
+building_data[ , .(
+  total_permits        = sum(total_permits,        na.rm = TRUE),
+  total_complaints     = sum(total_complaints,     na.rm = TRUE),
+  total_violations     = sum(total_violations,     na.rm = TRUE),
   total_investigations = sum(total_investigations, na.rm = TRUE)
-), by = year]
+), by = period][order(period)] |> print()
 
-fwrite(building_data,
-       file = glue("{output_dir}/building_data.csv"),
-       row.names = FALSE,
-       na = "NA")
+# Derive year integer (useful even for month/quarter outputs)
+building_data[ , year := as.integer(substr(period, 1, 4))]
+
+# ---------- Write ----------
+outfile <- glue("{output_dir}/building_data_{agg_level}.csv")
+fwrite(building_data, file = outfile, row.names = FALSE, na = "NA")
+print(glue("Wrote {outfile}"))

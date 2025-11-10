@@ -33,6 +33,85 @@ stuck_regex = paste0(
   "([a-z])(", suffixes, ")(\\.|\\|)"
 )
 
+ord_words_to_nums <- function(x) {
+  # suffix helper
+  suf <- function(n) {
+    n <- as.integer(n)
+    if (n %% 100L %in% c(11L, 12L, 13L)) return("th")
+    c("th","st","nd","rd","th","th","th","th","th","th")[(n %% 10L) + 1L]
+  }
+
+  # base vocab
+  units <- c(
+    "first"=1,"second"=2,"third"=3,"fourth"=4,"fifth"=5,
+    "sixth"=6,"seventh"=7,"eighth"=8,"ninth"=9
+  )
+  teens <- c(
+    "tenth"=10,"eleventh"=11,"twelfth"=12,"thirteenth"=13,"fourteenth"=14,
+    "fifteenth"=15,"sixteenth"=16,"seventeenth"=17,"eighteenth"=18,"nineteenth"=19
+  )
+  tens_only <- c(
+    "twentieth"=20,"thirtieth"=30,"fortieth"=40,"fiftieth"=50,
+    "sixtieth"=60,"seventieth"=70,"eightieth"=80,"ninetieth"=90
+  )
+  tens <- c(
+    "twenty"=20,"thirty"=30,"forty"=40,"fifty"=50,
+    "sixty"=60,"seventy"=70,"eighty"=80,"ninety"=90
+  )
+
+  out <- x
+
+  # 1) Compounds: e.g., "twenty first" / "twenty-first" / case-insensitive
+  # Build all patterns up to 99
+  for (t_word in names(tens)) {
+    t_val <- tens[[t_word]]
+    # tens + unit (21..29, 31..39, ...)
+    for (u_word in names(units)) {
+      u_val <- units[[u_word]]
+      n <- t_val + u_val
+      patt <- paste0("(?i)\\b", t_word, "[-\\s]+", u_word, "\\b")
+      repl <- paste0(n, suf(n))
+      out <- gsub(patt, repl, out, perl = TRUE)
+    }
+  }
+
+  # 2) Tens-only ordinals: "twentieth", "thirtieth", ...
+  for (w in names(tens_only)) {
+    n <- tens_only[[w]]
+    patt <- paste0("(?i)\\b", w, "\\b")
+    repl <- paste0(n, suf(n))
+    out <- gsub(patt, repl, out, perl = TRUE)
+  }
+
+  # 3) Teens: "eleventh" .. "nineteenth" and "tenth"
+  for (w in names(teens)) {
+    n <- teens[[w]]
+    patt <- paste0("(?i)\\b", w, "\\b")
+    repl <- paste0(n, suf(n))
+    out <- gsub(patt, repl, out, perl = TRUE)
+  }
+
+  # 4) Simple 1..9: "first".."ninth"
+  for (w in names(units)) {
+    n <- units[[w]]
+    patt <- paste0("(?i)\\b", w, "\\b")
+    repl <- paste0(n, suf(n))
+    out <- gsub(patt, repl, out, perl = TRUE)
+  }
+
+  out
+}
+
+# data.table-friendly wrapper
+# dt: a data.table; col: unquoted column name with street strings
+ordinalize_street_names <- function(dt, col) {
+  col <- substitute(col)
+  dt[, `:=`(tmp_ord = ord_words_to_nums(as.character(eval(col))))]
+  dt[, (as.character(col)) := tmp_ord][, tmp_ord := NULL]
+  invisible(dt)
+}
+
+
 test = c("7413a oxford ave|apt #21|phila, pa 19111|7413 oxford ave|apt #21|phila, pa 19111",
          "401 w walnut la|phila. , pa 19144")
 str_match(test, suffix_regex)
@@ -157,7 +236,7 @@ philly_evict_sample = philly_evict %>%
 
 # bunch of unknown addys but these are generally pre-2000
 dropped_ids_og = philly_evict_sample %>% filter(!pm.type %in% c("full", "short")) %>% pull(pm.uid)
-View(philly_evict_sample[pm.type=="unknown" & year == 2004] %>% relocate(def_address_lower, defendant_address))
+#View(philly_evict_sample[pm.type=="unknown" & year == 2004] %>% relocate(def_address_lower, defendant_address))
 
 # philly_evict_sample = philly_evict_sample%>%
 #   filter(pm.type %in% c("full", "short"))
@@ -230,6 +309,10 @@ philly_evict_adds_sample_copy1 = copy(philly_evict_adds_sample)
 
 philly_evict_adds_sample = pm_streetDir_parse(philly_evict_adds_sample, dictionary = dirs)
 philly_evict_adds_sample = pm_streetSuf_parse(philly_evict_adds_sample)
+
+philly_evict_adds_sample = philly_evict_adds_sample %>%
+  mutate(pm.address =ord_words_to_nums(pm.address) )
+
 # have to copy pre parsing... bc pm_street_parse will drop a bunch of ids
 philly_evict_adds_sample_copy = copy(philly_evict_adds_sample)
 
@@ -237,6 +320,7 @@ philly_evict_adds_sample_copy = copy(philly_evict_adds_sample)
 # philly_evict_adds_sample = philly_evict_adds_sample %>% mutate(
 #   pm.address = pm.address %>% str_remove_all( "(\\s[a-z]{1}|1st|2nd)$")
 # )
+# standardize street name; turn first into 1st, etc
 
 philly_evict_adds_sample = pm_street_parse(philly_evict_adds_sample, ordinal= T, drop = F)
 
@@ -313,5 +397,4 @@ philly_evict_adds_sample_m[,pm.city := coalesce(pm.city, "philadelphia")]
 philly_evict_adds_sample_m[,pm.state := coalesce(pm.state, "PA")]
 
 fwrite(philly_evict_adds_sample_m, "/Users/joefish/Desktop/data/philly-evict/evict_address_cleaned.csv")
-
 

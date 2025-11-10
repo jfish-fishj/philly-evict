@@ -51,6 +51,16 @@ philly_evict[,pm.zip := (pm.zip) %>%
                str_pad(5, "left", pad = "0")]
 
 philly_evict[,dup := .N, by = .(n_sn_ss_c, plaintiff,defendant,d_filing)][,dup := dup > 1]
+
+# plot evictions by year
+ev_year_aggs = philly_evict[commercial == "f" &
+                              commercial_alt == F &
+                              dup == F &
+                              year >= 2000 &
+                              total_rent <= 5e4 &
+                              !is.na(n_sn_ss_c), .N, by = year][order(year)]
+
+
 philly_evict_address_agg = philly_evict[commercial == "f" &
                                           commercial_alt == F &
                                           dup == F &

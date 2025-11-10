@@ -2,29 +2,32 @@
 \centering
 \begin{tabular}{lc}
    \tabularnewline \midrule \midrule
-   Dependent Variable:     & log\_med\_rent\\    
-   Model:                  & (1)\\  
+   Dependent Variable:             & log\_med\_rent\\    
+   Model:                          & (1)\\  
    \midrule
    \emph{Variables}\\
-   Filing Rate: 10-20\%    & 0.0089\\   
-                           & (0.0070)\\   
-   Filing Rate: 20-30\%    & 0.0304$^{***}$\\   
-                           & (0.0084)\\   
-   Filing Rate: 30\%+      & 0.0279$^{**}$\\   
-                           & (0.0109)\\   
+   filing\_rate\_cuts\_q $=$ Q1    & 0.1004$^{***}$\\   
+                                   & (0.0119)\\   
+   filing\_rate\_cuts\_q $=$ Q3    & -0.0041\\   
+                                   & (0.0097)\\   
+   filing\_rate\_cuts\_q $=$ Q4    & 0.0187$^{**}$\\   
+                                   & (0.0093)\\   
    \midrule
    \emph{Fixed-effects}\\
-   Census Block Group-year & Yes\\  
-   Decade Built            & Yes\\  
-   Number of Stories       & Yes\\  
-   Quality Grade           & Yes\\  
-   Exterior Condition      & Yes\\  
-   Building Type           & Yes\\  
+   Census Block Group-year         & Yes\\  
+   num\_units\_bins                & Yes\\  
+   Decade Built                    & Yes\\  
+   Number of Stories               & Yes\\  
+   Data Source                     & Yes\\  
+   number\_of\_bedrooms\_bin       & Yes\\  
+   Data Source-sfh                 & Yes\\  
+   Quality Grade                   & Yes\\  
+   Building Type                   & Yes\\  
    \midrule
    \emph{Fit statistics}\\
-   Observations            & 131,694\\  
-   R$^2$                   & 0.84381\\  
-   Within R$^2$            & 0.01184\\  
+   Observations                    & 92,029\\  
+   R$^2$                           & 0.85815\\  
+   Within R$^2$                    & 0.02906\\  
    \midrule \midrule
    \multicolumn{2}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
    \multicolumn{2}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\

@@ -66,47 +66,110 @@ by = PID]
 # bin filing rates into 0,5,10,20,50+
 bldg_panel[,filing_rate_cuts := cut(
   filing_rate,
-  breaks = c(-Inf,  0.1, 0.2, 0.3, Inf),
-  labels = c("0-10%",  "10-20%", "20-30%", "30%+"),
+  breaks = c(0, 0.2, 0.5,  0.1, 0.2, Inf),
+  labels = c("0-2%", "2-5%","5-10%", "10-20%", "20%+"),
   include.lowest = TRUE
 ) ]
-bldg_panel[,post_covid := (year >= 2021)]
 
+# bin into quartiles
+bldg_panel[,filing_rate_cuts_q := cut(
+  filing_rate,
+  breaks = quantile(filing_rate, probs = seq(0, 1, by = 0.25), na.rm = T),
+  labels = c("Q1", "Q2","Q3", "Q4"),
+  include.lowest = TRUE
+) ]
+
+bldg_panel[,number_of_bedrooms_bin := case_when(
+  number_of_bedrooms == 0 ~ "0",
+  number_of_bedrooms == 1 ~ "1",
+  number_of_bedrooms == 2 ~ "2",
+  number_of_bedrooms == 3 ~ "3",
+  number_of_bedrooms >= 4 ~ "4+",
+  TRUE ~ "missing"
+)]
+
+bldg_panel[,post_covid := (year >= 2021)]
+bldg_panel[,no_filings := (filing_rate == 0)]
+bldg_panel[,ever_altos := any(source == "altos"), by = PID]
 # break unit bins into 5 categories
 m1 <- fixest::feols(
-  log_med_rent ~filing_rate_cuts+#*post_covid +
+  log_med_rent ~i(filing_rate_cuts_q, ref = "Q2")#*post_covid +
    #+filing_rate_sq #+  ever_voucher*source
-+ num_units_imp
-+ num_units_imp^2
+   # +i(num_units_bins, ref = "1")
 #+ sfh#*source
  #   + year_built #* ever_permit
  # + year_built^2
  #+ permits_per_unit#*i(source,ref = "evict")
- +severe_violations_per_unit#*i(source,ref = "evict")
+# +severe_violations_per_unit#*i(source,ref = "evict")
  # +i(beds_imp_first_fixed, ref = 0)
  # +i(baths_first_fixed, ref = 1)
- #+ complaints_per_unit#*i(source,ref = "evict")
-# + permits_per_unit
+#  + any_unsafe_hazordous_dangerous#*i(source,ref = "evict")
+#  + permits_per_unit
+# +ever_investigations
  #+ total_investigations_per_unit
-# + severe_violations_per_unit
+# +  severe_violations_per_unit
  #+poly(number_stories,3)#*i(source,ref = "evict")
-+log(total_area)
- |GEOID^year+  #num_units_bins+ #month +
- #num_units_bins+#^source+
+#  +log(market_value)
+#+log(total_area)
+ |GEOID ^ year+  #num_units_bins+ #month +
+  num_units_bins+
   year_blt_decade+
   num_stories_bin+
-  #number_of_bedrooms +
-  #source +
-   quality_grade_fixed +
-  exterior_condition
-   +building_code_description_new_fixed
+  source +
+  number_of_bedrooms_bin +
+  source^sfh +
+  quality_grade_fixed +
+  # #exterior_condition
+   building_code_description_new_fixed
+#+source
  , data = bldg_panel[#source == "evict" &
-                       #year <= 2019 &
+                       year %in% 2011:2019 &
                        #year>=2014 &
-                     num_units_imp > 5 &
+                   # num_units_imp > 1 &
                     #(last_obs == T) &
                          filing_rate <=1  ],
 weights = ~(num_units_imp),
+  cluster = ~PID,
+  combine.quick = T
+)
+
+m2 <- fixest::feols(
+  log_med_rent ~i(filing_rate_cuts_q, ref = "Q2")#*post_covid +
+  #+filing_rate_sq #+  ever_voucher*source
+  # +i(num_units_bins, ref = "1")
+  #+ sfh#*source
+  #   + year_built #* ever_permit
+  # + year_built^2
+  #+ permits_per_unit#*i(source,ref = "evict")
+  # +severe_violations_per_unit#*i(source,ref = "evict")
+  # +i(beds_imp_first_fixed, ref = 0)
+  # +i(baths_first_fixed, ref = 1)
+  #  + any_unsafe_hazordous_dangerous#*i(source,ref = "evict")
+  #  + permits_per_unit
+  # +ever_investigations
+  #+ total_investigations_per_unit
+  # +  severe_violations_per_unit
+  #+poly(number_stories,3)#*i(source,ref = "evict")
+  #  +log(market_value)
+  #+log(total_area)
+  |GEOID ^ year+  #num_units_bins+ #month +
+    num_units_bins+
+    year_blt_decade+
+    num_stories_bin+
+    source +
+    number_of_bedrooms_bin +
+    source^sfh +
+    quality_grade_fixed +
+    # #exterior_condition
+    building_code_description_new_fixed
+  #+source
+  , data = bldg_panel[#source == "evict" &
+    year %in% 2011:2019 &
+      #year>=2014 &
+      # num_units_imp > 1 &
+      #(last_obs == T) &
+      filing_rate <=1  ],
+  weights = ~(num_units_imp),
   cluster = ~PID,
   combine.quick = T
 )
@@ -119,6 +182,10 @@ etable(m1, keep = "%filing_rate_cuts",
                 "filing_rate_cuts10-20%" = "Filing Rate: 10-20%",
                 "filing_rate_cuts20-30%" = "Filing Rate: 20-30%",
                 "filing_rate_cuts30%+" = "Filing Rate: 30%+",
+                "filing_rate_cutsQ1" = "Filing Rate: Q1",
+                "filing_rate_cutsQ3" = "Filing Rate: Q3",
+                "filing_rate_cutsQ4" = "Filing Rate: Q4",
+                "year_built" = "Year Built",
                 "num_units_imp" = "Number of Units",
                 "num_units_imp^2" = "Number of Units Squared",
                 "severe_violations_per_unit" = "Severe Violations per Unit",
@@ -448,9 +515,9 @@ coefplot(m1)
 
 m2 <- fixest::feols(
   log_med_rent ~ high_filing_preCOVID : i(year, ref = 2019) #+ num_units_bins * post_covid + corp_owner * post_covid
-  | year + high_filing + PID + CT_ID_10^year
+  | pm.zip^year + high_filing + PID
   , data = bldg_panel[#source == "evict" &
-    year %in% 2011:2023 #& abs(change_log_med_rent_annualized) <= 0.15 #&
+    year %in% 2013:2023 #& abs(change_log_med_rent_annualized) <= 0.15 #&
     #filing_rate <=0.75
     &num_units_imp >=1  ],
   weights = ~(num_units_imp),
@@ -459,6 +526,101 @@ m2 <- fixest::feols(
 )
 summary(m2)
 coefplot(m2)
+
+# extract coefs and plot
+coef_df_m2 = broom::tidy(m2) %>%
+  filter(str_detect(term, "high_filing_preCOVID.+year::")) %>%
+  mutate(year = as.integer(str_remove(term, "high_filing_preCOVID:year::"))) %>%
+  mutate(
+    lower = estimate - 1.96 * std.error,
+    upper = estimate + 1.96 * std.error,
+  ) %>%
+  # add 2019 = 0
+  bind_rows(tibble(
+    term = "high_filing_preCOVID:year::2019",
+    estimate = 0,
+    std.error = 0,
+    year = 2019,
+    lower = 0,
+    upper = 0
+  ))
+
+coef_df_m1 = broom::tidy(m1) %>%
+  filter(str_detect(term, "high_filing_preCOVID.+year::")) %>%
+  mutate(year = as.integer(str_remove(term, "high_filing_preCOVID:year::"))) %>%
+  mutate(
+    lower = estimate - 1.96 * std.error,
+    upper = estimate + 1.96 * std.error,
+  ) %>%
+  # add 2019 = 0
+  bind_rows(tibble(
+    term = "high_filing_preCOVID:year::2019",
+    estimate = 0,
+    std.error = 0,
+    year = 2019,
+    lower = 0,
+    upper = 0
+  ))
+
+ggplot(
+  coef_df_m1, aes(x = year, y = estimate)
+) +
+  geom_point() +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
+  #geom_line() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  scale_x_continuous(breaks = seq(2013, 2023, by = 1)) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), breaks = seq(-0.1,0.2,0.05)) +
+  labs(
+    title = "Event Study: High Filing Rate Buildings",
+    subtitle = "Relative to Low Filing Rate Buildings",
+    x = "Year",
+    y = "% Change in Rent"
+  ) +
+  theme_philly_evict()
+
+ggsave("figs/event_study_high_filing_preCOVID.png", width = 8, height = 6, bg = "white")
+
+# repeat m2
+ggplot(
+  coef_df_m2, aes(x = year, y = estimate)
+) +
+  geom_point() +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
+  #geom_line() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  scale_x_continuous(breaks = seq(2013, 2023, by = 1)) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), breaks = seq(-0.1,0.05,0.01)) +
+  labs(
+    title = "Event Study: High Filing Rate Buildings",
+    subtitle = "Relative to Low Filing Rate Buildings: Controlling for Neighborhood Trends",
+    x = "Year",
+    y = "% Change in Rent"
+  ) +
+  theme_philly_evict()
+ggsave("figs/event_study_high_filing_preCOVID_m2.png", width = 12, height = 8, bg = "white")
+
+
+setFixest_dict(
+  c(
+    "high_filing_preCOVIDTRUE"= "High Evictors",
+    "high_filing_preCOVID"= "High Evictors",
+    "CT_ID_10"= "Census Tract",
+    "year::2013" = "2013",
+    "year::2014" = "2014",
+    "year::2015" = "2015",
+    "year::2016" = "2016",
+    "year::2017" = "2017",
+    "year::2018" = "2018",
+    "year::2019" = "2019",
+    "year::2020" = "2020",
+    "year::2021" = "2021",
+    "year::2022" = "2022",
+    "year::2023" = "2023"
+  )
+)
+
+etable(m1,m2, drop = c("corp_ownerTRUE$|num_units_bins[0-9+-]+$") )
 
 summary(m2)
 m3 <- fixest::feols(
