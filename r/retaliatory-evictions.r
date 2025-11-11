@@ -1181,6 +1181,7 @@ ev_m_par <- ret_tab[ev_m_par, on = "pid_yq"]
 
 # attach retaliatory aggs to ret_tab
 ev_m_par_agg = ev_m_par[,list(any_no_grace = as.integer(any(no_grace == 1)),
+                              months_backrent = mean(months_backrent, na.rm=TRUE),
                               sum_no_grace = sum(no_grace==1) ), by = .(PID, year_quarter)]
 # Housekeeping (free sources you no longer need)
 rm(ret_tab, ev_light)  # keep parcels_min if you want it elsewhere
@@ -1190,10 +1191,11 @@ permits <- merge(permits, ev_m_par_agg, by = c("PID","year_quarter"), all.x = TR
 permits[,any_no_grace := fifelse(is.na(any_no_grace), 0L, any_no_grace)]
 permits[,sum_no_grace := fifelse(is.na(sum_no_grace), 0L, sum_no_grace)]
 permits[,per_no_grace := fifelse(num_evictions > 0, sum_no_grace / num_evictions, 0)]
-grace_model <- feols(per_no_grace ~lead_severe_4 +
-       lead_severe_3 + lead_severe_2  +
+permits[,ever_filed_severe := max(filed_severe), by = PID]
+grace_model <- feols(per_no_grace ~num_evictions +  lead_severe_4 +
+       lead_severe_3 + lead_severe_2  +lead_severe_1+
         filed_severe + lag_severe_1 + lag_severe_2 + lag_severe_3 + lag_severe_4 | year_quarter + PID,
-      data = permits[year <= 2019], cluster = ~PID)
+      data = permits[year <= 2019 & num_evictions > 0], cluster = ~PID)
 
 coefplot(grace_model)
 
@@ -1233,6 +1235,26 @@ grace_plt
 
 
 ggsave("figs/grace_plt.png", grace_plt, width=8, height=10, dpi=300, bg = "white")
+
+no_grace_aggs = permits[num_evictions > 0, .(
+  mean(per_no_grace),
+  count = .N
+), by = .(PID, retaliatory)]
+
+no_grace_aggs[,parcel_mean := weighted.mean(V1, w = count,na.rm = T), by = PID]
+no_grace_aggs[,rel_freq := (V1 - parcel_mean) ]
+no_grace_aggs[,mean(rel_freq,na.rm =T), by = retaliatory]
+
+retal_model <- feols(per_no_grace ~ retaliatory + log(num_evictions)|  year_quarter + PID,
+      data = permits[year <= 2019 & num_evictions > 0], cluster = ~PID)
+
+summary(retal_model)
+setFixest_dict(c("retaliatoryPluasibly Retaliatory" = "Plausibly Retaliatory",
+                      "retaliatoryRetaliatory" = "Retaliatory", "per_no_grace" = "Percent No Grace"))
+baseline_mean = permits[year <= 2019 & num_evictions > 0, mean(per_no_grace, na.rm=TRUE)]
+etable(retal_model, extralines = glue::glue("Baseline MeanL {scales::percent(baseline_mean, accuracy = 0.1)}"), se.below = TRUE, digits = 3)
+
+
 # group all non-severe into one category for regressions
 dt_pre[,non_severe := as.numeric(filed_vacant_property_complaint |
                       filed_zoning_complaint |
