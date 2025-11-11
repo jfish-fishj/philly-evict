@@ -56,7 +56,7 @@
 
 There's been a recent focus on landlord market power with respect to \textbf{posted prices} \parencite{framoutar2024market, calderwang2024algorithmic, watson2024rent, gurun-et-al-2022}
       \begin{itemize}
-        \item these papers generally have a traditional quantity restriction mechanism, usually with landlords holding units vacant for longer as a way of flexing market power
+        \item these papers generally have a traditional quantity restriction mechanism for market power
         \item landlord scale and concentration matter for rationalizing these effects
       \end{itemize}
     \pause
@@ -64,24 +64,25 @@ However, many of the most important parts of a landlord-tenant relationship are 
       \begin{itemize}
         \item maintenance requests, lease renewals, evictions
         \item large frictions, particularly in the low income segment, mean that the structure of the bargaining process will be important for tenant welfare and market equilibrium
-        \begin{itemize}
-            \item these frictions will matter independently (and perhaps multiplicatively with) market power
-        \end{itemize}
+        % \begin{itemize}
+        %     \item these frictions will matter independently (and perhaps multiplicatively with) market power
+        % \end{itemize}
       \end{itemize}
-  % Suggestion: later you might standardize capitalization (“maintenance”, “ex ante”) and maybe break the first bullet into two sentences for readability.
+      \pause
+Role of evictions in disciplining tenants has implications for landlord tenant policy, even though most evictions are for nonpayment of rent
 \end{frame}
 
 %------------------------------------------------
 \begin{frame}{Research Question}
   \begin{center}
-    \Large I'm going to try and convince you that bargaining is an important feature of the low income rental market
+    \Large I'm going to try and convince you that landlord-tenant bargaining is an important feature of the low income rental market
   \end{center}
 \end{frame}
 
 %------------------------------------------------
 \begin{frame}{This Presentation}
   \begin{itemize}
-    \item overview of landlord tenant law in Philadelphia as a framework for how this "bargaining" process works
+    \item overview of landlord tenant law and low income rental markets
     \pause
     \item stylized facts on equilibrium bargaining
       \begin{itemize}
@@ -102,6 +103,7 @@ However, many of the most important parts of a landlord-tenant relationship are 
   \begin{itemize}
     \item Large literature on plea bargaining (bargaining under asymmetric information, more broadly) \parencite{Bebchuk_1984, kennan_1993,Friedman_2006,Silveira_2017,Wolfers_2006}
     \item low income landlords \parencite{desmond-evicted, Desmond_2019,Damen_2025, humphries-2024, Corbae_2024}
+    \item market power in rental markets \parencite{framoutar2024market, calderwang2024algorithmic, watson2024rent, gurun-et-al-2022}
   \end{itemize}
 \end{frame}
 
@@ -114,19 +116,20 @@ Tenant Facts
       \begin{itemize}
         \item $\sim$85-95\% of cases involve non-payment of rent; median case is for \(\sim\)2 months back rent
         \item $\sim$50\% of tenants will default during the course of their tenancy \parencite{humphries-2024}
-        \item \(\sim 8\%\) of tenants have attorneys vs \(\sim 80\%\) of landlords
+        % \item \(\sim 8\%\) of tenants have attorneys vs \(\sim 80\%\) of landlords
         \item outcome data is spotty, but in general, if an eviction case goes to court, tenants lose (\(\sim 95\%\) of cases)
+        \item landlord conduct is almost never a legal defense for missed rent payments
       \end{itemize}
     \pause
 Landlord facts
 \begin{itemize}
     \item Low income landlords generally have \textbf{higher} profit margins \parencite{Desmond_2019,Damen_2025}
      \begin{itemize}
-        \item this is largely explained by lower costs, which will motivate my bargaining model
+        \item this is largely explained by lower costs
       \end{itemize}
-    \item High evicting landlords do less maintenance. again, this will hold conditional on rent prices
+    \item High evicting landlords do less maintenance
 \end{itemize}
-\textbf{equilibrium has to rationalize higher profits and lower maintenance}
+\textbf{equilibrium has to rationalize higher profits, bargaining breakdown, and lower maintenance}
 \end{frame}
 
 %------------------------------------------------
@@ -171,9 +174,7 @@ Landlord facts
 %     \end{itemize}
 \end{frame}
 
-%------------------------------------------------
 
-------------------------------------------------
 \section{Stylized Facts}
 \begin{frame}{Eviction in Philadelphia}
     \begin{itemize}
@@ -267,32 +268,39 @@ Commercially available rental datasets (\textcolor{red}{altos}) don't cover the 
 
 %------------------------------------------------
 \begin{frame}{landlord retaliation: specification}
-
-      \begin{align*}
-    Y_{it} 
-      &= \alpha_i + \lambda_t 
-      + \sum_{h=0}^{5} \beta_h D_{i,t-h} 
-      + \varepsilon_{it}, \\[0.5em]
-    \text{TE}_h 
-      &= \frac{\partial \mathbb{E}\!\left[ Y_{i,t+h} \mid \{D_{i,s}\}_{s} \right]}
-              {\partial D_{it}}
-       = \beta_h,
-       \quad h = 0,1,\dots,5, \\[0.5em]
-    \beta_h &= 0,
-       \quad h \ge 6.
-    \end{align*}
-
-  where:
-  \begin{itemize}
-    \item \(Y_{it}\) is an indicator for whether a building filed an eviction in a year-quarter,
-    \item \(\mathbf{1}\{q = k\}_{it}\) is an indicator for \(k\) quarters relative to the complaint,
-    \item \(\alpha_i\) are building fixed effects, \(\lambda_t\) are time fixed effects.
+Follow \cite{Dube_2025}, and do a Local Projections Difference in Differences to handle non-absorbing treatment\\
+ \begin{itemize}
+    \item $Y_{it}$: indicator that building $i$ files an eviction in year-quarter $t$.
+    \item $D_{it}$: indicator that building $i$ has a complaint in year-quarter $t$.
+    \item $\Delta D_{it} \equiv D_{it} - D_{i,t-1}$: new complaint starts at $t$.
+    \item Horizon $h = 0,\dots,6$ (effects fade out after 6 quarters).
   \end{itemize}
 
-  \medskip
-  assumption is that effects fade out after 6 quarters
-
-  % Suggestion: you might later explicitly note the omitted baseline period and how you normalize \(\beta_k\).
+  \pause
+  \textbf{LP-DiD regression (non-absorbing treatment)}
+  \begin{align}
+    \Delta^h Y_{it}
+      &\equiv Y_{i,t+h} - Y_{i,t-1} \nonumber\\
+      &= \beta_h^{LP\text{-}DiD}\,\Delta D_{it}
+       + \delta_t^h
+       + e_{it}^h,
+       \qquad h = 0,\dots,6.
+       \label{eq:lpdid-one-slide}
+  \end{align}
+  \vspace{-0.5em}
+  \small
+  \begin{itemize}
+    \item \textbf{Sample restriction (clean controls):}
+      \begin{itemize}
+        \item Treated: $\Delta D_{it} = 1$ and $D_{i,s} = 0$ for $s \in \{t-K,\dots,t-1\}$.
+        \item Controls: $D_{i,s} = 0$ for all $s \in \{t-K,\dots,t+h\}$.
+      \end{itemize}
+    \item \textbf{Interpretation:} For each $h$, $\beta_h^{LP\text{-}DiD}$ is the average 
+          \emph{difference-in-differences} in eviction probability between buildings that get a new complaint at $t$
+          and buildings that remain complaint-free in a window around $t$, measured from $t-1$ to $t+h$.
+          % A ``$\sim 200\%$ increase'' corresponds to $\beta_h^{LP\text{-}DiD} \approx 2 \times$ the baseline
+          % change in eviction probability for clean controls.
+  \end{itemize}
 \end{frame}
 
 %------------------------------------------------
@@ -610,13 +618,13 @@ Proofs are in \cite{Bebchuk_1984} and are omitted unless people really want to s
     
 \end{frame}
 
-\begin{frame}{A brief attempt at a dynamic probelem}
+\begin{frame}{A brief attempt at a dynamic problem}
 In reality, a landlords's problem is dynamic.\\
 
 They have to:
 \begin{itemize}
     \item Maintain a reputation to attract / shape the kind of tenants who apply
-    \item Perform maintenence to encourage tenants to resign lease
+    \item Perform maintenance to encourage tenants to resign lease
 \end{itemize}
     
 \end{frame}
