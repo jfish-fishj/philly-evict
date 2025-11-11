@@ -1,0 +1,30 @@
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variables:  & total\_complaints  & total\_severe\\   
+   Model:                & (1)                & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   High Filing Rate      & 0.427$^{***}$      & 0.602$^{***}$\\   
+                         & (0.010)            & (0.010)\\   
+   Log(Number of Units)  & 0.291$^{***}$      & 0.344$^{***}$\\   
+                         & (0.014)            & (0.013)\\   
+   Log(Total Area)       & 0.225$^{***}$      & 0.216$^{***}$\\   
+                         & (0.011)            & (0.012)\\   
+   Log(Median Rent)      & -0.016             & -0.250$^{***}$\\   
+                         & (0.014)            & (0.015)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   Census Block Group FE & Yes                & Yes\\  
+   Building Type FE      & Yes                & Yes\\  
+   Quality Grade FE      & Yes                & Yes\\  
+   Year Built Decade FE  & Yes                & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations          & 95,530             & 95,448\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

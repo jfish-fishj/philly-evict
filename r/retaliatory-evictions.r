@@ -214,6 +214,8 @@ permits[, paste0("lag_severe_",       1:H) := lapply(1:H, function(h) data.table
 permits[, paste0("lead_severe_",      1:H) := lapply(1:H, function(h) data.table::shift(filed_severe,       n=h, type="lead")), by = PID]
 permits[, paste0("lag_non_severe_",   1:H) := lapply(1:H, function(h) data.table::shift(filed_non_severe,   n=h, type="lag")),  by = PID]
 permits[, paste0("lead_non_severe_",  1:H) := lapply(1:H, function(h) data.table::shift(filed_non_severe,  n=h, type="lead")), by = PID]
+permits[, paste0("lag_complaint_",       1:H) := lapply(1:H, function(h) data.table::shift(filed_complaint,       n=h, type="lag")),  by = PID]
+permits[, paste0("lead_complaint_",       1:H) := lapply(1:H, function(h) data.table::shift(filed_complaint,       n=h, type="lead")),  by = PID]
 
 # Build a compact RHS constructor for severe/non-severe
 lead_lag_terms_stem <- function(stem, H) {
@@ -506,6 +508,85 @@ ggsave(
   dpi      = 300,
   bg = "white"
 )
+permits_sample = permits[PID %in% sample(PID,1000)]
+# now do lpm w/ leads + lags
+retaliate_lpm <- feols(
+  filed_eviction ~ lead_complaint_1 + lead_complaint_2 + lead_complaint_3 + lead_complaint_4 +
+    filed_complaint +
+    lag_complaint_1 + lag_complaint_2 + lag_complaint_3 + lag_complaint_4
+  ,data    = permits_sample
+)
+
+retaliate_severe_lpm <- feols(
+  filed_eviction ~ lead_severe_1 + lead_severe_2 + lead_severe_3 + lead_severe_4 +
+    filed_severe +
+    lag_severe_1 + lag_severe_2 + lag_severe_3 + lag_severe_4
+  ,data    = permits_sample
+)
+
+retaliate_nonsevere_lpm <- feols(
+  filed_eviction ~ lead_non_severe_1 + lead_non_severe_2 + lead_non_severe_3 + lead_non_severe_4 +
+    filed_non_severe +
+    lag_non_severe_1 + lag_non_severe_2 + lag_non_severe_3 + lag_non_severe_4
+  ,data    = permits_sample
+)
+
+plot_dist_lag <- function(df_lag){
+  df_lag %>%
+    broom::tidy() %>%
+    filter(str_detect(term, "^(lag|lead|filed)")) %>%
+    mutate(timing = case_when(
+      str_detect(term, "lag_") ~ -as.integer(str_extract(term, "\\d+$")),
+      str_detect(term, "lead_") ~ as.integer(str_extract(term, "\\d+$")),
+      str_detect(term, "filed") ~ 0L
+    )) %>%
+    # add row at t= -1
+    bind_rows(tibble(
+      term = "lead_1",
+      estimate = 0,
+      std.error = 0,
+      timing = 1L
+    )) %>%
+    arrange(timing) %>%
+    ggplot(aes(x = timing, y = estimate)) +
+    geom_point() +
+    geom_errorbar(aes(ymin = estimate - 1.96 * std.error, ymax = estimate + 1.96 * std.error), width = 0.2) +
+    scale_x_reverse(breaks = -H:H) +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    labs(x = "Quarters relative to complaint", y = "Coefficient") +
+    theme_philly_evict()
+}
+retaliate_plot <- plot_dist_lag(retaliate_lpm) + labs(title = "Distributed Lags: Any Complaint")
+retaliate_severe_plot <- plot_dist_lag(retaliate_severe_lpm) + labs(title = "Distributed Lags: Severe Complaint")
+retaliate_nonsevere_plot <- plot_dist_lag(retaliate_nonsevere_lpm) + labs(title = "Distributed Lags: Non-Severe Complaint")
+
+ggsave(
+  filename = "/Users/joefish/Documents/GitHub/philly-evictions/figs/lpm_retaliatory_any_complaint.png",
+  plot     = retaliate_plot,
+  width    = 10,
+  height   = 7,
+  dpi      = 300,
+  bg = "white"
+)
+
+ggsave(
+  filename = "/Users/joefish/Documents/GitHub/philly-evictions/figs/lpm_retaliatory_severe_complaint.png",
+  plot     = retaliate_severe_plot,
+  width    = 10,
+  height   = 7,
+  dpi      = 300,
+  bg = "white"
+)
+
+ggsave(
+  filename = "/Users/joefish/Documents/GitHub/philly-evictions/figs/lpm_retaliatory_nonsevere_complaint.png",
+  plot     = retaliate_nonsevere_plot,
+  width    = 10,
+  height   = 7,
+  dpi      = 300,
+  bg = "white"
+)
+
 
 # mean number of permits by year built + market value + building type bin
 permits_agg = permits[,list(
@@ -571,17 +652,18 @@ fixest::fepois(
 #   "building_complaint","complaint","vacant_property_complaint","drainage_complaint",
 #   "property_maintenance_complaint","zoning_complaint","trash_weeds_complaint",
 #   "license_business_complaint","program_initiative_complaint")
-# mk_lags_leads <- function(DT, stem, H=5L) {
-#   lag_names  <- paste0("lag_",  stem, "_", 1:H)
-#   lead_names <- paste0("lead_", stem, "_", 1:H)
-#   filed_col  <- paste0("filed_", stem)
-#   if (!filed_col %in% names(DT)) DT[, (filed_col) := 0L]
-#   for (h in 1:H) {
-#     DT[, (lag_names[h])  := data.table::shift(get(filed_col),  n=h, type="lag"),  by=PID]
-#     DT[, (lead_names[h]) := data.table::shift(get(filed_col),  n=h, type="lead"), by=PID]
-#   }
-# }
-# for (s in complaint_stems) mk_lags_leads(base_keep, s, H=5L)
+complaint_stems <- c("filed_complaint", )
+mk_lags_leads <- function(DT, stem, H=5L) {
+  lag_names  <- paste0("lag_",  stem, "_", 1:H)
+  lead_names <- paste0("lead_", stem, "_", 1:H)
+  filed_col  <- paste0("filed_", stem)
+  if (!filed_col %in% names(DT)) DT[, (filed_col) := 0L]
+  for (h in 1:H) {
+    DT[, (lag_names[h])  := data.table::shift(get(filed_col),  n=h, type="lag"),  by=PID]
+    DT[, (lead_names[h]) := data.table::shift(get(filed_col),  n=h, type="lead"), by=PID]
+  }
+}
+for (s in complaint_stems) mk_lags_leads(base_keep, s, H=5L)
 
 
 # ============================================================
@@ -1319,6 +1401,7 @@ row_means$severe_rate
 ))
 
 etable(permits_qm, evicts_qm, complaints_qm, complaints_sever_qm,
+       fitstat = c("n","r2"),
        se.below = TRUE, digits = 3, extralines = row_means_vec, tex = T) %>%
   writeLines("tables/quality_grade_effects.tex")
 
@@ -1338,6 +1421,9 @@ permits_agg <- permits[year <= 2019, list(
   total_electrical_permit_count = sum(electrical_permit_count,na.rm = T),
   total_mechanical_permit_count = sum(mechanical_permit_count,na.rm = T),
   total_filings = sum(num_evictions),
+  total_complaints = sum(total_complaints),
+  total_severe = sum(filed_severe),
+  total_non_severe = sum(filed_non_severe),
   quality_grade_fixed = first(quality_grade_fixed),
   building_code_description_new_fixed = first(building_code_description_new_fixed),
   total_area = first(total_area),
@@ -1407,9 +1493,29 @@ row_means_permit_vec = list("per unit mean" =c(
   permit_means$electrical_permit_rate
 ))
 
-etable(list(maintence, maintence_prop_chars, maintence_prop_chars_rent,mechanical_prop_chars_rent, electrical_prop_chars_rent),
+etable(list(maintence, maintence_prop_chars, maintence_prop_chars_rent,
+            mechanical_prop_chars_rent, electrical_prop_chars_rent),
        extralines = row_means_permit_vec,
+       drop = "Constant",
        tex = T,
+       fitstat = c("n","r2"),
        se.below = TRUE, digits = 3) %>%
   writeLines("tables/maintence_effects.tex")
+
+
+# repeat but have filed_eviction; complaint, severe_complaint as outcome
+compltains_prop_chars <- fepois(total_complaints ~ high_filing  + log(num_units_imp_alt) + log(total_area)  +  log_med_rent  |GEOID + building_code_description_new_fixed + quality_grade_fixed +year_built_decade,
+                                    data = permits_agg, cluster = ~PID)
+
+severe_compltains_prop_chars <- fepois(total_severe ~ high_filing  + log(num_units_imp_alt) + log(total_area)  +  log_med_rent  |GEOID + building_code_description_new_fixed + quality_grade_fixed +year_built_decade,
+                                 data = permits_agg, cluster = ~PID)
+
+etable(list(compltains_prop_chars,
+            severe_compltains_prop_chars),
+       drop = "Constant",
+       tex = T,
+       fitstat = c("n","r2"),
+       se.below = TRUE, digits = 3) %>%
+  writeLines("tables/complaint_effects.tex")
+
 
