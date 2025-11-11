@@ -56,32 +56,32 @@
 
 There's been a recent focus on landlord market power with respect to \textbf{posted prices} \parencite{framoutar2024market, calderwang2024algorithmic, watson2024rent, gurun-et-al-2022}
       \begin{itemize}
-        \item these papers generally have a traditional quantity restriction mechanism, usually with landlords holding units vacant for longer as a way of flexing market power
-        \item landlord scale and concentration matter for rationalizing these effects
+
+        \item these papers generally have a traditional quantity restriction mechanism for market power
+
       \end{itemize}
     \pause
 However, many of the most important parts of a landlord-tenant relationship are \textbf{bargained} over
       \begin{itemize}
         \item maintenance requests, lease renewals, evictions
         \item large frictions, particularly in the low income segment, mean that the structure of the bargaining process will be important for tenant welfare and market equilibrium
-        \begin{itemize}
-            \item these frictions will matter independently (and perhaps multiplicatively with) market power
-        \end{itemize}
+
       \end{itemize}
-  % Suggestion: later you might standardize capitalization (“maintenance”, “ex ante”) and maybe break the first bullet into two sentences for readability.
+      \pause
+Role of evictions in disciplining tenants has implications for landlord tenant policy, even though most evictions are for nonpayment of rent
 \end{frame}
 
 %------------------------------------------------
 \begin{frame}{Research Question}
   \begin{center}
-    \Large I'm going to try and convince you that bargaining is an important feature of the low income rental market
+    \Large I'm going to try and convince you that landlord-tenant bargaining is an important feature of the low income rental market
   \end{center}
 \end{frame}
 
 %------------------------------------------------
 \begin{frame}{This Presentation}
   \begin{itemize}
-    \item overview of landlord tenant law in Philadelphia as a framework for how this "bargaining" process works
+    \item overview of landlord tenant law and low income rental markets
     \pause
     \item stylized facts on equilibrium bargaining
       \begin{itemize}
@@ -102,6 +102,7 @@ However, many of the most important parts of a landlord-tenant relationship are 
   \begin{itemize}
     \item Large literature on plea bargaining (bargaining under asymmetric information, more broadly) \parencite{Bebchuk_1984, kennan_1993,Friedman_2006,Silveira_2017,Wolfers_2006}
     \item low income landlords \parencite{desmond-evicted, Desmond_2019,Damen_2025, humphries-2024, Corbae_2024}
+    \item market power in rental markets \parencite{framoutar2024market, calderwang2024algorithmic, watson2024rent, gurun-et-al-2022}
   \end{itemize}
 \end{frame}
 
@@ -114,19 +115,20 @@ Tenant Facts
       \begin{itemize}
         \item $\sim$85-95\% of cases involve non-payment of rent; median case is for \(\sim\)2 months back rent
         \item $\sim$50\% of tenants will default during the course of their tenancy \parencite{humphries-2024}
-        \item \(\sim 8\%\) of tenants have attorneys vs \(\sim 80\%\) of landlords
+        % \item \(\sim 8\%\) of tenants have attorneys vs \(\sim 80\%\) of landlords
         \item outcome data is spotty, but in general, if an eviction case goes to court, tenants lose (\(\sim 95\%\) of cases)
+        \item landlord conduct is almost never a legal defense for missed rent payments
       \end{itemize}
     \pause
 Landlord facts
 \begin{itemize}
     \item Low income landlords generally have \textbf{higher} profit margins \parencite{Desmond_2019,Damen_2025}
      \begin{itemize}
-        \item this is largely explained by lower costs, which will motivate my bargaining model
+        \item this is largely explained by lower costs
       \end{itemize}
-    \item High evicting landlords do less maintenance. again, this will hold conditional on rent prices
+    \item High evicting landlords do less maintenance
 \end{itemize}
-\textbf{equilibrium has to rationalize higher profits and lower maintenance}
+\textbf{equilibrium has to rationalize higher profits, bargaining breakdown, and lower maintenance}
 \end{frame}
 
 %------------------------------------------------
@@ -171,9 +173,7 @@ Landlord facts
 %     \end{itemize}
 \end{frame}
 
-%------------------------------------------------
 
-------------------------------------------------
 \section{Stylized Facts}
 \begin{frame}{Eviction in Philadelphia}
     \begin{itemize}
@@ -190,11 +190,11 @@ Landlord facts
     
 \end{frame}
 
-\begin{frame}{Summary Regressions on Maintenance, Complaints, Evictions}
-Lower quality parcels do less maintenance, have more complaints, and file more evictions. But the differences are largely \textbf{high vs low} and now \textbf{medium vs low vs very low}
-\tiny
-\include{tables/}
-\end{frame}
+% \begin{frame}{Summary Regressions on Maintenance, Complaints, Evictions}
+% Lower quality parcels do less maintenance, have more complaints, and file more evictions. But the differences are largely \textbf{high vs low} and now \textbf{medium vs low vs very low}
+% \tiny
+% \include{tables/}
+% \end{frame}
 
 %------------------------------------------------
 %------------------------------------------------
@@ -222,12 +222,21 @@ Commercially available rental datasets (\textcolor{red}{altos}) don't cover the 
   % Suggestion: you might later standardize capitalization and spelling (“maintenance”).
 \end{frame}
 
+\begin{frame}{Landlord Maintenance}
+  High filing ($\geq$ 10\% filing rate) landlords receive more complaints, even conditional on rent and property characteristics
+\tiny
+  \include{tables/complaint_effects}
+  %\hyperlink{permits-other}{\beamergotobutton{Other permit types}}
+  % Suggestion: you might later standardize capitalization and spelling (“maintenance”).
+\end{frame}
+
 \section{Complaints and Retaliation}
 \begin{frame}{Preview of Complaints Results}
 \begin{enumerate}
     \item Overview of Complaint Process 
-    \item Regressions demonstrating high evicting landlords receive more complaints
+    % \item Regressions demonstrating high evicting landlords receive more complaints
     \item Regressions demonstrating high evicting landlords retaliate against tenants that make complaints
+    \item Regressions demonstrating that "retaliatory" evictions are more likely to be for less backrent
 \end{enumerate}
     
 \end{frame}
@@ -238,98 +247,109 @@ Commercially available rental datasets (\textcolor{red}{altos}) don't cover the 
     \pause
     \item if landlord does not fix complaint, tenant can file a 311 complaint with the Licenses and Inspections Department
       \begin{itemize}
-        \item while complaint has been lodged, tenant is allowed to withhold rent \textbf{*by putting it in an escrow account*}
-        \item \textbf{*if tenant is current with rent*}, they cannot be retaliated against (e.g., the landlord cannot file an eviction against them)
+        \item while complaint has been lodged, tenant is allowed to withhold rent \textbf{by putting it in an escrow account}
+        \item \textbf{if tenant is current with rent}, they cannot be retaliated against (e.g., the landlord cannot file an eviction against them)
         \item tenant is allowed to sue for damages due to landlord neglect
       \end{itemize}
     \pause
     \item landlord has 35 days to fix issue, following inspection
     \item After 35 days, L+I should reinspect. If the property is still in violation, L+I should refer the case to the City Solicitor for court
-    \item if violation is severe enough, tenant is evicted \textbf{*by the court*}
+    \item if violation is severe enough, tenant is evicted \textbf{by the court}
   \end{enumerate}
 \end{frame}
 
-\begin{frame}{Landlord Complaints}
-    High Filing Landlords get more complaints
-    \tiny
-    \include{tables/evict_persist}
-\end{frame}
+% \begin{frame}{Landlord Complaints}
+%     High Filing Landlords get more complaints
+%     \tiny
+%     \include{tables/evict_persist}
+% \end{frame}
 
 
 %------------------------------------------------
 \begin{frame}{landlord retaliation: specification}
-  \textbf{LpDiD math about here}
-
-  \medskip
-  \textcolor{evictRed}{Local projection / event–study setup:}
-  \begin{align}
-    Y_{it}
-      &= \sum_{k=-6}^{6} \beta_k \,\mathbf{1}\{q = k\}_{it}
-       + \alpha_i + \lambda_t + \varepsilon_{it},
-      \label{eq:lpdid}
-  \end{align}
-  where:
-  \begin{itemize}
-    \item \(Y_{it}\) is an indicator for whether a building filed an eviction in a year-quarter,
-    \item \(\mathbf{1}\{q = k\}_{it}\) is an indicator for \(k\) quarters relative to the complaint,
-    \item \(\alpha_i\) are building fixed effects, \(\lambda_t\) are time fixed effects.
+Follow \cite{Dube_2025}, and do a Local Projections Difference in Differences to handle non-absorbing treatment\\
+ \begin{itemize}
+    \item $Y_{it}$: indicator that building $i$ files an eviction in year-quarter $t$.
+    \item $D_{it}$: indicator that building $i$ has a complaint in year-quarter $t$.
+    \item $\Delta D_{it} \equiv D_{it} - D_{i,t-1}$: new complaint starts at $t$.
+    \item Horizon $h = 0,\dots,6$ (effects fade out after 6 quarters).
   \end{itemize}
 
-  \medskip
-  assumption is that effects fade out after 6 quarters
-
-  % Suggestion: you might later explicitly note the omitted baseline period and how you normalize \(\beta_k\).
+  \pause
+  \textbf{LP-DiD regression (non-absorbing treatment)}
+  \begin{align}
+    \Delta^h Y_{it}
+      &\equiv Y_{i,t+h} - Y_{i,t-1} \nonumber\\
+      &= \beta_h^{LP\text{-}DiD}\,\Delta D_{it}
+       + \delta_t^h
+       + e_{it}^h,
+       \qquad h = 0,\dots,6.
+       \label{eq:lpdid-one-slide}
+  \end{align}
+  \vspace{-0.5em}
+  \small
+  \begin{itemize}
+    \item \textbf{Sample restriction (clean controls):}
+      \begin{itemize}
+        \item Treated: $\Delta D_{it} = 1$ and $D_{i,s} = 0$ for $s \in \{t-K,\dots,t-1\}$.
+        \item Controls: $D_{i,s} = 0$ for all $s \in \{t-K,\dots,t+h\}$.
+      \end{itemize}
+    \item \textbf{Interpretation:} For each $h$, $\beta_h^{LP\text{-}DiD}$ is the average 
+          \emph{difference-in-differences} in eviction probability between buildings that get a new complaint at $t$
+          and buildings that remain complaint-free in a window around $t$, measured from $t-1$ to $t+h$.
+          % A ``$\sim 200\%$ increase'' corresponds to $\beta_h^{LP\text{-}DiD} \approx 2 \times$ the baseline
+          % change in eviction probability for clean controls.
+  \end{itemize}
 \end{frame}
 
 %------------------------------------------------
-\begin{frame}{landlord retaliation results}
+\begin{frame}[label=lpdid]{landlord retaliation results}
   Probability of landlord retaliation increases \(\sim 200\%\) following a complaint
-
-  \medskip
   \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\linewidth]{figs/lp_did_any_complaint.png}
+    \includegraphics[width=0.6\linewidth]{figs/lp_did_any_complaint.png}
     \caption{Event-study of Eviction Probability Around Complaints}
   \end{figure}
-
-  \medskip
   \hyperlink{dlags}{\beamergotobutton{Distributed lag results}}
 \end{frame}
 
 \begin{frame}{landlord retaliation results}
   Effects are driven by "severe" complaints (those made for heat, fires, drainage, or property maintenance) vs non-severe (zoning, licensing issues, and trash collection)
-
-  \medskip
   \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\linewidth]{figs/lp_did_severe_nonsevere.png}
+    \includegraphics[width=0.6\linewidth]{figs/lp_did_severe_nonsevere.png}
     \caption{Event-study of Eviction Probability Around Complaints}
   \end{figure}
-
-  \medskip
   \hyperlink{dlags}{\beamergotobutton{Distributed lag results}}
 \end{frame}
 
-%------------------------------------------------
-\begin{frame}[label=dlags]{Distributed Lag Results}
-  \begin{itemize}
-    \item Estimate distributed lag model of complaints on eviction filings:
-  \end{itemize}
-  \begin{align}
+\begin{frame}{Landlord Changes to Allowed Backrent}
+Landlords generally evict tenants who are persistently behind on rent, however, they generally wait until the tenant has accrued ~2 months back rent.\\
+\pause
+Intuitively, one way landlords can "retaliate" is by giving tenants who complain zero leniency on rent.\\
+\pause
+One way to look at this is at the percent of cases in a quarter that are filed for one or fewer month's back rent as a function of the whether someone had filed a L\&I complaint
+
+\begin{align}
     Y_{it}
-      &= \sum_{\ell=0}^{6} \theta_\ell \,\text{Complaint}_{i,t-\ell}
+      &= \sum_{\ell=0}^{4} \theta_\ell \,\text{SevereComplaint}_{i,t-\ell}
        + \alpha_i + \lambda_t + \varepsilon_{it},
   \end{align}
-  \begin{itemize}
-    \item Focus on dynamic pattern of retaliation over time.
-    \item Check robustness to alternative lag lengths and functional forms.
+\begin{itemize}
+    \item \(Y_{it}\) is the percent of cases filed for $\leq$ 1 month back rent,
+    \item \(\mathbf{1}\{q = k\}_{it}\) is an indicator for \(k\) quarters relative to the complaint,
+    \item \(\alpha_i\) are building fixed effects, \(\lambda_t\) are time fixed effects.
   \end{itemize}
 
-  \medskip
-  \begin{figure}[H]
+
+\end{frame}
+
+\begin{frame}{Landlord Changes to Allowed Backrent}
+    Following a complaint, landlords file a higher share of cases for one month or less back rent
+    \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\linewidth]{figs/retaliation_distributed_lags.pdf}
-    \caption{Distributed Lag Effects of Complaints on Eviction Filings}
+    \includegraphics[width=0.6\linewidth]{figs/grace_plt.png}
+    \caption{Event-study of Eviction Probability Around Complaints}
   \end{figure}
 \end{frame}
 
@@ -363,13 +383,15 @@ Commercially available rental datasets (\textcolor{red}{altos}) don't cover the 
 \section{Bargaining Model}
 \begin{frame}{Preview of Results}
     To recap, in equilibrium, high filing landlords:
-\begin{itemize}
+\begin{enumerate}
     \item Do less maintenance
     \item Receive more complaints
     \item Retaliate against tenants who complain
-\end{itemize}
+    \item Have higher profits
+\end{enumerate}
 
-Goal is to build a model that rationalizes these facts.\\
+\parencite{Bebchuk_1984}-style model is going to rationalize 1) and 3). \\
+\vspace{0.5cm}
 Eventually, I'd like to embed this model within the larger rental market (landlord reputation effects, search and matching, etc.)
 \end{frame}
 
@@ -587,20 +609,21 @@ Proofs are in \cite{Bebchuk_1984} and are omitted unless people really want to s
 \begin{enumerate}
     \item Landlords who rent to lower mean $p$ tenants \textbf{offer} more maintenance, but acceptance probability remains equal
     \begin{itemize}
-        \item Empirically falsified. Suggests need for reputation effects and a dynamic landlord problem
+        \item Lower amounts of maintenance is consistent with data
+        \item Equal acceptance probabilities is falsified. Suggests need for reputation effects and a dynamic landlord problem
     \end{itemize}
     \item Landlords who rent to tenants with a smaller \textbf{range} of default probabilities perform more acts of maintenance; effect on level of maintenance is unclear
 \end{enumerate}
     
 \end{frame}
 
-\begin{frame}{A brief attempt at a dynamic probelem}
+\begin{frame}{A brief attempt at a dynamic problem}
 In reality, a landlords's problem is dynamic.\\
 
 They have to:
 \begin{itemize}
     \item Maintain a reputation to attract / shape the kind of tenants who apply
-    \item Perform maintenence to encourage tenants to resign lease
+    \item Perform maintenance to encourage tenants to resign lease
 \end{itemize}
     
 \end{frame}
@@ -635,6 +658,24 @@ They have to:
 \end{frame}
 
 \section{Appendix}
+%------------------------------------------------
+\begin{frame}[label=dlags]{Distributed Lag Results}
+  \begin{itemize}
+    \item Estimate distributed lag model of complaints on eviction filings:
+  \end{itemize}
+  \begin{align}
+    Y_{it}
+      &= \sum_{\ell=0}^{4} \theta_\ell \,\text{Complaint}_{i,t-\ell}
+       + \alpha_i + \lambda_t + \varepsilon_{it},
+  \end{align}
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{figs/lpm_retaliatory_any_complaint.png}
+    \caption{Distributed Lag Effects of Complaints on Eviction Filings}
+  \end{figure}
+  \hyperlink{lpdid}{\beamergotobutton{LPDiD}}
+\end{frame}
+
 \begin{frame}{Comparative Statics: Shifting Default Risk Up or Down}
   Consider a shift in the distribution of tenant default risk \(p\):
   \begin{align*}
