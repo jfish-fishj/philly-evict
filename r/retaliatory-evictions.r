@@ -1192,10 +1192,10 @@ permits[,any_no_grace := fifelse(is.na(any_no_grace), 0L, any_no_grace)]
 permits[,sum_no_grace := fifelse(is.na(sum_no_grace), 0L, sum_no_grace)]
 permits[,per_no_grace := fifelse(num_evictions > 0, sum_no_grace / num_evictions, 0)]
 permits[,ever_filed_severe := max(filed_severe), by = PID]
-grace_model <- feols(per_no_grace ~num_evictions +  lead_severe_4 +
+grace_model <- feols(per_no_grace ~  lead_severe_4 +
        lead_severe_3 + lead_severe_2  +lead_severe_1+
         filed_severe + lag_severe_1 + lag_severe_2 + lag_severe_3 + lag_severe_4 | year_quarter + PID,
-      data = permits[year <= 2019 & num_evictions > 0], cluster = ~PID)
+      data = permits[year %in% 2010:2019 & num_evictions > 0], cluster = ~PID)
 
 coefplot(grace_model)
 
@@ -1228,13 +1228,14 @@ grace_plt <- ggplot(grace_coef_df, aes(x = timing, y = estimate)) +
   scale_x_reverse(breaks = -H:H) +
   geom_hline(yintercept = 0, linetype = "dashed") +
   labs(title = "Distributed Lag Model:\nEffect on Percent of Cases for <= 1 month back rent",
+       subtitle = "Conditional on filing > 1 eviction",
        x = "Quarters relative to severe complaint",
        y = "Coefficient") +
   theme_philly_evict()
 grace_plt
 
 
-ggsave("figs/grace_plt.png", grace_plt, width=8, height=10, dpi=300, bg = "white")
+ggsave("figs/grace_plt.png", grace_plt, width=12, height=10, dpi=300, bg = "white")
 
 no_grace_aggs = permits[num_evictions > 0, .(
   mean(per_no_grace),

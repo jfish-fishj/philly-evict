@@ -1,0 +1,22 @@
+Poisson estimation, Dep. Var.: filings
+Observations: 305
+Standard-errors: Heteroskedasticity-robust 
+                             Estimate Std. Error   z value   Pr(>|z|)    
+(Intercept)                  2.976621   6.413079  0.464148 6.4254e-01    
+log_renting_hh               0.880375   0.079545 11.067591  < 2.2e-16 ***
+pov_rate                    -6.397927   2.853729 -2.241954 2.4964e-02 *  
+unemp_rate                   7.283647   4.292572  1.696802 8.9734e-02 .  
+labor_force_rate             1.089615   2.019265  0.539610 5.8947e-01    
+renter_share                 1.062587   1.041722  1.020029 3.0771e-01    
+ind_filings_court_issued_lt  0.403319   0.114402  3.525447 4.2277e-04 ***
+white_share                  1.158082   0.826735  1.400789 1.6128e-01    
+black_share                  4.707990   0.660273  7.130374 1.0010e-12 ***
+hisp_share                   1.726048   0.695863  2.480441 1.3122e-02 *  
+median_age                  -0.006776   0.014412 -0.470136 6.3826e-01    
+log_med_gross_rent          -1.140327   0.507399 -2.247398 2.4615e-02 *  
+log_med_hh_income           -0.493650   0.626020 -0.788554 4.3037e-01    
+log_med_renter_hh_income     0.664571   0.655177  1.014338 3.1042e-01    
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+Log-Likelihood: -240,633.2   Adj. Pseudo R2: 0.858665
+           BIC:  481,346.5     Squared Cor.: 0.7886  

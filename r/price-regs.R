@@ -7,14 +7,14 @@ library(fixest)
 source('r/helper-functions.R')
 indir = "/Users/joefish/Desktop/data/philly-evict/processed"
 #analytic_df = fread(file.path(indir, "analytic_df.csv"))
-bldg_panel = fread(file.path(indir, "bldg_panel.csv"))
+bldg_panel = fread(file.path(indir, "analytic_sample.csv"))
 #rent_list = fread(file.path(indir, "license_long_min.csv"))
 #parcels = fread(file.path(indir, "parcel_building_2024.csv"))
 
 
 
 #analytic_df[,high_filing := ifelse(filing_rate > 0.1, 1, 0)]
-bldg_panel[,high_filing := ifelse(filing_rate_preCOVID > 0.1, 1, 0)]
+bldg_panel[,high_filing := ifelse(filing_rate > 0.1, 1, 0)]
 bldg_panel[,filing_rate_year := num_filings / num_units_imp]
 bldg_panel[,high_filing_year := ifelse(filing_rate_year > 0.1, 1, 0)]
 bldg_panel[,last_obs := year == max(year) | year == 2019, by = PID]
@@ -60,24 +60,44 @@ bldg_panel[,any_unsafe_hazordous_dangerous := any(unsafe_violation_count > 1 |
 ),
 by = PID]
 
-
-
-
-# bin filing rates into 0,5,10,20,50+
+bldg_panel[,cumsum_filings := replace_na(cumsum_filings, 0)]
+bldg_panel[,filings_pre_covid := max(cumsum_filings[year <= 2019], na.rm = T), by = PID]
+bldg_panel[,filing_rate_pre_covid := filings_pre_covid / num_units_imp]
+bldg_panel[,filing_rate_pre_covid := median(filing_rate_pre_covid,na.rm =T), by = PID]
+# bin filing rates into 0,0.05, 0.15, 0.25, 25+
 bldg_panel[,filing_rate_cuts := cut(
-  filing_rate,
-  breaks = c(0, 0.2, 0.5,  0.1, 0.2, Inf),
-  labels = c("0-2%", "2-5%","5-10%", "10-20%", "20%+"),
+  filing_rate_pre_covid,
+  breaks = c(-Inf, 0, 0.075, 0.2, Inf),
+  labels = c("0", "(0-7.5%]", "(7.5-20%]", "20%+"),
+  # breaks = c(-Inf, 0,  0.02, 0.05, 0.1, 0.2, 0.3, Inf),
+  # labels = c("0", "(0-2%]", "(2-5%]", "(5-10%]", "(10-20%]", "(20-30%]", "30%+"),
   include.lowest = TRUE
 ) ]
+
+# bin violations
+bldg_panel[,violations_per_unit_cuts := cut(
+  violations_per_unit,
+  breaks = c(-Inf, 0, 0.01, 0.02, 0.05, 0.1, 0.2, Inf),
+  labels = c("0", "(0-1%]", "(1-2%]", "(2-5%]", "(5-10%]", "(10-20%]", "20%+"),
+  include.lowest = TRUE
+)]
+
+# severe severe_violations_per_unit
+bldg_panel[,severe_violations_per_unit_cuts := cut(
+  severe_violations_per_unit,
+  breaks = c(-Inf, 0,  0.05,Inf),
+  labels = c("0", "(0-5%]", "5%+"),
+  include.lowest = TRUE
+)]
 
 # bin into quartiles
-bldg_panel[,filing_rate_cuts_q := cut(
-  filing_rate,
-  breaks = quantile(filing_rate, probs = seq(0, 1, by = 0.25), na.rm = T),
-  labels = c("Q1", "Q2","Q3", "Q4"),
-  include.lowest = TRUE
-) ]
+# quantiles <- quantile(bldg_panel$filing_rate, probs = seq(0, 1, by = 0.25), na.rm = TRUE)
+# bldg_panel[,filing_rate_cuts_q := cut(
+#   filing_rate,
+#   breaks = quantile(filing_rate, probs = seq(0, 1, by = 0.25), na.rm = T),
+#   labels = c("Q1", "Q2","Q3", "Q4"),
+#   include.lowest = TRUE
+# ) ]
 
 bldg_panel[,number_of_bedrooms_bin := case_when(
   number_of_bedrooms == 0 ~ "0",
@@ -90,48 +110,38 @@ bldg_panel[,number_of_bedrooms_bin := case_when(
 
 bldg_panel[,post_covid := (year >= 2021)]
 bldg_panel[,no_filings := (filing_rate == 0)]
+bldg_panel[,source := fifelse(rental_from_altos == 1, "altos",
+                             fifelse(rental_from_evict == 1, "evict",
+                                     NA_character_))]
 bldg_panel[,ever_altos := any(source == "altos"), by = PID]
+
 # break unit bins into 5 categories
 m1 <- fixest::feols(
-  log_med_rent ~i(filing_rate_cuts_q, ref = "Q2")#*post_covid +
-   #+filing_rate_sq #+  ever_voucher*source
-   # +i(num_units_bins, ref = "1")
-#+ sfh#*source
- #   + year_built #* ever_permit
- # + year_built^2
- #+ permits_per_unit#*i(source,ref = "evict")
-# +severe_violations_per_unit#*i(source,ref = "evict")
- # +i(beds_imp_first_fixed, ref = 0)
- # +i(baths_first_fixed, ref = 1)
-#  + any_unsafe_hazordous_dangerous#*i(source,ref = "evict")
-#  + permits_per_unit
-# +ever_investigations
- #+ total_investigations_per_unit
-# +  severe_violations_per_unit
- #+poly(number_stories,3)#*i(source,ref = "evict")
-#  +log(market_value)
-#+log(total_area)
- |GEOID ^ year+  #num_units_bins+ #month +
-  num_units_bins+
-  year_blt_decade+
-  num_stories_bin+
-  source +
-  number_of_bedrooms_bin +
-  source^sfh +
-  quality_grade_fixed +
-  # #exterior_condition
-   building_code_description_new_fixed
+  log_med_rent ~i(filing_rate_cuts, ref = "(7.5-20%]") #+log(taxable_value) +log( total_livable_area)
+  |year + census_tract #month +
++   num_units_bin
++   year_blt_decade
+#   #num_stories_bin+
++   source
+#   #number_of_bedrooms_bin +
+#   quality_grade +
+#   exterior_condition+
+#    building_code_description_new_fixed
 #+source
  , data = bldg_panel[#source == "evict" &
-                       year %in% 2011:2019 &
+                       year %in% 2014:2019 &
                        #year>=2014 &
-                   # num_units_imp > 1 &
+                  #       str_detect(building_code_description_new_fixed,"APART") &
+                   # num_units_imp >= 15 &
+                     # severe_violations_per_unit <= 1 &
                     #(last_obs == T) &
                          filing_rate <=1  ],
 weights = ~(num_units_imp),
   cluster = ~PID,
   combine.quick = T
 )
+
+summary(m1)
 
 m2 <- fixest::feols(
   log_med_rent ~i(filing_rate_cuts_q, ref = "Q2")#*post_covid +
@@ -1117,3 +1127,6 @@ ggplot(bldg_panel_bins, aes(color = source,x = round(filing_rate, 2), y = mean_m
     y = "Mean Rent"
   ) +
   theme_philly_evict()
+
+
+
