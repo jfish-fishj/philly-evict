@@ -1,0 +1,137 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{setspace}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{amsmath, amssymb}
+\usepackage{hyperref}
+
+% For \parencite (and also supports \cite)
+\usepackage[backend=biber,style=authoryear,natbib=true]{biblatex}
+% If you have a .bib file, put its name here (or delete these two lines if you don't want a bibliography yet).
+\addbibresource{latex/bibliography.bib}
+
+% Make the original text compile without changing it:
+\newcommand{\filing}{\text{filing}}
+
+\title{Meeting With Matt}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Project Overview}
+
+I'll start by saying I'm having a hard time pinning down the precise question I'm trying to ask. Broadly, I'm interested in why the low-quality end of the US rental market is uniquely dysfunctional; in equilibrium, tenant defaults, evictions, and landlord reneging are high. Moreover, trying to explain the spatial variation in eviction rates with some combination of demographics, labor and housing market conditions, and policy variables (e.g., tenant protections) is challenging. To give you a sense of this, in Chicago, there are around 2.7 filings per 100 renter households, compared to 7.7 in Philadelphia, and 15.7 in Durham, despite these counties being relatively similar demographically.\\
+
+Currently, I'm trying to pursue two semi-related paths. First, I'm trying to model spatial variation in eviction filing rates (a more formal version of the above county-comparison). Second, I'm trying to model how landlords use evictions beyond being used to repossess property from a delinquent tenant.\\
+
+The connecting thread between these two avenues is that while economists have tended to view eviction as an outcome stemming from poor tenants who experience frequent income shocks and mediated by landlord tenant law, this is unsatisfactory for explaining both variation in filing rates and landlord conduct. Taking this view in a model also tends to imply regulating evictions will generally be inefficient, since evictions arise from tenant default, and not by landlord strategy.\\
+
+I'll include some slides that have some background on eviction and eviction in Philadelphia, specifically, in section \ref{appendix}. If you have general thoughts on the project, I would love to hear them, particularly since I think have some time to settle down with a specific question(s) (and can pivot projects if needed). For specific questions, I have the following:
+
+\section{Explaining variation in filing rates}.
+
+As I mentioned before, the general view of economists is that eviction filing rates are a function of what I call "fundamentals" -- characteristics of tenants and the labor and housing markets -- and policy variables -- loosely, how costly it is to file an eviction.\\
+
+As a first pass, I'd like to establish the negative result, which is that if you think evictions are mostly a function of fundamentals and policy variables, there would need to be implausibly large variation in policy to explain the residual variation in filing rates.\\
+
+It's challenging to write down exactly what variables make it easier / harder to file evictions, so the approach I wanted to take as a first pass to model eviction filing rates as a linearly separable function of demographic variables:
+
+\[
+\text{FilingRate}_{c} = \beta_0 + \beta_1 \ln(\text{HHIncome}_{c})
++ \beta_2\,\text{Unemp}_{c} + \beta_3\,\text{Poverty}_{c} + X_c'\gamma + \varepsilon_c
+\]
+
+Under some strong assumptions, the residuals would be a ranking of which places have more / less tenant friendly legal climates. You could then do an accounting exercise of what the implied cost of filing would need to be to explain the differences in residualized filing rates across space (e.g., 25th vs 75th percentiles). \\
+
+Given (implausible) implied filing costs, I'd like to motivate that the baseline model should have other considerations, such as evictions being a strategy pursued by certain landlords.\\
+
+The immediate issues of this, which I'd appreciate any feedback on, are that:
+
+\begin{enumerate}
+  \item everything in here is endogenous and downstream of, in particular, policy variation in cost of filing
+  \item it's not clear, to me, how much audience skepticism I would get from everything being linearly separable and from the implicit assumption that I've added in the requisite demographic variables
+  \item whether this kind of variation accounting exercise is at all useful
+\end{enumerate}
+
+Broadly, do you have any thoughts on how best to make the point that existing models do a poor job of explaining the observed variation in filing rates?
+
+
+
+\section{Patterns of Landlord Behavior}
+
+The next section is about trying to establish that landlords use evictions in strategic ways, in particular to avoid performing maintenance on their properties. What I'm trying to establish is that after tenants make formal 311 complaints about their property, they are way more likely to have an eviction filed against them.\\
+
+Here, my basic questions are about whether this makes sense econometrically and about whether it could be presented better. On the econometrics, my issues are that treatment is non-absorbing and the outcome is a binary variable, which, if I remember Adam's part correctly, makes the unit fixed effects work poorly.\\
+
+The setup is that I have a quarterly panel of rental properties in Philadelphia. Each quarter, I observe the count of complaints and the count of eviction filings, which I transform into indicator variables. I want to look at how the probability of a filing an eviction changes around the window of a complaint.\\
+
+To do this, I follow \cite{dube-2025}, and do a Local Projections Difference in Differences to handle non-absorbing treatment
+\begin{itemize}
+  \item $Y_{it}$: indicator that building $i$ files an eviction in year-quarter $t$.
+  \item $D_{it}$: indicator that building $i$ has a complaint in year-quarter $t$.
+  \item $\Delta D_{it} \equiv D_{it} - D_{i,t-1}$: new complaint starts at $t$.
+  \item Horizon $h = 0,\dots,6$ (effects fade out after 6 quarters).
+\end{itemize}
+
+\textbf{LP-DiD regression }
+\begin{align}
+  \Delta^h Y_{it}
+    &\equiv Y_{i,t+h} - Y_{i,t-1} \nonumber\\
+    &= \beta_h^{LP\text{-}DiD}\,\Delta D_{it}
+     + \delta_t^h
+     + e_{it}^h,
+     \qquad h = 0,\dots,6.
+     \label{eq:lpdid-one-slide}
+\end{align}
+
+\begin{itemize}
+  \item \textbf{Sample restriction:}
+    \begin{itemize}
+      \item Treated: $\Delta D_{it} = 1$ and $D_{i,s} = 0$ for $s \in \{t-K,\dots,t-1\}$.
+      \item Controls: $D_{i,s} = 0$ for all $s \in \{t-K,\dots,t+h\}$.
+    \end{itemize}
+\end{itemize}
+
+Probability of landlord retaliation increases \(\sim 200\%\) following a complaint
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\linewidth]{figs/lp_did_any_complaint.png}
+  \caption{Local Projections of Eviction Probability Around Complaints}
+\end{figure}
+\clearpage
+\section{Appendix}\label{appendix}
+\subsection{Low Income Rental Markets}
+This section is intended to get you very quickly up to speed with eviction and eviction policy. The low income rental market is characterized by the following facts:\\
+
+\paragraph{Tenant Facts}
+\begin{itemize}
+  \item $\sim$50\% of tenants will default during the course of their tenancy \parencite{humphries-2024}
+  \item $\sim$85-95\% of cases involve non-payment of rent; median case is for \(\sim\)2 months back rent
+  % \item \(\sim 8\%\) of tenants have attorneys vs \(\sim 80\%\) of landlords
+  \item outcome data is spotty, but in general, if an eviction case goes to court, tenants lose (\(\sim 95\%\) of cases)
+  \item landlord conduct is almost never a legal defense for missed rent payments
+\end{itemize}
+
+\paragraph{Landlord facts}
+\begin{itemize}
+  \item Low income landlords generally have \textbf{higher} profit margins \parencite{Desmond_2019,Damen_2025}
+  \begin{itemize}
+    \item this is largely explained by lower costs, in particular, less maintenance
+  \end{itemize}
+  \item Eviction is relatively infrequent
+  \item A small share of properties have very high eviction rates; for these landlords, eviction is a very important part of their business model
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.75\linewidth]{figs/empirical_cdf_filing_rate_preCOVID.png}
+  \caption{Empirical CDF of Filing Rate (pre-COVID)}
+  \label{fig:ecdf-filings}
+\end{figure}
+
+
+\end{document}
