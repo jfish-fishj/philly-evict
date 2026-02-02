@@ -1,360 +1,350 @@
-library(data.table)
-library(tidyverse)
-library(sf)
-library(tidycensus)
+## ============================================================
+## merge-altos-rental-listings.R
+## ============================================================
+## Purpose: Create crosswalk between Altos listings and OPA parcels using
+##          tiered address matching plus spatial joining
+##
+## Inputs:
+##   - cfg$products$altos_clean (clean/altos_clean.csv)
+##   - cfg$products$parcels_clean (clean/parcels_clean.csv)
+##   - cfg$products$licenses_clean (clean/licenses_clean.csv)
+##   - cfg$inputs$philly_parcels_sf (shapefiles/philly_parcels_sf/DOR_Parcel.shp)
+##
+## Outputs:
+##   - cfg$products$altos_address_agg (xwalks/altos_address_agg.csv)
+##   - cfg$products$altos_parcel_xwalk (xwalks/altos_parcel_xwalk.csv)
+##   - cfg$products$altos_parcel_xwalk_listing (xwalks/altos_parcel_xwalk_listing.csv)
+##
+## Primary keys:
+##   - altos_address_agg: (year, n_sn_ss_c)
+##   - altos_parcel_xwalk: n_sn_ss_c (unique addresses)
+##   - altos_parcel_xwalk_listing: listing_id
+##
+## Match tiers:
+##   1. num_st_sfx_dir_zip: full address match
+##   2. num_st: house + street + zip
+##   3. num_st_sfx: house + street + suffix
+##   4. spatial: point-in-polygon join for remaining addresses
+## ============================================================
 
-philly_lic = fread("/Users/joefish/Desktop/data/philly-evict/business_licenses_clean.csv")
-philly_altos = fread("~/Desktop/data/altos/cities/philadelphia_metro_all_years_clean_addys.csv")
-philly_parcels = fread("/Users/joefish/Desktop/data/philly-evict/parcel_address_cleaned.csv")
-philly_parcels_sf = read_sf("/Users/joefish/Desktop/data/philly-evict/philly_parcels_sf/DOR_Parcel.shp")
+suppressPackageStartupMessages({
+  library(data.table)
+  library(tidyverse)
+  library(sf)
+})
 
-#rgdal::ogrInfo(system.file("/Users/joefish/Desktop/data/philly-evict/opa_properties_public.gdb", package="sf"))
+# ---- Load config and set up logging ----
+source("r/config.R")
 
-philly_altos[,listing_id := seq(.N)]
+cfg <- read_config()
+log_file <- p_out(cfg, "logs", "merge-altos-rental-listings.log")
 
-philly_rentals = philly_lic[licensetype == "Rental"]
-philly_rentals[,start_year := as.numeric(substr(initialissuedate,1,4))]
-philly_rentals[,end_year := as.numeric(substr(expirationdate,1,4))]
-philly_rentals[,num_years := end_year - start_year]
-philly_rentals[,id := .I]
-philly_rentals[,pm.zip := as.character(pm.zip)]
-philly_rentals[,pm.zip := coalesce(pm.zip, str_sub(zip,1,5)) %>%
-                 str_pad(5, "left", pad = "0")]
+logf("=== Starting merge-altos-rental-listings.R ===", log_file = log_file)
+logf("Config: ", cfg$meta$config_path, log_file = log_file)
 
-philly_rentals = philly_rentals %>%
-  mutate(
-    geocode_y = lng,
-    geocode_x = lat
-  )
+# ---- Load input data ----
+logf("Loading input data...", log_file = log_file)
 
+# Load Altos data
+altos_path <- p_product(cfg, "altos_clean")
+logf("  Loading Altos: ", altos_path, log_file = log_file)
+altos <- fread(altos_path)
+logf("  Loaded ", nrow(altos), " Altos listings", log_file = log_file)
 
-philly_rentals_long = uncount(philly_rentals[num_years > 0], num_years) %>%
-  group_by(id) %>%
-  mutate(
-    year = start_year + row_number() - 1
-  ) %>%
-  ungroup() %>%
-  as.data.table()
+# Load parcel data
+parcels_path <- p_product(cfg, "parcels_clean")
+logf("  Loading parcels: ", parcels_path, log_file = log_file)
+parcels <- fread(parcels_path)
+logf("  Loaded ", nrow(parcels), " parcels", log_file = log_file)
 
-philly_rentals_long[,opa_account_num := str_pad(opa_account_num,9, "left",pad = "0")]
-philly_rentals_long[,PID :=opa_account_num ]
-philly_rentals_long = philly_rentals_long[year %in% 2016:2024 & n_sn_ss_c != ""]
-philly_parcels[,PID:= str_pad(parcel_number,9, "left",pad = "0")]
-philly_parcels_sf_m = philly_parcels_sf %>% select(-matches("PID")) %>%
-  merge(philly_parcels[,.(pin, PID)], by.x = "PIN", by.y = "pin")
+# Load licenses to identify rental parcels
+licenses_path <- p_product(cfg, "licenses_clean")
+logf("  Loading licenses: ", licenses_path, log_file = log_file)
+licenses <- fread(licenses_path)
 
-# now add in the
-philly_altos[,pm.zip := as.character(pm.zip)]
+# Filter to rental licenses
+rentals <- licenses[licensetype == "Rental"]
+rentals[, PID := str_pad(opa_account_num, 9, "left", pad = "0")]
+rental_pids <- unique(rentals$PID)
+logf("  Identified ", length(rental_pids), " rental parcel IDs", log_file = log_file)
 
-philly_altos[,pm.zip := coalesce(as.character(zip),pm.zip) %>%
-               str_pad(5, "left", pad = "0")]
+# Load parcel shapefile for spatial joining
+parcels_sf_path <- p_input(cfg, "philly_parcels_sf")
+logf("  Loading parcel shapefile: ", parcels_sf_path, log_file = log_file)
+parcels_sf <- read_sf(parcels_sf_path)
 
-philly_altos[,GEOID.longitude := as.numeric(geo_long)]
-philly_altos[,GEOID.latitude := as.numeric(geo_lat)]
+# ---- Prepare data for matching ----
+logf("Preparing data for matching...", log_file = log_file)
 
+# Add listing ID if not present
+if (!"listing_id" %in% names(altos)) {
+  altos[, listing_id := seq(.N)]
+}
 
-philly_altos_address_agg = philly_altos[,list(
+# pm.zip is already imputed with "_" prefix from clean-altos-addresses.R
+# No additional coalesce needed
+
+# Add coordinates for spatial join
+altos[, GEOID.longitude := as.numeric(geo_long)]
+altos[, GEOID.latitude := as.numeric(geo_lat)]
+
+# Create address-level aggregation
+logf("Creating address-level aggregation...", log_file = log_file)
+altos_address_agg <- altos[, .(
   num_listings = .N
-), by = .(year, n_sn_ss_c, pm.house, pm.street,pm.zip,
+), by = .(year, n_sn_ss_c, pm.house, pm.street, pm.zip,
           pm.streetSuf, pm.sufDir, pm.preDir, GEOID.longitude, GEOID.latitude)]
 
-philly_rentals_long_addys = unique(philly_rentals_long, by = "n_sn_ss_c")
-philly_altos_addys = unique(philly_altos_address_agg, by = "n_sn_ss_c")
+logf("  Address aggregation: ", nrow(altos_address_agg), " rows", log_file = log_file)
 
-philly_parcels[,PID := str_pad(parcel_number,9, "left",pad = "0") ]
-philly_parcel_addys = unique(philly_parcels, by = "n_sn_ss_c")
-philly_parcel_addys[,pm.zip := as.character(pm.zip)]
-# philly_parcel_addys = unique(rbindlist(list(philly_rentals_long_addys %>%
-#                                                            select(pm.address:PID, geocode_x, geocode_y),
-#                                                 philly_parcel_addys %>%
-#                                                   select(pm.address:PID, geocode_x, geocode_y)
-#                                                 ), fill=T),
-#                                           by = "n_sn_ss_c")
+# Prepare parcel addresses
+parcels[, PID := str_pad(parcel_number, 9, "left", pad = "0")]
+# Add "_" prefix to parcel pm.zip to match altos format (ensures character type)
+parcels[, pm.zip := paste0("_", str_pad(as.character(pm.zip), 5, "left", "0"))]
+parcels[pm.zip == "_NA" | pm.zip == "_   NA", pm.zip := NA_character_]
+parcel_addys <- unique(parcels, by = "n_sn_ss_c")
 
-## num st sfx prefix zip ##
-# merge the philly_altos_address_agg data back
-num_st_sfx_dir_zip_merge = philly_altos_addys %>%
-  # merge with address data
-  # only let merge with parcels that have units aka residential ones
-  merge(philly_parcel_addys[,.( pm.house, pm.street,pm.zip,
-                                    pm.streetSuf, pm.sufDir, pm.preDir,PID
-                                   )],
-    ,by = c("pm.house", "pm.street", "pm.streetSuf", "pm.sufDir", "pm.preDir", "pm.zip")
-    ,all.x= T,
-    allow.cartesian = T
+# Get unique Altos addresses
+altos_addys <- unique(altos_address_agg, by = "n_sn_ss_c")
+logf("  Unique Altos addresses: ", nrow(altos_addys), log_file = log_file)
+logf("  Unique parcel addresses: ", nrow(parcel_addys), log_file = log_file)
+
+# ---- Tier 1: Full address match ----
+logf("Tier 1: Matching on num_st_sfx_dir_zip...", log_file = log_file)
+
+num_st_sfx_dir_zip_merge <- altos_addys %>%
+  merge(
+    parcel_addys[, .(pm.house, pm.street, pm.zip, pm.streetSuf, pm.sufDir, pm.preDir, PID)],
+    by = c("pm.house", "pm.street", "pm.streetSuf", "pm.sufDir", "pm.preDir", "pm.zip"),
+    all.x = TRUE,
+    allow.cartesian = TRUE
   ) %>%
-  mutate(
-    merge = "num_st_sfx_dir_zip"
-  )
+  mutate(merge = "num_st_sfx_dir_zip")
 
 setDT(num_st_sfx_dir_zip_merge)
-num_st_sfx_dir_zip_merge[,num_pids := uniqueN(PID,na.rm = T), by = n_sn_ss_c]
-## save the merges that are unique ##
-num_st_sfx_dir_zip_merge[,matched := num_pids==1]
-matched_num_st_sfx_dir_zip = num_st_sfx_dir_zip_merge[matched == T, n_sn_ss_c]
+num_st_sfx_dir_zip_merge[, num_pids := uniqueN(PID, na.rm = TRUE), by = n_sn_ss_c]
+num_st_sfx_dir_zip_merge[, matched := num_pids == 1]
+matched_num_st_sfx_dir_zip <- num_st_sfx_dir_zip_merge[matched == TRUE, n_sn_ss_c]
 
+logf("  Tier 1 unique matches: ", length(matched_num_st_sfx_dir_zip), log_file = log_file)
 
-#### summary stats on merge ####
-# should really make this a function -- it's ugly code.
-unique(num_st_sfx_dir_zip_merge, by = "n_sn_ss_c")[,.N, by = num_pids][,per := (N / sum(N)) %>% round(2)][order(N)]
-unique(num_st_sfx_dir_zip_merge, by = "n_sn_ss_c")[,.N, by = .(num_pids==0)][,per := round(N/ sum(N),2)][order(N)]
+# ---- Tier 2: House + street + zip ----
+logf("Tier 2: Matching on num_st (unmatched from Tier 1)...", log_file = log_file)
 
-
-(unique(num_st_sfx_dir_zip_merge, by = "n_sn_ss_c")[num_pids == 0,.N, by = pm.street][
-  ,per :=N / sum(N)][order(-N),cum_p := cumsum(per)][
-    order(-N)][1:20])
-
-(unique(num_st_sfx_dir_zip_merge, by = "n_sn_ss_c")[!pm.street %in% philly_parcel_addys$pm.street,.N, by = pm.street][
-  ,per :=N / sum(N)][order(-N),cum_p := cumsum(per)][
-    order(-N)][1:20])
-
-(unique(num_st_sfx_dir_zip_merge, by = "n_sn_ss_c")[num_pids == 0,.N, by = n_sn_ss_c][
-  ,per :=N / sum(N)][order(-N),cum_p := cumsum(per)][
-    order(-N)][1:20])
-
-
-# View(philly_altos_address_agg[!pm.street %in% philly_rentals_long$pm.street] )
-#
-# View(num_st_sfx_dir_zip_merge[num_pids==2] %>% sample_n(100))
-# View(num_st_sfx_dir_zip_merge[num_pids==0] %>% sample_n(100))
-
-
-#### random sampling ####
-# View(num_st_sfx_dir_zip_merge[num_pids > 3 ] %>% sample_n(1000))
-View(num_st_sfx_dir_zip_merge[num_pids == 0 &  pm.street %in% num_st_sfx_dir_zip_merge[,sample(pm.street,100) ]  ] %>%
-       #select(-pm.state, -addy_id) %>%
-       arrange(pm.street, pm.house)
-     )
-
-
-#### merge on num st zip ####
-
-num_st_merge = philly_altos_addys %>%
-  filter(
-      !n_sn_ss_c %in% matched_num_st_sfx_dir_zip
+num_st_merge <- altos_addys %>%
+  filter(!n_sn_ss_c %in% matched_num_st_sfx_dir_zip) %>%
+  merge(
+    parcel_addys[, .(pm.house, pm.street, pm.zip, pm.streetSuf, pm.sufDir, pm.preDir, PID)],
+    by = c("pm.house", "pm.street", "pm.zip"),
+    all.x = TRUE,
+    allow.cartesian = TRUE
   ) %>%
-  # merge with address data
-  # only let merge with parcels that have units aka residential ones
-  merge(philly_parcel_addys[,.( pm.house, pm.street,pm.zip,
-                                      pm.streetSuf, pm.sufDir, pm.preDir,PID
-  )],
-  ,by = c("pm.house", "pm.street",'pm.zip')
-  ,all.x= T,
-  allow.cartesian = T
-  ) %>%
-  mutate(
-    merge = "num_st"
-  )
+  mutate(merge = "num_st")
 
 setDT(num_st_merge)
-num_st_merge[,num_pids := uniqueN(PID,na.rm = T), by = n_sn_ss_c]
+num_st_merge[, num_pids := uniqueN(PID, na.rm = TRUE), by = n_sn_ss_c]
+num_st_merge[, matched := num_pids == 1]
+matched_num_st <- num_st_merge[matched == TRUE, n_sn_ss_c]
 
-## keep the merges that are unique ##
-num_st_merge[,matched := num_pids==1]
-matched_num_st = num_st_merge[matched == T, n_sn_ss_c]
+logf("  Tier 2 unique matches: ", length(matched_num_st), log_file = log_file)
 
-# check that we just kept unique merges...
-sum( matched_num_st %in%  matched_num_st_sfx_dir_zip) # should be zero
+# ---- Tier 3: House + street + suffix ----
+logf("Tier 3: Matching on num_st_sfx (unmatched from Tiers 1-2)...", log_file = log_file)
 
-#### summary stats on merge ####
-# should really make this a function -- it's ugly code.
-unique(num_st_merge, by = "n_sn_ss_c")[,.N, by = num_pids][,per := (N / sum(N)) %>% round(2)][order(num_pids)]
-unique(num_st_merge, by = "n_sn_ss_c")[,.N, by = .(num_pids==0)][,per := round(N/ sum(N),2)][order(num_pids)]
-(unique(num_st_merge, by = "n_sn_ss_c")[num_pids == 0,.N, by = pm.street][
-  ,per :=N / sum(N)][order(-N),cum_p := cumsum(per)][
-    order(-N)][1:20])
-
-unique(num_st_merge, by = "n_sn_ss_c")[,.N, by = .(num_pids==0)][,per := round(N/ sum(N),2)][order(num_pids)]
-(unique(num_st_merge, by = "n_sn_ss_c")[num_pids == 0,.N, by = n_sn_ss_c][
-  ,per :=N / sum(N)][order(-N),cum_p := cumsum(per)][
-    order(-N)][1:20])
-
-
-#### num st sfx merge ####
-num_st_sfx_merge = philly_altos_address_agg  %>%
+num_st_sfx_merge <- altos_addys %>%
   filter(
     !n_sn_ss_c %in% matched_num_st_sfx_dir_zip &
-      !n_sn_ss_c %in% matched_num_st
+    !n_sn_ss_c %in% matched_num_st
   ) %>%
-  # merge with address data
-  # only let merge with parcels that have units aka residential ones
-  merge(philly_parcel_addys[,.( pm.house, pm.street,
-                                      pm.streetSuf,PID
-  )],
-  ,by = c("pm.house", "pm.street","pm.streetSuf")
-  ,all.x= T,
-  allow.cartesian = T
+  merge(
+    parcel_addys[, .(pm.house, pm.street, pm.streetSuf, PID)],
+    by = c("pm.house", "pm.street", "pm.streetSuf"),
+    all.x = TRUE,
+    allow.cartesian = TRUE
   ) %>%
-  mutate(
-    merge = "num_st_sfx"
-  )
-
+  mutate(merge = "num_st_sfx")
 
 setDT(num_st_sfx_merge)
-num_st_sfx_merge[,num_pids := uniqueN(PID,na.rm = T), by = n_sn_ss_c]
+num_st_sfx_merge[, num_pids := uniqueN(PID, na.rm = TRUE), by = n_sn_ss_c]
+num_st_sfx_merge[, matched := num_pids == 1]
+matched_num_st_sfx <- num_st_sfx_merge[matched == TRUE, unique(n_sn_ss_c)]
 
-## keep the merges that are unique ##
-num_st_sfx_merge[,matched := num_pids==1]
-matched_num_st_sfx = num_st_sfx_merge[matched == T, unique(n_sn_ss_c)]
-sum(matched_num_st_sfx %in% matched_num_st)
+logf("  Tier 3 unique matches: ", length(matched_num_st_sfx), log_file = log_file)
 
-#### summary stats on merge ####
-# should really make this a function -- it's ugly code.
-unique(num_st_sfx_merge, by = "n_sn_ss_c")[,.N, by = num_pids][,per := (N / sum(N)) %>% round(2)][order(num_pids)]
-unique(num_st_sfx_merge, by = "n_sn_ss_c")[,.N, by = .(num_pids==0)][,per := round(N/ sum(N),2)][order(num_pids)]
-unique(num_st_sfx_merge, by = "n_sn_ss_c")[num_pids == 0,.N, by = pm.street][
-  ,per :=N / sum(N)][order(-N),cum_p := cumsum(per)][
-    order(-N)][1:20]
+# ---- Tier 4: Spatial join ----
+logf("Tier 4: Spatial matching for remaining addresses...", log_file = log_file)
 
-
-#### spatial join ####
-# not doing this for now
-# set this off otherwise the spatial merge doesnt work for whatever reason
+# Disable s2 for spatial operations
 sf_use_s2(FALSE)
-# filter to just be parcels that didn't uniquely merge
-# spatial_join = num_st_sfx_merge[num_pids != 1]
-#
-parcel_sf_subset = philly_parcels_sf_m %>%
-  filter(PID %in% philly_rentals_long_addys$PID |
-  PID %in% philly_parcel_addys[category_code_description %in% c("MIXED USE",
-                                                                       "MULTI FAMILY",
-                                                                       "SINGLE FAMILY",
-                                                                       "APARTMENTS  > 4 UNITS"),PID])
 
-# reproject parcel_sf_subset to be crs4269
-parcel_sf_subset = st_transform(parcel_sf_subset, crs = 4269)
+# Merge parcel shapefile with parcel data to get PID
+parcels_sf_m <- parcels_sf %>%
+  select(-matches("PID")) %>%
+  merge(parcels[, .(pin, PID)], by.x = "PIN", by.y = "pin")
 
-# filter to just be parcels that didn't uniquely merge
-spatial_join = num_st_sfx_merge[num_pids != 1]
+# Filter to residential parcels
+residential_codes <- c("MIXED USE", "MULTI FAMILY", "SINGLE FAMILY", "APARTMENTS  > 4 UNITS")
+parcel_sf_subset <- parcels_sf_m %>%
+  filter(
+    PID %in% rental_pids |
+    PID %in% parcel_addys[category_code_description %in% residential_codes, PID]
+  )
 
-# get lat long coords from parcel_sf_subset
-# make altos into shape file
-# note here that altos data is only geocoded to 5 digits or within a meter
-# of precission.
-# also pretty sure that it's geocoding to the street level in a lot of cases
-# so there might be some room to re geocode them and get parcel-level coordinates
-spatial_join_sf = spatial_join %>%
-  filter(!is.na(GEOID.longitude) & !is.na(GEOID.latitude)) %>%
-  st_as_sf(coords = c("GEOID.longitude", "GEOID.latitude")) %>%
-  st_set_crs(value = st_crs(parcel_sf_subset))
+# Reproject to match coordinate system
+parcel_sf_subset <- st_transform(parcel_sf_subset, crs = 4269)
 
-spatial_join_sf_join = st_join(
-  spatial_join_sf,
-  parcel_sf_subset %>%
-    rename(PID_2 = PID) %>%
-    select(PID_2, geometry)# %>% filter(PID %in% fa_expand[, PID])
-)
+logf("  Parcel subset for spatial join: ", nrow(parcel_sf_subset), " parcels", log_file = log_file)
 
-spatial_join_sf_join = spatial_join_sf_join %>%
-  as.data.table() %>%
-  select(-geometry) %>%
-  mutate(merge = "spatial")
+# Get addresses that didn't uniquely match
+spatial_join_dt <- num_st_sfx_merge[num_pids != 1]
 
-spatial_join_sf_join[,num_pids_st := uniqueN(PID_2), by = n_sn_ss_c]
+if (nrow(spatial_join_dt) > 0) {
+  # Convert to sf
+  spatial_join_sf <- spatial_join_dt %>%
+    filter(!is.na(GEOID.longitude) & !is.na(GEOID.latitude)) %>%
+    st_as_sf(coords = c("GEOID.longitude", "GEOID.latitude")) %>%
+    st_set_crs(value = st_crs(parcel_sf_subset))
 
-# keep unique matches
-spatial_join_sf_join[, matched := num_pids_st == 1 ]
-matched_spatial = spatial_join_sf_join[matched == T, n_sn_ss_c]
+  # Perform spatial join
+  spatial_join_result <- st_join(
+    spatial_join_sf,
+    parcel_sf_subset %>%
+      rename(PID_spatial = PID) %>%
+      select(PID_spatial, geometry)
+  )
 
-## summary stats ##
-spatial_join_sf_join[,num_pids_st := uniqueN(PID_2,na.rm = T), by = n_sn_ss_c]
-unique(spatial_join_sf_join, by = "n_sn_ss_c")[,.N, by = .(num_pids_st==0)][,per := round(N/ sum(N),2)][order(N)]
-unique(spatial_join_sf_join, by = "n_sn_ss_c")[,.N, by = num_pids_st][,per := (N / sum(N)) %>% round(2)][order(N)]
+  spatial_join_sf_join <- spatial_join_result %>%
+    as.data.table() %>%
+    select(-geometry) %>%
+    mutate(merge = "spatial")
 
-(spatial_join_sf_join[num_pids_st == 0,.N, by = pm.street][
-  ,per :=N / sum(N)][order(-N),cum_p := cumsum(per)][
-    order(-N)][1:20])
+  spatial_join_sf_join[, num_pids_st := uniqueN(PID_spatial, na.rm = TRUE), by = n_sn_ss_c]
+  spatial_join_sf_join[, matched := num_pids_st == 1]
+  matched_spatial <- spatial_join_sf_join[matched == TRUE, n_sn_ss_c]
 
-#View(sample_n(spatial_join_sf_join[num_pids_st == 0][,count :=.N, by = n_sn_ss_c] ,1000))
+  logf("  Tier 4 unique matches: ", length(matched_spatial), log_file = log_file)
+} else {
+  spatial_join_sf_join <- data.table()
+  matched_spatial <- character(0)
+  logf("  No addresses remaining for spatial join", log_file = log_file)
+}
 
+# ---- Build crosswalk ----
+logf("Building crosswalk...", log_file = log_file)
 
-matched_ids = c(
+matched_ids <- c(
   matched_num_st_sfx_dir_zip,
   matched_num_st,
   matched_num_st_sfx,
   matched_spatial
 )
 
+logf("  Total unique matches: ", length(matched_ids), log_file = log_file)
 
-#unique(spatial_join_sf_join, by = "n_sn_ss_c_1")[,.N, by = .(n_sn_ss_c_1 %in% (matched))][,per := N / sum(N)][]
-
-#                      )
-#matched_new = matched_ids
-unique(num_st_sfx_dir_zip_merge, by = "n_sn_ss_c")[,.N, by = .(n_sn_ss_c %in% (matched_ids))][,per := N / sum(N)][]
-#unique(num_st_sfx_dir_zip_merge, by = "n_sn_ss_c")[,.N, by = .(n_sn_ss_c %in% (matched_new))][,per := N / sum(N)][]
-
-# take some random samples of not merged
-
-#### make philly_altos_address_agg-parcels xwalk ####
-# first start with parcels that merged uniquely
-# spatial_join_sf_join = spatial_join_sf_join %>%
-#   mutate(n_sn_ss_c = n_sn_ss_c_1,
-#          merge = "spatial"
-#          )
-xwalk_unique = bind_rows(list(
-  num_st_sfx_dir_zip_merge[num_pids == 1, .(PID,n_sn_ss_c, merge)] %>% distinct(),
-  num_st_merge[num_pids == 1, .(PID,n_sn_ss_c, merge)] %>% distinct(),
-  num_st_sfx_merge[num_pids == 1, .(PID,n_sn_ss_c, merge)] %>% distinct(),
-  spatial_join_sf_join[num_pids_st == 1, .(PID_2,n_sn_ss_c, merge)]  %>%
-    distinct()%>%
-    rename(PID = PID_2)
-  #fuzzy_match[num_matches==1, .(PID_match, n_sn_ss_c, merge)] %>% rename(PID = PID_match) %>% distinct()
+# Unique matches
+xwalk_unique_parts <- list(
+  num_st_sfx_dir_zip_merge[num_pids == 1, .(PID, n_sn_ss_c, merge)] %>% distinct(),
+  num_st_merge[num_pids == 1, .(PID, n_sn_ss_c, merge)] %>% distinct(),
+  num_st_sfx_merge[num_pids == 1, .(PID, n_sn_ss_c, merge)] %>% distinct()
 )
-) %>%
-  mutate(unique = T) %>%
+
+if (nrow(spatial_join_sf_join) > 0) {
+  xwalk_unique_parts <- c(xwalk_unique_parts, list(
+    spatial_join_sf_join[num_pids_st == 1, .(PID_spatial, n_sn_ss_c, merge)] %>%
+      distinct() %>%
+      rename(PID = PID_spatial)
+  ))
+}
+
+xwalk_unique <- bind_rows(xwalk_unique_parts) %>%
+  mutate(unique = TRUE) %>%
   as.data.table()
 
-# next append parcels that did not merge uniquely
-xwalk_non_unique = bind_rows(list(
-  num_st_sfx_dir_zip_merge[num_pids > 1, .(PID,n_sn_ss_c, merge)] %>% distinct(),
-  num_st_merge[num_pids > 1, .(PID,n_sn_ss_c, merge)] %>% distinct(),
-  num_st_sfx_merge[num_pids > 1, .(PID,n_sn_ss_c, merge)] %>% distinct(),
-  spatial_join_sf_join[num_pids_st > 1 & !is.na(PID_2), .(PID_2,n_sn_ss_c, merge)]  %>%
-    distinct()%>%
-    rename(PID = PID_2)
-  #fuzzy_match[num_matches > 1, .(PID_match, n_sn_ss_c, merge)] %>% rename(PID = PID_match) %>% distinct()
-)) %>%
-  mutate(unique = F) %>%
+# Non-unique matches
+xwalk_non_unique_parts <- list(
+  num_st_sfx_dir_zip_merge[num_pids > 1, .(PID, n_sn_ss_c, merge)] %>% distinct(),
+  num_st_merge[num_pids > 1, .(PID, n_sn_ss_c, merge)] %>% distinct(),
+  num_st_sfx_merge[num_pids > 1, .(PID, n_sn_ss_c, merge)] %>% distinct()
+)
+
+if (nrow(spatial_join_sf_join) > 0) {
+  xwalk_non_unique_parts <- c(xwalk_non_unique_parts, list(
+    spatial_join_sf_join[num_pids_st > 1 & !is.na(PID_spatial), .(PID_spatial, n_sn_ss_c, merge)] %>%
+      distinct() %>%
+      rename(PID = PID_spatial)
+  ))
+}
+
+xwalk_non_unique <- bind_rows(xwalk_non_unique_parts) %>%
+  mutate(unique = FALSE) %>%
   filter(!n_sn_ss_c %in% xwalk_unique$n_sn_ss_c) %>%
   filter(!is.na(PID)) %>%
-  distinct(PID, n_sn_ss_c,.keep_all = T) %>%
+  distinct(PID, n_sn_ss_c, .keep_all = TRUE) %>%
   as.data.table()
 
+# Unmatched
+xwalk_unmatched <- tibble(
+  n_sn_ss_c = altos_address_agg[
+    !n_sn_ss_c %in% xwalk_non_unique$n_sn_ss_c &
+    !n_sn_ss_c %in% xwalk_unique$n_sn_ss_c,
+    n_sn_ss_c
+  ],
+  merge = "not merged",
+  PID = NA_character_
+) %>%
+  distinct()
 
-xwalk = bind_rows(list(
-  xwalk_unique,
-  xwalk_non_unique,
-  tibble(n_sn_ss_c = philly_altos_address_agg[(!n_sn_ss_c %in% xwalk_non_unique$n_sn_ss_c &
-                                     !n_sn_ss_c %in% xwalk_unique$n_sn_ss_c), n_sn_ss_c],
-         merge = "not merged", PID = NA) %>% distinct()
-) )
+# Combine
+xwalk <- bind_rows(list(xwalk_unique, xwalk_non_unique, xwalk_unmatched))
 
-xwalk[,num_merges := uniqueN(merge), by = .(n_sn_ss_c, unique)]
-unique(xwalk, by = "n_sn_ss_c")[,.N, by = .(merge)][,per := round(N / sum(N),2)][]
-xwalk[unique == T,.N, by = num_merges] # this should always be one
-xwalk[unique == F,.N, by = num_merges] # this should mostly be one
-xwalk[,num_parcels_matched := uniqueN(PID,na.rm = T), by = n_sn_ss_c]
-xwalk[,num_addys_matched := uniqueN(n_sn_ss_c,na.rm = T), by = PID]
-unique(xwalk[], by = "n_sn_ss_c")[,.N, by = num_parcels_matched][,per := round(N / sum(N),4)][order(num_parcels_matched)]
-unique(xwalk[], by = "n_sn_ss_c")[,.N, by = num_addys_matched][,per := round(N / sum(N),4)][order(num_addys_matched)]
-xwalk[,.N, by = num_addys_matched][,per := round(N / sum(N),4)][order(num_addys_matched)]
+xwalk[, num_merges := uniqueN(merge), by = .(n_sn_ss_c, unique)]
+xwalk[, num_parcels_matched := uniqueN(PID, na.rm = TRUE), by = n_sn_ss_c]
+xwalk[, num_addys_matched := uniqueN(n_sn_ss_c, na.rm = TRUE), by = PID]
 
+logf("  Crosswalk rows: ", nrow(xwalk), log_file = log_file)
 
-#xwalk = unique(xwalk, by = c("n_sn_ss_c", "PID"))
-philly_altos_address_agg[,sum(num_listings), by = .(!n_sn_ss_c %in% xwalk_non_unique$n_sn_ss_c &
-                           !n_sn_ss_c %in% xwalk_unique$n_sn_ss_c)][,per := V1 / sum(V1)][]
+# ---- Match summary ----
+logf("Match summary by tier:", log_file = log_file)
+merge_summary <- unique(xwalk, by = "n_sn_ss_c")[, .N, by = merge][, per := round(N / sum(N), 3)]
+for (i in 1:nrow(merge_summary)) {
+  logf("  ", merge_summary$merge[i], ": ", merge_summary$N[i], " (", merge_summary$per[i] * 100, "%)", log_file = log_file)
+}
 
-xwalk_listing = merge(
+# ---- Create listing-level crosswalk ----
+logf("Creating listing-level crosswalk...", log_file = log_file)
+
+xwalk_listing <- merge(
   xwalk,
-  philly_altos[,.(n_sn_ss_c, listing_id)] %>% distinct(),
-  by = "n_sn_ss_c", allow.cartesian = T
+  altos[, .(n_sn_ss_c, listing_id)] %>% distinct(),
+  by = "n_sn_ss_c",
+  allow.cartesian = TRUE
 )
 
-xwalk_listing[,.N, by = num_addys_matched][,per := round(N / sum(N),4)][order(num_addys_matched)]
-xwalk_listing[,.N, by = num_parcels_matched][,per := round(N / sum(N),4)][order(num_parcels_matched)]
+logf("  Listing crosswalk rows: ", nrow(xwalk_listing), log_file = log_file)
 
-#### export ####
-fwrite(xwalk, "/Users/joefish/Desktop/data/philly-evict/philly_altos_address_agg_xwalk.csv")
-fwrite(philly_altos_address_agg, "/Users/joefish/Desktop/data/philly-evict/philly_altos_address_agg.csv")
-fwrite(xwalk_listing, "/Users/joefish/Desktop/data/philly-evict/philly_altos_address_agg_xwalk_listing.csv")
+# ---- Assertions ----
+logf("Running assertions...", log_file = log_file)
 
+# Check address uniqueness in xwalk
+n_unique_addys <- uniqueN(xwalk$n_sn_ss_c)
+logf("  Unique addresses in xwalk: ", n_unique_addys, log_file = log_file)
+
+# ---- Write outputs ----
+logf("Writing outputs...", log_file = log_file)
+
+# Write address aggregation
+out_agg <- p_product(cfg, "altos_address_agg")
+fwrite(altos_address_agg, out_agg)
+logf("  Wrote altos_address_agg: ", nrow(altos_address_agg), " rows to ", out_agg, log_file = log_file)
+
+# Write crosswalk
+out_xwalk <- p_product(cfg, "altos_parcel_xwalk")
+fwrite(xwalk, out_xwalk)
+logf("  Wrote altos_parcel_xwalk: ", nrow(xwalk), " rows to ", out_xwalk, log_file = log_file)
+
+# Write listing-level crosswalk
+out_xwalk_listing <- p_product(cfg, "altos_parcel_xwalk_listing")
+fwrite(xwalk_listing, out_xwalk_listing)
+logf("  Wrote altos_parcel_xwalk_listing: ", nrow(xwalk_listing), " rows to ", out_xwalk_listing, log_file = log_file)
+
+logf("=== Finished merge-altos-rental-listings.R ===", log_file = log_file)

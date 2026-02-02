@@ -1,14 +1,47 @@
-library(data.table)
-library(tidyverse)
-library(sf)
-library(tidycensus)
+## ============================================================
+## merge-infousa-parcels.R
+## ============================================================
+## Purpose: Merge InfoUSA household data with parcel records
+##          Creates address crosswalk for linking InfoUSA to parcels
+##
+## Inputs:
+##   - cfg$inputs$infousa_cleaned (infousa/infousa_address_cleaned.csv)
+##   - cfg$products$parcels_clean (clean/parcels_clean.csv)
+##   - cfg$inputs$philly_parcels_sf (shapefiles/philly_parcels_sf/DOR_Parcel.shp)
+##
+## Outputs:
+##   - cfg$products$infousa_address_xwalk (xwalks/philly_infousa_dt_address_agg_xwalk.csv)
+##   - cfg$products$infousa_address_agg (xwalks/philly_infousa_dt_address_agg.csv)
+##
+## Primary key: n_sn_ss_c (address key) for xwalk
+## ============================================================
 
-philly_infousa_dt = fread("~/Desktop/data/philly-evict/infousa_address_cleaned.csv")
-philly_infousa_dt[,obs_id := .I]
-philly_parcels = fread("/Users/joefish/Desktop/data/philly-evict/parcel_address_cleaned.csv")
-philly_parcels_sf = read_sf("/Users/joefish/Desktop/data/philly-evict/philly_parcels_sf/DOR_Parcel.shp")
+suppressPackageStartupMessages({
+  library(data.table)
+  library(tidyverse)
+  library(sf)
+  library(tidycensus)
+})
 
-#rgdal::ogrInfo(system.file("/Users/joefish/Desktop/data/philly-evict/opa_properties_public.gdb", package="sf"))
+# ---- Load config and set up logging ----
+source("r/config.R")
+
+cfg <- read_config()
+log_file <- p_out(cfg, "logs", "merge-infousa-parcels.log")
+
+logf("=== Starting merge-infousa-parcels.R ===", log_file = log_file)
+logf("Config: ", cfg$meta$config_path, log_file = log_file)
+
+# ---- Load input data ----
+logf("Loading input data...", log_file = log_file)
+
+philly_infousa_dt <- fread(p_input(cfg, "infousa_cleaned"))
+philly_infousa_dt[, obs_id := .I]
+philly_parcels <- fread(p_product(cfg, "parcels_clean"))
+philly_parcels_sf <- read_sf(p_input(cfg, "philly_parcels_sf"))
+
+logf("  InfoUSA: ", nrow(philly_infousa_dt), " rows", log_file = log_file)
+logf("  Parcels: ", nrow(philly_parcels), " rows", log_file = log_file)
 
 
 
@@ -16,9 +49,12 @@ philly_parcels[,PID:= str_pad(parcel_number,9, "left",pad = "0")]
 philly_parcels_sf_m = philly_parcels_sf %>% select(-matches("PID")) %>%
   merge(philly_parcels[,.(pin, PID)], by.x = "PIN", by.y = "pin")
 
-# now add in the
-philly_infousa_dt[,pm.zip := as.numeric(pm.zip)]
-philly_parcels[,pm.zip := as.numeric(pm.zip)]
+# Normalize pm.zip for merging: strip "_" prefix, pad to 5 digits
+# This ensures consistency between files that may or may not have the "_" prefix
+philly_infousa_dt[, pm.zip := str_remove(as.character(pm.zip), "^_") %>%
+                    str_pad(5, "left", "0")]
+philly_parcels[, pm.zip := str_remove(as.character(pm.zip), "^_") %>%
+                 str_pad(5, "left", "0")]
 
 philly_infousa_dt[,GEOID.longitude := as.numeric(ge_longitude_2010)]
 philly_infousa_dt[,GEOID.latitude := as.numeric(ge_latitude_2010)]
@@ -33,7 +69,8 @@ philly_infousa_dt_addys = unique(philly_infousa_dt_address_agg, by = "n_sn_ss_c"
 
 philly_parcels[,PID := str_pad(parcel_number,9, "left",pad = "0") ]
 philly_parcel_addys = unique(philly_parcels, by = "n_sn_ss_c")
-philly_parcel_addys[,pm.zip := as.numeric(pm.zip)]
+philly_parcel_addys[, pm.zip := str_remove(as.character(pm.zip), "^_") %>%
+                      str_pad(5, "left", "0")]
 philly_parcel_addys[,pm.house := as.character(pm.house)]
 # philly_parcel_addys = unique(rbindlist(list(philly_rentals_long_addys %>%
 #                                                            select(pm.address:PID, geocode_x, geocode_y),
@@ -318,8 +355,45 @@ xwalk_listing = merge(
 xwalk_listing[,.N, by = num_addys_matched][,per := round(N / sum(N),4)][order(num_addys_matched)]
 xwalk_listing[,.N, by = num_parcels_matched][,per := round(N / sum(N),4)][order(num_parcels_matched)]
 
+#### Merge Statistics Summary ####
+logf("Merge statistics...", log_file = log_file)
+
+# Summary by merge type
+merge_summary <- xwalk[, .N, by = merge][, per := round(N / sum(N), 2)][order(-N)]
+logf("  By merge type:", log_file = log_file)
+for (i in seq_len(nrow(merge_summary))) {
+  logf("    ", merge_summary$merge[i], ": ", merge_summary$N[i], " (", merge_summary$per[i] * 100, "%)", log_file = log_file)
+}
+
+# Match rate
+n_matched <- xwalk[!is.na(PID) & PID != "", uniqueN(n_sn_ss_c)]
+n_total <- xwalk[, uniqueN(n_sn_ss_c)]
+match_rate <- round(n_matched / n_total * 100, 1)
+logf("  Overall match rate: ", n_matched, " / ", n_total, " addresses (", match_rate, "%)", log_file = log_file)
+
+# Parcels per address
+parcels_dist <- unique(xwalk, by = "n_sn_ss_c")[, .N, by = num_parcels_matched][order(num_parcels_matched)]
+logf("  Parcels per address distribution:", log_file = log_file)
+for (i in seq_len(min(5, nrow(parcels_dist)))) {
+  logf("    ", parcels_dist$num_parcels_matched[i], " parcels: ", parcels_dist$N[i], " addresses", log_file = log_file)
+}
+
 #### export ####
-fwrite(xwalk, "/Users/joefish/Desktop/data/philly-evict/philly_infousa_dt_address_agg_xwalk.csv")
-fwrite(philly_infousa_dt_address_agg, "/Users/joefish/Desktop/data/philly-evict/philly_infousa_dt_address_agg.csv")
-fwrite(xwalk_listing, "/Users/joefish/Desktop/data/philly-evict/philly_infousa_dt_address_agg_xwalk_listing.csv")
+logf("Writing outputs...", log_file = log_file)
+
+out_xwalk <- p_product(cfg, "infousa_address_xwalk")
+out_agg <- p_product(cfg, "infousa_address_agg")
+
+fwrite(xwalk, out_xwalk)
+logf("  Wrote infousa_address_xwalk: ", nrow(xwalk), " rows to ", out_xwalk, log_file = log_file)
+
+fwrite(philly_infousa_dt_address_agg, out_agg)
+logf("  Wrote infousa_address_agg: ", nrow(philly_infousa_dt_address_agg), " rows to ", out_agg, log_file = log_file)
+
+# Optional: xwalk_listing (per-observation crosswalk)
+out_xwalk_listing <- p_proc(cfg, "xwalks/philly_infousa_dt_address_agg_xwalk_listing.csv")
+fwrite(xwalk_listing, out_xwalk_listing)
+logf("  Wrote xwalk_listing: ", nrow(xwalk_listing), " rows to ", out_xwalk_listing, log_file = log_file)
+
+logf("=== Finished merge-infousa-parcels.R ===", log_file = log_file)
 
