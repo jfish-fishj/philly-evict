@@ -202,6 +202,21 @@ altos_adds_sample$pm.streetSuf <- altos_adds_sample$pm.streetSuf %>%
   str_replace_all("alley", " aly") %>%
   str_replace_all("way", " way")
 
+# ============================================================
+# Step 5b: Oracle-validated canonicalization (altos)
+# ============================================================
+
+setDT(altos_adds_sample)
+
+# Use reusable canonicalization function from address_utils.R
+altos_adds_sample <- canonicalize_parsed_addresses(
+  altos_adds_sample,
+  cfg,
+  source = "altos",
+  export_qa = TRUE,
+  log_file = log_file
+)
+
 # Create composite address column
 altos_adds_sample_c <- altos_adds_sample %>%
   mutate(across(c(pm.sufDir, pm.street, pm.streetSuf, pm.preDir), ~ str_squish(str_to_lower(replace_na(.x, ""))))) %>%

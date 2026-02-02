@@ -442,3 +442,372 @@ validate_address_table <- function(dt, required_cols = c("n_sn_ss_c", "pm.house"
 
   TRUE
 }
+
+
+# =========================
+# Suffix alias loader / mapper
+# =========================
+
+load_suffix_aliases <- function(cfg) {
+  alias_path <- p_input(cfg, "street_suffix_aliases")
+  dt <- data.table::fread(alias_path)
+  stopifnot(all(c("from", "to") %in% names(dt)))
+  dt[, `:=`(from = tolower(from), to = tolower(to))]
+  data.table::setkey(dt, from)
+  dt
+}
+
+map_suffix_vec <- function(x, suffix_alias_dt = NULL) {
+  # normalize punctuation + case
+  x <- tolower(x)
+  x <- gsub("\\.+$", "", x)           # trailing periods
+  x <- gsub("[^a-z0-9]+", "", x)      # keep compact token (blv., blv -> blv)
+  x[is.na(x)] <- ""
+
+  if (is.null(suffix_alias_dt) || nrow(suffix_alias_dt) == 0) return(x)
+
+  hit <- suffix_alias_dt[J(x), on = .(from)]
+  out <- x
+  ok <- !is.na(hit$to)
+  out[ok] <- hit$to[ok]
+  out
+}
+
+# =========================
+# Street standardization
+# =========================
+standardize_street_name_vec <- function(x) {
+  x <- tolower(x)
+  x[is.na(x)] <- ""
+  x <- stringr::str_squish(x)
+
+  # common punctuation normalization
+  x <- gsub("[’']", "", x)
+
+  # MLK (many variants)
+  x <- gsub("\\b(m\\.?\\s*l\\.?\\s*k\\.?|mlk)\\b", "martin luther king", x)
+
+  # JFK (many variants)
+  x <- gsub("\\b(j\\.?\\s*f\\.?\\s*k\\.?|jfk)\\b", "john f kennedy", x)
+
+  # Mount -> Mt (your preference)
+  x <- gsub("\\bmount\\b", "mt", x)
+
+  # Saint -> St (street name token; NOT the suffix field)
+  x <- gsub("\\bsaint\\b", "st", x)
+
+  # Boulevard misspelling
+  x <- gsub("\\bboulvard\\b", "boulevard", x)
+
+  # Clean stray punctuation inside name (keep spaces)
+  x <- gsub("[^a-z0-9 ]+", " ", x)
+  x <- stringr::str_squish(x)
+
+  x
+}
+
+# =========================
+# Parcel oracle prep (counts by street/suffix)
+# =========================
+prep_parcel_oracle <- function(cfg) {
+  # parcel_address_counts is a derived product, not a raw input
+  pth <- p_product(cfg, "parcel_address_counts")
+  dt <- data.table::fread(pth)
+
+  stopifnot(all(c("pm.street","pm.streetSuf","N") %in% names(dt)))
+
+  dt[, pm.street := standardize_street_name_vec(stringr::str_squish(tolower(pm.street)))]
+  dt[, pm.streetSuf := stringr::str_squish(tolower(pm.streetSuf))]
+  dt <- dt[pm.street != "" & pm.streetSuf != ""]
+  dt[, key := paste(pm.street, pm.streetSuf, sep="|")]
+
+  # collapse in case of duplicates
+  dt <- dt[, .(N = sum(N)), by = key]
+  data.table::setkey(dt, key)
+
+  # parcel street set (for stuck-direction checks)
+  streets <- unique(sub("\\|.*$", "", dt$key))
+  streets <- streets[streets != ""]
+  street_set <- data.table::data.table(pm.street = streets)
+  data.table::setkey(street_set, pm.street)
+
+  list(
+    counts = dt,
+    street_set = street_set,
+    suffixes = unique(sub("^.*\\|", "", dt$key))
+  )
+}
+
+oracle_lookup_N <- function(keys, parcel_counts_dt) {
+  # vectorized lookup
+  parcel_counts_dt$N[ match(keys, parcel_counts_dt$key) ]
+}
+
+
+# ============================================================
+# ORACLE-VALIDATED ADDRESS CANONICALIZATION (Step 5b)
+# ============================================================
+
+#' Canonicalize parsed addresses using parcel oracle validation
+#'
+#' Applies a series of oracle-validated fix rules to improve address matching.
+#' Each fix only commits if the resulting (street, suffix) exists in parcel data.
+#'
+#' @param dt data.table with parsed pm.* columns (pm.street, pm.streetSuf, pm.preDir, pm.sufDir)
+#' @param cfg Config object for loading oracle and alias paths
+#' @param source Source identifier for QA outputs (e.g., "evictions", "altos", "licenses", "infousa")
+#' @param export_qa If TRUE, write QA summaries to output/qa/<source>_address_canonicalize/
+#' @param log_file Optional log file path for logging
+#' @return data.table with canonicalized pm.* columns and fix tracking fields
+#'
+#' @details
+#' Fix rules applied (in order):
+#' 1. Boulevard precedence - street ending in blv/blvd/boulevard -> (street_base, blvd)
+#' 2. Stuck directionals - echurch -> (e, church) if pm.preDir empty
+#' 3. est/rst repair - spruc+est -> spruce+st
+#' 4. Split trailing suffix - "roosevelt blv" -> (roosevelt, blvd) if suffix-like token at end
+#'
+#' All fixes are oracle-validated: only committed if (new_street, new_suffix) exists in parcels.
+#'
+#' @examples
+#' dt <- canonicalize_parsed_addresses(dt, cfg, source = "altos", export_qa = TRUE)
+canonicalize_parsed_addresses <- function(dt, cfg, source = "unknown",
+                                          export_qa = TRUE, log_file = NULL) {
+  stopifnot(is.data.table(dt))
+
+  # Helper for logging
+  log_msg <- function(...) {
+    if (!is.null(log_file)) {
+      logf(..., log_file = log_file)
+    }
+  }
+
+  log_msg("Step 5b: Oracle canonicalization (", source, ")")
+
+  # Load oracle + suffix aliases from config
+  oracle <- prep_parcel_oracle(cfg)
+  parcel_counts <- oracle$counts
+  parcel_streets <- oracle$street_set
+  parcel_suffixes <- oracle$suffixes
+
+  # Try to load suffix aliases, fall back to empty if not configured
+  suffix_alias <- tryCatch({
+    load_suffix_aliases(cfg)
+  }, error = function(e) {
+    log_msg("  Note: No suffix alias file found, using empty alias map")
+    data.table::data.table(from = character(), to = character())
+  })
+
+  # Preserve originals for QA
+  if (!"pm.preDir_orig" %in% names(dt)) {
+    dt[, `:=`(
+      pm.preDir_orig    = pm.preDir,
+      pm.street_orig    = pm.street,
+      pm.streetSuf_orig = pm.streetSuf
+    )]
+  }
+
+  # Normalize parsed components
+  dt[, `:=`(
+    pm.preDir    = stringr::str_squish(tolower(data.table::fifelse(is.na(pm.preDir), "", as.character(pm.preDir)))),
+    pm.sufDir    = stringr::str_squish(tolower(data.table::fifelse(is.na(pm.sufDir), "", as.character(pm.sufDir)))),
+    pm.street    = standardize_street_name_vec(data.table::fifelse(is.na(pm.street), "", as.character(pm.street))),
+    pm.streetSuf = stringr::str_squish(tolower(data.table::fifelse(is.na(pm.streetSuf), "", as.character(pm.streetSuf))))
+  )]
+
+  # Apply suffix alias normalization immediately
+  dt[, pm.streetSuf := map_suffix_vec(pm.streetSuf, suffix_alias)]
+
+  # Initialize fix tracking
+  if (!"fix_tag" %in% names(dt)) {
+    dt[, `:=`(fix_tag = NA_character_, fix_changed = FALSE, fix_parcelN = as.integer(NA))]
+  }
+
+  # Helper: refresh oracle membership columns
+  refresh_oracle <- function() {
+    dt[, key := paste(pm.street, pm.streetSuf, sep = "|")]
+    dt[, parcelN := oracle_lookup_N(key, parcel_counts)]
+    dt[, in_parcels := !is.na(parcelN)]
+  }
+
+  refresh_oracle()
+  before_rate <- dt[, mean(in_parcels)]
+  log_msg("  Oracle-valid BEFORE: ", round(100 * before_rate, 3), "%")
+
+  # --------------------------
+  # Rule 1: Boulevard precedence (even if suffix already set)
+  # --------------------------
+  blv_tokens <- c("blv", "blvd", "boul", "boulev", "boulv", "boulevard", "boulvard")
+
+  i1 <- dt[
+    is.na(fix_tag) & pm.street != "" & stringr::str_detect(pm.street, paste0("\\b(", paste(blv_tokens, collapse = "|"), ")\\b$")),
+    which = TRUE
+  ]
+
+  if (length(i1) > 0) {
+    street_base <- sub(paste0("\\s*\\b(", paste(blv_tokens, collapse = "|"), ")\\b$"), "", dt$pm.street[i1])
+    street_base <- stringr::str_squish(street_base)
+
+    key_blvd <- paste(street_base, "blvd", sep = "|")
+    N_blvd <- oracle_lookup_N(key_blvd, parcel_counts)
+    ok <- !is.na(N_blvd) & street_base != ""
+
+    if (any(ok)) {
+      ii <- i1[ok]
+      dt[ii, `:=`(
+        pm.street = street_base[ok],
+        pm.streetSuf = "blvd",
+        fix_tag = "boulevard_precedence",
+        fix_changed = TRUE,
+        fix_parcelN = as.integer(N_blvd[ok])
+      )]
+    }
+  }
+
+  refresh_oracle()
+
+  # --------------------------
+  # Rule 2: Stuck directionals in street (echurch -> preDir=e, street=church)
+  # --------------------------
+  i2 <- dt[
+    is.na(fix_tag) & pm.preDir == "" & pm.street != "" & stringr::str_detect(pm.street, "^[nsew][a-z]"),
+    which = TRUE
+  ]
+
+  if (length(i2) > 0) {
+    dir <- substr(dt$pm.street[i2], 1, 1)
+    st2 <- substr(dt$pm.street[i2], 2, nchar(dt$pm.street[i2]))
+    st2 <- stringr::str_squish(st2)
+
+    # street membership check
+    st2_in <- !is.na(parcel_streets[J(st2), on = .(pm.street), x.pm.street])
+
+    # oracle validation of (street, suffix)
+    key2 <- paste(st2, dt$pm.streetSuf[i2], sep = "|")
+    N2 <- oracle_lookup_N(key2, parcel_counts)
+
+    ok <- st2_in & !is.na(N2) & st2 != ""
+
+    if (any(ok)) {
+      ii <- i2[ok]
+      dt[ii, `:=`(
+        pm.preDir = dir[ok],
+        pm.street = st2[ok],
+        fix_tag = "unstick_dir_by_street_membership",
+        fix_changed = TRUE,
+        fix_parcelN = as.integer(N2[ok])
+      )]
+    }
+  }
+
+  refresh_oracle()
+
+  # --------------------------
+  # Rule 3: est/rst repair -> st (spruc+est -> spruce+st)
+  # --------------------------
+  i3 <- dt[
+    is.na(fix_tag) & pm.street != "" & pm.streetSuf %chin% c("est", "rst"),
+    which = TRUE
+  ]
+
+  if (length(i3) > 0) {
+    extra <- sub("st$", "", dt$pm.streetSuf[i3])  # e or r
+    new_st <- paste0(dt$pm.street[i3], extra)
+    new_key <- paste(new_st, "st", sep = "|")
+    newN <- oracle_lookup_N(new_key, parcel_counts)
+
+    ok <- !is.na(newN) & new_st != ""
+    if (any(ok)) {
+      ii <- i3[ok]
+      dt[ii, `:=`(
+        pm.street = new_st[ok],
+        pm.streetSuf = "st",
+        fix_tag = "attach_extra_from_suf:st",
+        fix_changed = TRUE,
+        fix_parcelN = as.integer(newN[ok])
+      )]
+    }
+  }
+
+  refresh_oracle()
+
+  # --------------------------
+  # Rule 4: Split trailing suffix token from street
+  # --------------------------
+  i4 <- dt[
+    is.na(fix_tag) & pm.street != "" & stringr::str_detect(pm.street, "\\s+[a-z0-9]+$"),
+    which = TRUE
+  ]
+
+  if (length(i4) > 0) {
+    last_tok <- sub("^.*\\s+([a-z0-9]+)$", "\\1", dt$pm.street[i4])
+    base_st <- sub("\\s+[a-z0-9]+$", "", dt$pm.street[i4])
+    base_st <- stringr::str_squish(base_st)
+
+    cand_suf <- map_suffix_vec(last_tok, suffix_alias)
+
+    # only consider if cand_suf is a parcel suffix
+    cand_ok <- cand_suf %chin% parcel_suffixes
+
+    if (any(cand_ok)) {
+      key4 <- paste(base_st[cand_ok], cand_suf[cand_ok], sep = "|")
+      N4 <- oracle_lookup_N(key4, parcel_counts)
+      ok <- !is.na(N4) & base_st[cand_ok] != ""
+
+      if (any(ok)) {
+        ii <- i4[cand_ok][ok]
+        dt[ii, `:=`(
+          pm.street = base_st[cand_ok][ok],
+          pm.streetSuf = cand_suf[cand_ok][ok],
+          fix_tag = "split_suffix_from_street_token",
+          fix_changed = TRUE,
+          fix_parcelN = as.integer(N4[ok])
+        )]
+      }
+    }
+  }
+
+  refresh_oracle()
+
+  after_rate <- dt[, mean(in_parcels)]
+  log_msg("  Oracle-valid AFTER: ", round(100 * after_rate, 3), "%")
+  log_msg("  Improvement: +", round(100 * (after_rate - before_rate), 3), " pp")
+
+  # --------------------------
+  # QA outputs
+  # --------------------------
+  if (export_qa) {
+    qa_dir <- p_out(cfg, "qa", paste0(source, "_address_canonicalize"))
+    dir.create(qa_dir, recursive = TRUE, showWarnings = FALSE)
+
+    fix_counts <- dt[, .N, by = fix_tag][order(-N)]
+    fix_counts[is.na(fix_tag), fix_tag := "NO_FIX"]
+    data.table::fwrite(fix_counts, file.path(qa_dir, "fix_tag_counts.csv"))
+
+    data.table::fwrite(
+      data.table::data.table(
+        metric = c("oracle_valid_rate_before", "oracle_valid_rate_after", "improvement_pp"),
+        value = c(before_rate, after_rate, after_rate - before_rate)
+      ),
+      file.path(qa_dir, "oracle_valid_rate_before_after.csv")
+    )
+
+    # Examples: show changed rows
+    changed <- dt[fix_changed == TRUE,
+                  .(pm.preDir_orig, pm.street_orig, pm.streetSuf_orig,
+                    pm.preDir, pm.street, pm.streetSuf, fix_tag, fix_parcelN)]
+    set.seed(123)
+    if (nrow(changed) > 0) changed <- changed[sample.int(.N, min(.N, 500))]
+    data.table::fwrite(changed, file.path(qa_dir, "changed_rows_sample.csv"))
+
+    log_msg("  QA outputs written to: ", qa_dir)
+  }
+
+  # Clean up temporary columns (keep fix tracking)
+  if ("key" %in% names(dt)) dt[, key := NULL]
+  if ("parcelN" %in% names(dt)) dt[, parcelN := NULL]
+  if ("in_parcels" %in% names(dt)) dt[, in_parcels := NULL]
+
+  dt
+}
+

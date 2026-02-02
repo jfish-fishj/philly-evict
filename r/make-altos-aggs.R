@@ -254,6 +254,26 @@ if (length(missing_cols_bldg) > 0) {
 }
 logf("  Building panel columns: PASS", log_file = log_file)
 
+# Check key uniqueness for bedroom panel: (PID, bed_bath_pid_ID, year)
+n_bed_rows <- nrow(altos_year_bedrooms)
+n_bed_unique <- altos_year_bedrooms[, uniqueN(.SD), .SDcols = c("PID", "bed_bath_pid_ID", "year")]
+if (n_bed_rows != n_bed_unique) {
+  logf("WARNING: Bedroom panel not unique on (PID, bed_bath_pid_ID, year): ",
+       n_bed_rows, " rows vs ", n_bed_unique, " unique keys", log_file = log_file)
+} else {
+  logf("  Bedroom panel unique on (PID, bed_bath_pid_ID, year): PASS", log_file = log_file)
+}
+
+# Check key uniqueness for building panel: (PID, year)
+n_bldg_rows <- nrow(altos_year_building)
+n_bldg_unique <- altos_year_building[, uniqueN(.SD), .SDcols = c("PID", "year")]
+if (n_bldg_rows != n_bldg_unique) {
+  logf("WARNING: Building panel not unique on (PID, year): ",
+       n_bldg_rows, " rows vs ", n_bldg_unique, " unique keys", log_file = log_file)
+} else {
+  logf("  Building panel unique on (PID, year): PASS", log_file = log_file)
+}
+
 # Log summary stats
 logf("  Bedroom panel: ", altos_year_bedrooms[, uniqueN(PID)], " unique PIDs, ",
      altos_year_bedrooms[, uniqueN(year)], " years", log_file = log_file)

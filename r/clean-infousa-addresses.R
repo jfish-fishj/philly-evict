@@ -75,6 +75,19 @@ philly_infousa_dt[, pm.sufDir := str_to_lower(street_post_dir)]
 # Concatenated direction (prefer pre, fallback to post)
 philly_infousa_dt[, pm.dir_concat := coalesce(pm.preDir, pm.sufDir)]
 
+# ============================================================
+# Step 5b: Oracle-validated canonicalization (infousa)
+# ============================================================
+
+# Use reusable canonicalization function from address_utils.R
+philly_infousa_dt <- canonicalize_parsed_addresses(
+  philly_infousa_dt,
+  cfg,
+  source = "infousa",
+  export_qa = TRUE,
+  log_file = log_file
+)
+
 # Composite address string for matching
 philly_infousa_dt[, n_sn_ss_c := str_squish(str_to_lower(paste(pm.house, pm.preDir, pm.street, pm.streetSuf, pm.sufDir)))]
 

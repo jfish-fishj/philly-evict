@@ -183,190 +183,21 @@ philly_evict_adds_sample = philly_evict_adds_sample %>% mutate(
     str_replace_all("[Ss]t ", "saint ")
 )
 
+
 # ============================================================
-# Step 5b: Oracle-validated canonicalization against parcels
+# Step 5b: Oracle-validated canonicalization (evictions)
 # ============================================================
 
-logf("Step 5b: Oracle canonicalization (evictions)", log_file = log_file)
-
-# ---- Load parcel oracle ----
-parcel_counts_path <- p_input(cfg, "parcel_address_counts")
-logf("Loading parcel oracle: ", parcel_counts_path, log_file = log_file)
-
-parcel_counts <- data.table::fread(parcel_counts_path)
-stopifnot(all(c("pm.street","pm.streetSuf","N") %in% names(parcel_counts)))
-
-# normalize oracle
-parcel_counts[, pm.street := stringr::str_squish(tolower(pm.street))]
-parcel_counts[, pm.streetSuf := stringr::str_squish(tolower(pm.streetSuf))]
-parcel_counts <- parcel_counts[pm.street != "" & pm.streetSuf != ""]
-parcel_counts[, key := paste(pm.street, pm.streetSuf, sep="|")]
-data.table::setkey(parcel_counts, key)
-
-parcel_suffixes <- unique(parcel_counts$pm.streetSuf)
-
-# ---- Prepare eviction parsed table ----
 data.table::setDT(philly_evict_adds_sample)
 
-# keep originals for QA
-philly_evict_adds_sample[, `:=`(
-  pm.preDir_orig    = pm.preDir,
-  pm.street_orig    = pm.street,
-  pm.streetSuf_orig = pm.streetSuf
-)]
-
-# normalize parsed pieces (lower/squish, NA->"")
-philly_evict_adds_sample[, `:=`(
-  pm.preDir    = stringr::str_squish(tolower(data.table::fifelse(is.na(pm.preDir), "", as.character(pm.preDir)))),
-  pm.sufDir    = stringr::str_squish(tolower(data.table::fifelse(is.na(pm.sufDir), "", as.character(pm.sufDir)))),
-  pm.street    = stringr::str_squish(tolower(data.table::fifelse(is.na(pm.street), "", as.character(pm.street)))),
-  pm.streetSuf = stringr::str_squish(tolower(data.table::fifelse(is.na(pm.streetSuf), "", as.character(pm.streetSuf))))
-)]
-
-# canonical key + oracle membership
-philly_evict_adds_sample[, key := paste(pm.street, pm.streetSuf, sep="|")]
-# parcel_counts must be keyed by "key"
-setkey(parcel_counts, key)
-
-# add parcelN via join; i.parcelN is one value per row in philly_evict_adds_sample
-philly_evict_adds_sample[parcel_counts, on = .(key), parcelN := i.N]
-philly_evict_adds_sample[, in_parcels := !is.na(parcelN)]
-
-
-before_rate <- philly_evict_adds_sample[, mean(in_parcels)]
-logf("Oracle-valid BEFORE fixes: ", round(100*before_rate, 3), "%", log_file = log_file)
-
-# Track fixes
-philly_evict_adds_sample[, `:=`(fix_tag = NA_character_, fix_changed = FALSE, fix_parcelN = as.integer(NA))]
-
-# ============================================================
-# Rule B (high impact): fix est/rst by attaching extra letter back to street
-# spruc + est -> spruce + st   ; bouvie + rst -> bouvier + st
-# ============================================================
-iB <- philly_evict_adds_sample[
-  !in_parcels & pm.streetSuf %chin% c("est","rst") & pm.street != "",
-  which = TRUE
-]
-
-if (length(iB) > 0) {
-  extra <- sub("st$", "", philly_evict_adds_sample$pm.streetSuf[iB])  # "e" or "r"
-  new_st <- paste0(philly_evict_adds_sample$pm.street[iB], extra)
-  new_key <- paste(new_st, "st", sep="|")
-  newN <- parcel_counts[.(new_key), x.N]
-
-  ok <- !is.na(newN)
-  if (any(ok)) {
-    ii <- iB[ok]
-    philly_evict_adds_sample[ii, `:=`(
-      pm.street = new_st[ok],
-      pm.streetSuf = "st",
-      fix_tag = "attach_extra_from_suf:st",
-      fix_changed = TRUE,
-      fix_parcelN = as.integer(newN[ok])
-    )]
-  }
-}
-
-# refresh oracle membership
-philly_evict_adds_sample[, key := paste(pm.street, pm.streetSuf, sep="|")]
-# parcel_counts must be keyed by "key"
-setkey(parcel_counts, key)
-
-# add parcelN via join; i.parcelN is one value per row in philly_evict_adds_sample
-philly_evict_adds_sample[parcel_counts, on = .(key), parcelN := i.N]
-philly_evict_adds_sample[, in_parcels := !is.na(parcelN)]
-
-
-# ============================================================
-# Rule A (high impact): split glued direction when pm.preDir missing
-# wlehigh + ave -> preDir=w, street=lehigh, suf=ave (oracle validated)
-# ============================================================
-iA <- philly_evict_adds_sample[
-  is.na(fix_tag) & pm.preDir == "" & !in_parcels & stringr::str_detect(pm.street, "^[nsew][a-z]"),
-  which = TRUE
-]
-
-if (length(iA) > 0) {
-  dir <- substr(philly_evict_adds_sample$pm.street[iA], 1, 1)
-  st2 <- substr(philly_evict_adds_sample$pm.street[iA], 2, nchar(philly_evict_adds_sample$pm.street[iA]))
-  key2 <- paste(st2, philly_evict_adds_sample$pm.streetSuf[iA], sep="|")
-  N2 <- parcel_counts[.(key2), x.N]
-
-  ok <- !is.na(N2)
-  if (any(ok)) {
-    ii <- iA[ok]
-    philly_evict_adds_sample[ii, `:=`(
-      pm.preDir = dir[ok],
-      pm.street = st2[ok],
-      fix_tag = "split_dir_same_suffix",
-      fix_changed = TRUE,
-      fix_parcelN = as.integer(N2[ok])
-    )]
-  }
-}
-
-# final refresh
-philly_evict_adds_sample[, key := paste(pm.street, pm.streetSuf, sep="|")]
-philly_evict_adds_sample[, parcelN := parcel_counts[.(key), x.N]]
-philly_evict_adds_sample[, in_parcels := !is.na(parcelN)]
-
-after_rate <- philly_evict_adds_sample[, mean(in_parcels)]
-logf("Oracle-valid AFTER fixes: ", round(100*after_rate, 3), "%", log_file = log_file)
-
-# ---- Hard checks that should move if the block ran ----
-logf("Counts of est/rst/un AFTER fixes:",
-     " est=", philly_evict_adds_sample[pm.streetSuf == "est", .N],
-     " rst=", philly_evict_adds_sample[pm.streetSuf == "rst", .N],
-     " un=",  philly_evict_adds_sample[pm.streetSuf == "un",  .N],
-     log_file = log_file)
-
-logf("Fix tag counts (top):", log_file = log_file)
-print(philly_evict_adds_sample[, .N, by = fix_tag][order(-N)][1:10])
-
-# Optional: export QA artifacts
-qa_dir <- p_out(cfg, "qa", "evictions_address_canonicalize")
-dir.create(qa_dir, recursive = TRUE, showWarnings = FALSE)
-
-data.table::fwrite(
-  philly_evict_adds_sample[, .N, by = fix_tag][order(-N)],
-  file.path(qa_dir, "fix_tag_counts.csv")
+# Use reusable canonicalization function from address_utils.R
+philly_evict_adds_sample <- canonicalize_parsed_addresses(
+  philly_evict_adds_sample,
+  cfg,
+  source = "evictions",
+  export_qa = TRUE,
+  log_file = log_file
 )
-data.table::fwrite(
-  data.table::data.table(metric=c("oracle_valid_rate_before","oracle_valid_rate_after"),
-                         value=c(before_rate, after_rate)),
-  file.path(qa_dir, "oracle_valid_rate_before_after.csv")
-)
-
-# ---- QA outputs ----
-qa_dir <- p_out(cfg, "qa", "evictions_address_canonicalize")
-dir.create(qa_dir, recursive = TRUE, showWarnings = FALSE)
-
-fix_counts <- philly_evict_adds_sample[, .N, by = fix_tag][order(-N)]
-fix_counts[is.na(fix_tag), fix_tag := "NO_FIX"]
-fwrite(fix_counts, file.path(qa_dir, "fix_tag_counts.csv"))
-
-# a compact before/after summary
-oracle_summary <- data.table(
-  metric = c("oracle_valid_rate_before", "oracle_valid_rate_after"),
-  value  = c(before_rate, after_rate)
-)
-fwrite(oracle_summary, file.path(qa_dir, "oracle_valid_rate_before_after.csv"))
-
-# sample of changed rows for inspection
-changed_sample <- philly_evict_adds_sample[fix_changed == TRUE][
-  , .(pm.uid, pm.house, pm.preDir_orig, pm.street_orig, pm.streetSuf_orig,
-      pm.preDir, pm.street, pm.streetSuf, fix_tag, fix_parcelN)
-]
-set.seed(123)
-if (nrow(changed_sample) > 0) {
-  changed_sample <- changed_sample[sample.int(.N, min(.N, 500))]
-}
-fwrite(changed_sample, file.path(qa_dir, "changed_rows_sample.csv"))
-
-# ============================================================
-# End canonicalization; proceed to key creation using pm.* fields
-# ============================================================
-
 
 # Fix "la" suffix
 philly_evict_adds_sample = philly_evict_adds_sample %>%

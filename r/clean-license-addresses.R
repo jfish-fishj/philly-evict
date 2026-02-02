@@ -102,6 +102,21 @@ philly_lic_adds_sample <- philly_lic_adds_sample %>% mutate(
 
 philly_lic_adds_sample <- pm_street_parse(philly_lic_adds_sample, ordinal = TRUE, drop = FALSE)
 
+# ============================================================
+# Step 4b: Oracle-validated canonicalization (licenses)
+# ============================================================
+
+setDT(philly_lic_adds_sample)
+
+# Use reusable canonicalization function from address_utils.R
+philly_lic_adds_sample <- canonicalize_parsed_addresses(
+  philly_lic_adds_sample,
+  cfg,
+  source = "licenses",
+  export_qa = TRUE,
+  log_file = log_file
+)
+
 # ---- Step 5: Create composite address key ----
 logf("Step 5: Creating composite address key", log_file = log_file)
 

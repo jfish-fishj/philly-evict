@@ -79,6 +79,25 @@ ggplot2::ggplot() +
   ggplot2::labs(title = "Philadelphia Boundary (hexagons)") +
   ggplot2::theme_minimal()
 
+# ---- Assertions ----
+logf("Running assertions...", log_file = log_file)
+
+# Check h3 uniqueness
+n_hex <- nrow(hex_sf)
+n_unique_h3 <- length(unique(hex_sf$h3))
+if (n_hex != n_unique_h3) {
+  stop("Assertion failed: h3 index is not unique. ", n_hex, " rows vs ", n_unique_h3, " unique h3 values")
+}
+logf("  h3 uniqueness: PASS (", n_unique_h3, " unique hexagons)", log_file = log_file)
+
+# Check geometry validity
+n_invalid <- sum(!st_is_valid(hex_sf))
+if (n_invalid > 0) {
+  logf("  WARNING: ", n_invalid, " invalid geometries detected", log_file = log_file)
+} else {
+  logf("  Geometry validity: PASS", log_file = log_file)
+}
+
 # ---- Export ----
 logf("Writing outputs...", log_file = log_file)
 

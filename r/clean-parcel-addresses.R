@@ -204,8 +204,8 @@ fwrite(philly_sf_dt_adds_sample_m, output_path)
 logf("Wrote ", nrow(philly_sf_dt_adds_sample_m), " rows to ", output_path, log_file = log_file)
 logf("=== Finished clean-parcel-addresses.R ===", log_file = log_file)
 
-# write address counts
+# write address counts (oracle for other scripts)
 addr_counts <- philly_sf_dt_adds_sample_m[, .N, by = .(pm.street, pm.streetSuf)][order(-N)]
-addr_counts_path <- p_out(cfg, "logs", "parcel_address_counts")
+addr_counts_path <- p_product(cfg, "parcel_address_counts")
 fwrite(addr_counts, addr_counts_path)
-logf("Wrote address counts to: ", addr_counts_path, log_file = log_file)
+logf("Wrote parcel address counts (oracle) to: ", addr_counts_path, log_file = log_file)

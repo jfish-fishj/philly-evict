@@ -122,6 +122,19 @@ corelogic[, pm.preDir := situs_direction]
 corelogic[, pm.sufDir := NA_character_]
 corelogic[, pm.dir_concat := situs_direction]
 
+# ============================================================
+# Step 5b: Oracle-validated canonicalization (corelogic)
+# ============================================================
+
+# Use reusable canonicalization function from address_utils.R
+corelogic <- canonicalize_parsed_addresses(
+  corelogic,
+  cfg,
+  source = "corelogic",
+  export_qa = TRUE,
+  log_file = log_file
+)
+
 # Composite address string for matching
 corelogic[, n_sn_ss_c := str_squish(str_to_lower(paste(pm.house, pm.preDir, pm.street, pm.streetSuf)))]
 

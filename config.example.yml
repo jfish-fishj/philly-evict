@@ -64,6 +64,9 @@ inputs:
   hex_res8: "shapefiles/philly_hex_res8"
   hex_res9: "shapefiles/philly_hex_res9"
 
+  # --- Aliases (for address canonicalization) ---
+  street_suffix_aliases: "aliases/street_suffix_aliases.csv"
+
   # --- Open Data Portal ---
   open_data_business_licenses: "open-data/business_licenses.csv"
   open_data_violations: "open-data/violations.csv"

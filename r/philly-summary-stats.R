@@ -23,7 +23,6 @@ philly_summary[,xcasenum := id]
 philly_lic = fread(p_input(cfg, "business_licenses"))
 philly_evict = fread(p_product(cfg, "evictions_clean"))
 philly_parcels = fread(p_product(cfg, "parcels_clean"))
-#rgdal::ogrInfo(system.file("/Users/joefish/Desktop/data/philly-evict/opa_properties_public.gdb", package="sf"))
 
 philly_rentals = philly_lic[licensetype == "Rental"]
 philly_rentals[,start_year := as.numeric(substr(initialissuedate,1,4))]
