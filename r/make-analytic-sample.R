@@ -1,15 +1,21 @@
 ## ============================================================
-## make-analytic-sample-from-ever-rentals.R
+## make-analytic-sample.R
 ## ============================================================
-## Assumes:
-##  - ever_rentals_panel.csv          (from ever-rentals script)
-##  - parcel_occupancy_panel_with_ever_rentals.csv (from occupancy script)
-##  - parcel_events_panel_pid_year.csv (violations + permits + complaints, PID×year)
-##  - assessments.csv                 (raw assessments: taxable_land, taxable_building, parcel_number, year, ...)
+## Purpose: Build the final analytic sample from ever-rentals panel
 ##
-## Produces:
-##  - bldg_panel_blp.csv   : full panel with shares, HHI, BLP instruments
-##  - analytic_sample.csv  : filtered estimation sample
+## Inputs (from config):
+##   - ever_rentals_panel (from make-rent-panel.R)
+##   - parcel_occupancy_panel (from make-occupancy-vars.R)
+##   - parcel_building (events panel)
+##   - assessments (raw)
+##
+## Outputs (to config):
+##   - bldg_panel_blp: full panel with shares, HHI, BLP instruments
+##   - analytic_sample: filtered estimation sample
+##
+## Primary keys:
+##   - bldg_panel_blp: PID × year
+##   - analytic_sample: PID × year (subset)
 ## ============================================================
 
 suppressPackageStartupMessages({
@@ -18,35 +24,40 @@ suppressPackageStartupMessages({
   library(tidyverse)
 })
 
+# ---- Load config and set up logging ----
+source("r/config.R")
+
+cfg <- read_config()
+log_file <- p_out(cfg, "logs", "make-analytic-sample.log")
+
+logf("=== Starting make-analytic-sample.R ===", log_file = log_file)
+logf("Config: ", cfg$meta$config_path, log_file = log_file)
+
 normalize_pid <- function(x) {
   stringr::str_pad(as.character(x), width = 9, side = "left", pad = "0")
 }
 fco <- function(x, val = 0) fifelse(is.na(x), val, x)
 
-## ------------------------------------------------------------
-## 0) PATHS (EDIT THESE)
-## ------------------------------------------------------------
-ROOT      <- "~/Desktop/data/philly-evict"
-PROC      <- file.path(ROOT, "processed")
+# ---- Load input data ----
+logf("Loading input data...", log_file = log_file)
 
-path_ever_panel    <- file.path(PROC, "ever_rentals_panel.csv")
-path_occ_panel     <- file.path(PROC, "parcel_occupancy_panel_with_ever_rentals.csv")
-path_events_panel  <- file.path(PROC, "parcel_building.csv")
+path_ever_panel   <- p_product(cfg, "ever_rentals_panel")
+path_occ_panel    <- p_product(cfg, "parcel_occupancy_panel")
+path_events_panel <- p_product(cfg, "parcel_building")
+path_assess_csv   <- p_input(cfg, "assessments")
 
-## Raw assessments file (as in original: ass <- fread(".../assessments.csv"))
-path_assess_csv    <- file.path(ROOT, "assessments.csv")
-
-out_bldg_panel     <- file.path(PROC, "bldg_panel_blp.csv")
-out_analytic       <- file.path(PROC, "analytic_sample.csv")
-
-## ------------------------------------------------------------
-## 1) LOAD DATA
-## ------------------------------------------------------------
 ever_panel    <- fread(path_ever_panel)
+logf("  ever_rentals_panel: ", nrow(ever_panel), " rows", log_file = log_file)
+
 occ_panel     <- fread(path_occ_panel)
-event_cols <- (fread(path_events_panel, nrows = 1) |>  colnames())[ (1:35)]
+logf("  parcel_occupancy_panel: ", nrow(occ_panel), " rows", log_file = log_file)
+
+event_cols <- (fread(path_events_panel, nrows = 1) |> colnames())[(1:35)]
 events_panel  <- fread(path_events_panel, select = event_cols)
-ass           <- fread(path_assess_csv)
+logf("  parcel_building (events): ", nrow(events_panel), " rows", log_file = log_file)
+
+ass <- fread(path_assess_csv)
+logf("  assessments: ", nrow(ass), " rows", log_file = log_file)
 
 setDT(ever_panel)
 setDT(occ_panel)
@@ -63,12 +74,19 @@ events_panel[, PID := normalize_pid(PID)]
 ## ------------------------------------------------------------
 bldg_panel <- copy(occ_panel)
 
-# have to clean up that pm.zip.x; pm.zip.y are in
-ever_panel[,pm.zip := coalesce(pm.zip.x |> as.numeric(),
-                               pm.zip.y|> as.numeric(),
-                               zip_code|> as.numeric() )]
+# Clean up pm.zip columns: strip "_" prefix, coalesce available sources
+# Keep as character (5-digit padded) for consistency
+ever_panel[, pm.zip := coalesce(
+  str_remove(as.character(pm.zip.x), "^_") %>% str_pad(5, "left", "0"),
+  str_remove(as.character(pm.zip.y), "^_") %>% str_pad(5, "left", "0"),
+  str_remove(as.character(zip_code), "^_") %>% str_pad(5, "left", "0")
+)]
+ever_panel[pm.zip == "   NA" | pm.zip == "NA" | pm.zip == "00000", pm.zip := NA_character_]
 
 ## ever_rentals_panel: rents, rental flags, filings, parcel chars
+logf("Merging ever_rentals_panel...", log_file = log_file)
+logf("  bldg_panel rows before merge: ", nrow(bldg_panel), log_file = log_file)
+
 bldg_panel <- merge(
   bldg_panel,
   ever_panel,
@@ -77,13 +95,24 @@ bldg_panel <- merge(
   suffixes = c("", "_ever")
 )
 
+logf("  bldg_panel rows after merge: ", nrow(bldg_panel), log_file = log_file)
+assert_unique(bldg_panel, c("PID", "year"), "bldg_panel after ever_panel merge")
+logf("  Assertion passed: (PID, year) unique after ever_panel merge", log_file = log_file)
+
 ## Single merged events file: violations + permits + complaints (PID×year)
+logf("Merging events_panel...", log_file = log_file)
+logf("  bldg_panel rows before merge: ", nrow(bldg_panel), log_file = log_file)
+
 bldg_panel <- merge(
   bldg_panel,
   events_panel,
   by    = c("PID", "year"),
   all.x = TRUE
 )
+
+logf("  bldg_panel rows after merge: ", nrow(bldg_panel), log_file = log_file)
+assert_unique(bldg_panel, c("PID", "year"), "bldg_panel after events_panel merge")
+logf("  Assertion passed: (PID, year) unique after events_panel merge", log_file = log_file)
 
 ## ------------------------------------------------------------
 ## 3) ASSESSMENTS: BUILD VARIABLES ON THE FLY (from ass <- fread(...))
@@ -159,12 +188,19 @@ drop_cols <- intersect(drop_cols, names(ass))
 if (length(drop_cols) > 0L) ass[, (drop_cols) := NULL]
 
 ## Merge assessments into bldg_panel (PID×year)
+logf("Merging assessments...", log_file = log_file)
+logf("  bldg_panel rows before merge: ", nrow(bldg_panel), log_file = log_file)
+
 bldg_panel <- merge(
   bldg_panel,
   ass,
   by    = c("PID", "year"),
   all.x = TRUE
 )
+
+logf("  bldg_panel rows after merge: ", nrow(bldg_panel), log_file = log_file)
+assert_unique(bldg_panel, c("PID", "year"), "bldg_panel after assessments merge")
+logf("  Assertion passed: (PID, year) unique after assessments merge", log_file = log_file)
 
 ## Per-unit assessment vars (using canonical units from occupancy)
 if (!("num_units_imp_final" %in% names(bldg_panel))) {
@@ -521,117 +557,41 @@ analytic <- analytic[market_id %in% good_markets]
 analytic <- analytic[year >= 2006]  ## tweak time window if needed
 
 ## ------------------------------------------------------------
-## 10) EXPORT
+## 10) FINAL ASSERTIONS
 ## ------------------------------------------------------------
+logf("Running final assertions...", log_file = log_file)
+
+# Verify key columns exist
+required_cols <- c("PID", "year", "market_id", "owner_mailing_clean", "log_med_rent",
+                   "num_units_imp_final", "market_share_units")
+assert_has_cols(bldg_panel, required_cols, "bldg_panel")
+logf("  Required columns present in bldg_panel", log_file = log_file)
+
+assert_has_cols(analytic, required_cols, "analytic")
+logf("  Required columns present in analytic", log_file = log_file)
+
+# Verify uniqueness of final outputs
+assert_unique(bldg_panel, c("PID", "year"), "bldg_panel final")
+logf("  bldg_panel: (PID, year) unique - PASSED", log_file = log_file)
+
+assert_unique(analytic, c("PID", "year"), "analytic final")
+logf("  analytic: (PID, year) unique - PASSED", log_file = log_file)
+
+## ------------------------------------------------------------
+## 11) EXPORT
+## ------------------------------------------------------------
+logf("Writing outputs...", log_file = log_file)
+
+out_bldg_panel <- p_product(cfg, "bldg_panel_blp")
+out_analytic   <- p_product(cfg, "analytic_sample")
 
 fwrite(bldg_panel, out_bldg_panel)
-fwrite(analytic,   out_analytic)
+logf("  Wrote bldg_panel_blp: ", nrow(bldg_panel), " rows to ", out_bldg_panel, log_file = log_file)
 
-message("[analytic] bldg_panel rows: ", nrow(bldg_panel))
-message("[analytic] analytic_sample rows: ", nrow(analytic))
-message("[analytic] unique markets: ", analytic[, uniqueN(market_id)])
-message("[analytic] unique owners: ", analytic[, uniqueN(owner_mailing_clean)])
-#
-bldg_panel = fread(out_bldg_panel)
+fwrite(analytic, out_analytic)
+logf("  Wrote analytic_sample: ", nrow(analytic), " rows to ", out_analytic, log_file = log_file)
 
-analytic = fread(out_analytic)
-
-# make sample of apartments with >= 20 units; get median rent, address, num filings
-analytic[,num_unique_num_units := uniqueN(num_units_imp_final), by=.(PID)]
-large_apts = analytic[num_units_imp_final >= 20, .(median_rent = max(med_rent, na.rm=TRUE),
-                                                   year = round(max(year)),
-                                                   n_sn_ss_c = first(n_sn_ss_c),
-                                                   pm.zip = first(pm.zip),
-                                                   census_tract = first(census_tract),
-                                                   GEOID = first(GEOID),
-                                                   num_units_imp_final = first(num_units_imp_final),
-                                         total_filings = sum(fco(num_filings,0), na.rm=TRUE)),
-                      by=.(PID)]
-
-fwrite(large_apts, file.path(PROC, "large_apartments.csv"))
-places_summary <- fread("output/places_summary.csv")
-places_summary[,n_sn_ss_c := str_match(text_search_query, "^([0-9a-zA-Z\\s-]+)(, phila)")[,2]]
-
-# laod json review data
-json_file = "output/reviews_raw.ndjson"
-library(ndjson)
-reviews_data = ndjson::stream_in(json_file)
-# flag review as containing "fake"
-setDT(reviews_data)
-reviews_data[, fake_review := grepl("(fake|fraud|scam).+review", tolower(text))]
-reviews_data[,building_has_fake_reviews := any(fake_review), by=.(place_id)]
-reviews_data[,most_recent_review := case_when(
-  str_detect(relative_time_description, "last week|months ago") ~ "within last year",
-  str_detect(relative_time_description, "a year ago") ~ "over a year",
-  TRUE ~ "over two years"
-)]
-large_apts_places <- merge(analytic, places_summary,
-                          by = "n_sn_ss_c",
-                           all.x = F)
-setorder(reviews_data, "place_id", "time_unix")
-reviews_data_bldg_agg = reviews_data[, .(building_has_fake_reviews = any(building_has_fake_reviews),
-                                         most_recent_review = first(most_recent_review)),
-                                      by=.(place_id)]
-#
-large_apts_places = merge(large_apts_places, reviews_data_bldg_agg,
-                          by.x = "place_id", by.y = "place_id",
-                          all.x = TRUE)
-
-large_apts_places[,filing_rate_binned := cut(filing_rate,
-                                        breaks = c(-Inf, 0, 0.05, 0.1, Inf),
-                                        labels = c("0", "0-0.05", "0.05-0.1", "0.1+"),
-                                        include.lowest = TRUE)]
-
-# bin ratings into half-stars
-large_apts_places[,rating_round := round(rating * 2) / 2]
-
-large_apts_places[,year_built_decade := cut(year_built,
-                                      breaks = c(-Inf, 1900, 1910, 1920, 1930, 1940, 1950, 1960, 1970, 1980, 1990, 2000, 2010, Inf),
-                                      labels = c("<1900", "1900s", "1910s", "1920s", "1930s", "1940s", "1950s", "1960s", "1970s", "1980s", "1990s", "2000s", "2010s+"),
-                                      include.lowest = TRUE)]
-large_apts_places[,num_units_cuts := cut(num_units_imp_final,
-                                 breaks = c(19, 50, 100, 200, 500, Inf),
-                                 labels = c("20-50", "51-100", "101-200", "201-500", "500+"),
-                                 include.lowest = TRUE)]
-feols(log_med_rent ~ rating + log(user_ratings_total) + i(filing_rate_binned, ref = '0.05-0.1')   | year_built_decade+GEOID +  year +num_units_cuts +quality_grade +building_code_description_new_fixed ,
-      weights = ~num_units_imp_final,
-      cluster = ~PID,
-      data = large_apts_places[ year >= 2010 & filing_rate <= 1 & user_ratings_total > 10 & user_ratings_total < 100 & num_units_imp_final > 0]) |> summary()
-
-feols(log_med_rent ~i(rating_round, ref = 3.5)  |year ,
-      weights = ~num_units_imp_final,
-      cluster = ~PID,
-      data = large_apts_places[ year >= 2010  & filing_rate <= 1 & user_ratings_total > 10 & user_ratings_total < 100 & num_units_imp_final > 0]) |> summary()
-
-# residualize out year fe
-library(fixest)
-large_apts_places[num_units_imp_final > 0,log_med_rent_resid := resid(fixest::feols(log_med_rent ~1  | year,
-                                               weights = ~num_units_imp_final,
-                                               cluster = ~PID,
-                                               data = large_apts_places[num_units_imp_final > 0]))]
-
-# ggplot rating vs median rent; size by user_ratings_total
-ggplot(large_apts_places[user_ratings_total > 10 & user_ratings_total < 300 & rating >1.5 & year >= 2011],
-       aes(x = rating, y = log_med_rent_resid, size = user_ratings_total, group = filing_rate_binned)) +
-  geom_point(alpha = 0.6) +
-  geom_smooth(method = "lm", se = TRUE, color = "blue") +
-  scale_x_continuous(breaks = seq(2, 5, by = 0.5)) +
-  labs(title = "Median Rent vs. Apartment Rating",
-       x = "Apartment Rating",
-       y = "Median Rent") +
-  theme_minimal() +
-  facet_wrap(~filing_rate_binned)
-
-# do this in feols
-feols(log_med_rent ~  rating_round : filing_rate_binned + filing_rate_binned  | year,
-      #weights = ~num_units_imp_final,
-      cluster = ~PID,
-      data = large_apts_places[  filing_rate <= 1 & user_ratings_total > 10 & user_ratings_total < 100 & num_units_imp_final > 0]) |> summary()
-
-# mean rent by rating_round
-mean_rent_by_rating <- large_apts_places[user_ratings_total > 10, .(mean_rent = mean(med_rent, na.rm=TRUE),
-                                              median_rent = median(med_rent, na.rm=TRUE),
-                                              n_apartments = uniqueN(PID)),
-                                         by=.(rating_round)]
-mean_rent_by_rating[order(rating_round)]
+logf("  Unique markets: ", analytic[, uniqueN(market_id)], log_file = log_file)
+logf("  Unique owners: ", analytic[, uniqueN(owner_mailing_clean)], log_file = log_file)
+logf("=== Finished make-analytic-sample.R ===", log_file = log_file)
 

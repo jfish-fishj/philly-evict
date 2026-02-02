@@ -1,9 +1,27 @@
-# ============================================================
-# Philly: occupancy / renters with 2010 BG constraints
-#  - Reuses units from ever-rentals script (parcel_units)
-#  - Rakes those units to match 2010 BG structure counts & renters
-#  - Builds parcel-year occupancy panel, informed by ever-rentals
-# ============================================================
+## ============================================================
+## make-occupancy-vars.r
+## ============================================================
+## Purpose: Build occupancy / renters panel with 2010 BG constraints
+##   - Reuses units from ever-rentals script (parcel_units)
+##   - Rakes those units to match 2010 BG structure counts & renters
+##   - Builds parcel-year occupancy panel, informed by ever-rentals
+##
+## Inputs:
+##   - cfg$inputs$infousa_cleaned (infousa/infousa_address_cleaned.csv)
+##   - cfg$products$parcel_building_2024 (xwalks/parcel_building_2024.csv)
+##   - cfg$products$parcel_building_summary (xwalks/parcel_building_summary_2024.csv)
+##   - cfg$products$infousa_address_xwalk (xwalks/philly_infousa_dt_address_agg_xwalk.csv)
+##   - cfg$inputs$tenure_bg_2010 (census/tenure_bg_2010.csv)
+##   - cfg$inputs$uis_tr_2010 (census/uis_tr_2010.csv)
+##   - cfg$products$ever_rentals_panel (panels/ever_rentals_panel.csv)
+##   - cfg$products$ever_rental_parcel_units (panels/ever_rental_parcel_units.csv)
+##
+## Outputs:
+##   - cfg$products$parcel_occupancy_panel (panels/parcel_occupancy_panel_with_ever_rentals.csv)
+##   - cfg$products$parcel_occupancy_rentals_only (panels/parcel_occupancy_panel_rentals_only.csv)
+##
+## Primary key: (PID, year)
+## ============================================================
 
 suppressPackageStartupMessages({
   library(data.table)
@@ -12,6 +30,15 @@ suppressPackageStartupMessages({
   library(tidycensus)
   library(stringr)
 })
+
+# ---- Load config and set up logging ----
+source("r/config.R")
+
+cfg <- read_config()
+log_file <- p_out(cfg, "logs", "make-occupancy-vars.log")
+
+logf("=== Starting make-occupancy-vars.r ===", log_file = log_file)
+logf("Config: ", cfg$meta$config_path, log_file = log_file)
 
 `%||%` <- function(a, b) if (is.null(a) || all(is.na(a))) b else a
 normalize_pid <- function(x) stringr::str_pad(as.character(x), 9, "left", "0")
@@ -30,40 +57,24 @@ scale_to_target <- function(x, target, floor_vec = NULL, cap_vec = NULL) {
 }
 
 # -------------------------------
-# 0) FILE PATHS & INPUTS
-#    (edit to your actual locations)
-# -------------------------------
-ROOT      <- "~/Desktop/data/philly-evict"
-PROC      <- file.path(ROOT, "processed")
-CENSUSDIR <- file.path(ROOT, "census")
-
-path_infousa        <- file.path(ROOT,  "infousa_address_cleaned.csv")
-path_parcels_2024   <- file.path(PROC,  "parcel_building_2024.csv")
-path_bldg_summary   <- file.path(PROC,  "parcel_building_summary_2024.csv")
-path_info_xwalk     <- file.path(ROOT,  "philly_infousa_dt_address_agg_xwalk.csv")
-
-path_tenure_bg_2010 <- file.path(CENSUSDIR, "tenure_bg_2010.csv")
-path_uis_tr_2010    <- file.path(CENSUSDIR, "uis_tr_2010.csv")
-
-## Outputs from ever-rentals script
-path_ever_panel     <- file.path(PROC, "ever_rentals_panel.csv")
-path_parcel_units   <- file.path(PROC, "ever_rental_parcel_units.csv")
-# (Optional) if you exported PID-level summary; not strictly needed:
-# path_ever_pid    <- file.path(PROC, "ever_rentals_pid.csv")
-
-# -------------------------------
 # 1) LOAD DATA
 # -------------------------------
-philly_infousa_dt <- fread(path_infousa)
-philly_bldgs      <- fread(path_bldg_summary)
-philly_parcels    <- fread(path_parcels_2024)
-info_usa_xwalk    <- fread(path_info_xwalk)
+logf("Loading input data...", log_file = log_file)
 
-tenure_bg_2010    <- fread(path_tenure_bg_2010)
-uis_tr_2010       <- fread(path_uis_tr_2010)
+philly_infousa_dt <- fread(p_input(cfg, "infousa_cleaned"))
+philly_bldgs      <- fread(p_product(cfg, "parcel_building_summary"))
+philly_parcels    <- fread(p_product(cfg, "parcel_building_2024"))
+info_usa_xwalk    <- fread(p_product(cfg, "infousa_address_xwalk"))
 
-ever_rentals_panel <- fread(path_ever_panel)
-parcel_units       <- fread(path_parcel_units)
+tenure_bg_2010    <- fread(p_input(cfg, "tenure_bg_2010"))
+uis_tr_2010       <- fread(p_input(cfg, "uis_tr_2010"))
+
+ever_rentals_panel <- fread(p_product(cfg, "ever_rentals_panel"))
+parcel_units       <- fread(p_product(cfg, "ever_rental_parcel_units"))
+
+logf("  InfoUSA: ", nrow(philly_infousa_dt), " rows", log_file = log_file)
+logf("  Parcels: ", nrow(philly_parcels), " rows", log_file = log_file)
+logf("  Ever rentals panel: ", nrow(ever_rentals_panel), " rows", log_file = log_file)
 
 setDT(philly_infousa_dt)
 setDT(philly_parcels)
@@ -86,14 +97,22 @@ philly_infousa_dt[, obs_id := .I]
 # -------------------------------
 # 2) INFOUSA × PARCEL MERGES
 # -------------------------------
-xwalk_1 <- info_usa_xwalk[num_parcels_matched == 1 & !is.na(PID)]
+logf("Merging InfoUSA with parcels...", log_file = log_file)
 
+xwalk_1 <- info_usa_xwalk[num_parcels_matched == 1 & !is.na(PID)]
+logf("  xwalk_1 (unique matches): ", nrow(xwalk_1), " rows", log_file = log_file)
+
+n_before <- nrow(philly_infousa_dt)
 infousa_m <- merge(
   philly_infousa_dt,
   xwalk_1[, .(n_sn_ss_c, PID)],
   by    = "n_sn_ss_c",
   all.x = TRUE
 )
+
+n_matched <- sum(!is.na(infousa_m$PID))
+logf("  InfoUSA rows: ", n_before, log_file = log_file)
+logf("  Matched to parcel: ", n_matched, " (", round(100 * n_matched / n_before, 1), "%)", log_file = log_file)
 
 # Basic household / tenure summaries
 infousa_m[, home_owner := owner_renter_status %in% c(7, 8, 9)]
@@ -176,7 +195,12 @@ parcel_agg <- merge(
 )
 
 # Merge units from ever-rentals (canonical units; no re-imputation here)
+logf("Merging units from ever-rentals...", log_file = log_file)
 parcel_units[, PID := normalize_pid(PID)]
+
+n_before <- nrow(parcel_agg)
+assert_unique(parcel_agg, "PID", "parcel_agg before units merge")
+assert_unique(parcel_units, "PID", "parcel_units")
 
 parcel_agg <- merge(
   parcel_agg,
@@ -187,6 +211,11 @@ parcel_agg <- merge(
   by    = "PID",
   all.x = TRUE
 )
+
+n_matched <- sum(!is.na(parcel_agg$num_units_imp_base))
+logf("  parcel_agg rows: ", n_before, " -> ", nrow(parcel_agg), log_file = log_file)
+logf("  Matched to units: ", n_matched, " (", round(100 * n_matched / nrow(parcel_agg), 1), "%)", log_file = log_file)
+assert_unique(parcel_agg, "PID", "parcel_agg after units merge")
 
 # For occupancy logic, use num_units_imp_base as starting units
 parcel_agg[, num_units_imp := num_units_imp_base]
@@ -386,6 +415,7 @@ parcel_bg[
 # 7) USE EVER-RENTALS TO ALLOCATE 2010 RENTERS
 # -------------------------------
 # PID-level rental evidence from ever_rentals_panel
+logf("Computing ever-rental flags from ever_rentals_panel...", log_file = log_file)
 ever_pid_stats <- ever_rentals_panel[
   ,
   .(
@@ -396,13 +426,21 @@ ever_pid_stats <- ever_rentals_panel[
   ),
   by = PID
 ]
+assert_unique(ever_pid_stats, "PID", "ever_pid_stats")
+logf("  ever_pid_stats: ", nrow(ever_pid_stats), " unique PIDs", log_file = log_file)
 
+logf("Merging ever-rental flags into parcel_bg...", log_file = log_file)
+n_before <- nrow(parcel_bg)
 parcel_bg <- merge(
   parcel_bg,
   ever_pid_stats,
   by    = "PID",
   all.x = TRUE
 )
+
+n_matched <- sum(!is.na(parcel_bg$ever_rental_any) & parcel_bg$ever_rental_any == 1)
+logf("  parcel_bg rows: ", n_before, " -> ", nrow(parcel_bg), log_file = log_file)
+logf("  Ever-rental parcels: ", n_matched, log_file = log_file)
 
 parcel_bg[is.na(ever_rental_any),     ever_rental_any     := 0L]
 parcel_bg[is.na(ever_rental_altos),   ever_rental_altos   := 0L]
@@ -626,20 +664,33 @@ panel[
 ]
 
 # -------------------------------
-# 9) EXPORT
+# 9) FINAL ASSERTIONS
 # -------------------------------
-out_path_all  <- file.path(PROC, "parcel_occupancy_panel_with_ever_rentals.csv")
-out_path_rent <- file.path(PROC, "parcel_occupancy_panel_rentals_only.csv")
+logf("Running final assertions...", log_file = log_file)
+
+assert_unique(panel, c("PID", "year"), "panel final")
+logf("  panel: (PID, year) unique - PASSED", log_file = log_file)
+
+# Check required columns
+required_cols <- c("PID", "year", "num_units_imp_final", "occupancy_rate")
+assert_has_cols(panel, required_cols, "panel")
+logf("  Required columns present in panel", log_file = log_file)
+
+# -------------------------------
+# 10) EXPORT
+# -------------------------------
+logf("Writing outputs...", log_file = log_file)
+
+out_path_all  <- p_product(cfg, "parcel_occupancy_panel")
+out_path_rent <- p_product(cfg, "parcel_occupancy_rentals_only")
 
 fwrite(panel, out_path_all)
+logf("  Wrote parcel_occupancy_panel: ", nrow(panel), " rows to ", out_path_all, log_file = log_file)
 
-fwrite(
-  panel[ever_rental_any_year == TRUE | rental_from_license == TRUE | rental_from_altos == TRUE],
-  out_path_rent
-)
+panel_rentals <- panel[ever_rental_any_year == TRUE | rental_from_license == TRUE | rental_from_altos == TRUE]
+fwrite(panel_rentals, out_path_rent)
+logf("  Wrote parcel_occupancy_rentals_only: ", nrow(panel_rentals), " rows to ", out_path_rent, log_file = log_file)
 
-message("[occupancy] Rows in panel: ", nrow(panel))
-message("[occupancy] Parcels (unique): ", uniqueN(panel$PID))
-message("[occupancy] Parcels with any rental evidence: ",
-        panel[ever_rental_any_year == TRUE | rental_from_license == TRUE | rental_from_altos == TRUE, uniqueN(PID)])
-message("[occupancy] Done.")
+logf("  Total parcels: ", uniqueN(panel$PID), log_file = log_file)
+logf("  Parcels with rental evidence: ", uniqueN(panel_rentals$PID), log_file = log_file)
+logf("=== Finished make-occupancy-vars.r ===", log_file = log_file)

@@ -1,3 +1,17 @@
+## ============================================================
+## make-hexagons.r
+## ============================================================
+## Purpose: Create H3 hexagon grid for Philadelphia
+##
+## Inputs:
+##   - cfg$inputs$philly_bg_shp (shapefiles/philly_bg.shp)
+##
+## Outputs:
+##   - Hex grid shapefiles at specified resolution (shapefiles/philly_hex_res{RES})
+##
+## Primary key: h3 (H3 index)
+## ============================================================
+
 # ---- Threads / libs ----
 Sys.setenv("OMP_THREAD_LIMIT" = max(1, parallel::detectCores() %/% 2))
 data.table::setDTthreads(max(1, parallel::detectCores() %/% 2))
@@ -8,13 +22,24 @@ suppressPackageStartupMessages({
   library(h3jsr)      # polygon_to_cells, cell_to_polygon
 })
 
-# ---- Config ----
-RES <- 9
-# point to any polygon layer you can dissolve to the City of Philadelphia boundary
-# e.g., a TIGER/Line place file already clipped to Philadelphia, or a county subset you can dissolve
-PHL_SHP <- "~/Desktop/data/philly-evict/philly_bg.shp"
+# ---- Load config and set up logging ----
+source("r/config.R")
 
-OUT_DIR <- sprintf("~/Desktop/data/philly-evict/philly_hex_res%d", RES)
+cfg <- read_config()
+log_file <- p_out(cfg, "logs", "make-hexagons.log")
+
+logf("=== Starting make-hexagons.r ===", log_file = log_file)
+logf("Config: ", cfg$meta$config_path, log_file = log_file)
+
+# ---- Config ----
+RES <- cfg$spatial$h3_resolution %||% 9
+logf("H3 resolution: ", RES, log_file = log_file)
+
+# Input: Philadelphia boundary shapefile
+PHL_SHP <- p_input(cfg, "philly_bg_shp")
+
+# Output directory for hex grid
+OUT_DIR <- p_in(cfg, sprintf("shapefiles/philly_hex_res%d", RES))
 dir.create(OUT_DIR, recursive = TRUE, showWarnings = FALSE)
 
 OUT_HEX_SHP     <- file.path(OUT_DIR, sprintf("phl_hex_res%d.shp", RES))
@@ -55,13 +80,21 @@ ggplot2::ggplot() +
   ggplot2::theme_minimal()
 
 # ---- Export ----
+logf("Writing outputs...", log_file = log_file)
+
 # shapefile
-st_write(hex_sf, OUT_HEX_SHP, quiet = TRUE)
+st_write(hex_sf, OUT_HEX_SHP, quiet = TRUE, delete_layer = TRUE)
+logf("  Wrote shapefile: ", OUT_HEX_SHP, log_file = log_file)
+
 # gpkg
-try(st_write(hex_sf, OUT_HEX_GPKG, quiet = TRUE), silent = TRUE)
+try(st_write(hex_sf, OUT_HEX_GPKG, quiet = TRUE, delete_layer = TRUE), silent = TRUE)
+logf("  Wrote geopackage: ", OUT_HEX_GPKG, log_file = log_file)
+
 # parquet (requires sf >= 1.0 w/ arrow; skip if not available)
 if (requireNamespace("arrow", quietly = TRUE)) {
   try(st_write_parquet(hex_sf, OUT_HEX_PARQUET), silent = TRUE)
+  logf("  Wrote parquet: ", OUT_HEX_PARQUET, log_file = log_file)
 }
 
-message(sprintf("[OK] Philly hex grid → %s (n=%s @ res=%d)", OUT_HEX_SHP, format(nrow(hex_sf), big.mark=","), RES))
+logf("  Hex count: ", nrow(hex_sf), " at resolution ", RES, log_file = log_file)
+logf("=== Finished make-hexagons.r ===", log_file = log_file)

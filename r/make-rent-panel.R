@@ -1,32 +1,22 @@
 ## ============================================================
-## make-ever-rentals.R
+## make-rent-panel.R (formerly make-ever-rentals.R)
 ## ============================================================
-## Goal:
-##  1) Combine Altos, rental licenses, parcels, and evictions
-##     into a unified "ever-rental" dataset.
-##  2) Impute number of dwelling units per parcel using parcels,
-##     licenses, InfoUSA, and building features (units_model-style).
+## Purpose: Build the ever-rental panel combining Altos, licenses,
+##          parcels, and evictions into a unified dataset.
 ##
-## Assumptions:
-##  - You already have these data objects loaded OR you will
-##    replace the placeholder fread/readRDS calls below:
-##      * philly_parcels
-##      * philly_building_df (or philly_bldgs)
-##      * philly_bg (2010 block groups sf)
-##      * philly_lic
-##      * philly_altos
-##      * philly_evict (with at least n_sn_ss_c, defendant, plaintiff, etc.)
-##      * evict_xwalk (address → PID xwalk, with num_parcels_matched)
-##      * philly_infousa_dt
-##      * info_usa_xwalk (InfoUSA address → parcel xwalk, with num_parcels_matched)
-##      * tenure_bg_2010, uis_tr_2010 (if you later want BG constraints)
+## Inputs (from config):
+##   - parcels_clean, parcel_building_summary, philly_bg_shp
+##   - business_licenses (cleaned), altos_year_bedrooms (from make-altos-aggs.R)
+##   - evictions_clean, evict_address_xwalk
+##   - infousa_cleaned, infousa_address_xwalk
+##   - tenure_bg_2010, uis_tr_2010
 ##
-##  - PIDs are ultimately 9-character, left-padded strings.
+## Outputs (to config):
+##   - ever_rentals_pid, ever_rentals_panel, ever_rental_parcel_units
 ##
-## You’ll likely want to edit:
-##  - Data loading block
-##  - Column names for building areas, number of stories, etc.
-##  - Paths for fwrite() outputs.
+## Primary keys:
+##   - ever_rentals_pid: PID
+##   - ever_rentals_panel: PID × year
 ## ============================================================
 
 suppressPackageStartupMessages({
@@ -37,39 +27,55 @@ suppressPackageStartupMessages({
   library(fixest)
 })
 
-## -------------------------
-## 0) WORKING DIRECTORY / HELPERS
-## -------------------------
-## (Optional) setwd to your project root
-setwd("/Users/joefish/Documents/GitHub/philly-evictions")
-source("r/helper-functions.R")  # if you rely on Mode(), clean_name(), etc.
+# ---- Load config and set up logging ----
+source("r/config.R")
+source("R/helper-functions.R")
+
+cfg <- read_config()
+log_file <- p_out(cfg, "logs", "make-rent-panel.log")
+
+logf("=== Starting make-rent-panel.R ===", log_file = log_file)
+logf("Config: ", cfg$meta$config_path, log_file = log_file)
 
 normalize_pid <- function(x) {
   stringr::str_pad(as.character(x), width = 9, side = "left", pad = "0")
 }
 
-## -------------------------
-## 1) DATA LOADING (PLACEHOLDERS)
-## -------------------------
-## Comment these out if you already have the objects in memory and
-## replace with your actual paths as needed.
+# ---- Load input data ----
+logf("Loading input data...", log_file = log_file)
 
-philly_parcels     <- fread("/Users/joefish/Desktop/data/philly-evict/parcel_address_cleaned.csv")
-philly_building_df <- fread('~/Desktop/data/philly-evict/processed/parcel_building_summary_2024.csv')
+philly_parcels     <- fread(p_product(cfg, "parcels_clean"))
+logf("  parcels_clean: ", nrow(philly_parcels), " rows", log_file = log_file)
 
-philly_bg          <- st_read("~/Desktop/data/philly-evict/philly_bg.shp")
+philly_building_df <- fread(p_product(cfg, "parcel_building_summary"))
+logf("  parcel_building_summary: ", nrow(philly_building_df), " rows", log_file = log_file)
 
-philly_lic         <- fread("/Users/joefish/Desktop/data/philly-evict/business_licenses_clean.csv")
-philly_altos       <- fread("~/Desktop/data/philly-evict/altos_year_bedrooms_philly.csv")
+philly_bg          <- st_read(p_input(cfg, "philly_bg_shp"), quiet = TRUE)
+logf("  philly_bg_shp: ", nrow(philly_bg), " block groups", log_file = log_file)
 
-philly_evict       <- fread("/Users/joefish/Desktop/data/philly-evict/evict_address_cleaned.csv")
-evict_xwalk        <- fread("~/Desktop/data/philly-evict/philly_evict_address_agg_xwalk.csv")
+philly_lic         <- fread(p_input(cfg, "business_licenses"))
+logf("  business_licenses: ", nrow(philly_lic), " rows", log_file = log_file)
 
-philly_infousa_dt  <- fread("~/Desktop/data/philly-evict/infousa_address_cleaned.csv")
-info_usa_xwalk     <- fread("~/Desktop/data/philly-evict/philly_infousa_dt_address_agg_xwalk.csv")
+philly_altos       <- fread(p_product(cfg, "altos_year_bedrooms"))
+logf("  altos_year_bedrooms: ", nrow(philly_altos), " rows", log_file = log_file)
 
-tenure_bg_2010     <- fread('/Users/joefish/Desktop/data/philly-evict/census/tenure_bg_2010.csv')
-uis_tr_2010        <- fread("~/Desktop/data/philly-evict/census/uis_tr_2010.csv")
+philly_evict       <- fread(p_product(cfg, "evictions_clean"))
+logf("  evictions_clean: ", nrow(philly_evict), " rows", log_file = log_file)
+
+evict_xwalk        <- fread(p_product(cfg, "evict_address_xwalk"))
+logf("  evict_address_xwalk: ", nrow(evict_xwalk), " rows", log_file = log_file)
+
+philly_infousa_dt  <- fread(p_input(cfg, "infousa_cleaned"))
+logf("  infousa_cleaned: ", nrow(philly_infousa_dt), " rows", log_file = log_file)
+
+info_usa_xwalk     <- fread(p_product(cfg, "infousa_address_xwalk"))
+logf("  infousa_address_xwalk: ", nrow(info_usa_xwalk), " rows", log_file = log_file)
+
+tenure_bg_2010     <- fread(p_input(cfg, "tenure_bg_2010"))
+logf("  tenure_bg_2010: ", nrow(tenure_bg_2010), " rows", log_file = log_file)
+
+uis_tr_2010        <- fread(p_input(cfg, "uis_tr_2010"))
+logf("  uis_tr_2010: ", nrow(uis_tr_2010), " rows", log_file = log_file)
 
 
 ## ============================================================
@@ -94,6 +100,15 @@ prep_parcel_backbone <- function(philly_parcels, philly_bg) {
 
   # Spatial join to BG (expects geocode_x/geocode_y in same CRS as philly_bg)
   stopifnot(all(c("geocode_x", "geocode_y") %in% names(parcels_first)))
+
+  # Filter out rows with missing coordinates (can't geocode)
+  n_before <- nrow(parcels_first)
+  parcels_first <- parcels_first[!is.na(geocode_x) & !is.na(geocode_y)]
+  n_dropped <- n_before - nrow(parcels_first)
+  if (n_dropped > 0) {
+    message("  Dropped ", n_dropped, " parcels with missing coordinates")
+  }
+
   parcels_sf <- st_as_sf(
     parcels_first,
     coords = c("geocode_x", "geocode_y"),
@@ -150,8 +165,11 @@ prep_rent_altos_simple <- function(philly_lic, philly_altos) {
   lic[, num_years  := end_year - start_year]
   lic[, id         := .I]
 
-  lic[, pm.zip := stringr::str_pad(stringr::str_sub(coalesce(pm.zip, zip), 1, 5),
-                                   5, "left", "0")]
+  # Normalize pm.zip: strip "_" prefix if present, pad to 5 digits
+  lic[, pm.zip := coalesce(
+    stringr::str_remove(as.character(pm.zip), "^_"),
+    stringr::str_sub(zip, 1, 5)
+  ) %>% stringr::str_pad(5, "left", "0")]
 
   ## Expand to one row per PID × year
   lic_long <- lic[num_years > 0]
@@ -663,13 +681,23 @@ build_units_imputation <- function(philly_parcels,
 ## ============================================================
 
 ## 5.1 Parcel backbone
+logf("Building parcel backbone...", log_file = log_file)
 parcel_backbone <- prep_parcel_backbone(philly_parcels, philly_bg)
+assert_unique(parcel_backbone, "PID", "parcel_backbone")
+logf("  parcel_backbone: ", nrow(parcel_backbone), " rows, PID unique - PASSED", log_file = log_file)
 
 ## 5.2 Altos + licenses
+logf("Preparing Altos + licenses...", log_file = log_file)
 rent_list <- prep_rent_altos_simple(philly_lic, philly_altos)
+logf("  rent: ", nrow(rent_list$rent), " rows", log_file = log_file)
+logf("  lic_units: ", nrow(rent_list$lic_units), " rows", log_file = log_file)
+logf("  lic_long: ", nrow(rent_list$lic_long), " rows", log_file = log_file)
 
 ## 5.3 Evictions
+logf("Preparing evictions...", log_file = log_file)
 evict_agg <- prep_evictions_simple(philly_evict, evict_xwalk)
+assert_unique(evict_agg, c("PID", "year"), "evict_agg")
+logf("  evict_agg: ", nrow(evict_agg), " rows, (PID, year) unique - PASSED", log_file = log_file)
 
 ## 5.4 Ever-rentals panel
 ever_rental_out <- build_ever_rentals_panel(
@@ -680,6 +708,12 @@ ever_rental_out <- build_ever_rentals_panel(
 
 ever_rentals_pid   <- ever_rental_out$ever_rentals_pid
 ever_rentals_panel <- ever_rental_out$ever_rentals_panel
+
+assert_unique(ever_rentals_pid, "PID", "ever_rentals_pid")
+logf("  ever_rentals_pid: ", nrow(ever_rentals_pid), " rows, PID unique - PASSED", log_file = log_file)
+
+assert_unique(ever_rentals_panel, c("PID", "year"), "ever_rentals_panel")
+logf("  ever_rentals_panel: ", nrow(ever_rentals_panel), " rows, (PID, year) unique - PASSED", log_file = log_file)
 
 ## 5.5 Unit imputation (parcel-level)
 ## For renters, you probably want a rentals-only version of philly_rentals
@@ -694,13 +728,20 @@ parcel_units <- build_units_imputation(
   philly_rentals     = philly_rentals_for_units
 )
 
+assert_unique(parcel_units, "PID", "parcel_units")
+logf("  parcel_units: ", nrow(parcel_units), " rows, PID unique - PASSED", log_file = log_file)
+
 ## 5.6 Merge units onto ever-rentals
+logf("Merging units onto ever-rentals...", log_file = log_file)
+
 ever_rentals_pid <- merge(
   ever_rentals_pid,
   parcel_units,
   by    = "PID",
   all.x = TRUE
 )
+assert_unique(ever_rentals_pid, "PID", "ever_rentals_pid after units merge")
+logf("  ever_rentals_pid after units merge: ", nrow(ever_rentals_pid), " rows, PID unique - PASSED", log_file = log_file)
 
 ever_rentals_panel <- merge(
   ever_rentals_panel,
@@ -708,51 +749,26 @@ ever_rentals_panel <- merge(
   by    = "PID",
   all.x = TRUE
 )
+assert_unique(ever_rentals_panel, c("PID", "year"), "ever_rentals_panel after units merge")
+logf("  ever_rentals_panel after units merge: ", nrow(ever_rentals_panel), " rows, (PID, year) unique - PASSED", log_file = log_file)
 
-## 5.7 Export (edit paths as needed)
-OUTDIR = "~/Desktop/data/philly-evict/processed"
-fwrite(ever_rentals_pid,
-      paste0( OUTDIR,"/ever_rentals_pid.csv")
-       )
-fwrite(ever_rentals_panel,
-       #"output/ever_rentals_panel.csv"
-       paste0(OUTDIR, "/ever_rentals_panel.csv")
-       )
-fwrite(parcel_units,
-       #"output/ever_rental_parcel_units.csv"
-       paste0(OUTDIR, "/ever_rental_parcel_units.csv")
-       )
+## 5.7 Export
+logf("Writing outputs...", log_file = log_file)
 
-message("Done building ever-rentals and unit imputes.")
-message("Ever-rental parcels (PID-level): ", nrow(ever_rentals_pid))
-message("Ever-rental panel rows (PID-year): ", nrow(ever_rentals_panel))
+out_pid <- p_product(cfg, "ever_rentals_pid")
+fwrite(ever_rentals_pid, out_pid)
+logf("  Wrote ever_rentals_pid: ", nrow(ever_rentals_pid), " rows to ", out_pid, log_file = log_file)
+
+out_panel <- p_product(cfg, "ever_rentals_panel")
+fwrite(ever_rentals_panel, out_panel)
+logf("  Wrote ever_rentals_panel: ", nrow(ever_rentals_panel), " rows to ", out_panel, log_file = log_file)
+
+out_units <- p_product(cfg, "ever_rental_parcel_units")
+fwrite(parcel_units, out_units)
+logf("  Wrote ever_rental_parcel_units: ", nrow(parcel_units), " rows to ", out_units, log_file = log_file)
+
+logf("=== Finished make-rent-panel.R ===", log_file = log_file)
 
 
-#
-ever_rentals_panel <- fread(paste0(OUTDIR, "/ever_rentals_panel.csv"))
-
-# get correlation between evict / altos rents
-cor_test <- cor.test(
-  ever_rentals_panel$med_rent_altos,
-  ever_rentals_panel$med_eviction_rent,
-  use = "pairwise.complete.obs"
-)
-# ols
-ols_model <- feols(
-  med_eviction_rent ~ med_rent_altos,
-  data = ever_rentals_panel
-)
-ols_model
-
-# ggplot
-ggplot(ever_rentals_panel, aes(x = med_rent_altos, y = med_eviction_rent)) +
-  geom_point(alpha = 0.1) +
-  geom_smooth( color = "blue") +
-  # add abline
-  geom_abline(1, intercept = 0, color = "red") +
-  labs(
-    title = "Correlation between Altos and Eviction Rents",
-    x = "Median Rent (Altos)",
-    y = "Median Eviction Rent"
-  ) +
-  theme_minimal()
+# NOTE: Exploratory analysis code moved to analysis/ folder
+# See analysis/rent-validation.R for correlation checks between Altos and eviction rents

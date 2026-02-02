@@ -1,257 +1,249 @@
-#### libraries
-library(data.table)
-library(tidyverse)
-library(postmastr)
-library(bit64)
-library(sf)
-library(geosphere)
-library(DescTools)
-library(fixest)
+## ============================================================
+## make-evict-aggs.R
+## ============================================================
+## Purpose: Aggregate eviction filings to parcel-year and zip-year levels
+##
+## Inputs:
+##   - cfg$products$evictions_clean (clean/evictions_clean.csv)
+##   - cfg$products$xwalk_evictions_to_parcel (xwalks/xwalk_evictions_to_parcel.csv)
+##
+## Outputs:
+##   - cfg$products$evict_pid_year (panels/evict_pid_year.csv)
+##   - cfg$products$evict_zip_year (panels/evict_zip_year.csv)
+##
+## Primary keys:
+##   - evict_pid_year: (parcel_number, year)
+##   - evict_zip_year: (pm.zip, year)
+## ============================================================
 
-evict = fread("~/Desktop/data/philly-evict/phila-lt-data/summary-table.txt")
-evict_addys = fread("/Users/joefish/Desktop/data/philly-evict/evict_address_cleaned.csv")
+suppressPackageStartupMessages({
+  library(data.table)
+  library(tidyverse)
+})
 
+# ---- Load config and set up logging ----
+source("r/config.R")
 
-evict[,xcasenum := id]
-evict_m = merge(
-  evict, evict_addys %>% select( xcasenum, pm.address:pm.dir_concat),
-  by = "xcasenum"
-)
+cfg <- read_config()
+log_file <- p_out(cfg, "logs", "make-evict-aggs.log")
 
-xwalk = fread("~/Desktop/data/philly-evict/philly_evict_address_agg_xwalk.csv")
-xwalk_unique = xwalk[num_parcels_matched==1 & !is.na(PID)]
+logf("=== Starting make-evict-aggs.R ===", log_file = log_file)
+logf("Config: ", cfg$meta$config_path, log_file = log_file)
 
-#### functions ####
+# ---- Helper functions ----
 Mode <- function(x, na.rm = FALSE) {
-  if(na.rm){
-    x = x[!is.na(x)]
+  if (na.rm) {
+    x <- x[!is.na(x)]
   }
-
+  if (length(x) == 0) return(NA)
   ux <- unique(x)
   return(ux[which.max(tabulate(match(x, ux)))])
 }
 
-impute_units <- function(col){
-  col = col %>%
-    str_remove("\\.0+")
-  case_when(
-    str_detect(col, regex("studio", ignore_case = T)) ~ 0,
-    str_detect(col, regex("(zero|0)[\\s,]?(bd|bed|br[^a-z])", ignore_case = T)) ~ 0,
-    str_detect(col, regex("(one|1)[\\s,]?(bd|bed|br[^a-z])", ignore_case = T)) ~ 1,
-    str_detect(col, regex("(two|2)[\\s,]?(bd|bed|br[^a-z])", ignore_case = T)) ~ 2,
-    str_detect(col, regex("(three|3)[\\s,]?(bd|bed|br[^a-z])", ignore_case = T)) ~ 3,
-    str_detect(col, regex("(four|4)[\\s,]?(bd|bed|br[^a-z])", ignore_case = T)) ~ 4,
-    str_detect(col, regex("(five|5)[\\s,]?(bd|bed|br[^a-z])", ignore_case = T)) ~ 5,
-    TRUE ~ NA_real_
+# ---- Load input data ----
+logf("Loading input data...", log_file = log_file)
 
-  ) %>% return()
+# Load cleaned eviction data
+evict_path <- p_product(cfg, "evictions_clean")
+logf("  Loading evictions: ", evict_path, log_file = log_file)
+evict <- fread(evict_path)
+logf("  Loaded ", nrow(evict), " eviction records", log_file = log_file)
+
+# Load address-to-parcel crosswalk
+xwalk_path <- p_product(cfg, "xwalk_evictions_to_parcel")
+logf("  Loading crosswalk: ", xwalk_path, log_file = log_file)
+
+if (!file.exists(xwalk_path)) {
+  logf("WARNING: Crosswalk file not found. Run make-address-parcel-xwalk.R first.", log_file = log_file)
+  logf("Proceeding without parcel linkage - will aggregate by address only.", log_file = log_file)
+  xwalk <- NULL
+} else {
+  xwalk <- fread(xwalk_path)
+  logf("  Loaded ", nrow(xwalk), " crosswalk records", log_file = log_file)
 }
 
-impute_baths <- function(col){
-  col = col %>%
-    str_remove("\\.0+")
-  case_when(
-    str_detect(col, regex("(zero|0)[\\s,]?(bath|ba[^a-z])", ignore_case = T)) ~ 0,
-    str_detect(col, regex("(0.5)[\\s,]?(bath|ba[^a-z])", ignore_case = T)) ~ 0.5,
-    str_detect(col, regex("(one|1)[\\s,]?(bath|ba[^a-z])", ignore_case = T)) ~ 1,
-    str_detect(col, regex("(1.5)[\\s,]?(bath|ba[^a-z])", ignore_case = T)) ~ 1,
-    str_detect(col, regex("(two|2)[\\s,]?(bath|ba[^a-z])", ignore_case = T)) ~ 2,
-    str_detect(col, regex("(2.5)[\\s,]?(bath|ba[^a-z])", ignore_case = T)) ~ 2.5,
-    str_detect(col, regex("(three|3)[\\s,]?(bath|ba[^a-z])", ignore_case = T)) ~ 3,
-    str_detect(col, regex("(four|4)[\\s,]?(bath|ba[^a-z])", ignore_case = T)) ~ 4,
-    str_detect(col, regex("(five|5)[\\s,]?(bath|ba[^a-z])", ignore_case = T)) ~ 5,
-    TRUE ~ NA_real_
+# ---- Create filing date variables ----
+logf("Creating date variables...", log_file = log_file)
 
-  ) %>% return()
+# Parse filing date components
+evict[, day := as.numeric(str_sub(d_filing, start = -2, end = -1))]
+evict[, ym := year + (month - 1) / 12]
+evict[, ymd := year + (month - 1) / 12 + (day - 1) / 365]
+evict[, year_quarter := paste0(year, "Q", ceiling(month / 3))]
+
+# Parse rent if available (often missing or zero)
+evict[, claimed_rent := as.numeric(ongoing_rent)]
+evict[claimed_rent <= 0 | claimed_rent > 10000, claimed_rent := NA_real_]
+
+# Create address-based ID for records without parcel match
+evict[, address_id := paste(pm.house, pm.preDir, pm.street, pm.streetSuf, pm.sufDir, pm.zip, sep = "_")]
+
+logf("  Date variables created", log_file = log_file)
+
+# ---- Merge with crosswalk to get parcel IDs ----
+logf("Merging with address-parcel crosswalk...", log_file = log_file)
+
+if (!is.null(xwalk)) {
+  # The crosswalk links source_address_id to parcel_number
+  # Need to match on the address key used in the crosswalk
+
+  # First check what key columns are in the crosswalk
+  xwalk_cols <- names(xwalk)
+  logf("  Crosswalk columns: ", paste(xwalk_cols, collapse = ", "), log_file = log_file)
+
+  # Merge on n_sn_ss_c (the composite address key)
+  if ("n_sn_ss_c" %in% xwalk_cols && "n_sn_ss_c" %in% names(evict)) {
+    # Deduplicate crosswalk: take best match (highest score) per address
+    xwalk_unique <- xwalk[order(-match_score)][!duplicated(n_sn_ss_c)]
+    logf("  Deduplicated crosswalk: ", nrow(xwalk_unique), " unique addresses", log_file = log_file)
+
+    evict_m <- merge(
+      evict,
+      xwalk_unique[, .(n_sn_ss_c, parcel_number, match_tier, match_score)],
+      by = "n_sn_ss_c",
+      all.x = TRUE
+    )
+  } else if ("source_address_id" %in% xwalk_cols) {
+    # Alternative: match on source_address_id
+    evict_m <- merge(
+      evict,
+      xwalk[, .(source_address_id, parcel_number, match_tier, match_score)],
+      by.x = "pm.uid",
+      by.y = "source_address_id",
+      all.x = TRUE
+    )
+  } else {
+    logf("WARNING: Cannot determine crosswalk join key. Using address_id fallback.", log_file = log_file)
+    evict_m <- copy(evict)
+    evict_m[, parcel_number := NA_character_]
+  }
+
+  # Report match rate
+  n_matched <- evict_m[!is.na(parcel_number), .N]
+  match_rate <- round(100 * n_matched / nrow(evict_m), 1)
+  logf("  Matched to parcel: ", n_matched, " (", match_rate, "%)", log_file = log_file)
+} else {
+  evict_m <- copy(evict)
+  evict_m[, parcel_number := NA_character_]
+  logf("  No crosswalk - parcel_number set to NA", log_file = log_file)
 }
 
+# Create combined ID (parcel if available, else address)
+evict_m[, pid_or_address := coalesce(as.character(parcel_number), address_id)]
 
-# make some evict vars
-# first, let's get the number of months a listing has been up for
-evict[,day := as.numeric(str_sub(d_filing, start = -2, end = -1))]
-evict[,ym := year + (month-1)/12]
-evict[,ymd := year + (month-1)/12 + (day-1) / 365]
-evict[,price :=as.numeric(ongoing_rent)]
-evict[,beds_txt := NA_real_]
-evict[,beds_imp := NA_real_]
-evict[,price_per_bed :=as.numeric(price)/beds_imp]
+# ---- Aggregate to parcel-year level ----
+logf("Aggregating to parcel-year level...", log_file = log_file)
 
+evict_pid_year <- evict_m[!is.na(parcel_number), .(
+  n_filings = .N,
+  n_cases = uniqueN(id),
+  med_claimed_rent = median(claimed_rent, na.rm = TRUE),
+  mean_claimed_rent = mean(claimed_rent, na.rm = TRUE),
+  n_with_rent = sum(!is.na(claimed_rent)),
+  first_filing_date = min(d_filing, na.rm = TRUE),
+  last_filing_date = max(d_filing, na.rm = TRUE),
+  n_unique_addresses = uniqueN(n_sn_ss_c),
+  modal_zip = Mode(pm.zip, na.rm = TRUE)
+), by = .(parcel_number, year)]
 
-# merge evict and xwalk
-evict_m = merge(evict,
-                xwalk_unique,
-                by = "xcasenum",
-                all.x = TRUE)
+logf("  Created evict_pid_year: ", nrow(evict_pid_year), " rows", log_file = log_file)
+logf("  Unique parcels: ", uniqueN(evict_pid_year$parcel_number), log_file = log_file)
+logf("  Year range: ", min(evict_pid_year$year, na.rm = TRUE), " - ", max(evict_pid_year$year, na.rm = TRUE), log_file = log_file)
 
-evict[,address_id := .GRP, by = .(pm.house, pm.street, pm.streetSuf, pm.preDir, pm.sufDir,pm.zip)]
-evict[,bed_address_id := .GRP, by = .(address_id, beds_imp)]
+# ---- ENHANCED DIAGNOSTICS: Parcel-Year Panel ----
+logf("  --- Enhanced Diagnostics ---", log_file = log_file)
 
+# 1. Temporal coverage
+year_counts <- evict_pid_year[, .N, by = year][order(year)]
+logf("  Filings by year:", log_file = log_file)
+for (i in 1:nrow(year_counts)) {
+  logf("    ", year_counts$year[i], ": ", year_counts$N[i], " parcel-years", log_file = log_file)
+}
 
-# now begins the process of cleaning the evict data...
-# 54% have a unique PID in boston... could be more but condos...
-# more like 84% in houston
-evict_m[,.N, by = is.na(PID)][,per := N / sum(N)][]
-evict_m[,PID_replace := coalesce(PID, address_id)]
-evict_m[,bed_bath_pid_ID := .GRP, by = .(PID_replace, beds_imp, baths) ]
-evict_m[,beds_round := round(beds_imp,0)]
-# choice of whether to windsorize data to get rid of obviously bad listings...
-evict_m[,bed_year_percentile := ntile(price, 1000), by = year]
-# drop the units listed for < 600 (this is less than 1/1000 of data, so im pretty sure its just typos)
-# other units, e.g. super expensive ones can be dropped later
+# 2. Average years per parcel
+years_per_parcel <- evict_pid_year[, .(n_years = .N), by = parcel_number]
+logf("  Years per parcel:", log_file = log_file)
+logf("    Mean: ", round(mean(years_per_parcel$n_years), 2), log_file = log_file)
+logf("    Median: ", median(years_per_parcel$n_years), log_file = log_file)
+logf("    Max: ", max(years_per_parcel$n_years), log_file = log_file)
+ypp_dist <- years_per_parcel[, .N, by = n_years][order(n_years)]
+logf("    Distribution: ", paste(ypp_dist$n_years, "yrs=", ypp_dist$N, collapse = ", "), log_file = log_file)
 
-# can sample some non merged to see if there's an obvious match
-sample_ids = evict_m[is.na(PID) & !is.na(pm.uid_zip), sample(pm.uid_zip, 1)]
+# 3. Filings per parcel-year distribution
+filing_quantiles <- quantile(evict_pid_year$n_filings, probs = c(0, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99, 1))
+logf("  Filings per parcel-year:", log_file = log_file)
+logf("    Min: ", filing_quantiles[1], ", Q1: ", filing_quantiles[2],
+    ", Median: ", filing_quantiles[3], ", Q3: ", filing_quantiles[4], log_file = log_file)
+logf("    P90: ", filing_quantiles[5], ", P95: ", filing_quantiles[6],
+    ", P99: ", filing_quantiles[7], ", Max: ", filing_quantiles[8], log_file = log_file)
 
-# View(evict_m[address_id %in% sample_ids] )
-# View(fa[city_c == "boston" & streetName_c == "beacon"])
+# 4. High-frequency parcels (potential large landlords or data issues)
+high_freq <- evict_pid_year[n_filings >= 10, .(parcel_number, year, n_filings)][order(-n_filings)]
+if (nrow(high_freq) > 0) {
+  logf("  High-frequency parcels (>=10 filings/year): ", nrow(high_freq), " parcel-years", log_file = log_file)
+  logf("    Top 5:", log_file = log_file)
+  for (i in 1:min(5, nrow(high_freq))) {
+    logf("      ", high_freq$parcel_number[i], " (", high_freq$year[i], "): ",
+        high_freq$n_filings[i], " filings", log_file = log_file)
+  }
+}
 
-# sample some that did merge to check match quality
-sample_ids = evict_m[!is.na(PID) & !is.na(pm.uid_zip), sample(pm.uid_zip, 100)]
-# View(evict_m[pm.uid_zip %in% sample_ids] %>% distinct(street_address_lower, fa_minus_unit,PID, merge))
-# View(fa[PID == as.integer64(2000092171001),.(fullAddress_c, type, landUsage)])
-# here are the basic issues:
-# it's not clear how long a listing has been up for (e.g, is it still being listed)
-# so grabbing the months can be dicey
-# it's not clear how much to believe large fluctations in prices
-# this is going to be an attempt to smooth this all out
+# 5. Match tier coverage (if match_tier available)
+if ("match_tier" %in% names(evict_m)) {
+  tier_coverage <- evict_m[!is.na(parcel_number), .N, by = match_tier][, pct := round(100 * N / sum(N), 1)]
+  logf("  Match tier coverage:", log_file = log_file)
+  for (i in 1:nrow(tier_coverage)) {
+    logf("    ", tier_coverage$match_tier[i], ": ", tier_coverage$N[i],
+        " (", tier_coverage$pct[i], "%)", log_file = log_file)
+  }
+}
 
-# first step is to make a panel of all listings by ID- ym
-evict_m[,num_listings_ym := .N, by = .(bed_bath_pid_ID, ym)]
-evict_m[,num_listings_ymw := .N, by = .(bed_bath_pid_ID, ymd)]
-evict_m[,num_prices_ym := uniqueN(price), by = .(bed_bath_pid_ID, ym)]
-evict_m[,num_prices_ym_round100 := uniqueN(100*round(price/100,0)), by = .(bed_bath_pid_ID, ym)]
-evict_m[,num_prices_ymw := uniqueN(price), by = .(bed_bath_pid_ID, ymd)]
-evict_m[,num_years_listed := uniqueN(year), by = .(bed_bath_pid_ID)]
-evict_m[,num_years_listed_PID := uniqueN(year), by = .(PID_replace)]
-evict_m[,listing_id := .GRP, by = .(bed_bath_pid_ID, property_name)]
-# try to get some sense of people who just leave their listings on
-evict_m = evict_m[order(bed_bath_pid_ID, ymd),]
-evict_m[,rep_listing := replace_na(price == lag(price),0), by = listing_id]
-evict_m[,time_gap := c(NA, diff(ymd)), by = listing_id]
-# have a running variable that resets when a listing changes
-evict_m[,cum_rep_listing :=ifelse(rep_listing == 1, seq_len(.N), 0), by = .(listing_id, rleid(rep_listing))]
-evict_m[,quantile(cum_rep_listing,na.rm = T, probs = seq(0,1,0.01))]
+# ---- Aggregate to zip-year level ----
+logf("Aggregating to zip-year level...", log_file = log_file)
 
-# sample the listings that have been up for a long time
-sample_ids = evict_m[cum_rep_listing > 10 & !is.na(PID) , sample(bed_bath_pid_ID, 1)]
-# View(evict_m[bed_bath_pid_ID %in% sample_ids] %>%
-#        relocate(bed_bath_pid_ID,PID,property_name,listing_id,
-#                 date,street_address_lower,fa_minus_unit, cum_rep_listing,rep_listing,
-#                 beds_imp, baths, price, landUsage, ymd) %>%
-#        select(-contains("pm.")))
+evict_zip_year <- evict_m[!is.na(pm.zip) & nzchar(pm.zip), .(
+  n_filings = .N,
+  n_cases = uniqueN(id),
+  n_parcels = uniqueN(parcel_number[!is.na(parcel_number)]),
+  n_addresses = uniqueN(n_sn_ss_c),
+  med_claimed_rent = median(claimed_rent, na.rm = TRUE),
+  mean_claimed_rent = mean(claimed_rent, na.rm = TRUE),
+  n_with_rent = sum(!is.na(claimed_rent))
+), by = .(pm.zip, year)]
 
-# pretty arbitrary but I'm gonna slice off listings based on whether they've been > 10
-# weeks on the market without a price cut
-evict_m = evict_m[cum_rep_listing <= 10 ]
+logf("  Created evict_zip_year: ", nrow(evict_zip_year), " rows", log_file = log_file)
+logf("  Unique zips: ", uniqueN(evict_zip_year$pm.zip), log_file = log_file)
 
-# what's going to be true is that a bunch have multiple prices listed within the same
-# year-month
-ym_listings = evict_m[,.N, by = num_listings_ym][order(num_listings_ym)]
-ymw_listings = evict_m[,.N, by = num_listings_ymw][order(num_listings_ymw)]
-ym_prices = evict_m[,.N, by = num_prices_ym][order(num_prices_ym)]
-ym_prices_round100 = evict_m[,.N, by = num_prices_ym_round100][order(num_prices_ym_round100)]
-ymw_prices = evict_m[,.N, by = num_prices_ymw][order(num_prices_ymw)]
+# ---- Assertions ----
+logf("Running assertions...", log_file = log_file)
 
-ym_listings %>%
-  merge(ymw_listings,
-        by.x = "num_listings_ym",
-        by.y = "num_listings_ymw",
-        suffixes = c("_ym_listings","_ymw_listings"),
-        all = TRUE) %>%
-  merge(ym_prices,
-        by.x = "num_listings_ym",
-        by.y = "num_prices_ym",
-        suffixes = c("_ym_price","_ym_prices"),
-        all = TRUE) %>%
-  merge(ym_prices_round100,
-        by.x = "num_listings_ym",
-        by.y = "num_prices_ym_round100",
-        suffixes = c("","_ym_prices_round100"),
-        all = TRUE) %>%
-  merge(ymw_prices,
-        by.x = "num_listings_ym",
-        by.y = "num_prices_ymw",
-        suffixes = c("","_ymw_prices"),
-        all = TRUE) %>%
-  rename(N_ym_price = N)%>%
-  slice(1:15)
+# Check evict_pid_year uniqueness
+n_pid_year <- nrow(evict_pid_year)
+n_unique_pid_year <- uniqueN(evict_pid_year, by = c("parcel_number", "year"))
+if (n_pid_year != n_unique_pid_year) {
+  stop("ASSERTION FAILED: evict_pid_year is not unique on (parcel_number, year)")
+}
+logf("  evict_pid_year unique on (parcel_number, year): OK", log_file = log_file)
 
-unique(evict_m, by ="bed_bath_pid_ID")[,.N, by = num_years_listed][order(num_years_listed)]
-unique(evict_m, by ="PID_replace")[,.N, by = num_years_listed_PID][order(num_years_listed_PID)]
-print("made vars")
+# Check evict_zip_year uniqueness
+n_zip_year <- nrow(evict_zip_year)
+n_unique_zip_year <- uniqueN(evict_zip_year, by = c("pm.zip", "year"))
+if (n_zip_year != n_unique_zip_year) {
+  stop("ASSERTION FAILED: evict_zip_year is not unique on (pm.zip, year)")
+}
+logf("  evict_zip_year unique on (pm.zip, year): OK", log_file = log_file)
 
-# sample some
-sample_ids = evict_m[num_prices_ymw > 5 & !is.na(PID), sample(bed_bath_pid_ID, 1)]
-# View(evict_m[bed_bath_pid_ID %in% sample_ids] %>%
-#        relocate(bed_bath_pid_ID,PID,property_name,listing_id,
-#                 date,street_address_lower,cum_rep_listing,rep_listing,landUsage,
-#                 beds_imp, baths, price, landUsage, ymd) %>%
-#        select(-contains("pm.")) %>%
-#        arrange(bed_bath_pid_ID, ymd, price)
-#      )
+# ---- Write outputs ----
+logf("Writing outputs...", log_file = log_file)
 
-pid_to_check = as.integer64(2000114413001)
+# Write parcel-year aggregation
+out_pid_year <- p_product(cfg, "evict_pid_year")
+fwrite(evict_pid_year, out_pid_year)
+logf("  Wrote evict_pid_year: ", nrow(evict_pid_year), " rows to ", out_pid_year, log_file = log_file)
 
-#View(fa[PID == pid_to_check])
-evict_m[,price := as.numeric(price)]
-# dumb thing but uniqueN is much slower for small T, large N
-evict_m[,num_prices := length(unique(price)), by = .(ymd, bed_bath_pid_ID)]
-evict_m[,num_prices_year := length(unique(price)), by = .(year, bed_bath_pid_ID)]
-evict_m[,num_addresses := length(unique(address_id)), by = .(ymd, bed_bath_pid_ID)]
-evict_m[,change_price_year := price != lag(price), by = .(bed_bath_pid_ID, year)]
+# Write zip-year aggregation
+out_zip_year <- p_product(cfg, "evict_zip_year")
+fwrite(evict_zip_year, out_zip_year)
+logf("  Wrote evict_zip_year: ", nrow(evict_zip_year), " rows to ", out_zip_year, log_file = log_file)
 
-# now aggregate to unit level...
-# cut off the big bed places and big bath places cause they give weird answers...
-evict_year_bedrooms = evict_m[beds_imp<=6 & baths <= 4,list(
-  med_price = median(price, na.rm = TRUE),
-  mean_price = mean(price, na.rm = TRUE),
-  sd_price = sd(price, na.rm = TRUE),
-  mad_price = mad(price, na.rm = TRUE),
-  min_price = min(price, na.rm = TRUE),
-  max_price = max(price, na.rm = TRUE),
-  num_listings = sum(num_listings),
-  num_prices = uniqueN(price),
-  num_price_changes = sum(change_price_year,na.rm = T),
-  street_address_lower_first = first(street_address_lower),
-  address_id_first = first(address_id),
-  #num_addresses = uniqueN(address_id),
-  #year = first(year),
-  ymd = first(ymd),
-  month = first(month),
-  day = first(day)
-), by = .(PID,bed_bath_pid_ID, year)]
-
-# now aggregate to building level...
-# cut off the big bed places and big bath places cause they give weird answers...
-evict_year_building = evict_m[beds_imp<=6 & baths <= 4,list(
-  med_price = median(price, na.rm = TRUE),
-  mean_price = mean(price, na.rm = TRUE),
-  sd_price = sd(price, na.rm = TRUE),
-  mad_price = mad(price, na.rm = TRUE),
-  min_price = min(price, na.rm = TRUE),
-  max_price = max(price, na.rm = TRUE),
-  num_listings = sum(num_listings),
-  num_prices = uniqueN(price),
-  num_price_changes = sum(change_price_year,na.rm = T),
-  street_address_lower_first = first(street_address_lower),
-  address_id_first = first(address_id),
-  #num_addresses = uniqueN(address_id),
-  #year = first(year),
-  ymd = first(ymd),
-  month = first(month),
-  day = first(day)
-), by = .(PID, year)]
-
-
-
-evict_year_building[order(year),year_gap := c(NA, diff(year)), by = PID]
-evict_year_bedrooms[order(year),year_gap := c(NA, diff(year)), by = bed_bath_pid_ID]
-#
-evict_year_building[,num_years_in_sample := uniqueN(year[!is.na(med_price)]), by = PID]
-evict_year_building[,max_year_gap := max(year_gap,na.rm = T), by = PID]
-
-evict_year_bedrooms[,num_years_in_sample := uniqueN(year[!is.na(med_price)]), by = bed_bath_pid_ID]
-evict_year_bedrooms[,max_year_gap := max(year_gap,na.rm = T), by = bed_bath_pid_ID]
-
-fwrite( evict_year_bedrooms, glue::glue("~/Desktop/data/philly-evict/evict_year_bedrooms_philly.csv"))
-fwrite(evict_year_building, glue::glue("~/Desktop/data/philly-evict/evict_year_building_philly.csv"))
+logf("=== Finished make-evict-aggs.R ===", log_file = log_file)

@@ -1,32 +1,66 @@
-#### libraries ####
-library(data.table)
-library(tidyverse)
-library(postmastr)
-library(bit64)
-library(glue)
-library(janitor)
+## ============================================================
+## make-building-data.R
+## ============================================================
+## Purpose: Create parcel-period panel of building permits,
+##          complaints, violations, and investigations
+##
+## Inputs:
+##   - cfg$inputs$open_data_permits (open-data/permits.csv)
+##   - cfg$inputs$open_data_complaints (open-data/complaints.csv)
+##   - cfg$inputs$open_data_violations (open-data/violations.csv)
+##   - cfg$inputs$open_data_case_investigations (open-data/case_investigations.csv)
+##   - cfg$products$parcels_clean (clean/parcels_clean.csv)
+##
+## Outputs:
+##   - cfg$products$building_data (panels/building_data_{agg_level}.csv)
+##
+## Primary key: (parcel_number, period)
+## ============================================================
 
-print("loaded libraries")
+suppressPackageStartupMessages({
+  library(data.table)
+  library(tidyverse)
+  library(postmastr)
+  library(bit64)
+  library(glue)
+  library(janitor)
+})
+
+# ---- Load config and set up logging ----
+source("r/config.R")
+
+cfg <- read_config()
+log_file <- p_out(cfg, "logs", "make-building-data.log")
+
+logf("=== Starting make-building-data.R ===", log_file = log_file)
+logf("Config: ", cfg$meta$config_path, log_file = log_file)
 
 #### ---------- SETTINGS ----------- ####
-# Choose: "year", "quarter", or "month"
-agg_level <- "quarter"   # <- change here
+# Aggregation level: "year", "quarter", or "month"
+# Read from config, with fallback to "quarter"
+agg_level <- cfg$run$building_data_agg_level %||% "quarter"
+stopifnot(agg_level %in% c("year", "quarter", "month"))
 
 # Optional: period domain bounds (used if you want to override min/max from data)
 domain_start <- as.Date("2005-01-01")
 domain_end   <- as.Date("2025-12-31")
 
-#### directories ####
-print("setting directories")
-input_dir  = "~/Desktop/data/philly-evict/open-data"
-output_dir = "~/Desktop/data/philly-evict/open-data"
+logf("Aggregation level: ", agg_level, log_file = log_file)
 
-setwd(input_dir)
-permits        = fread("permits.csv")
-complaints     = fread("complaints.csv")
-violations     = fread("violations.csv")
-investigations = fread("case_investigations.csv")
-parcels        = fread("/Users/joefish/Desktop/data/philly-evict/parcel_address_cleaned.csv")
+# ---- Load input data ----
+logf("Loading input data...", log_file = log_file)
+
+permits        <- fread(p_input(cfg, "open_data_permits"))
+complaints     <- fread(p_input(cfg, "open_data_complaints"))
+violations     <- fread(p_input(cfg, "open_data_violations"))
+investigations <- fread(p_input(cfg, "open_data_case_investigations"))
+parcels        <- fread(p_product(cfg, "parcels_clean"))
+
+logf("  Permits: ", nrow(permits), " rows", log_file = log_file)
+logf("  Complaints: ", nrow(complaints), " rows", log_file = log_file)
+logf("  Violations: ", nrow(violations), " rows", log_file = log_file)
+logf("  Investigations: ", nrow(investigations), " rows", log_file = log_file)
+logf("  Parcels: ", nrow(parcels), " rows", log_file = log_file)
 
 # ---------- Helpers: date -> period ----------
 as_date_safe <- function(x) {
@@ -356,23 +390,33 @@ parcel_grid <- expand_grid(
 ) |> as.data.table()
 
 # ---------- Suffix & merges ----------
+logf("Merging data sources...", log_file = log_file)
+
 permits_agg <- permits_agg |>
   rename_with(~paste0(.x, "_permit_count"), -c(parcel_number, period, total_permits))
+logf("  permits_agg: ", nrow(permits_agg), " rows, ", uniqueN(permits_agg$parcel_number), " unique parcels", log_file = log_file)
 
 complaints_agg <- complaints_agg |>
   rename_with(~paste0(.x, "_complaint_count"), -c(parcel_number, period, total_complaints))
+logf("  complaints_agg: ", nrow(complaints_agg), " rows, ", uniqueN(complaints_agg$parcel_number), " unique parcels", log_file = log_file)
 
 violations_agg <- violations_agg |>
   rename_with(~paste0(.x, "_violation_count"), -c(parcel_number, period, total_violations))
+logf("  violations_agg: ", nrow(violations_agg), " rows, ", uniqueN(violations_agg$parcel_number), " unique parcels", log_file = log_file)
 
 investigations_agg <- investigations_agg |>
   rename_with(~paste0(.x, "_investigation_count"), -c(parcel_number, period, total_investigations))
+logf("  investigations_agg: ", nrow(investigations_agg), " rows, ", uniqueN(investigations_agg$parcel_number), " unique parcels", log_file = log_file)
+
+logf("  parcel_grid: ", nrow(parcel_grid), " rows", log_file = log_file)
 
 building_data <- parcel_grid |>
   merge(permits_agg,        by = c("parcel_number","period"), all.x = TRUE) |>
   merge(complaints_agg,     by = c("parcel_number","period"), all.x = TRUE) |>
   merge(violations_agg,     by = c("parcel_number","period"), all.x = TRUE) |>
   merge(investigations_agg, by = c("parcel_number","period"), all.x = TRUE)
+
+logf("  building_data after merges: ", nrow(building_data), " rows", log_file = log_file)
 
 # Fill NAs with zeros
 building_data <- building_data |>
@@ -389,7 +433,34 @@ building_data[ , .(
 # Derive year integer (useful even for month/quarter outputs)
 building_data[ , year := as.integer(substr(period, 1, 4))]
 
-# ---------- Write ----------
-outfile <- glue("{output_dir}/building_data_{agg_level}.csv")
+# ---- Assertions ----
+logf("Running assertions...", log_file = log_file)
+
+n_total <- nrow(building_data)
+n_unique_keys <- building_data[, uniqueN(paste(parcel_number, period))]
+logf("  Total rows: ", n_total, ", Unique (parcel_number, period): ", n_unique_keys, log_file = log_file)
+
+if (n_total != n_unique_keys) {
+  logf("WARNING: Duplicate keys detected!", log_file = log_file)
+  stop("Assertion failed: (parcel_number, period) must be unique")
+} else {
+  logf("  Assertion PASSED: (parcel_number, period) is unique", log_file = log_file)
+}
+
+# Verify required columns
+required_cols <- c("parcel_number", "period", "year", "total_permits", "total_complaints",
+                   "total_violations", "total_investigations")
+missing_cols <- setdiff(required_cols, names(building_data))
+if (length(missing_cols) > 0) {
+  stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
+}
+logf("  Required columns present", log_file = log_file)
+
+# ---- Write output ----
+outfile <- p_proc(cfg, glue("panels/building_data_{agg_level}.csv"))
+logf("Writing output to: ", outfile, log_file = log_file)
+
 fwrite(building_data, file = outfile, row.names = FALSE, na = "NA")
-print(glue("Wrote {outfile}"))
+
+logf("Wrote ", nrow(building_data), " rows to ", outfile, log_file = log_file)
+logf("=== Finished make-building-data.R ===", log_file = log_file)
