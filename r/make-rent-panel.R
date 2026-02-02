@@ -118,8 +118,36 @@ prep_parcel_backbone <- function(philly_parcels, philly_bg) {
 
   parcels_dt <- as.data.table(parcels_sf)[, geometry := NULL]
 
-  # Basic cleaning / recodes for building descriptors if present
-  if ("building_code_description_new" %in% names(parcels_dt)) {
+  # Extract stories from building code description
+  if ("building_code_description" %in% names(parcels_dt)) {
+    parcels_dt[, stories_from_code := extract_stories_from_code(building_code_description)]
+  }
+
+  # Standardize building type using both old and new columns
+  if (all(c("building_code_description", "building_code_description_new") %in% names(parcels_dt))) {
+    parcels_dt[, building_type := standardize_building_type(
+      bldg_code_desc = building_code_description,
+      bldg_code_desc_new = building_code_description_new,
+      num_bldgs = if ("num_bldgs" %in% names(parcels_dt)) num_bldgs else NA_integer_,
+      num_stories = if ("stories_from_code" %in% names(parcels_dt)) stories_from_code else NA_real_
+    )]
+
+    # Also create legacy column for backward compatibility with models
+    parcels_dt[, building_code_description_new_fixed := fcase(
+      building_type == "ROW", "ROW",
+      building_type == "TWIN", "TWIN",
+      building_type == "LOWRISE_MULTI", "LOW RISE APARTMENTS",
+      building_type == "MIDRISE_MULTI", "MID RISE APARTMENTS",
+      building_type == "HIGHRISE_MULTI", "HIGH RISE APARTMENTS",
+      building_type == "MULTI_BLDG_COMPLEX", "GARDEN APARTMENTS",
+      building_type %in% c("SMALL_MULTI_2_4", "OTHER"), "APARTMENTS OTHER",
+      building_type == "CONDO", "CONDO",
+      building_type == "DETACHED", "OTHER",
+      building_type == "COMMERCIAL_MIXED", "OTHER",
+      default = "OTHER"
+    )]
+  } else if ("building_code_description_new" %in% names(parcels_dt)) {
+    # Fallback if only new column exists (legacy behavior)
     parcels_dt[, building_code_description_new_fixed := fcase(
       grepl("ROW", building_code_description_new, ignore.case = TRUE), "ROW",
       grepl("TWIN", building_code_description_new, ignore.case = TRUE), "TWIN",
@@ -571,7 +599,40 @@ build_units_imputation <- function(philly_parcels,
       "quality_grade" %in% names(parcel_agg_for_model)) {
     parcel_agg_for_model[, quality_grade_fixed := as.factor(quality_grade)]
   }
-  if ("building_code_description_new" %in% names(parcel_agg_for_model)) {
+
+  # Extract stories and standardize building type if not already done
+  if (!"stories_from_code" %in% names(parcel_agg_for_model) &&
+      "building_code_description" %in% names(parcel_agg_for_model)) {
+    parcel_agg_for_model[, stories_from_code := extract_stories_from_code(building_code_description)]
+  }
+
+  if (!"building_type" %in% names(parcel_agg_for_model) &&
+      all(c("building_code_description", "building_code_description_new") %in% names(parcel_agg_for_model))) {
+    parcel_agg_for_model[, building_type := standardize_building_type(
+      bldg_code_desc = building_code_description,
+      bldg_code_desc_new = building_code_description_new,
+      num_bldgs = if ("num_bldgs_imp" %in% names(parcel_agg_for_model)) num_bldgs_imp else NA_integer_,
+      num_stories = if ("num_stories_imp" %in% names(parcel_agg_for_model)) num_stories_imp else stories_from_code
+    )]
+  }
+
+  # Create legacy column for model (mapping from new building_type)
+  if ("building_type" %in% names(parcel_agg_for_model)) {
+    parcel_agg_for_model[, building_code_description_new_fixed := fcase(
+      building_type == "ROW", "ROW",
+      building_type == "TWIN", "TWIN",
+      building_type == "LOWRISE_MULTI", "LOW RISE APARTMENTS",
+      building_type == "MIDRISE_MULTI", "MID RISE APARTMENTS",
+      building_type == "HIGHRISE_MULTI", "HIGH RISE APARTMENTS",
+      building_type == "MULTI_BLDG_COMPLEX", "GARDEN APARTMENTS",
+      building_type %in% c("SMALL_MULTI_2_4", "OTHER"), "APARTMENTS OTHER",
+      building_type == "CONDO", "CONDO",
+      building_type == "DETACHED", "OTHER",
+      building_type == "COMMERCIAL_MIXED", "OTHER",
+      default = "OTHER"
+    )]
+  } else if ("building_code_description_new" %in% names(parcel_agg_for_model)) {
+    # Fallback to legacy behavior if building_type not available
     parcel_agg_for_model[, building_code_description_new_fixed := fcase(
       grepl("ROW", building_code_description_new, ignore.case = TRUE), "ROW",
       grepl("TWIN", building_code_description_new, ignore.case = TRUE), "TWIN",

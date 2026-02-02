@@ -33,6 +33,7 @@ suppressPackageStartupMessages({
 
 # ---- Load config and set up logging ----
 source("r/config.R")
+source("r/helper-functions.R")
 
 cfg <- read_config()
 log_file <- p_out(cfg, "logs", "make-occupancy-vars.log")
@@ -156,11 +157,29 @@ philly_parcels <- merge(
   all.x = TRUE
 )
 
-# Story imputations by building code group
+# Ensure building_type is available for imputation grouping
+if (!"building_type" %in% names(philly_parcels) &&
+    all(c("building_code_description", "building_code_description_new") %in% names(philly_parcels))) {
+
+  # Extract stories from building code first
+  philly_parcels[, stories_from_code := extract_stories_from_code(building_code_description)]
+
+  # Create building_type (num_bldgs may not be available yet, so pass NA)
+  philly_parcels[, building_type := standardize_building_type(
+    bldg_code_desc = building_code_description,
+    bldg_code_desc_new = building_code_description_new,
+    num_bldgs = if ("num_bldgs" %in% names(philly_parcels)) num_bldgs else NA_integer_,
+    num_stories = stories_from_code
+  )]
+}
+
+# Story imputations by building type group (more meaningful than old fixed column)
+impute_group_col <- if ("building_type" %in% names(philly_parcels)) "building_type" else "building_code_description_new_fixed"
+
 philly_parcels[
   ,
   num_stories_mean := mean(number_stories, na.rm = TRUE),
-  by = building_code_description_new_fixed
+  by = c(impute_group_col)
 ]
 philly_parcels[
   ,
@@ -175,7 +194,7 @@ philly_parcels[
 philly_parcels[
   ,
   num_bldgs_mean := mean(num_bldgs, na.rm = TRUE),
-  by = building_code_description_new_fixed
+  by = c(impute_group_col)
 ]
 philly_parcels[
   ,
@@ -291,42 +310,98 @@ bg_targets[
 # -------------------------------
 # 5) STRUCTURE BINS & PARCEL-BUILDING TABLE
 # -------------------------------
-parcel_agg[
-  ,
-  building_code_description_new_fixed :=
-    stringr::str_to_lower(building_code_description_new_fixed)
-]
 
-parcel_agg[
-  ,
-  structure_bin := case_when(
-    str_detect(building_code_description_new_fixed, "single|detached") ~ "u_1_detached",
-    str_detect(building_code_description_new_fixed, "row|town|attached|condo") ~ "u_1_attached",
-    str_detect(building_code_description_new_fixed, "twin|old style") ~ "u_2_units",
-    str_detect(building_code_description_new_fixed, "3|4 unit|triplex|quad") ~ "u_3_4_units",
-    str_detect(building_code_description_new_fixed, "apartments other") ~ "u_5_9_units",
-    str_detect(building_code_description_new_fixed, "garden|low rise") ~ "u_10_19_units",
-    str_detect(building_code_description_new_fixed, "mid rise") ~ "u_20_49_units",
-    str_detect(building_code_description_new_fixed, "50\\+|high rise|tower") |
-      num_stories_imp >= 6 ~ "u_50plus_units",
-    str_detect(building_code_description_new_fixed, "other") ~ NA_character_,
-    TRUE ~ NA_character_
-  )
-]
+# Ensure building_type is available; create if missing
+if (!"building_type" %in% names(parcel_agg) &&
+    all(c("building_code_description", "building_code_description_new") %in% names(parcel_agg))) {
 
-# For "other", back out from units/bldgs
-parcel_agg[
-  building_code_description_new_fixed == "other",
-  structure_bin := case_when(
-    num_units_imp <= 1 & num_bldgs_imp == 1 ~ "u_1_attached",
-    num_units_imp <= 2 & num_bldgs_imp == 1 ~ "u_2_units",
-    num_units_imp <= 4 & num_bldgs_imp == 1 ~ "u_3_4_units",
-    num_units_imp <= 9 & num_bldgs_imp == 1 ~ "u_5_9_units",
-    num_units_imp <= 19 & num_bldgs_imp == 1 ~ "u_10_19_units",
-    num_units_imp <= 49 & num_bldgs_imp == 1 ~ "u_20_49_units",
-    num_units_imp >= 50 | num_bldgs_imp > 1  ~ "u_50plus_units"
-  )
-]
+  # Extract stories if not already present
+  if (!"stories_from_code" %in% names(parcel_agg)) {
+    parcel_agg[, stories_from_code := extract_stories_from_code(building_code_description)]
+  }
+
+  parcel_agg[, building_type := standardize_building_type(
+    bldg_code_desc = building_code_description,
+    bldg_code_desc_new = building_code_description_new,
+    num_bldgs = if ("num_bldgs_imp" %in% names(parcel_agg)) num_bldgs_imp else NA_integer_,
+    num_stories = if ("num_stories_imp" %in% names(parcel_agg)) num_stories_imp else stories_from_code
+  )]
+}
+
+# Map building_type to structure_bin (for census matching)
+# Direct mapping from standardized building types
+if ("building_type" %in% names(parcel_agg)) {
+  parcel_agg[
+    ,
+    structure_bin := fcase(
+      building_type == "DETACHED", "u_1_detached",
+      building_type == "ROW", "u_1_attached",
+      building_type == "CONDO", "u_1_attached",
+      building_type == "TWIN", "u_2_units",
+      building_type == "SMALL_MULTI_2_4", "u_3_4_units",
+      building_type == "LOWRISE_MULTI", "u_10_19_units",
+      building_type == "MULTI_BLDG_COMPLEX", "u_10_19_units",
+      building_type == "MIDRISE_MULTI", "u_20_49_units",
+      building_type == "HIGHRISE_MULTI", "u_50plus_units",
+      building_type == "COMMERCIAL_MIXED", NA_character_,
+      building_type == "OTHER", NA_character_,
+      default = NA_character_
+    )
+  ]
+
+  # For unclassified (OTHER/COMMERCIAL_MIXED), back out from units/bldgs
+  parcel_agg[
+    building_type %in% c("OTHER", "COMMERCIAL_MIXED") | is.na(structure_bin),
+    structure_bin := fcase(
+      num_units_imp <= 1 & num_bldgs_imp == 1, "u_1_attached",
+      num_units_imp <= 2 & num_bldgs_imp == 1, "u_2_units",
+      num_units_imp <= 4 & num_bldgs_imp == 1, "u_3_4_units",
+      num_units_imp <= 9 & num_bldgs_imp == 1, "u_5_9_units",
+      num_units_imp <= 19 & num_bldgs_imp == 1, "u_10_19_units",
+      num_units_imp <= 49 & num_bldgs_imp == 1, "u_20_49_units",
+      num_units_imp >= 50 | num_bldgs_imp > 1, "u_50plus_units",
+      default = NA_character_
+    )
+  ]
+} else {
+  # Fallback to legacy regex-based approach if building_type not available
+  parcel_agg[
+    ,
+    building_code_description_new_fixed :=
+      stringr::str_to_lower(building_code_description_new_fixed)
+  ]
+
+  parcel_agg[
+    ,
+    structure_bin := case_when(
+      str_detect(building_code_description_new_fixed, "single|detached") ~ "u_1_detached",
+      str_detect(building_code_description_new_fixed, "row|town|attached|condo") ~ "u_1_attached",
+      str_detect(building_code_description_new_fixed, "twin|old style") ~ "u_2_units",
+      str_detect(building_code_description_new_fixed, "3|4 unit|triplex|quad") ~ "u_3_4_units",
+      str_detect(building_code_description_new_fixed, "apartments other") ~ "u_5_9_units",
+      str_detect(building_code_description_new_fixed, "garden|low rise") ~ "u_10_19_units",
+      str_detect(building_code_description_new_fixed, "mid rise") ~ "u_20_49_units",
+      str_detect(building_code_description_new_fixed, "50\\+|high rise|tower") |
+        num_stories_imp >= 6 ~ "u_50plus_units",
+      str_detect(building_code_description_new_fixed, "other") ~ NA_character_,
+      TRUE ~ NA_character_
+    )
+  ]
+
+  # For "other", back out from units/bldgs
+  parcel_agg[
+    building_code_description_new_fixed == "other",
+    structure_bin := case_when(
+      num_units_imp <= 1 & num_bldgs_imp == 1 ~ "u_1_attached",
+      num_units_imp <= 2 & num_bldgs_imp == 1 ~ "u_2_units",
+      num_units_imp <= 4 & num_bldgs_imp == 1 ~ "u_3_4_units",
+      num_units_imp <= 9 & num_bldgs_imp == 1 ~ "u_5_9_units",
+      num_units_imp <= 19 & num_bldgs_imp == 1 ~ "u_10_19_units",
+      num_units_imp <= 49 & num_bldgs_imp == 1 ~ "u_20_49_units",
+      num_units_imp >= 50 | num_bldgs_imp > 1  ~ "u_50plus_units"
+    )
+  ]
+}
 
 # Parcel-building table (replicate parcel info across buildings)
 parcel_building <- merge(

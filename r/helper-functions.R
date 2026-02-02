@@ -315,4 +315,239 @@ make_person_short_name <- function(x){
 }
 
 
+# =============================================================================
+# BUILDING CODE STANDARDIZATION FUNCTIONS
+# =============================================================================
+
+#' Extract number of stories from building code description
+#'
+#' Parses building code descriptions to extract explicit story counts.
+#' Handles patterns like "2 STY", "3.5 STY", "10-14 STY" (returns midpoint for ranges).
+#'
+#' @param bldg_code_desc Character vector of building code descriptions
+#'   (typically from building_code_description column)
+#' @return Numeric vector of story counts (NA if not found)
+#'
+#' @examples
+#' extract_stories_from_code("ROW 2 STY MASONRY")
+#' # Returns: 2
+#' extract_stories_from_code("APT 2-4 UNITS 3 STY MASON")
+#' # Returns: 3
+#' extract_stories_from_code("APTS 5-50 UNITS MASONRY")
+#' # Returns: NA (no stories mentioned)
+#' extract_stories_from_code("PUB UTIL 10-14 STY MASON")
+#' # Returns: 12 (midpoint of range)
+extract_stories_from_code <- function(bldg_code_desc) {
+  # Handle NA/empty inputs
+  result <- rep(NA_real_, length(bldg_code_desc))
+  valid_idx <- !is.na(bldg_code_desc) & nchar(bldg_code_desc) > 0
+
+  if (!any(valid_idx)) return(result)
+
+  desc <- toupper(bldg_code_desc[valid_idx])
+
+
+  # Pattern 1: Range like "10-14 STY" - take midpoint
+  range_pattern <- "\\b(\\d+)-(\\d+)\\s*STY"
+  range_matches <- str_match(desc, range_pattern)
+  has_range <- !is.na(range_matches[, 1])
+
+  # Pattern 2: Single number like "2 STY" or "3.5 STY"
+  single_pattern <- "\\b(\\d+\\.?\\d*)\\s*STY"
+  single_matches <- str_match(desc, single_pattern)
+  has_single <- !is.na(single_matches[, 1]) & !has_range
+
+  # Extract values
+  stories <- rep(NA_real_, length(desc))
+
+  # Range: take midpoint
+
+  if (any(has_range)) {
+    low <- as.numeric(range_matches[has_range, 2])
+    high <- as.numeric(range_matches[has_range, 3])
+    stories[has_range] <- (low + high) / 2
+  }
+
+  # Single value
+  if (any(has_single)) {
+    stories[has_single] <- as.numeric(single_matches[has_single, 2])
+  }
+
+  result[valid_idx] <- stories
+  return(result)
+}
+
+
+#' Standardize building type from Philadelphia building code descriptions
+#'
+#' Classifies parcels into standardized building types using both the old and new
+#' building code description columns, plus optional context from building footprint
+#' data. Designed to distinguish between high-rise apartments and multi-building
+#' garden-style complexes.
+#'
+#' @param bldg_code_desc Character vector - the "old" building code description
+#'   (e.g., "ROW 2 STY MASONRY", "APT 2-4 UNITS 3 STY MASON")
+#' @param bldg_code_desc_new Character vector - the "new" building code description
+#'   (e.g., "ROW TYPICAL", "APARTMENTS - LOW RISE")
+#' @param num_bldgs Numeric vector (optional) - number of buildings on parcel,
+#'   from building_pid_xwalk. Used to identify multi-building complexes.
+#' @param num_stories Numeric vector (optional) - number of stories, either from
+#'   extract_stories_from_code() or from parcel data. Used to distinguish rise types.
+#'
+#' @return Character vector with standardized building types:
+#'   \itemize{
+#'     \item "DETACHED" - single-family detached (DET patterns)
+#'     \item "ROW" - rowhouse/attached single-family
+#'     \item "TWIN" - semi-detached/duplex (SEMI/DET, S/D patterns)
+#'     \item "SMALL_MULTI_2_4" - 2-4 unit building
+#'     \item "LOWRISE_MULTI" - 5-19 units, typically <=3 stories
+#'     \item "MIDRISE_MULTI" - 20-49 units or 4-6 stories
+#'     \item "HIGHRISE_MULTI" - 50+ units or 7+ stories, single building
+#'     \item "MULTI_BLDG_COMPLEX" - multiple buildings on parcel (garden-style)
+#'     \item "CONDO" - condominiums
+#'     \item "COMMERCIAL_MIXED" - commercial or mixed-use properties
+#'     \item "OTHER" - unable to classify
+#'   }
+#'
+#' @examples
+#' standardize_building_type("ROW 2 STY MASONRY", "ROW TYPICAL")
+#' # Returns: "ROW"
+#' standardize_building_type("APT 2-4 UNITS 3 STY MASON", "ROW TYPICAL")
+#' # Returns: "SMALL_MULTI_2_4"
+#' standardize_building_type("APTS 5-50 UNITS MASONRY", "APARTMENTS - LOW RISE",
+#'                           num_bldgs = 5)
+#' # Returns: "MULTI_BLDG_COMPLEX"
+standardize_building_type <- function(bldg_code_desc,
+                                       bldg_code_desc_new,
+                                       num_bldgs = NA_integer_,
+                                       num_stories = NA_real_) {
+
+  n <- length(bldg_code_desc)
+
+  # Ensure all vectors are same length
+  if (length(bldg_code_desc_new) == 1) bldg_code_desc_new <- rep(bldg_code_desc_new, n)
+  if (length(num_bldgs) == 1) num_bldgs <- rep(num_bldgs, n)
+  if (length(num_stories) == 1) num_stories <- rep(num_stories, n)
+
+  # Uppercase for matching
+  old_desc <- toupper(coalesce(as.character(bldg_code_desc), ""))
+  new_desc <- toupper(coalesce(as.character(bldg_code_desc_new), ""))
+
+  # Initialize result
+  result <- rep(NA_character_, n)
+
+  # -------------------------------------------------------------------------
+  # Priority 1: Multi-building complexes (garden-style)
+  # If num_bldgs > 3, it's a complex regardless of total units
+  # -------------------------------------------------------------------------
+  is_complex <- !is.na(num_bldgs) & num_bldgs > 3
+  result[is_complex & is.na(result)] <- "MULTI_BLDG_COMPLEX"
+
+  # -------------------------------------------------------------------------
+  # Priority 2: Explicit apartment size in NEW column
+
+  # -------------------------------------------------------------------------
+  is_highrise_new <- grepl("HIGH\\s*RISE|APTS?\\s*-?\\s*HIGH", new_desc) |
+                     grepl("TOWER", new_desc)
+  is_midrise_new  <- grepl("MID\\s*RISE|APTS?\\s*-?\\s*MID", new_desc)
+  is_lowrise_new  <- grepl("LOW\\s*RISE|APTS?\\s*-?\\s*LOW", new_desc)
+  is_garden_new   <- grepl("GARDEN", new_desc)
+
+  result[is_highrise_new & is.na(result)] <- "HIGHRISE_MULTI"
+  result[is_midrise_new & is.na(result)]  <- "MIDRISE_MULTI"
+  result[is_lowrise_new & is.na(result)]  <- "LOWRISE_MULTI"
+  result[is_garden_new & is.na(result)]   <- "LOWRISE_MULTI"
+
+  # -------------------------------------------------------------------------
+  # Priority 3: Unit count patterns in OLD column
+  # -------------------------------------------------------------------------
+  # APTS 100+ or APTS 51-100 -> large multi
+  is_100plus <- grepl("APTS?\\s*(100\\+|100-|101)", old_desc)
+  is_51_100  <- grepl("APTS?\\s*51-?100", old_desc)
+  # APTS 5-50 -> could be mid or low rise depending on stories
+  is_5_50    <- grepl("APTS?\\s*5-?50", old_desc)
+  # APT 2-4 -> small multi
+  is_2_4     <- grepl("APT\\s*2-?4", old_desc)
+
+  # 100+ units: highrise unless multi-building
+  result[is_100plus & is.na(result)] <- "HIGHRISE_MULTI"
+  # 51-100 units: highrise unless multi-building or low stories
+  result[is_51_100 & is.na(result)] <- "HIGHRISE_MULTI"
+
+  # 5-50 units: depends on stories
+  # If stories >= 6: highrise; 4-5: midrise; else: lowrise
+  is_5_50_unassigned <- is_5_50 & is.na(result)
+  result[is_5_50_unassigned & !is.na(num_stories) & num_stories >= 6] <- "HIGHRISE_MULTI"
+  result[is_5_50_unassigned & !is.na(num_stories) & num_stories >= 4 & num_stories < 6] <- "MIDRISE_MULTI"
+  result[is_5_50_unassigned & !is.na(num_stories) & num_stories < 4] <- "LOWRISE_MULTI"
+  # If no story info, default to lowrise for 5-50
+  result[is_5_50 & is.na(result)] <- "LOWRISE_MULTI"
+
+  # 2-4 units
+  result[is_2_4 & is.na(result)] <- "SMALL_MULTI_2_4"
+
+  # -------------------------------------------------------------------------
+  # Priority 4: Story-based classification (when we have story info)
+  # -------------------------------------------------------------------------
+  has_stories <- !is.na(num_stories)
+  # 7+ stories -> highrise
+  result[has_stories & num_stories >= 7 & is.na(result)] <- "HIGHRISE_MULTI"
+  # 4-6 stories -> midrise
+  result[has_stories & num_stories >= 4 & num_stories < 7 & is.na(result)] <- "MIDRISE_MULTI"
+
+  # -------------------------------------------------------------------------
+  # Priority 5: Structural type patterns (ROW, TWIN, DET)
+  # -------------------------------------------------------------------------
+  # Condos first (can appear with ROW/TWIN structure)
+  is_condo <- grepl("CONDO", old_desc) | grepl("CONDO", new_desc) |
+              grepl("RES\\s*CONDO", old_desc)
+  result[is_condo & is.na(result)] <- "CONDO"
+
+  # Detached single-family: DET but NOT "SEMI/DET" or "S/D"
+  # Also exclude apartments, condos
+  is_detached <- (grepl("^DET\\b|\\bDET\\s", old_desc) &
+                  !grepl("SEMI|S/D|APT|APTS|CONDO", old_desc))
+  result[is_detached & is.na(result)] <- "DETACHED"
+
+  # Twin/Semi-detached: SEMI/DET or S/D patterns
+  is_twin <- grepl("SEMI/?DET|S/D\\b|TWIN", old_desc) |
+             grepl("TWIN", new_desc)
+  # Exclude if already classified as apartment
+  result[is_twin & is.na(result)] <- "TWIN"
+
+  # Row homes
+  is_row <- grepl("^ROW\\b|\\bROW\\s", old_desc) |
+            grepl("^ROW\\b", new_desc)
+  # Exclude converted apartments
+  is_row_conv_apt <- grepl("ROW\\s*CONV/?APT", old_desc)
+  result[is_row & !is_row_conv_apt & is.na(result)] <- "ROW"
+
+  # Row converted to apartments -> small multi
+  result[is_row_conv_apt & is.na(result)] <- "SMALL_MULTI_2_4"
+
+  # -------------------------------------------------------------------------
+  # Priority 6: Commercial/Mixed-use patterns
+  # -------------------------------------------------------------------------
+  is_commercial <- grepl("STR/OFF|STORE|WAREHOUSE|SHOP\\b|FACTORY|COMMERCIAL|RETAIL",
+                         old_desc) |
+                   grepl("MIXED.*COM|COM.*RES|BSMTRETAIL", new_desc)
+  # Exclude if residential patterns are stronger
+  is_residential_strong <- grepl("APT|APTS|ROW|TWIN|DET|CONDO|SEMI", old_desc)
+  result[is_commercial & !is_residential_strong & is.na(result)] <- "COMMERCIAL_MIXED"
+
+  # -------------------------------------------------------------------------
+  # Priority 7: Catch remaining apartment patterns
+  # -------------------------------------------------------------------------
+  is_apt_other <- grepl("APT|APTS|APARTMENT|BOARDING", old_desc) |
+                  grepl("APARTMENT", new_desc)
+  result[is_apt_other & is.na(result)] <- "LOWRISE_MULTI"
+
+  # -------------------------------------------------------------------------
+  # Default: OTHER
+  # -------------------------------------------------------------------------
+  result[is.na(result)] <- "OTHER"
+
+  return(result)
+}
+
 
