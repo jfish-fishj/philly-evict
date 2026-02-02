@@ -1,13 +1,28 @@
+## ============================================================
+## altos-price-regs.R
+## ============================================================
+## Purpose: Analyze Altos-CoreLogic price data with voucher analysis
+##
+## Inputs: altos_corelogic_agg_dir (directory of aggregated files)
+## Outputs: figs/*.png
+## ============================================================
+
 library(data.table)
 library(tidyverse)
 library(sf)
 library(tidycensus)
 library(glue)
 library(fixest)
+
+# ---- Load config ----
+source("r/config.R")
 source("r/helper-functions.R")
-#### files ####
-indir = '/Users/joefish/Desktop/data/altos-corelogic-agg'
-df_list = lapply(list.files(indir, full.names = T), fread)
+cfg <- read_config()
+
+# ---- Load data via config ----
+# altos_corelogic_agg_dir contains multiple aggregated CSV files
+indir <- p_proc(cfg, cfg$products$altos_corelogic_agg_dir)
+df_list = lapply(list.files(indir, full.names = TRUE, pattern = "\\.csv$"), fread)
 # fix census tract to be numeric
 df_list = lapply(df_list, function(x) {
   x[,census_tract := as.numeric(census_tract)]

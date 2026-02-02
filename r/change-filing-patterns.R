@@ -1,4 +1,11 @@
-# eviction changes
+## ============================================================
+## change-filing-patterns.R
+## ============================================================
+## Purpose: Analyze changes in eviction filing patterns pre/post COVID
+##
+## Inputs: analytic_df, bldg_panel, license_long_min, parcel_building_2024
+## Outputs: figs/*.png
+## ============================================================
 
 library(data.table)
 library(tidyverse)
@@ -6,12 +13,16 @@ library(sf)
 library(tidycensus)
 library(fixest)
 
+# ---- Load config ----
+source("r/config.R")
 source('r/helper-functions.R')
-indir = "/Users/joefish/Desktop/data/philly-evict/processed"
-analytic_df = fread(file.path(indir, "analytic_df.csv"))
-bldg_panel = fread(file.path(indir, "bldg_panel.csv"))
-rent_list = fread(file.path(indir, "license_long_min.csv"))
-parcels = fread(file.path(indir, "parcel_building_2024.csv"))
+cfg <- read_config()
+
+# ---- Load data via config ----
+analytic_df = fread(p_product(cfg, "analytic_df"))
+bldg_panel = fread(p_product(cfg, "bldg_panel"))
+rent_list = fread(p_product(cfg, "license_long_min"))
+parcels = fread(p_product(cfg, "parcel_building_2024"))
 
 # designate high-filing by pre-covid filing average
 bldg_panel2019 = bldg_panel[year < 2019, list(
@@ -120,7 +131,7 @@ make_es_plot <- function(model,ref_year=2018){
 }
 
 make_es_plot(es_filing, ref_year = 2019)
-ggsave("figs/event_study_high_filing_2019.png", width=10, height=10, bg = "white")
+ggsave(p_out(cfg, "figs", "event_study_high_filing_2019.png"), width=10, height=10, bg = "white")
 
 # repeat but add controls for neighborhood and building characteristics
 es_filing_controls = feols(log_med_rent ~ high_filing_2019*i(year,ref = 2019)
@@ -133,7 +144,7 @@ es_filing_controls = feols(log_med_rent ~ high_filing_2019*i(year,ref = 2019)
 
 summary(es_filing_controls, cluster = "PID")
 make_es_plot(es_filing_controls, ref_year = 2019)
-ggsave("figs/event_study_high_filing_2019_nhood_trends.png", width=10, height=10, bg = "white")
+ggsave(p_out(cfg, "figs", "event_study_high_filing_2019_nhood_trends.png"), width=10, height=10, bg = "white")
 
 filing_rates_pre_post_covid = bldg_panel[filing_rate <= 1,list(
   pre_covid = mean(filing_rate2019[year < 2020], na.rm=TRUE),
@@ -157,6 +168,6 @@ ggplot(filing_rates_pre_post_covid[num_units_imp >= 25 & pre_covid < 0.75 & post
     x = "Pre-COVID Filing Rate",
     y = "Post-COVID Filing Rate"
   )
-ggsave("figs/filing_rate_pre_post_covid.png", width=10, height=10, bg = "white")
+ggsave(p_out(cfg, "figs", "filing_rate_pre_post_covid.png"), width=10, height=10, bg = "white")
 
 

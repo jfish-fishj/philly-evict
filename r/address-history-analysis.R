@@ -1,15 +1,31 @@
+## ============================================================
+## address-history-analysis.R
+## ============================================================
+## Purpose: Analyze tenant address histories and eviction persistence
+##
+## Inputs: infousa_cleaned, parcel_building_2024, infousa_address_xwalk,
+##         bldg_panel, license_long_min, infousa_occupancy
+## Outputs: tables/evict_persist.tex
+## ============================================================
+
 library(data.table)
 library(tidyverse)
 library(sf)
 library(tidycensus)
 library(fixest)
-philly_infousa_dt = fread("~/Desktop/data/philly-evict/infousa_address_cleaned.csv")
+
+# ---- Load config ----
+source("r/config.R")
+cfg <- read_config()
+
+# ---- Load data via config ----
+philly_infousa_dt = fread(p_input(cfg, "infousa_cleaned"))
 philly_infousa_dt[,obs_id := .I]
-philly_parcels = fread("~/Desktop/data/philly-evict/processed/parcel_building_2024.csv")
-info_usa_xwalk = fread("/Users/joefish/Desktop/data/philly-evict/philly_infousa_dt_address_agg_xwalk.csv")
-philly_rent_df = fread("~/Desktop/data/philly-evict/processed/bldg_panel.csv")
-philly_rentals = fread("~/Desktop/data/philly-evict/processed/license_long_min.csv")
-philly_occ = fread("~/Desktop/data/philly-evict/processed/infousa_parcel_occupancy_vars.csv")
+philly_parcels = fread(p_product(cfg, "parcel_building_2024"))
+info_usa_xwalk = fread(p_product(cfg, "infousa_address_xwalk"))
+philly_rent_df = fread(p_product(cfg, "bldg_panel"))
+philly_rentals = fread(p_product(cfg, "license_long_min"))
+philly_occ = fread(p_product(cfg, "infousa_occupancy"))
 # Merge infousa with parcel data
 parcel_cols = intersect(philly_rent_df %>% colnames(), philly_parcels %>% colnames())
 
@@ -143,7 +159,7 @@ etable(list(m1, m2,  m4),
        label = "tab:evict_persist",
        drop = "Constant",
        tex = T
-) %>% writeLines("/Users/joefish/Documents/GitHub/philly-evictions/tables/evict_persist.tex")
+) %>% writeLines(p_out(cfg, "tables", "evict_persist.tex"))
 
 # get eviction rate of prev move
 philly_infousa_dt_m_movers[prev_num_units_imp >= 1 & num_units_imp >= 1

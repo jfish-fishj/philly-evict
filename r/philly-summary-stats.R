@@ -1,15 +1,28 @@
+## ============================================================
+## philly-summary-stats.R
+## ============================================================
+## Purpose: Generate summary statistics for Philadelphia evictions
+##
+## Inputs: evictions_summary_table, business_licenses, evictions_clean, parcels_clean
+## Outputs: tables/philly-summary-rent.tex
+## ============================================================
+
 library(data.table)
 library(tidyverse)
 library(ggplot2)
 library(gt)
 
-#philly_docket <- fread("~/Desktop/data/philly-evict/phila-lt-data/docket-entries.txt")
-philly_summary <- fread("~/Desktop/data/philly-evict/phila-lt-data/summary-table.txt")
+# ---- Load config ----
+source("r/config.R")
+cfg <- read_config()
+
+# ---- Load data via config ----
+philly_summary <- fread(p_input(cfg, "evictions_summary_table"))
 philly_summary[,xcasenum := id]
 
-philly_lic = fread("/Users/joefish/Desktop/data/philly-evict/business_licenses_clean.csv")
-philly_evict = fread("/Users/joefish/Desktop/data/philly-evict/evict_address_cleaned.csv")
-philly_parcels = fread("/Users/joefish/Desktop/data/philly-evict/parcel_address_cleaned.csv")
+philly_lic = fread(p_input(cfg, "business_licenses"))
+philly_evict = fread(p_product(cfg, "evictions_clean"))
+philly_parcels = fread(p_product(cfg, "parcels_clean"))
 #rgdal::ogrInfo(system.file("/Users/joefish/Desktop/data/philly-evict/opa_properties_public.gdb", package="sf"))
 
 philly_rentals = philly_lic[licensetype == "Rental"]
@@ -45,7 +58,7 @@ philly_evict[,pm.zip := coalesce(pm.zip,GEOID.Zip) %>%
                str_pad(5, "left", pad = "0")]
 
 
-xwalk = fread("/Users/joefish/Desktop/data/philly-evict/philly_evict_address_agg_xwalk_case.csv")
+xwalk = fread(p_product(cfg, "evict_address_xwalk_case"))
 xwalk[,PID := str_pad(as.character(PID),9, "left","0")]
 #
 philly_summary_m = merge(
@@ -225,6 +238,6 @@ philly_summary_rent_high_evict_table = philly_summary_rent_high_evict %>%
 
 philly_summary_rent_high_evict_table %>%
   as_latex() %>%
-  writeLines("/Users/joefish/Documents/GitHub/philly-evictions/tables/philly-summary-rent.tex")
+  writeLines(p_out(cfg, "tables", "philly-summary-rent.tex"))
 
 

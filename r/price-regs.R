@@ -1,15 +1,25 @@
+## ============================================================
+## price-regs.R
+## ============================================================
+## Purpose: Price regulation regressions and analysis
+##
+## Inputs: analytic_sample
+## Outputs: tables/*.tex, figs/*.png
+## ============================================================
+
 library(data.table)
 library(tidyverse)
 library(sf)
 library(tidycensus)
 library(fixest)
 
+# ---- Load config ----
+source("r/config.R")
 source('r/helper-functions.R')
-indir = "/Users/joefish/Desktop/data/philly-evict/processed"
-#analytic_df = fread(file.path(indir, "analytic_df.csv"))
-bldg_panel = fread(file.path(indir, "analytic_sample.csv"))
-#rent_list = fread(file.path(indir, "license_long_min.csv"))
-#parcels = fread(file.path(indir, "parcel_building_2024.csv"))
+cfg <- read_config()
+
+# ---- Load data via config ----
+bldg_panel = fread(p_product(cfg, "analytic_sample"))
 
 
 
@@ -210,7 +220,7 @@ etable(m1, keep = "%filing_rate_cuts",
                 ),
        tex = T
        ) %>%
-  writeLines("tables/hedonic_filing_rate_cuts.tex")
+  writeLines(p_out(cfg, "tables", "hedonic_filing_rate_cuts.tex"))
 
 
 coeftable(m1, keep = "filing|voucher")
@@ -342,7 +352,7 @@ model_tables_m0_m1 = etable(
   label = "tab:rent_regs",
   tex = TRUE
 )
-writeLines(model_tables_m0_m1, "model_tables.tex")
+writeLines(model_tables_m0_m1, p_out(cfg, "tables", "model_tables.tex"))
 
 # export all models
 model_tables_all_models = etable(
@@ -364,7 +374,7 @@ model_tables_all_models = etable(
   tex = TRUE
 )
 
-writeLines(model_tables_all_models, "model_tables_all_models.tex")
+writeLines(model_tables_all_models, p_out(cfg, "tables", "model_tables_all_models.tex"))
 
 # now do share regs
 m0_share <- fixest::feols(
@@ -503,7 +513,7 @@ mean_price_quintile[  year %in% c(2011:2023) & !is.na(filing_rate_ntile)] %>%
   ) +
   theme_philly_evict()
 
-ggsave("figs/mean_price_quintile.png", width = 8, height = 6, bg = "white")
+ggsave(p_out(cfg, "figs", "mean_price_quintile.png"), width = 8, height = 6, bg = "white")
 
 bldg_panel[,change_log_med_rent := log_med_rent - data.table::shift(log_med_rent), by = PID]
 bldg_panel[,year_gap := year - data.table::shift(year), by = PID]
@@ -589,7 +599,7 @@ ggplot(
   ) +
   theme_philly_evict()
 
-ggsave("figs/event_study_high_filing_preCOVID.png", width = 8, height = 6, bg = "white")
+ggsave(p_out(cfg, "figs", "event_study_high_filing_preCOVID.png"), width = 8, height = 6, bg = "white")
 
 # repeat m2
 ggplot(
@@ -608,7 +618,7 @@ ggplot(
     y = "% Change in Rent"
   ) +
   theme_philly_evict()
-ggsave("figs/event_study_high_filing_preCOVID_m2.png", width = 12, height = 8, bg = "white")
+ggsave(p_out(cfg, "figs", "event_study_high_filing_preCOVID_m2.png"), width = 12, height = 8, bg = "white")
 
 
 setFixest_dict(
@@ -745,7 +755,7 @@ evict_tables = etable(
   tex = T)
 
 evict_tables
-writeLines(evict_tables, "tables/covid_price_change_regs.tex")
+writeLines(evict_tables, p_out(cfg, "tables", "covid_price_change_regs.tex"))
 
 library(fwlplot)
 
@@ -882,7 +892,7 @@ rental_aggs %>%
     source_note = "Data from Philadelphia Housing Rental Registry and Eviction Lab"
   ) %>%
   as_latex()%>%
-  write_lines("tables/rental_stock_over_time.tex")
+  write_lines(p_out(cfg, "tables", "rental_stock_over_time.tex"))
 
 #### graveyard ####
 fixest::feols(violations_per_unit ~ filing_rate,
@@ -1078,7 +1088,7 @@ ggplot(analytic_df[year %in% c(2018,2019)], aes( x= med_price, group = source, c
   theme_philly_evict()
 
 ggsave(
-  filename = "figs/density_rent_prices.png",
+  filename = p_out(cfg, "figs", "density_rent_prices.png"),
   width = 10,
   height = 6,
   dpi = 300,
