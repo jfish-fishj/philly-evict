@@ -1,20 +1,55 @@
-library(data.table)
-library(tidyverse)
-library(sf)
-library(tidycensus)
-library(postmastr)
+## ============================================================
+## clean-eviction-addresses.R
+## ============================================================
+## Purpose: Clean and standardize eviction filing addresses
+##
+## Inputs:
+##   - cfg$inputs$evictions_summary_table (phila-lt-data/summary-table.txt)
+##
+## Outputs:
+##   - cfg$products$evictions_clean (clean/evictions_clean.csv)
+##
+## Primary key: pm.uid (unique eviction filing ID)
+##
+## Workflow:
+##   1. Load raw eviction summary data
+##   2. Extract short address from defendant_address
+##   3. Parse address components using postmastr
+##   4. Standardize street names, directions, suffixes
+##   5. Create composite address key (n_sn_ss_c)
+##   6. Export cleaned data
+## ============================================================
 
-# philly_hist = readRDS("/Users/joefish/Desktop/data/philly-evict/philadelphia_historical.rds")
-# philly_cur = readRDS("/Users/joefish/Desktop/data/philly-evict/philadelphia_2020_2021.rds")
+suppressPackageStartupMessages({
+  library(data.table)
+  library(tidyverse)
+  library(postmastr)
+})
 
-philly_evict =  fread("~/Desktop/data/philly-evict/phila-lt-data/summary-table.txt")
+# ---- Load config and set up logging ----
+source("r/config.R")
+source("r/lib/address_utils.R")
 
+cfg <- read_config()
+log_file <- p_out(cfg, "logs", "clean-eviction-addresses.log")
+
+logf("=== Starting clean-eviction-addresses.R ===", log_file = log_file)
+logf("Config: ", cfg$meta$config_path, log_file = log_file)
+
+# ---- Load input data ----
+input_path <- p_input(cfg, "evictions_summary_table")
+logf("Loading: ", input_path, log_file = log_file)
+
+philly_evict <- fread(input_path)
+logf("Loaded ", nrow(philly_evict), " rows", log_file = log_file)
+
+# ---- Build suffix regex patterns ----
 suffixes = c(
   postmastr::dic_us_suffix %>% pull(suf.input),
   postmastr::dic_us_suffix %>% pull(suf.type),
   postmastr::dic_us_suffix %>% pull(suf.output)
 ) %>%
-  str_replace("(pt|pts)","")%>%
+  str_replace("(pt|pts)","") %>%
   unique() %>%
   str_to_lower() %>%
   sort() %>%
@@ -24,266 +59,60 @@ suffixes = c(
   append("bld") %>%
   str_c(collapse = "|")
 
+suffix_regex = paste0("(^|,|\\|)?([0-9-]+[a-z]?\\s[a-z0-9\\.\\s-]+\\s(", suffixes, "))")
+stuck_regex = paste0("([a-z])(", suffixes, ")(\\.|\\|)")
 
-suffix_regex = paste0(
-  "(^|,|\\|)?([0-9-]+[a-z]?\\s[a-z0-9\\.\\s-]+\\s(", suffixes, "))"
-)
+# ---- Step 1: Initial address cleaning ----
+logf("Step 1: Initial address cleaning", log_file = log_file)
 
-stuck_regex = paste0(
-  "([a-z])(", suffixes, ")(\\.|\\|)"
-)
-
-ord_words_to_nums <- function(x) {
-  # suffix helper
-  suf <- function(n) {
-    n <- as.integer(n)
-    if (n %% 100L %in% c(11L, 12L, 13L)) return("th")
-    c("th","st","nd","rd","th","th","th","th","th","th")[(n %% 10L) + 1L]
-  }
-
-  # base vocab
-  units <- c(
-    "first"=1,"second"=2,"third"=3,"fourth"=4,"fifth"=5,
-    "sixth"=6,"seventh"=7,"eighth"=8,"ninth"=9
-  )
-  teens <- c(
-    "tenth"=10,"eleventh"=11,"twelfth"=12,"thirteenth"=13,"fourteenth"=14,
-    "fifteenth"=15,"sixteenth"=16,"seventeenth"=17,"eighteenth"=18,"nineteenth"=19
-  )
-  tens_only <- c(
-    "twentieth"=20,"thirtieth"=30,"fortieth"=40,"fiftieth"=50,
-    "sixtieth"=60,"seventieth"=70,"eightieth"=80,"ninetieth"=90
-  )
-  tens <- c(
-    "twenty"=20,"thirty"=30,"forty"=40,"fifty"=50,
-    "sixty"=60,"seventy"=70,"eighty"=80,"ninety"=90
-  )
-
-  out <- x
-
-  # 1) Compounds: e.g., "twenty first" / "twenty-first" / case-insensitive
-  # Build all patterns up to 99
-  for (t_word in names(tens)) {
-    t_val <- tens[[t_word]]
-    # tens + unit (21..29, 31..39, ...)
-    for (u_word in names(units)) {
-      u_val <- units[[u_word]]
-      n <- t_val + u_val
-      patt <- paste0("(?i)\\b", t_word, "[-\\s]+", u_word, "\\b")
-      repl <- paste0(n, suf(n))
-      out <- gsub(patt, repl, out, perl = TRUE)
-    }
-  }
-
-  # 2) Tens-only ordinals: "twentieth", "thirtieth", ...
-  for (w in names(tens_only)) {
-    n <- tens_only[[w]]
-    patt <- paste0("(?i)\\b", w, "\\b")
-    repl <- paste0(n, suf(n))
-    out <- gsub(patt, repl, out, perl = TRUE)
-  }
-
-  # 3) Teens: "eleventh" .. "nineteenth" and "tenth"
-  for (w in names(teens)) {
-    n <- teens[[w]]
-    patt <- paste0("(?i)\\b", w, "\\b")
-    repl <- paste0(n, suf(n))
-    out <- gsub(patt, repl, out, perl = TRUE)
-  }
-
-  # 4) Simple 1..9: "first".."ninth"
-  for (w in names(units)) {
-    n <- units[[w]]
-    patt <- paste0("(?i)\\b", w, "\\b")
-    repl <- paste0(n, suf(n))
-    out <- gsub(patt, repl, out, perl = TRUE)
-  }
-
-  out
-}
-
-# data.table-friendly wrapper
-# dt: a data.table; col: unquoted column name with street strings
-ordinalize_street_names <- function(dt, col) {
-  col <- substitute(col)
-  dt[, `:=`(tmp_ord = ord_words_to_nums(as.character(eval(col))))]
-  dt[, (as.character(col)) := tmp_ord][, tmp_ord := NULL]
-  invisible(dt)
-}
-
-
-test = c("7413a oxford ave|apt #21|phila, pa 19111|7413 oxford ave|apt #21|phila, pa 19111",
-         "401 w walnut la|phila. , pa 19144")
-str_match(test, suffix_regex)
-
-philly_evict[,def_address_lower := str_to_lower(defendant_address) %>%
+philly_evict[, def_address_lower := str_to_lower(defendant_address) %>%
                str_replace_all("\\. ,", ".,") %>%
                str_remove_all("\\.")]
-philly_evict[,def_address_lower := (def_address_lower) %>%
-               str_replace_all( "\\s([nsew])([0-9]+)", "\\1 \\2") ]
-philly_evict[,def_address_lower := str_replace_all(def_address_lower, stuck_regex ,"\\1 \\2\\3")]
+philly_evict[, def_address_lower := (def_address_lower) %>%
+               str_replace_all("\\s([nsew])([0-9]+)", "\\1 \\2")]
+philly_evict[, def_address_lower := str_replace_all(def_address_lower, stuck_regex, "\\1 \\2\\3")]
 
-# philly_evict_sample= philly_evict[year > 2000] %>% sample_n(10000)
-# fix issue where addresses are stuck together...
+# Extract short address
+philly_evict[, short_address_r1 := str_match(def_address_lower, suffix_regex)[,3]]
+philly_evict[, short_address_r2 := str_match(short_address_r1, "(.+)\\saka(.+)")[,2]]
+philly_evict[, short_address := coalesce(short_address_r2, short_address_r1)]
 
-philly_evict[,short_address_r1 := str_match(def_address_lower, suffix_regex)[,3] ]
-philly_evict[,short_address_r2 := str_match(short_address_r1, "(.+)\\saka(.+)" )[,2] ]
-philly_evict[,short_address := coalesce(short_address_r2, short_address_r1)]
+# ---- Step 2: Postmastr parsing ----
+logf("Step 2: Postmastr address parsing", log_file = log_file)
 
-
-#View(sample_n(philly_evict[str_detect(def_address_lower, suffix_regex)],1000) %>% select(def_address_lower, short_address_r1, short_address))
-
-# setDT(philly_hist)
-# setDT(philly_cur)
-# cols = c("xcasenum", "xfileyear", "xfileweek","xfilemonth",
-#          "xdefendant","xplaintiff",
-#          "short_address", "xplaintiff_address",
-#          "GEOID.Tract","GEOID.latitude","GEOID.longitude","GEOID.Zip","GEOID.accuracy"  ,
-#          "sealed","dup","anon","include","commercial"
-#          )
-#
-# philly_hist[,GEOID.Zip := zip]
-# philly_hist[,GEOID.longitude := Longitude]
-# philly_hist[,GEOID.latitude := Latitude]
-# philly_hist[,GEOID.accuracy := `Accuracy Score`]
-# philly_hist[, short_address := coalesce(xdefendant_street, short_address)]
-#
-# philly_cur= philly_cur %>% unite(
-#  col = "short_address", xdefendant_number, xdefendant_street, sep = " ", na.rm = T, remove = F
-# )
-
-# philly_evict = bind_rows(philly_hist %>%
-#                            select(cols),
-#                          philly_cur %>%
-#                            select(cols)
-#                          ) %>%
-#   mutate(short_address = str_to_lower(short_address))
-
-# clean addresses
-# parse unit from address column. returns unit column, original address, and
-# cleaned address column (removes unit)
-parse_unit <- function(address) {
-  .regex = regex(
-    "\\s(((fl|floor|-?apt\\.?|-?apartment\\.?|unit|suite|ste|rm|room|#|rear|building|bldg)+\\s?#?\\s?[0-9A-Z-]+)|\\s[0-9]{1,4})$",
-    ignore_case = T
-  )
-  matches = str_match(address, .regex)
-  clean_address = str_remove(address, .regex)
-  return(tibble(
-    clean_address = clean_address,
-    unit = matches[, 2],
-    og_address = address
-  ))
-
-}
-
-# same thing as parse unit but uses a different regex. this is designed to run
-# after the first parse_unit function
-parse_unit_extra <- function(address) {
-  .regex = regex(
-    "([0-9]+-\\s([a-z\\s]+)\\s(homes?|apartments?))|(-[a-z][0-9]$)|([0-9]+[a-z]{1})$",
-    ignore_case = T
-  )
-  matches = str_match(address, .regex)
-  clean_address = str_remove(address, .regex) %>%
-    str_replace_all("\\s(fl|floor|apt|apartment|unit|suite|ste|rm|room|#|rear|-|basement|bsmt)+$","")
-
-  return(tibble(
-    clean_address = clean_address,
-    unit = matches[, 2],
-    og_address = address
-  ))
-}
-
-
-# parse range of addresses. turn 123-125 into a 123 and 125. returns 3 columns
-# num1 and num2 and og address
-parse_range <- function(address_num){
-  .regex = regex(
-    "([0-9]+)(\\s?-\\s?)([0-9]+)"
-  )
-  matches = str_match(address_num, .regex)
-  return(tibble(
-    range1 = matches[,2],
-    range2 = matches[, 4],
-    og_address = address_num
-  ))
-}
-
-# changes 123A into 123 and A
-parse_letter <- function(address_num){
-  .regex = regex(
-    "([0-9\\s-]+)([a-z]+)?$", ignore_case = T
-  )
-  matches = str_match(address_num, .regex)
-  return(tibble(
-    clean_address = matches[,2],
-    letter = matches[, 3],
-    og_address = address_num
-  ))
-}
-
-
-# setup for MA specific cleaning
 dirs <- pm_dictionary(type = "directional", filter = c("N", "S", "E", "W"), locale = "us")
-pa <- pm_dictionary(type = "state", filter = "PA", case = c("title", "upper","lower"), locale = "us")
-# list of boston n'hoods. done to parse off city. e.g. 123 main st, dorchester ma
+pa <- pm_dictionary(type = "state", filter = "PA", case = c("title", "upper", "lower"), locale = "us")
 cities = c("phila", "philadelphia") %>% str_to_lower()
-philly <-   tibble(city.input = unique(cities)) #%>%
+philly <- tibble(city.input = unique(cities))
+
 philly_evict_sample = philly_evict %>%
-  #filter(short_address %in% sample(short_address, 25000)) %>%
   pm_identify(var = short_address)
 
-# bunch of unknown addys but these are generally pre-2000
-dropped_ids_og = philly_evict_sample %>% filter(!pm.type %in% c("full", "short")) %>% pull(pm.uid)
-#View(philly_evict_sample[pm.type=="unknown" & year == 2004] %>% relocate(def_address_lower, defendant_address))
+logf("Identified ", nrow(philly_evict_sample), " addresses", log_file = log_file)
 
-# philly_evict_sample = philly_evict_sample%>%
-#   filter(pm.type %in% c("full", "short"))
-
-# workflow is
-"
-prep
-parse unit
-parse postal code
-parse state
-parse city
-parse unit again
-parse house #
-parse street directionals
-parse street suffiix
-parse street name
-post processing
-  parse ranges of house numbers
-  remove letters from house numbers
-recombine
-"
-# philly_evict gets rid of any address that's not an intersection, so save those for later
+# Prep for parsing (filters to street addresses only)
 philly_evict_adds_sample <- pm_prep(philly_evict_sample, var = "short_address", type = "street")
+logf("After pm_prep: ", nrow(philly_evict_adds_sample), " rows", log_file = log_file)
 
+# Parse postal, state, city
 philly_evict_adds_sample <- pm_postal_parse(philly_evict_adds_sample, locale = "us")
 philly_evict_adds_sample <- pm_state_parse(philly_evict_adds_sample, dictionary = pa)
 philly_evict_adds_sample <- pm_city_parse(philly_evict_adds_sample, dictionary = philly)
 
-# dropped pm.uid
-dropped_ids = philly_evict_sample %>% filter(!pm.uid %in% philly_evict_adds_sample$pm.uid) %>% pull(pm.uid)
-# have to parse off unit first for 123 main st boston ma #1
-# otherwise parsing gets all messed up
-# general issue w/ postmastr is that mistakes cascade, so need to check
-# parsing at each step
+# ---- Step 3: Unit parsing (multiple rounds) ----
+logf("Step 3: Unit parsing", log_file = log_file)
+
 philly_evict_adds_sample_units = parse_unit(philly_evict_adds_sample$pm.address)
 philly_evict_adds_sample$pm.address = philly_evict_adds_sample_units$clean_address %>% str_squish()
 
-
-# unit parsing -- 3 rounds
 philly_evict_adds_sample_units_r1 = parse_unit(philly_evict_adds_sample$pm.address)
-# parse units again
-philly_evict_adds_sample_units_r2 = parse_unit(philly_evict_adds_sample_units_r1$clean_address%>% str_squish())
+philly_evict_adds_sample_units_r2 = parse_unit(philly_evict_adds_sample_units_r1$clean_address %>% str_squish())
 philly_evict_adds_sample_units_r3 = parse_unit_extra(philly_evict_adds_sample_units_r2$clean_address %>% str_squish())
+
 philly_evict_adds_sample$pm.address = philly_evict_adds_sample_units_r3$clean_address %>% str_squish()
 philly_evict_adds_sample$pm.unit = philly_evict_adds_sample_units_r3$unit
-# save the unit tibble. rn i don't do anything with this since I don't use the
-# unit number for merging but in theory usefule
+
+# Save unit tibble for reference
 unit_tibble = tibble(
   address = philly_evict_adds_sample_units$og_address,
   clean_address = philly_evict_adds_sample_units_r3$clean_address,
@@ -293,60 +122,51 @@ unit_tibble = tibble(
   u4 = philly_evict_adds_sample_units_r3$unit,
   uid = philly_evict_adds_sample$pm.uid
 ) %>%
-  mutate(
-    pm.unit = coalesce(u1, u2, u3, u4)
-  )
+  mutate(pm.unit = coalesce(u1, u2, u3, u4))
 
+# ---- Step 4: House number and street parsing ----
+logf("Step 4: House number and street parsing", log_file = log_file)
 
 philly_evict_adds_sample = pm_house_parse(philly_evict_adds_sample)
 philly_evict_adds_sample_nums = philly_evict_adds_sample$pm.house %>% parse_letter()
 philly_evict_adds_sample_range = philly_evict_adds_sample_nums$clean_address %>% parse_range()
-new_pm_house = coalesce( philly_evict_adds_sample_range$range1, philly_evict_adds_sample_range$og_address )
+
+new_pm_house = coalesce(philly_evict_adds_sample_range$range1, philly_evict_adds_sample_range$og_address)
 philly_evict_adds_sample$pm.house = new_pm_house %>% as.numeric()
 philly_evict_adds_sample$pm.house2 = philly_evict_adds_sample_range$range2 %>% as.numeric()
 philly_evict_adds_sample$pm.house.letter = philly_evict_adds_sample_nums$letter
-philly_evict_adds_sample_copy1 = copy(philly_evict_adds_sample)
 
 philly_evict_adds_sample = pm_streetDir_parse(philly_evict_adds_sample, dictionary = dirs)
 philly_evict_adds_sample = pm_streetSuf_parse(philly_evict_adds_sample)
 
+# Ordinalize street names
 philly_evict_adds_sample = philly_evict_adds_sample %>%
-  mutate(pm.address =ord_words_to_nums(pm.address) )
+  mutate(pm.address = ord_words_to_nums(pm.address))
 
-# have to copy pre parsing... bc pm_street_parse will drop a bunch of ids
-philly_evict_adds_sample_copy = copy(philly_evict_adds_sample)
+philly_evict_adds_sample = pm_street_parse(philly_evict_adds_sample, ordinal = TRUE, drop = FALSE)
 
-# have to peel off trailing letters
-# philly_evict_adds_sample = philly_evict_adds_sample %>% mutate(
-#   pm.address = pm.address %>% str_remove_all( "(\\s[a-z]{1}|1st|2nd)$")
-# )
-# standardize street name; turn first into 1st, etc
+# ---- Step 5: Street name standardization ----
+logf("Step 5: Street name standardization", log_file = log_file)
 
-philly_evict_adds_sample = pm_street_parse(philly_evict_adds_sample, ordinal= T, drop = F)
-
-# fix some of the street names
 philly_evict_adds_sample = philly_evict_adds_sample %>% mutate(
   pm.street = case_when(
     str_detect(pm.street, "[a-zA-Z]") ~ pm.street,
-    pm.street == 1~ "1st",
-    pm.street == 2~ "2nd",
-    pm.street == 3~ "3rd",
-    (pm.street )>=4 ~ paste0((pm.street ),"th"),
+    pm.street == 1 ~ "1st",
+    pm.street == 2 ~ "2nd",
+    pm.street == 3 ~ "3rd",
+    (pm.street) >= 4 ~ paste0((pm.street), "th"),
     TRUE ~ pm.street
-
   )
 )
 
+# Fix directional prefix issues
 philly_evict_adds_sample = philly_evict_adds_sample %>% mutate(
-  pm.street = str_replace_all(
-    pm.street,"^([S])([dfgjbvxzs])","\\2"
-  ) %>% str_replace_all(
-    "^([E])([ebpgq])","\\2"
-  ) %>%
-    str_replace_all(
-      "^([NW])([dfgjbvxzs])","\\2"
-    ))
+  pm.street = str_replace_all(pm.street, "^([S])([dfgjbvxzs])", "\\2") %>%
+    str_replace_all("^([E])([ebpgq])", "\\2") %>%
+    str_replace_all("^([NW])([dfgjbvxzs])", "\\2")
+)
 
+# Fix known misspellings
 philly_evict_adds_sample = philly_evict_adds_sample %>% mutate(
   pm.street = case_when(
     pm.street == "berkeley" ~ "berkley",
@@ -355,46 +175,273 @@ philly_evict_adds_sample = philly_evict_adds_sample %>% mutate(
   )
 )
 
+# Expand abbreviations
 philly_evict_adds_sample = philly_evict_adds_sample %>% mutate(
   pm.street = pm.street %>%
-    str_replace_all("[Mm]t ","mount ") %>%
-    str_replace_all("[Mm]c ","mc") %>%
-    str_replace_all("[Ss]t ","saint ")
-
+    str_replace_all("[Mm]t ", "mount ") %>%
+    str_replace_all("[Mm]c ", "mc") %>%
+    str_replace_all("[Ss]t ", "saint ")
 )
 
-philly_evict_adds_sample = philly_evict_adds_sample %>%
-  mutate(pm.sufDir = NA_character_)
+# ============================================================
+# Step 5b: Oracle-validated canonicalization against parcels
+# ============================================================
 
+logf("Step 5b: Oracle canonicalization (evictions)", log_file = log_file)
+
+# ---- Load parcel oracle ----
+parcel_counts_path <- p_input(cfg, "parcel_address_counts")
+logf("Loading parcel oracle: ", parcel_counts_path, log_file = log_file)
+
+parcel_counts <- data.table::fread(parcel_counts_path)
+stopifnot(all(c("pm.street","pm.streetSuf","N") %in% names(parcel_counts)))
+
+# normalize oracle
+parcel_counts[, pm.street := stringr::str_squish(tolower(pm.street))]
+parcel_counts[, pm.streetSuf := stringr::str_squish(tolower(pm.streetSuf))]
+parcel_counts <- parcel_counts[pm.street != "" & pm.streetSuf != ""]
+parcel_counts[, key := paste(pm.street, pm.streetSuf, sep="|")]
+data.table::setkey(parcel_counts, key)
+
+parcel_suffixes <- unique(parcel_counts$pm.streetSuf)
+
+# ---- Prepare eviction parsed table ----
+data.table::setDT(philly_evict_adds_sample)
+
+# keep originals for QA
+philly_evict_adds_sample[, `:=`(
+  pm.preDir_orig    = pm.preDir,
+  pm.street_orig    = pm.street,
+  pm.streetSuf_orig = pm.streetSuf
+)]
+
+# normalize parsed pieces (lower/squish, NA->"")
+philly_evict_adds_sample[, `:=`(
+  pm.preDir    = stringr::str_squish(tolower(data.table::fifelse(is.na(pm.preDir), "", as.character(pm.preDir)))),
+  pm.sufDir    = stringr::str_squish(tolower(data.table::fifelse(is.na(pm.sufDir), "", as.character(pm.sufDir)))),
+  pm.street    = stringr::str_squish(tolower(data.table::fifelse(is.na(pm.street), "", as.character(pm.street)))),
+  pm.streetSuf = stringr::str_squish(tolower(data.table::fifelse(is.na(pm.streetSuf), "", as.character(pm.streetSuf))))
+)]
+
+# canonical key + oracle membership
+philly_evict_adds_sample[, key := paste(pm.street, pm.streetSuf, sep="|")]
+# parcel_counts must be keyed by "key"
+setkey(parcel_counts, key)
+
+# add parcelN via join; i.parcelN is one value per row in philly_evict_adds_sample
+philly_evict_adds_sample[parcel_counts, on = .(key), parcelN := i.N]
+philly_evict_adds_sample[, in_parcels := !is.na(parcelN)]
+
+
+before_rate <- philly_evict_adds_sample[, mean(in_parcels)]
+logf("Oracle-valid BEFORE fixes: ", round(100*before_rate, 3), "%", log_file = log_file)
+
+# Track fixes
+philly_evict_adds_sample[, `:=`(fix_tag = NA_character_, fix_changed = FALSE, fix_parcelN = as.integer(NA))]
+
+# ============================================================
+# Rule B (high impact): fix est/rst by attaching extra letter back to street
+# spruc + est -> spruce + st   ; bouvie + rst -> bouvier + st
+# ============================================================
+iB <- philly_evict_adds_sample[
+  !in_parcels & pm.streetSuf %chin% c("est","rst") & pm.street != "",
+  which = TRUE
+]
+
+if (length(iB) > 0) {
+  extra <- sub("st$", "", philly_evict_adds_sample$pm.streetSuf[iB])  # "e" or "r"
+  new_st <- paste0(philly_evict_adds_sample$pm.street[iB], extra)
+  new_key <- paste(new_st, "st", sep="|")
+  newN <- parcel_counts[.(new_key), x.N]
+
+  ok <- !is.na(newN)
+  if (any(ok)) {
+    ii <- iB[ok]
+    philly_evict_adds_sample[ii, `:=`(
+      pm.street = new_st[ok],
+      pm.streetSuf = "st",
+      fix_tag = "attach_extra_from_suf:st",
+      fix_changed = TRUE,
+      fix_parcelN = as.integer(newN[ok])
+    )]
+  }
+}
+
+# refresh oracle membership
+philly_evict_adds_sample[, key := paste(pm.street, pm.streetSuf, sep="|")]
+# parcel_counts must be keyed by "key"
+setkey(parcel_counts, key)
+
+# add parcelN via join; i.parcelN is one value per row in philly_evict_adds_sample
+philly_evict_adds_sample[parcel_counts, on = .(key), parcelN := i.N]
+philly_evict_adds_sample[, in_parcels := !is.na(parcelN)]
+
+
+# ============================================================
+# Rule A (high impact): split glued direction when pm.preDir missing
+# wlehigh + ave -> preDir=w, street=lehigh, suf=ave (oracle validated)
+# ============================================================
+iA <- philly_evict_adds_sample[
+  is.na(fix_tag) & pm.preDir == "" & !in_parcels & stringr::str_detect(pm.street, "^[nsew][a-z]"),
+  which = TRUE
+]
+
+if (length(iA) > 0) {
+  dir <- substr(philly_evict_adds_sample$pm.street[iA], 1, 1)
+  st2 <- substr(philly_evict_adds_sample$pm.street[iA], 2, nchar(philly_evict_adds_sample$pm.street[iA]))
+  key2 <- paste(st2, philly_evict_adds_sample$pm.streetSuf[iA], sep="|")
+  N2 <- parcel_counts[.(key2), x.N]
+
+  ok <- !is.na(N2)
+  if (any(ok)) {
+    ii <- iA[ok]
+    philly_evict_adds_sample[ii, `:=`(
+      pm.preDir = dir[ok],
+      pm.street = st2[ok],
+      fix_tag = "split_dir_same_suffix",
+      fix_changed = TRUE,
+      fix_parcelN = as.integer(N2[ok])
+    )]
+  }
+}
+
+# final refresh
+philly_evict_adds_sample[, key := paste(pm.street, pm.streetSuf, sep="|")]
+philly_evict_adds_sample[, parcelN := parcel_counts[.(key), x.N]]
+philly_evict_adds_sample[, in_parcels := !is.na(parcelN)]
+
+after_rate <- philly_evict_adds_sample[, mean(in_parcels)]
+logf("Oracle-valid AFTER fixes: ", round(100*after_rate, 3), "%", log_file = log_file)
+
+# ---- Hard checks that should move if the block ran ----
+logf("Counts of est/rst/un AFTER fixes:",
+     " est=", philly_evict_adds_sample[pm.streetSuf == "est", .N],
+     " rst=", philly_evict_adds_sample[pm.streetSuf == "rst", .N],
+     " un=",  philly_evict_adds_sample[pm.streetSuf == "un",  .N],
+     log_file = log_file)
+
+logf("Fix tag counts (top):", log_file = log_file)
+print(philly_evict_adds_sample[, .N, by = fix_tag][order(-N)][1:10])
+
+# Optional: export QA artifacts
+qa_dir <- p_out(cfg, "qa", "evictions_address_canonicalize")
+dir.create(qa_dir, recursive = TRUE, showWarnings = FALSE)
+
+data.table::fwrite(
+  philly_evict_adds_sample[, .N, by = fix_tag][order(-N)],
+  file.path(qa_dir, "fix_tag_counts.csv")
+)
+data.table::fwrite(
+  data.table::data.table(metric=c("oracle_valid_rate_before","oracle_valid_rate_after"),
+                         value=c(before_rate, after_rate)),
+  file.path(qa_dir, "oracle_valid_rate_before_after.csv")
+)
+
+# ---- QA outputs ----
+qa_dir <- p_out(cfg, "qa", "evictions_address_canonicalize")
+dir.create(qa_dir, recursive = TRUE, showWarnings = FALSE)
+
+fix_counts <- philly_evict_adds_sample[, .N, by = fix_tag][order(-N)]
+fix_counts[is.na(fix_tag), fix_tag := "NO_FIX"]
+fwrite(fix_counts, file.path(qa_dir, "fix_tag_counts.csv"))
+
+# a compact before/after summary
+oracle_summary <- data.table(
+  metric = c("oracle_valid_rate_before", "oracle_valid_rate_after"),
+  value  = c(before_rate, after_rate)
+)
+fwrite(oracle_summary, file.path(qa_dir, "oracle_valid_rate_before_after.csv"))
+
+# sample of changed rows for inspection
+changed_sample <- philly_evict_adds_sample[fix_changed == TRUE][
+  , .(pm.uid, pm.house, pm.preDir_orig, pm.street_orig, pm.streetSuf_orig,
+      pm.preDir, pm.street, pm.streetSuf, fix_tag, fix_parcelN)
+]
+set.seed(123)
+if (nrow(changed_sample) > 0) {
+  changed_sample <- changed_sample[sample.int(.N, min(.N, 500))]
+}
+fwrite(changed_sample, file.path(qa_dir, "changed_rows_sample.csv"))
+
+# ============================================================
+# End canonicalization; proceed to key creation using pm.* fields
+# ============================================================
+
+
+# Fix "la" suffix
 philly_evict_adds_sample = philly_evict_adds_sample %>%
   mutate(
-    pm.streetSuf = fifelse(is.na(pm.streetSuf) & str_detect(pm.street, "\\s[lL]a$"),"ln", pm.streetSuf),
+    pm.streetSuf = fifelse(is.na(pm.streetSuf) & str_detect(pm.street, "\\s[lL]a$"), "ln", pm.streetSuf),
     pm.street = str_remove_all(pm.street, "\\s[lL]a$")
   )
 
-# make all components lower case and make composite address column
+# ---- Step 6: Create composite address key ----
+logf("Step 6: Creating composite address key", log_file = log_file)
+
 philly_evict_adds_sample_c = philly_evict_adds_sample %>%
-  mutate(across(c( pm.sufDir, pm.street, pm.streetSuf, pm.preDir), ~str_squish(str_to_lower(replace_na(.x, ""))))) %>%
+  mutate(across(c(pm.sufDir, pm.street, pm.streetSuf, pm.preDir), ~str_squish(str_to_lower(replace_na(.x, ""))))) %>%
   mutate(
-    n_sn_ss_c = str_squish( str_to_lower(paste(pm.house, pm.preDir, pm.street, pm.streetSuf, pm.sufDir))),
+    n_sn_ss_c = str_squish(str_to_lower(paste(pm.house, pm.preDir, pm.street, pm.streetSuf, pm.sufDir))),
     pm.dir_concat = coalesce(pm.preDir, pm.sufDir)
   )
 
 setDT(philly_evict_adds_sample_c)
 setDT(philly_evict_sample)
 
-# merge and export
+# ---- Step 7: Merge and finalize ----
+logf("Step 7: Merging parsed addresses back to original data", log_file = log_file)
+
 philly_evict_adds_sample_m = merge(
   philly_evict_sample,
   philly_evict_adds_sample_c,
   by.x = "pm.uid",
   by.y = "pm.uid",
-  all.x = T
+  all.x = TRUE
 )
 
-philly_evict_adds_sample_m[,pm.zip := coalesce(pm.zip, zip)]
-philly_evict_adds_sample_m[,pm.city := coalesce(pm.city, "philadelphia")]
-philly_evict_adds_sample_m[,pm.state := coalesce(pm.state, "PA")]
+logf("After merge: ", nrow(philly_evict_adds_sample_m), " rows", log_file = log_file)
 
-fwrite(philly_evict_adds_sample_m, "/Users/joefish/Desktop/data/philly-evict/evict_address_cleaned.csv")
+# Fill in defaults
+# Add "_" prefix to pm.zip to ensure character type on read (e.g., "_19104")
+philly_evict_adds_sample_m[, pm.zip := {
+  raw_zip <- coalesce(pm.zip, zip)
+  fifelse(
+    !is.na(raw_zip) & nchar(as.character(raw_zip)) >= 4,
+    paste0("_", str_pad(as.character(raw_zip), 5, "left", "0")),
+    NA_character_
+  )
+}]
+philly_evict_adds_sample_m[, pm.city := coalesce(pm.city, "philadelphia")]
+philly_evict_adds_sample_m[, pm.state := coalesce(pm.state, "PA")]
 
+# ---- Assertions ----
+logf("Running assertions...", log_file = log_file)
+
+# Check pm.uid uniqueness
+n_total <- nrow(philly_evict_adds_sample_m)
+n_unique_uid <- philly_evict_adds_sample_m[, uniqueN(pm.uid)]
+logf("Total rows: ", n_total, ", Unique pm.uid: ", n_unique_uid, log_file = log_file)
+
+if (n_total != n_unique_uid) {
+  logf("WARNING: pm.uid is not unique! Duplicates exist.", log_file = log_file)
+}
+
+# Check key columns exist
+required_cols <- c("pm.uid", "n_sn_ss_c", "year", "pm.house", "pm.street", "pm.zip")
+missing_cols <- setdiff(required_cols, names(philly_evict_adds_sample_m))
+if (length(missing_cols) > 0) {
+  logf("WARNING: Missing columns: ", paste(missing_cols, collapse = ", "), log_file = log_file)
+}
+
+# Log address parsing success rate
+n_with_address <- philly_evict_adds_sample_m[!is.na(n_sn_ss_c) & nzchar(n_sn_ss_c), .N]
+logf("Addresses parsed: ", n_with_address, " (", round(100 * n_with_address / n_total, 1), "%)", log_file = log_file)
+
+# ---- Write output ----
+output_path <- p_product(cfg, "evictions_clean")
+logf("Writing output to: ", output_path, log_file = log_file)
+
+fwrite(philly_evict_adds_sample_m, output_path)
+
+logf("Wrote ", nrow(philly_evict_adds_sample_m), " rows to ", output_path, log_file = log_file)
+logf("=== Finished clean-eviction-addresses.R ===", log_file = log_file)
