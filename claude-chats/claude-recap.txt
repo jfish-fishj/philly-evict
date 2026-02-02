@@ -1,0 +1,228 @@
+# Claude Recap: Philly Evictions Pipeline Refactoring
+# Date: 2026-01-25 (updated)
+# Purpose: Document refactoring work for future Claude sessions
+
+## OVERVIEW
+This codebase is an R pipeline for analyzing Philadelphia eviction data for academic publication.
+The goal was to make it portable, reproducible, and publication-ready by eliminating hardcoded
+paths and standardizing script structure.
+
+## WHAT WAS DONE
+
+### Phase 1: Data Folder Reorganization
+Restructured /data from a flat structure to:
+```
+data/
+├── inputs/           # Raw external data (read-only)
+│   ├── evictions/    # Eviction court records
+│   ├── parcels/      # OPA property data
+│   ├── licenses/     # Business licenses
+│   ├── listings/     # Altos rental listings
+│   ├── census/       # Census/ACS data
+│   ├── infousa/      # InfoUSA household data
+│   ├── crime/        # Crime data
+│   ├── assessments/  # Property assessments
+│   ├── shapefiles/   # Geographic boundaries
+│   └── open-data/    # Philly Open Data Portal files
+├── processed/        # Derived data products
+│   ├── clean/        # Cleaned address files
+│   ├── panels/       # Panel datasets
+│   ├── xwalks/       # Address crosswalks
+│   └── analytic/     # Analysis-ready datasets
+└── tmp/              # Scratch files (safe to delete)
+```
+
+### Phase 2: Config Integration
+Refactored 11 core scripts to use config-driven paths:
+
+CLEAN SCRIPTS:
+- R/clean-eviction-addresses.R
+- R/clean-parcel-addresses.R
+- R/clean-license-addresses.R
+
+MAKE SCRIPTS:
+- R/make-rent-panel.R
+- R/make-analytic-sample.R
+- R/make-building-data.R
+- R/make-occupancy-vars.r
+- R/make-hexagons.r
+
+MERGE SCRIPTS:
+- R/merge-evictions-rental-listings.R
+- R/merge-infousa-parcels.R
+
+ADDITIONAL CLEAN SCRIPTS (Phase 3):
+- R/clean-altos-addresses.R
+- R/clean-infousa-addresses.R
+- R/clean-corelogic-addresses.R
+- R/clean-eviction-names.R
+
+MAKE SCRIPTS (Phase 3):
+- R/make-altos-aggs.R
+- R/make-address-parcel-xwalk.R (NEW - address-to-parcel matching system)
+- R/make-evict-aggs.R (REWRITTEN - original was broken, now produces evict_pid_year & evict_zip_year)
+- R/make-altos-corelogic-dfs.R (merges Altos with CoreLogic via xwalk)
+
+MERGE SCRIPTS (Phase 3):
+- R/merge-altos-corelogic.R (creates Altos-CoreLogic address crosswalk)
+- R/merge-altos-rental-listings.R (creates Altos-OPA parcel crosswalk with spatial join)
+
+DATA PROCESSING SCRIPTS (Phase 3):
+- R/assign-evictions-crimes-homes-to-hexagon.r (assigns events to H3 hexagons, creates hex panels)
+
+## STANDARD SCRIPT PATTERN
+
+Every refactored script follows this structure:
+
+```r
+## ============================================================
+## script-name.R
+## ============================================================
+## Purpose: One-line description
+##
+## Inputs:
+##   - cfg$inputs$key_name (relative/path/to/file.csv)
+##   - cfg$products$other_key (relative/path/to/product.csv)
+##
+## Outputs:
+##   - cfg$products$output_key (relative/path/to/output.csv)
+##
+## Primary key: column_name (or composite key description)
+## ============================================================
+
+suppressPackageStartupMessages({
+  library(data.table)
+  library(tidyverse)
+  # ... other libraries
+})
+
+# ---- Load config and set up logging ----
+source("R/config.R")
+
+cfg <- read_config()
+log_file <- p_out(cfg, "logs", "script-name.log")
+
+logf("=== Starting script-name.R ===", log_file = log_file)
+logf("Config: ", cfg$meta$config_path, log_file = log_file)
+
+# ---- Load input data ----
+logf("Loading input data...", log_file = log_file)
+
+data1 <- fread(p_input(cfg, "input_key"))
+data2 <- fread(p_product(cfg, "product_key"))
+
+logf("  Data1: ", nrow(data1), " rows", log_file = log_file)
+
+# ---- Processing steps ----
+# ... actual logic ...
+
+# ---- Assertions ----
+logf("Running assertions...", log_file = log_file)
+# Check uniqueness, row counts, required columns
+
+# ---- Write output ----
+logf("Writing outputs...", log_file = log_file)
+
+out_path <- p_product(cfg, "output_key")
+fwrite(result, out_path)
+logf("  Wrote output: ", nrow(result), " rows to ", out_path, log_file = log_file)
+
+logf("=== Finished script-name.R ===", log_file = log_file)
+```
+
+## KEY PATH HELPERS (defined in R/config.R)
+
+- `p_in(cfg, rel_path)` - Build path relative to input_dir
+- `p_proc(cfg, rel_path)` - Build path relative to processed_dir
+- `p_out(cfg, rel_path)` - Build path relative to output_dir
+- `p_input(cfg, key)` - Look up input key from config and return full path
+- `p_product(cfg, key)` - Look up product key from config and return full path
+- `logf(...)` - Log message with timestamp to file and console
+
+## CONFIG STRUCTURE (config.yml)
+
+```yaml
+paths:
+  repo_root: "."
+  input_dir: "data/inputs"
+  processed_dir: "data/processed"
+  output_dir: "output"
+  tmp_dir: "data/tmp"
+
+inputs:
+  evictions_summary_table: "evictions/phila-lt-data/summary-table.txt"
+  opa_gdb: "parcels/opa_properties_public.gdb"
+  # ... all raw input paths
+
+products:
+  evictions_clean: "clean/evictions_clean.csv"
+  parcels_clean: "clean/parcels_clean.csv"
+  ever_rentals_panel: "panels/ever_rentals_panel.csv"
+  # ... all derived output paths
+
+run:
+  sample_mode: false
+  sample_n: 200000
+  seed: 123
+
+spatial:
+  h3_resolution: 9
+  time_unit: "year_quarter"
+```
+
+## SCRIPTS NOT YET REFACTORED
+
+These are ANALYSIS scripts that read from processed/ and write to output/:
+- R/price-regs.R
+- R/retaliatory-evictions.r
+- R/philly-summary-stats.R
+
+Note: Per CLAUDE.md, analysis scripts should NOT write to processed products.
+They only need path refactoring for reads and output writes.
+
+## IMPORTANT NOTES FOR FUTURE REFACTORING
+
+1. ALWAYS check for hardcoded paths like:
+   - ~/Desktop/data/philly-evict/...
+   - /Users/joefish/...
+   - Any absolute paths
+
+2. NEVER use setwd() - use absolute paths via config helpers
+
+3. When adding new inputs/outputs:
+   - Add entry to config.yml AND config.example.yml
+   - Use semantic key names (e.g., "evictions_clean" not "file1")
+
+4. Keep paradigm consistent within files:
+   - data.table scripts stay data.table
+   - tidyverse scripts stay tidyverse
+
+5. Exploratory/analysis code at end of make-* scripts should be moved
+   to dedicated analysis scripts
+
+6. The CLAUDE.md file contains project guardrails - always follow them
+
+## FILES CREATED/MODIFIED
+
+Created:
+- claude-recap.txt (this file)
+- REFACTOR_PLAN.md (detailed refactoring plan)
+
+Modified:
+- config.yml (added missing input/product keys)
+- config.example.yml (synced with config.yml)
+- R/config.R (added p_input, p_product helpers)
+- 11 R scripts listed above
+
+## PIPELINE EXECUTION ORDER
+
+The intended execution order is:
+1. clean-*-addresses.R scripts (parcels, licenses, evictions)
+2. merge-*-parcels.R scripts (create address crosswalks)
+3. make-rent-panel.R (create ever_rentals_panel)
+4. make-occupancy-vars.r (create occupancy panel)
+5. make-building-data.R (create building panel)
+6. make-analytic-sample.R (create final analytic dataset)
+7. Analysis scripts (price-regs.R, retaliatory-evictions.r, etc.)
+
+A _targets.R file exists but needs to be updated to use the new config system.
