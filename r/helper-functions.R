@@ -394,29 +394,32 @@ extract_stories_from_code <- function(bldg_code_desc) {
 #' @param num_stories Numeric vector (optional) - number of stories, either from
 #'   extract_stories_from_code() or from parcel data. Used to distinguish rise types.
 #'
-#' @return Character vector with standardized building types:
+#' @return A list with two elements:
 #'   \itemize{
-#'     \item "DETACHED" - single-family detached (DET patterns)
-#'     \item "ROW" - rowhouse/attached single-family
-#'     \item "TWIN" - semi-detached/duplex (SEMI/DET, S/D patterns)
-#'     \item "SMALL_MULTI_2_4" - 2-4 unit building
-#'     \item "LOWRISE_MULTI" - 5-19 units, typically <=3 stories
-#'     \item "MIDRISE_MULTI" - 20-49 units or 4-6 stories
-#'     \item "HIGHRISE_MULTI" - 50+ units or 7+ stories, single building
-#'     \item "MULTI_BLDG_COMPLEX" - multiple buildings on parcel (garden-style)
-#'     \item "CONDO" - condominiums
-#'     \item "COMMERCIAL_MIXED" - commercial or mixed-use properties
-#'     \item "OTHER" - unable to classify
+#'     \item building_type: Character vector with size-based building types:
+#'       \itemize{
+#'         \item "DETACHED" - single-family detached (DET patterns)
+#'         \item "ROW" - rowhouse/attached single-family
+#'         \item "TWIN" - semi-detached/duplex (SEMI/DET, S/D patterns)
+#'         \item "SMALL_MULTI_2_4" - 2-4 unit building
+#'         \item "LOWRISE_MULTI" - 5-19 units, typically <=3 stories
+#'         \item "MIDRISE_MULTI" - 20-49 units or 4-6 stories
+#'         \item "HIGHRISE_MULTI" - 50+ units or 7+ stories, single building
+#'         \item "MULTI_BLDG_COMPLEX" - multiple buildings on parcel (garden-style)
+#'         \item "COMMERCIAL" - commercial properties (both columns agree)
+#'         \item "OTHER" - unable to classify
+#'       }
+#'     \item is_condo: Logical vector indicating if parcel is a condo
 #'   }
 #'
 #' @examples
-#' standardize_building_type("ROW 2 STY MASONRY", "ROW TYPICAL")
-#' # Returns: "ROW"
-#' standardize_building_type("APT 2-4 UNITS 3 STY MASON", "ROW TYPICAL")
-#' # Returns: "SMALL_MULTI_2_4"
-#' standardize_building_type("APTS 5-50 UNITS MASONRY", "APARTMENTS - LOW RISE",
-#'                           num_bldgs = 5)
-#' # Returns: "MULTI_BLDG_COMPLEX"
+#' result <- standardize_building_type("ROW 2 STY MASONRY", "ROW TYPICAL")
+#' result$building_type  # "ROW"
+#' result$is_condo       # FALSE
+#'
+#' result <- standardize_building_type("RES CONDO 5 STY MASONRY", "CONDO")
+#' result$building_type  # "MIDRISE_MULTI" (classified by size)
+#' result$is_condo       # TRUE
 standardize_building_type <- function(bldg_code_desc,
                                        bldg_code_desc_new,
                                        num_bldgs = NA_integer_,
@@ -433,19 +436,57 @@ standardize_building_type <- function(bldg_code_desc,
   old_desc <- toupper(coalesce(as.character(bldg_code_desc), ""))
   new_desc <- toupper(coalesce(as.character(bldg_code_desc_new), ""))
 
-  # Initialize result
+  # Initialize results
   result <- rep(NA_character_, n)
+  is_condo <- rep(FALSE, n)
+
+  # -------------------------------------------------------------------------
+  # Detect condos (separate flag, not a building type)
+  # -------------------------------------------------------------------------
+  is_condo <- grepl("CONDO", old_desc) | grepl("CONDO", new_desc)
+
+  # -------------------------------------------------------------------------
+  # Detect commercial - BOTH columns must indicate commercial
+  # This prevents hotels, office buildings from being classified as residential
+  # -------------------------------------------------------------------------
+  commercial_patterns_old <- "HOTEL|OFFICE|OFF\\s*BLD|BANK|STORE\\b|STR/OFF|WAREHOUSE|" %+%
+                             "FACTORY|IND\\s*BLDG|IND\\s*SHOP|IND\\s*WAREHOUSE|" %+%
+                             "COMMERCIAL|RETAIL|TAVERN|REST.RNT|AUTO\\s*REPAIR|" %+%
+                             "AUTO\\s*DEALER|PARKING|PKG\\s*LOT|SCHOOL|HOSPITAL|" %+%
+                             "HEALTH\\s*FAC|HSE\\s*WORSHIP|CHURCH|CEMETERY|" %+%
+                             "AMUSE|MISC\\s*ADMIN|PUB\\s*UTIL"
+  commercial_patterns_new <- "RETAIL|WAREHOUSE|OFFICE|HOTEL|HOSPITAL|SCHOOL|" %+%
+                             "RELIGIOUS|COMMERCIAL|INDUSTRIAL|MANUFACTURING|" %+%
+                             "DOWNTOWN\\s*ROW|MEDICAL|CULTURAL|PARKING|" %+%
+                             "RECREATIONAL|COUNTRY\\s*CLUB|DAY\\s*CARE|" %+%
+                             "GOV.T|COLLEGES|THEATER|GYMNASIUM"
+
+  is_commercial_old <- grepl(commercial_patterns_old, old_desc)
+  is_commercial_new <- grepl(commercial_patterns_new, new_desc)
+
+  # Only flag as commercial if BOTH columns agree (conservative approach)
+  is_commercial_both <- is_commercial_old & is_commercial_new
+
+  # Also flag as commercial if old column is clearly non-residential and new is empty/generic
+  is_clearly_commercial <- grepl("^(HOTEL|OFFICE|OFF\\s*BLD|BANK|WAREHOUSE|FACTORY|" %+%
+                                  "IND\\s*BLDG|IND\\s*SHOP|SCHOOL|HOSPITAL|" %+%
+                                  "HSE\\s*WORSHIP|CEMETERY|PUB\\s*UTIL)", old_desc) &
+                           !grepl("APT|APTS|APARTMENT|RESID|DWELLING", old_desc)
+
+  is_commercial <- is_commercial_both | is_clearly_commercial
+  result[is_commercial] <- "COMMERCIAL"
 
   # -------------------------------------------------------------------------
   # Priority 1: Multi-building complexes (garden-style)
   # If num_bldgs > 3, it's a complex regardless of total units
+  # Skip if already classified as commercial
   # -------------------------------------------------------------------------
   is_complex <- !is.na(num_bldgs) & num_bldgs > 3
   result[is_complex & is.na(result)] <- "MULTI_BLDG_COMPLEX"
 
   # -------------------------------------------------------------------------
   # Priority 2: Explicit apartment size in NEW column
-
+  # Only apply to residential buildings
   # -------------------------------------------------------------------------
   is_highrise_new <- grepl("HIGH\\s*RISE|APTS?\\s*-?\\s*HIGH", new_desc) |
                      grepl("TOWER", new_desc)
@@ -453,13 +494,16 @@ standardize_building_type <- function(bldg_code_desc,
   is_lowrise_new  <- grepl("LOW\\s*RISE|APTS?\\s*-?\\s*LOW", new_desc)
   is_garden_new   <- grepl("GARDEN", new_desc)
 
-  result[is_highrise_new & is.na(result)] <- "HIGHRISE_MULTI"
-  result[is_midrise_new & is.na(result)]  <- "MIDRISE_MULTI"
-  result[is_lowrise_new & is.na(result)]  <- "LOWRISE_MULTI"
-  result[is_garden_new & is.na(result)]   <- "LOWRISE_MULTI"
+  # Must also have residential indicator to use these
+ is_residential_new <- grepl("APARTMENT|RESID|BLT\\s*AS\\s*RES", new_desc)
+
+  result[is_highrise_new & is_residential_new & is.na(result)] <- "HIGHRISE_MULTI"
+  result[is_midrise_new & is_residential_new & is.na(result)]  <- "MIDRISE_MULTI"
+  result[is_lowrise_new & is_residential_new & is.na(result)]  <- "LOWRISE_MULTI"
+  result[is_garden_new & is_residential_new & is.na(result)]   <- "LOWRISE_MULTI"
 
   # -------------------------------------------------------------------------
-  # Priority 3: Unit count patterns in OLD column
+  # Priority 3: Unit count patterns in OLD column (residential apartments)
   # -------------------------------------------------------------------------
   # APTS 100+ or APTS 51-100 -> large multi
   is_100plus <- grepl("APTS?\\s*(100\\+|100-|101)", old_desc)
@@ -475,7 +519,6 @@ standardize_building_type <- function(bldg_code_desc,
   result[is_51_100 & is.na(result)] <- "HIGHRISE_MULTI"
 
   # 5-50 units: depends on stories
-  # If stories >= 6: highrise; 4-5: midrise; else: lowrise
   is_5_50_unassigned <- is_5_50 & is.na(result)
   result[is_5_50_unassigned & !is.na(num_stories) & num_stories >= 6] <- "HIGHRISE_MULTI"
   result[is_5_50_unassigned & !is.na(num_stories) & num_stories >= 4 & num_stories < 6] <- "MIDRISE_MULTI"
@@ -487,32 +530,28 @@ standardize_building_type <- function(bldg_code_desc,
   result[is_2_4 & is.na(result)] <- "SMALL_MULTI_2_4"
 
   # -------------------------------------------------------------------------
-  # Priority 4: Story-based classification (when we have story info)
+  # Priority 4: Story-based classification for remaining unclassified
+  # Only if there's a residential indicator
   # -------------------------------------------------------------------------
   has_stories <- !is.na(num_stories)
-  # 7+ stories -> highrise
-  result[has_stories & num_stories >= 7 & is.na(result)] <- "HIGHRISE_MULTI"
-  # 4-6 stories -> midrise
-  result[has_stories & num_stories >= 4 & num_stories < 7 & is.na(result)] <- "MIDRISE_MULTI"
+  is_residential_old <- grepl("APT|APTS|DWELLING|RESID|RES\\s*CONDO|STACKED\\s*PUD", old_desc)
+
+  # 7+ stories with residential indicator -> highrise
+ result[has_stories & num_stories >= 7 & is_residential_old & is.na(result)] <- "HIGHRISE_MULTI"
+  # 4-6 stories with residential indicator -> midrise
+  result[has_stories & num_stories >= 4 & num_stories < 7 & is_residential_old & is.na(result)] <- "MIDRISE_MULTI"
 
   # -------------------------------------------------------------------------
   # Priority 5: Structural type patterns (ROW, TWIN, DET)
   # -------------------------------------------------------------------------
-  # Condos first (can appear with ROW/TWIN structure)
-  is_condo <- grepl("CONDO", old_desc) | grepl("CONDO", new_desc) |
-              grepl("RES\\s*CONDO", old_desc)
-  result[is_condo & is.na(result)] <- "CONDO"
-
   # Detached single-family: DET but NOT "SEMI/DET" or "S/D"
-  # Also exclude apartments, condos
   is_detached <- (grepl("^DET\\b|\\bDET\\s", old_desc) &
-                  !grepl("SEMI|S/D|APT|APTS|CONDO", old_desc))
+                  !grepl("SEMI|S/D|APT|APTS", old_desc))
   result[is_detached & is.na(result)] <- "DETACHED"
 
   # Twin/Semi-detached: SEMI/DET or S/D patterns
   is_twin <- grepl("SEMI/?DET|S/D\\b|TWIN", old_desc) |
              grepl("TWIN", new_desc)
-  # Exclude if already classified as apartment
   result[is_twin & is.na(result)] <- "TWIN"
 
   # Row homes
@@ -526,19 +565,9 @@ standardize_building_type <- function(bldg_code_desc,
   result[is_row_conv_apt & is.na(result)] <- "SMALL_MULTI_2_4"
 
   # -------------------------------------------------------------------------
-  # Priority 6: Commercial/Mixed-use patterns
+  # Priority 6: Catch remaining apartment patterns
   # -------------------------------------------------------------------------
-  is_commercial <- grepl("STR/OFF|STORE|WAREHOUSE|SHOP\\b|FACTORY|COMMERCIAL|RETAIL",
-                         old_desc) |
-                   grepl("MIXED.*COM|COM.*RES|BSMTRETAIL", new_desc)
-  # Exclude if residential patterns are stronger
-  is_residential_strong <- grepl("APT|APTS|ROW|TWIN|DET|CONDO|SEMI", old_desc)
-  result[is_commercial & !is_residential_strong & is.na(result)] <- "COMMERCIAL_MIXED"
-
-  # -------------------------------------------------------------------------
-  # Priority 7: Catch remaining apartment patterns
-  # -------------------------------------------------------------------------
-  is_apt_other <- grepl("APT|APTS|APARTMENT|BOARDING", old_desc) |
+  is_apt_other <- grepl("APT|APTS|APARTMENT|BOARDING|DORMITORY", old_desc) |
                   grepl("APARTMENT", new_desc)
   result[is_apt_other & is.na(result)] <- "LOWRISE_MULTI"
 
@@ -547,7 +576,13 @@ standardize_building_type <- function(bldg_code_desc,
   # -------------------------------------------------------------------------
   result[is.na(result)] <- "OTHER"
 
-  return(result)
+  return(list(
+    building_type = result,
+    is_condo = is_condo
+  ))
 }
+
+# Helper for string concatenation (avoids paste0 verbosity)
+`%+%` <- function(a, b) paste0(a, b)
 
 

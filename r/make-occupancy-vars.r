@@ -164,13 +164,15 @@ if (!"building_type" %in% names(philly_parcels) &&
   # Extract stories from building code first
   philly_parcels[, stories_from_code := extract_stories_from_code(building_code_description)]
 
-  # Create building_type (num_bldgs may not be available yet, so pass NA)
-  philly_parcels[, building_type := standardize_building_type(
-    bldg_code_desc = building_code_description,
-    bldg_code_desc_new = building_code_description_new,
-    num_bldgs = if ("num_bldgs" %in% names(philly_parcels)) num_bldgs else NA_integer_,
-    num_stories = stories_from_code
-  )]
+  # Create building_type and is_condo (num_bldgs may not be available yet, so pass NA)
+  bldg_result <- standardize_building_type(
+    bldg_code_desc = philly_parcels$building_code_description,
+    bldg_code_desc_new = philly_parcels$building_code_description_new,
+    num_bldgs = if ("num_bldgs" %in% names(philly_parcels)) philly_parcels$num_bldgs else NA_integer_,
+    num_stories = philly_parcels$stories_from_code
+  )
+  philly_parcels[, building_type := bldg_result$building_type]
+  philly_parcels[, is_condo := bldg_result$is_condo]
 }
 
 # Story imputations by building type group (more meaningful than old fixed column)
@@ -320,38 +322,40 @@ if (!"building_type" %in% names(parcel_agg) &&
     parcel_agg[, stories_from_code := extract_stories_from_code(building_code_description)]
   }
 
-  parcel_agg[, building_type := standardize_building_type(
-    bldg_code_desc = building_code_description,
-    bldg_code_desc_new = building_code_description_new,
-    num_bldgs = if ("num_bldgs_imp" %in% names(parcel_agg)) num_bldgs_imp else NA_integer_,
-    num_stories = if ("num_stories_imp" %in% names(parcel_agg)) num_stories_imp else stories_from_code
-  )]
+  bldg_result <- standardize_building_type(
+    bldg_code_desc = parcel_agg$building_code_description,
+    bldg_code_desc_new = parcel_agg$building_code_description_new,
+    num_bldgs = if ("num_bldgs_imp" %in% names(parcel_agg)) parcel_agg$num_bldgs_imp else NA_integer_,
+    num_stories = if ("num_stories_imp" %in% names(parcel_agg)) parcel_agg$num_stories_imp else parcel_agg$stories_from_code
+  )
+  parcel_agg[, building_type := bldg_result$building_type]
+  parcel_agg[, is_condo := bldg_result$is_condo]
 }
 
 # Map building_type to structure_bin (for census matching)
 # Direct mapping from standardized building types
+# Note: is_condo is a separate flag; condos are classified by size here
 if ("building_type" %in% names(parcel_agg)) {
   parcel_agg[
     ,
     structure_bin := fcase(
       building_type == "DETACHED", "u_1_detached",
       building_type == "ROW", "u_1_attached",
-      building_type == "CONDO", "u_1_attached",
       building_type == "TWIN", "u_2_units",
       building_type == "SMALL_MULTI_2_4", "u_3_4_units",
       building_type == "LOWRISE_MULTI", "u_10_19_units",
       building_type == "MULTI_BLDG_COMPLEX", "u_10_19_units",
       building_type == "MIDRISE_MULTI", "u_20_49_units",
       building_type == "HIGHRISE_MULTI", "u_50plus_units",
-      building_type == "COMMERCIAL_MIXED", NA_character_,
+      building_type == "COMMERCIAL", NA_character_,
       building_type == "OTHER", NA_character_,
       default = NA_character_
     )
   ]
 
-  # For unclassified (OTHER/COMMERCIAL_MIXED), back out from units/bldgs
+  # For unclassified (OTHER/COMMERCIAL), back out from units/bldgs
   parcel_agg[
-    building_type %in% c("OTHER", "COMMERCIAL_MIXED") | is.na(structure_bin),
+    building_type %in% c("OTHER", "COMMERCIAL") | is.na(structure_bin),
     structure_bin := fcase(
       num_units_imp <= 1 & num_bldgs_imp == 1, "u_1_attached",
       num_units_imp <= 2 & num_bldgs_imp == 1, "u_2_units",

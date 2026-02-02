@@ -125,12 +125,14 @@ prep_parcel_backbone <- function(philly_parcels, philly_bg) {
 
   # Standardize building type using both old and new columns
   if (all(c("building_code_description", "building_code_description_new") %in% names(parcels_dt))) {
-    parcels_dt[, building_type := standardize_building_type(
-      bldg_code_desc = building_code_description,
-      bldg_code_desc_new = building_code_description_new,
-      num_bldgs = if ("num_bldgs" %in% names(parcels_dt)) num_bldgs else NA_integer_,
-      num_stories = if ("stories_from_code" %in% names(parcels_dt)) stories_from_code else NA_real_
-    )]
+    bldg_result <- standardize_building_type(
+      bldg_code_desc = parcels_dt$building_code_description,
+      bldg_code_desc_new = parcels_dt$building_code_description_new,
+      num_bldgs = if ("num_bldgs" %in% names(parcels_dt)) parcels_dt$num_bldgs else NA_integer_,
+      num_stories = if ("stories_from_code" %in% names(parcels_dt)) parcels_dt$stories_from_code else NA_real_
+    )
+    parcels_dt[, building_type := bldg_result$building_type]
+    parcels_dt[, is_condo := bldg_result$is_condo]
 
     # Also create legacy column for backward compatibility with models
     parcels_dt[, building_code_description_new_fixed := fcase(
@@ -141,9 +143,8 @@ prep_parcel_backbone <- function(philly_parcels, philly_bg) {
       building_type == "HIGHRISE_MULTI", "HIGH RISE APARTMENTS",
       building_type == "MULTI_BLDG_COMPLEX", "GARDEN APARTMENTS",
       building_type %in% c("SMALL_MULTI_2_4", "OTHER"), "APARTMENTS OTHER",
-      building_type == "CONDO", "CONDO",
       building_type == "DETACHED", "OTHER",
-      building_type == "COMMERCIAL_MIXED", "OTHER",
+      building_type == "COMMERCIAL", "OTHER",
       default = "OTHER"
     )]
   } else if ("building_code_description_new" %in% names(parcels_dt)) {
@@ -608,12 +609,14 @@ build_units_imputation <- function(philly_parcels,
 
   if (!"building_type" %in% names(parcel_agg_for_model) &&
       all(c("building_code_description", "building_code_description_new") %in% names(parcel_agg_for_model))) {
-    parcel_agg_for_model[, building_type := standardize_building_type(
-      bldg_code_desc = building_code_description,
-      bldg_code_desc_new = building_code_description_new,
-      num_bldgs = if ("num_bldgs_imp" %in% names(parcel_agg_for_model)) num_bldgs_imp else NA_integer_,
-      num_stories = if ("num_stories_imp" %in% names(parcel_agg_for_model)) num_stories_imp else stories_from_code
-    )]
+    bldg_result <- standardize_building_type(
+      bldg_code_desc = parcel_agg_for_model$building_code_description,
+      bldg_code_desc_new = parcel_agg_for_model$building_code_description_new,
+      num_bldgs = if ("num_bldgs_imp" %in% names(parcel_agg_for_model)) parcel_agg_for_model$num_bldgs_imp else NA_integer_,
+      num_stories = if ("num_stories_imp" %in% names(parcel_agg_for_model)) parcel_agg_for_model$num_stories_imp else parcel_agg_for_model$stories_from_code
+    )
+    parcel_agg_for_model[, building_type := bldg_result$building_type]
+    parcel_agg_for_model[, is_condo := bldg_result$is_condo]
   }
 
   # Create legacy column for model (mapping from new building_type)
@@ -626,9 +629,8 @@ build_units_imputation <- function(philly_parcels,
       building_type == "HIGHRISE_MULTI", "HIGH RISE APARTMENTS",
       building_type == "MULTI_BLDG_COMPLEX", "GARDEN APARTMENTS",
       building_type %in% c("SMALL_MULTI_2_4", "OTHER"), "APARTMENTS OTHER",
-      building_type == "CONDO", "CONDO",
       building_type == "DETACHED", "OTHER",
-      building_type == "COMMERCIAL_MIXED", "OTHER",
+      building_type == "COMMERCIAL", "OTHER",
       default = "OTHER"
     )]
   } else if ("building_code_description_new" %in% names(parcel_agg_for_model)) {
