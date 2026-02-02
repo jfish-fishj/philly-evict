@@ -4,3 +4,6 @@
 .Ruserdata
 .DS_Store
 */.DS_Store
+coc_msa_xwalk_ca_primary.csv
+data/*
+cache_acs/*
