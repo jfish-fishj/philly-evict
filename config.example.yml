@@ -1,0 +1,167 @@
+# config.example.yml
+# Copy to config.yml (do not commit config.yml), or set PHILLY_EVICTIONS_CONFIG to point to a config file.
+#
+# Philosophy:
+# - No hardcoded paths in code. All reads/writes route through this config.
+# - scripts should read config via R/config.R::read_config()
+
+paths:
+  # By default, interpret relative paths from repo root.
+  repo_root: "."
+  input_dir: "data/inputs"           # raw inputs (read-only)
+  processed_dir: "data/processed"    # generated data products
+  output_dir: "output"               # tables/figures/models/logs
+  tmp_dir: "data/tmp"                # scratch intermediates safe to delete
+
+# ============================================================
+# INPUTS: Raw external data (relative to input_dir)
+# ============================================================
+inputs:
+  # --- Evictions ---
+  evictions_summary_table: "evictions/phila-lt-data/summary-table.txt"
+  evictions_party_names: "evictions/phila-lt-data/party-names-addresses.txt"
+  evictions_docket_entries: "evictions/phila-lt-data/docket-entries.txt"
+  evictions_property_addresses: "evictions/phila-lt-data/property-addresses.txt"
+  evictions_tenant_addresses: "evictions/phila-lt-data/tenant-addresses-cleaned.txt"
+  evictions_attorney_names: "evictions/phila-lt-data/attorney-names.txt"
+  eviction_pa_philadelphia: "evictions/eviction_PA_philadelphia.csv"
+
+  # --- Parcels / Property Master ---
+  opa_gdb: "parcels/opa_properties_public.gdb"
+  opa_shp: "parcels/opa_properties_public.shp"
+  building_footprints: "parcels/LI_BUILDING_FOOTPRINTS.csv"
+
+  # --- Licenses ---
+  business_licenses: "licenses/business_licenses_clean.csv"
+
+  # --- Listings (Altos) ---
+  altos_metro_raw: "listings/philadelphia_metro_all_years.csv"
+
+  # --- CoreLogic ---
+  corelogic_philly_raw: "corelogic/filtered_42101.csv"
+
+  # --- Census ---
+  tenure_bg_2000: "census/tenure_bg_2000.csv"
+  tenure_bg_2010: "census/tenure_bg_2010.csv"
+  bg_2000: "census/bg_2000.csv"
+  bg_2010: "census/bg_2010.csv"
+  uis_tr_2010: "census/uis_tr_2010.csv"
+
+  # --- InfoUSA ---
+  infousa_raw: "infousa/philly-infousa.csv"
+  infousa_cleaned: "infousa/infousa_address_cleaned.csv"
+
+  # --- Assessments ---
+  assessments: "assessments/assessments.csv"
+
+  # --- Crime ---
+  crime: "crime/philly-crime.csv"
+
+  # --- Shapefiles ---
+  philly_bg_shp: "shapefiles/philly_bg.shp"
+  philly_parcels_sf: "shapefiles/philly_parcels_sf/DOR_Parcel.shp"
+  hex_res7: "shapefiles/philly_hex_res7"
+  hex_res8: "shapefiles/philly_hex_res8"
+  hex_res9: "shapefiles/philly_hex_res9"
+
+  # --- Open Data Portal ---
+  open_data_business_licenses: "open-data/business_licenses.csv"
+  open_data_violations: "open-data/violations.csv"
+  open_data_permits: "open-data/permits.csv"
+  open_data_complaints: "open-data/complaints.csv"
+  open_data_case_investigations: "open-data/case_investigations.csv"
+  open_data_crime: "open-data/crime.csv"
+
+# ============================================================
+# PRODUCTS: Derived data outputs (relative to processed_dir)
+# ============================================================
+products:
+  # --- Clean outputs (from clean-* scripts) ---
+  evictions_clean: "clean/evictions_clean.csv"
+  parcels_clean: "clean/parcels_clean.csv"
+  parcel_address_counts: "clean/philly-parcel-address-counts.csv"
+  licenses_clean: "clean/licenses_clean.csv"
+  altos_clean: "clean/altos_clean.csv"
+  infousa_clean: "clean/infousa_clean.csv"
+  corelogic_clean: "clean/corelogic_clean.csv"
+  eviction_names_clean: "clean/eviction_names_clean.csv"
+  bldg_footprints_clean: "clean/opa_properties_public_bldg_footprints.csv"
+
+  # --- Panels (from make-* scripts) ---
+  ever_rentals_panel: "panels/ever_rentals_panel.csv"
+  ever_rentals_pid: "panels/ever_rentals_pid.csv"
+  ever_rental_parcel_units: "panels/ever_rental_parcel_units.csv"
+  evict_pid_year: "panels/evict_pid_year.csv"
+  evict_pid_bed_year: "panels/evict_pid_bed_year.csv"
+  evict_zip_year: "panels/evict_zip_year.csv"
+  parcel_occupancy_panel: "panels/parcel_occupancy_panel_with_ever_rentals.csv"
+  parcel_occupancy_rentals_only: "panels/parcel_occupancy_panel_rentals_only.csv"
+  infousa_occupancy: "panels/infousa_parcel_occupancy_vars.csv"
+  license_long_min: "panels/license_long_min.csv"
+  rent_altos: "panels/rent_altos.csv"
+  rent_licenses: "panels/rent_licenses.csv"
+  altos_year_bedrooms: "panels/altos_year_bedrooms.csv"
+  altos_year_building: "panels/altos_year_building.csv"
+  hex_panel_res7: "panels/phl_hex_yq_panel_res7.csv"
+  hex_panel_res8: "panels/phl_hex_yq_panel_res8.csv"
+  hex_panel_res9: "panels/phl_hex_yq_panel_res9.csv"
+
+  # --- Crosswalks (from merge-* scripts) ---
+  evict_address_agg: "xwalks/philly_evict_address_agg.csv"
+  evict_address_xwalk: "xwalks/philly_evict_address_agg_xwalk.csv"
+  evict_address_xwalk_case: "xwalks/philly_evict_address_agg_xwalk_case.csv"
+  infousa_address_agg: "xwalks/philly_infousa_dt_address_agg.csv"
+  infousa_address_xwalk: "xwalks/philly_infousa_dt_address_agg_xwalk.csv"
+  building_pid_xwalk: "xwalks/building_pid_xwalk_2024.csv"
+  parcel_building: "xwalks/parcel_building.csv"
+  parcel_building_2024: "xwalks/parcel_building_2024.csv"
+  parcel_building_summary: "xwalks/parcel_building_summary_2024.csv"
+
+  # --- Address-to-Parcel Crosswalks (from make-address-parcel-xwalk.R) ---
+  xwalk_evictions_to_parcel: "xwalks/xwalk_evictions_to_parcel.csv"
+  xwalk_infousa_to_parcel: "xwalks/xwalk_infousa_to_parcel.csv"
+  xwalk_altos_to_parcel: "xwalks/xwalk_altos_to_parcel.csv"
+  match_audit_evictions: "xwalks/match_audit_evictions.csv"
+  match_audit_infousa: "xwalks/match_audit_infousa.csv"
+  match_audit_altos: "xwalks/match_audit_altos.csv"
+  match_summary_evictions: "xwalks/match_summary_evictions.csv"
+  match_summary_infousa: "xwalks/match_summary_infousa.csv"
+  match_summary_altos: "xwalks/match_summary_altos.csv"
+
+  # --- Altos-CoreLogic Crosswalks (from merge-altos-corelogic.R) ---
+  altos_corelogic_xwalk: "xwalks/altos_corelogic_xwalk.csv"
+  altos_corelogic_xwalk_listing: "xwalks/altos_corelogic_xwalk_listing.csv"
+  altos_corelogic_agg: "panels/altos_corelogic_agg.csv"
+
+  # --- Altos-Parcel Crosswalks (from merge-altos-rental-listings.R) ---
+  altos_address_agg: "xwalks/altos_address_agg.csv"
+  altos_parcel_xwalk: "xwalks/altos_parcel_xwalk.csv"
+  altos_parcel_xwalk_listing: "xwalks/altos_parcel_xwalk_listing.csv"
+
+  # --- Analytic (final analysis-ready datasets) ---
+  analytic_sample: "analytic/analytic_sample.csv"
+  analytic_df: "analytic/analytic_df.csv"
+  bldg_panel: "analytic/bldg_panel.csv"
+  bldg_panel_blp: "analytic/bldg_panel_blp.csv"
+  final_panel: "analytic/final_panel.csv"
+  large_apartments: "analytic/large_apartments.csv"
+  market_shares: "analytic/adjusted_market_shares.csv"
+  market_share_zips: "analytic/market_share_all_zips.csv"
+  market_share_details: "analytic/market_share_details.csv"
+
+# ============================================================
+# RUN SETTINGS
+# ============================================================
+run:
+  # Toggle to run on a small sample for fast smoke tests (scripts must respect this).
+  sample_mode: false
+  sample_n: 200000
+  seed: 123
+
+# ============================================================
+# SPATIAL SETTINGS
+# ============================================================
+spatial:
+  # If you are building hex panels
+  h3_resolution: 9
+  time_unit: "year_quarter"  # one of: year, year_quarter, month
