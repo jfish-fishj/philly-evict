@@ -5,8 +5,9 @@
 ##
 ## Inputs (from config):
 ##   - ever_rentals_panel (from make-rent-panel.R)
-##   - parcel_occupancy_panel (from make-occupancy-vars.R)
-##   - parcel_building (events panel)
+##   - parcel_occupancy_panel (from make-occupancy-vars.R; total_units, renter_occ)
+##   - building_data (from make-building-data.R; violations, permits, complaints)
+##   - parcels_clean (owner_1, mailing_street, pm.zip for owner/zip fallback)
 ##   - assessments (raw)
 ##
 ## Outputs (to config):
@@ -43,8 +44,9 @@ logf("Loading input data...", log_file = log_file)
 
 path_ever_panel   <- p_product(cfg, "ever_rentals_panel")
 path_occ_panel    <- p_product(cfg, "parcel_occupancy_panel")
-path_events_panel <- p_product(cfg, "parcel_building")
+path_events_panel <- p_product(cfg, "building_data")
 path_assess_csv   <- p_input(cfg, "assessments")
+path_parcels_clean <- p_product(cfg, "parcels_clean")
 
 ever_panel    <- fread(path_ever_panel)
 logf("  ever_rentals_panel: ", nrow(ever_panel), " rows", log_file = log_file)
@@ -52,12 +54,19 @@ logf("  ever_rentals_panel: ", nrow(ever_panel), " rows", log_file = log_file)
 occ_panel     <- fread(path_occ_panel)
 logf("  parcel_occupancy_panel: ", nrow(occ_panel), " rows", log_file = log_file)
 
-event_cols <- (fread(path_events_panel, nrows = 1) |> colnames())[(1:35)]
-events_panel  <- fread(path_events_panel, select = event_cols)
-logf("  parcel_building (events): ", nrow(events_panel), " rows", log_file = log_file)
+events_panel  <- fread(path_events_panel)
+logf("  building_data (events): ", nrow(events_panel), " rows", log_file = log_file)
 
 ass <- fread(path_assess_csv)
 logf("  assessments: ", nrow(ass), " rows", log_file = log_file)
+
+parcels_meta <- fread(path_parcels_clean,
+                      select = c("parcel_number", "owner_1", "mailing_street", "pm.zip"))
+parcels_meta[, PID := normalize_pid(parcel_number)]
+parcels_meta[, parcel_number := NULL]
+setnames(parcels_meta, "pm.zip", "pm.zip_parcels")
+parcels_meta <- unique(parcels_meta, by = "PID")
+logf("  parcels_clean (meta): ", nrow(parcels_meta), " rows", log_file = log_file)
 
 setDT(ever_panel)
 setDT(occ_panel)
@@ -67,21 +76,17 @@ setDT(ass)
 ## Normalize PIDs
 ever_panel[,   PID := normalize_pid(PID)]
 occ_panel[,    PID := normalize_pid(PID)]
-events_panel[, PID := normalize_pid(PID)]
+events_panel[, PID := normalize_pid(parcel_number)]
+events_panel[, parcel_number := NULL]
+if ("period" %in% names(events_panel)) events_panel[, period := NULL]
 
 ## ------------------------------------------------------------
 ## 2) BUILD BASE PANEL (PID × YEAR) FROM OCC + EVER + EVENTS
 ## ------------------------------------------------------------
 bldg_panel <- copy(occ_panel)
 
-# Clean up pm.zip columns: strip "_" prefix, coalesce available sources
-# Keep as character (5-digit padded) for consistency
-ever_panel[, pm.zip := coalesce(
-  str_remove(as.character(pm.zip.x), "^_") %>% str_pad(5, "left", "0"),
-  str_remove(as.character(pm.zip.y), "^_") %>% str_pad(5, "left", "0"),
-  str_remove(as.character(zip_code), "^_") %>% str_pad(5, "left", "0")
-)]
-ever_panel[pm.zip == "   NA" | pm.zip == "NA" | pm.zip == "00000", pm.zip := NA_character_]
+## Merge parcels_clean metadata (owner + zip fallback)
+bldg_panel <- merge(bldg_panel, parcels_meta, by = "PID", all.x = TRUE)
 
 ## ever_rentals_panel: rents, rental flags, filings, parcel chars
 logf("Merging ever_rentals_panel...", log_file = log_file)
@@ -98,6 +103,14 @@ bldg_panel <- merge(
 logf("  bldg_panel rows after merge: ", nrow(bldg_panel), log_file = log_file)
 assert_unique(bldg_panel, c("PID", "year"), "bldg_panel after ever_panel merge")
 logf("  Assertion passed: (PID, year) unique after ever_panel merge", log_file = log_file)
+
+## Coalesce pm.zip: prefer ever_panel's pm.zip, fall back to parcels_clean
+bldg_panel[, pm.zip := coalesce(
+  str_remove(as.character(pm.zip), "^_") %>% str_pad(5, "left", "0"),
+  str_remove(as.character(pm.zip_parcels), "^_") %>% str_pad(5, "left", "0")
+)]
+bldg_panel[pm.zip %in% c("   NA", "NA", "00000"), pm.zip := NA_character_]
+bldg_panel[, pm.zip_parcels := NULL]
 
 ## Single merged events file: violations + permits + complaints (PID×year)
 logf("Merging events_panel...", log_file = log_file)
@@ -121,6 +134,9 @@ logf("  Assertion passed: (PID, year) unique after events_panel merge", log_file
 ## Normalize PID & year in assessments
 ass[, PID  := normalize_pid(parcel_number)]
 ass[, year := as.integer(year)]
+
+# drop dupes by year X PID
+ass = unique(ass, by = c("PID", "year"))
 
 ## Core taxable values
 ass[, taxable_value := as.numeric(taxable_land + taxable_building)]
@@ -190,6 +206,8 @@ if (length(drop_cols) > 0L) ass[, (drop_cols) := NULL]
 ## Merge assessments into bldg_panel (PID×year)
 logf("Merging assessments...", log_file = log_file)
 logf("  bldg_panel rows before merge: ", nrow(bldg_panel), log_file = log_file)
+# ass has a couple dupes; drop them
+
 
 bldg_panel <- merge(
   bldg_panel,
@@ -203,23 +221,23 @@ assert_unique(bldg_panel, c("PID", "year"), "bldg_panel after assessments merge"
 logf("  Assertion passed: (PID, year) unique after assessments merge", log_file = log_file)
 
 ## Per-unit assessment vars (using canonical units from occupancy)
-if (!("num_units_imp_final" %in% names(bldg_panel))) {
-  stop("Expected 'num_units_imp_final' in occupancy panel.")
+if (!("total_units" %in% names(bldg_panel))) {
+  stop("Expected 'total_units' in occupancy panel.")
 }
 
 bldg_panel[
   ,
   change_taxable_value_per_unit := fifelse(
-    !is.na(change_taxable_value) & num_units_imp_final > 0,
-    change_taxable_value / num_units_imp_final,
+    !is.na(change_taxable_value) & total_units > 0,
+    change_taxable_value / total_units,
     NA_real_
   )
 ]
 bldg_panel[
   ,
   log_taxable_value_per_unit := fifelse(
-    !is.na(taxable_value) & taxable_value > 0 & num_units_imp_final > 0,
-    log(taxable_value / num_units_imp_final),
+    !is.na(taxable_value) & taxable_value > 0 & total_units > 0,
+    log(taxable_value / total_units),
     NA_real_
   )
 ]
@@ -233,8 +251,8 @@ bldg_panel[
   ,
   occupied_units := fifelse(
     !is.na(occupancy_rate),
-    num_units_imp_final * occupancy_rate,
-    num_units_imp_final
+    total_units * occupancy_rate,
+    total_units
   )
 ]
 
@@ -256,18 +274,14 @@ bldg_panel[
 ## 5) MARKET & OWNER IDS
 ## ------------------------------------------------------------
 
-## Market = zip-year (pm.zip_parcels preferred)
-market_zip_col <- if ("pm.zip_parcels" %in% names(bldg_panel)) {
-  "pm.zip_parcels"
-} else if ("pm.zip" %in% names(bldg_panel)) {
+## Market = zip-year (pm.zip already coalesced from ever_panel + parcels_clean)
+market_zip_col <- if ("pm.zip" %in% names(bldg_panel)) {
   "pm.zip"
-} else if ("zip_parcels" %in% names(bldg_panel)) {
-  "zip_parcels"
 } else {
   NA_character_
 }
 if (is.na(market_zip_col)) {
-  stop("No zip column found (pm.zip_parcels / pm.zip / zip_parcels). Please adjust the market definition.")
+  stop("No zip column found (pm.zip). Please adjust the market definition.")
 }
 
 bldg_panel[
@@ -279,22 +293,22 @@ bldg_panel[
   market_id := paste(market_zip, year, sep = "_")
 ]
 
-## Owner ID
-if ("owner_mailing" %in% names(bldg_panel)) {
+## Owner ID (from parcels_clean: owner_1)
+if ("owner_1" %in% names(bldg_panel)) {
+  bldg_panel[
+    ,
+    owner_mailing_clean := fifelse(
+      !is.na(owner_1) & nzchar(owner_1),
+      owner_1,
+      paste0("UNK_", PID)
+    )
+  ]
+} else if ("owner_mailing" %in% names(bldg_panel)) {
   bldg_panel[
     ,
     owner_mailing_clean := fifelse(
       !is.na(owner_mailing) & nzchar(owner_mailing),
       owner_mailing,
-      paste0("UNK_", PID)
-    )
-  ]
-} else if ("owner" %in% names(bldg_panel)) {
-  bldg_panel[
-    ,
-    owner_mailing_clean := fifelse(
-      !is.na(owner) & nzchar(owner),
-      owner,
       paste0("UNK_", PID)
     )
   ]
@@ -326,7 +340,7 @@ rental_pids <- bldg_panel[is_rental_year == TRUE, unique(PID)]
 bldg_panel  <- bldg_panel[PID %in% rental_pids]
 
 ## Restrict to multi-unit rentals (tweak threshold as needed)
-#bldg_panel  <- bldg_panel[num_units_imp_final ]
+#bldg_panel  <- bldg_panel[total_units ]
 
 ## Drop pre-construction years if you have year_built
 if ("year_built" %in% names(bldg_panel)) {
@@ -337,7 +351,7 @@ if ("year_built" %in% names(bldg_panel)) {
 if ("num_filings" %in% names(bldg_panel)) {
   bldg_panel[
     ,
-    filing_rate := fco(num_filings, 0) / pmax(num_units_imp_final, 1)
+    filing_rate := fco(num_filings, 0) / pmax(total_units, 1)
   ]
   bldg_panel[
     ,
@@ -419,7 +433,7 @@ bldg_panel <- merge(
 bldg_panel[
   ,
   num_units_bin := cut(
-    num_units_imp_final,
+    total_units,
     breaks = c(-Inf, 1, 5, 20, 50, Inf),
     labels = c("1", "2-5", "6-20", "21-50", "51+"),
     include.lowest = TRUE
@@ -504,7 +518,7 @@ make_blp_instruments <- function(
 }
 
 blp_cont_vars <- c(
-  "num_units_imp_final",
+  "total_units",
   "log_med_rent",
   "hazardous_violation_count",
   "total_violations",
@@ -536,7 +550,7 @@ bldg_panel <- make_blp_instruments(
 analytic <- bldg_panel[
   !is.na(log_med_rent) &
     !is.na(market_share_units) &
-    !is.na(num_units_imp_final)
+    !is.na(total_units)
 ]
 
 market_stats <- analytic[
@@ -563,7 +577,7 @@ logf("Running final assertions...", log_file = log_file)
 
 # Verify key columns exist
 required_cols <- c("PID", "year", "market_id", "owner_mailing_clean", "log_med_rent",
-                   "num_units_imp_final", "market_share_units")
+                   "total_units", "market_share_units")
 assert_has_cols(bldg_panel, required_cols, "bldg_panel")
 logf("  Required columns present in bldg_panel", log_file = log_file)
 
