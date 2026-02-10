@@ -27,7 +27,7 @@ suppressPackageStartupMessages({
 
 # ---- Load config and set up logging ----
 source("r/config.R")
-
+source("r/helper-functions.R")
 cfg <- read_config()
 log_file <- p_out(cfg, "logs", "make-analytic-sample.log")
 
@@ -61,11 +61,39 @@ ass <- fread(path_assess_csv)
 logf("  assessments: ", nrow(ass), " rows", log_file = log_file)
 
 parcels_meta <- fread(path_parcels_clean,
-                      select = c("parcel_number", "owner_1", "mailing_street", "pm.zip"))
+                      select = c("parcel_number", "owner_1", "mailing_street", "pm.zip",
+                                 "number_stories", "topography" , "total_area" , "total_livable_area" , "type_heater",
+                                 "unfinished"  ,"building_code_description"   ,  "building_code_description_new", "quality_grade"
+                                 ))
 parcels_meta[, PID := normalize_pid(parcel_number)]
 parcels_meta[, parcel_number := NULL]
 setnames(parcels_meta, "pm.zip", "pm.zip_parcels")
 parcels_meta <- unique(parcels_meta, by = "PID")
+
+# clean parcels meta
+if (!"building_type" %in% names(parcels_meta) &&
+    all(c("building_code_description", "building_code_description_new") %in% names(parcels_meta))) {
+
+  bldg_result <- standardize_building_type(
+    bldg_code_desc     = parcels_meta$building_code_description,
+    bldg_code_desc_new = parcels_meta$building_code_description_new,
+    num_bldgs   = if ("num_bldgs" %in% names(parcels_meta)) parcels_meta$num_bldgs else NA_integer_,
+    num_stories = parcels_meta$number_stories
+  )
+  parcels_meta[, building_type := bldg_result$building_type]
+  parcels_meta[, is_condo := bldg_result$is_condo]
+}
+
+# Impute stories by building_type (not fixed legacy column)
+impute_group_col <- if ("building_type" %in% names(parcels_meta)) "building_type" else "building_code_description_new_fixed"
+
+parcels_meta[, num_stories_mean := mean(number_stories, na.rm = TRUE), by = c(impute_group_col)]
+parcels_meta[, num_stories_imp  := fifelse(!is.na(number_stories), number_stories, num_stories_mean)]
+
+# parcels_meta[, num_bldgs_mean := mean(num_bldgs, na.rm = TRUE), by = c(impute_group_col)]
+# parcels_meta[, num_bldgs_imp  := fifelse(!is.na(num_bldgs), num_bldgs, num_bldgs_mean)]
+# parcels_meta[is.na(num_bldgs_imp), num_bldgs_imp := 1]
+
 logf("  parcels_clean (meta): ", nrow(parcels_meta), " rows", log_file = log_file)
 
 setDT(ever_panel)
@@ -92,11 +120,20 @@ bldg_panel <- merge(bldg_panel, parcels_meta, by = "PID", all.x = TRUE)
 logf("Merging ever_rentals_panel...", log_file = log_file)
 logf("  bldg_panel rows before merge: ", nrow(bldg_panel), log_file = log_file)
 
+# drop num_filings from bldg_panel
+bldg_panel[,num_years_in_panel := .N, by = PID]
+bldg_panel[,num_years_pre2019 := sum(year <= 2019), by = PID]
+bldg_panel[,total_filings := sum(num_filings, na.rm = TRUE), by = PID]
+bldg_panel[,total_filings_pre2019 := sum(num_filings[year <= 2019], na.rm = TRUE), by = PID]
+
+bldg_panel[,filing_rate_longrun := total_filings / total_units / num_years_in_panel ]
+bldg_panel[,filing_rate_longrun_pre2019 := total_filings_pre2019 / total_units / num_years_pre2019 ]
+
 bldg_panel <- merge(
   bldg_panel,
   ever_panel,
   by    = c("PID", "year"),
-  all.x = TRUE,
+  all.x = T,
   suffixes = c("", "_ever")
 )
 
@@ -120,7 +157,7 @@ bldg_panel <- merge(
   bldg_panel,
   events_panel,
   by    = c("PID", "year"),
-  all.x = TRUE
+  all.x = F
 )
 
 logf("  bldg_panel rows after merge: ", nrow(bldg_panel), log_file = log_file)
@@ -270,6 +307,8 @@ bldg_panel[
   )
 ]
 
+
+
 ## ------------------------------------------------------------
 ## 5) MARKET & OWNER IDS
 ## ------------------------------------------------------------
@@ -324,19 +363,8 @@ if ("owner_1" %in% names(bldg_panel)) {
 ## ------------------------------------------------------------
 
 ## Rental status from ever_rentals_panel columns
-bldg_panel[
-  ,
-  is_rental_year := fifelse(
-    fco(ever_rental_any_year, FALSE) |
-      fco(rental_from_altos, FALSE)  |
-      fco(rental_from_license, FALSE) |
-      fco(rental_from_evict, FALSE),
-    TRUE, FALSE
-  )
-]
-
 ## Restrict to parcels that ever look like rentals
-rental_pids <- bldg_panel[is_rental_year == TRUE, unique(PID)]
+rental_pids <- unique(ever_panel$PID)
 bldg_panel  <- bldg_panel[PID %in% rental_pids]
 
 ## Restrict to multi-unit rentals (tweak threshold as needed)
@@ -347,28 +375,261 @@ if ("year_built" %in% names(bldg_panel)) {
   bldg_panel <- bldg_panel[is.na(year_built) | year >= year_built]
 }
 
-## Simple filing rate + high_evict (optional)
+## ------------------------------------------------------------
+## 6b) FILINGS INTENSITY: RAW RATES + EMPIRICAL BAYES (POOLED ACROSS YEARS)
+## ------------------------------------------------------------
+## Target: a *building-level* long-run intensity (pre-COVID) pooled across years:
+##   y_it | lambda_i ~ Poisson(exposure_it * lambda_i)
+##   lambda_i ~ Gamma(alpha, beta)
+## Sufficient stats over pre-period: Y_i = sum_t y_it, E_i = sum_t exposure_it
+## Posterior mean: E[lambda_i | data] = (alpha + Y_i) / (beta + E_i)
+##
+## Two priors:
+##   - city prior (one alpha,beta for all buildings)
+##   - zip prior  (alpha_z,beta_z estimated within ZIP; fallback to city if thin)
+
 if ("num_filings" %in% names(bldg_panel)) {
-  bldg_panel[
-    ,
-    filing_rate := fco(num_filings, 0) / pmax(total_units, 1)
+
+  fco <- function(x, val = 0) fifelse(is.na(x), val, x)
+
+  # Ensure numeric + nonnegative
+  bldg_panel[, num_filings := pmax(0, as.numeric(fco(num_filings, 0)))]
+
+  # Denominators
+  # NOTE: make sure occupied_units is truly a COUNT (units), not a rate.
+  bldg_panel[, exposure_total := pmax(1, as.numeric(fco(total_units, 0)))]
+  bldg_panel[, exposure_occ   := as.numeric(fco(occupied_units, NA_real_))]
+  bldg_panel[, exposure_occ   := fifelse(is.finite(exposure_occ) & exposure_occ > 0, exposure_occ, NA_real_)]
+
+  # RAW rates (yearly)
+  bldg_panel[, filing_rate_total_raw := num_filings / exposure_total]
+  bldg_panel[, filing_rate_occ_raw   := fifelse(!is.na(exposure_occ), num_filings / exposure_occ, NA_real_)]
+
+  # Back-compat: main raw rate = occ-based
+  bldg_panel[, filing_rate_raw := filing_rate_occ_raw]
+
+  # ------------- Helper: method-of-moments Gamma prior on (Y,E) -------------
+  est_gamma_prior_mom <- function(Y, E) {
+    Y <- as.numeric(Y); E <- as.numeric(E)
+    ok <- is.finite(Y) & is.finite(E) & E > 0
+    if (!any(ok)) return(list(alpha = NA_real_, beta = NA_real_, mu = NA_real_))
+    Y <- Y[ok]; E <- E[ok]
+
+    S1 <- sum(Y, na.rm = TRUE)
+    E1 <- sum(E, na.rm = TRUE)
+    mu <- if (E1 > 0) S1 / E1 else 0
+
+    # Mixture identity: E[Y(Y-1)] = E^2 * (mu^2 + mu/beta)
+    yy1 <- sum(Y * pmax(Y - 1, 0), na.rm = TRUE)
+    E2  <- sum(E^2, na.rm = TRUE)
+    T   <- if (E2 > 0) yy1 / E2 else NA_real_
+
+    eps <- 1e-12
+    beta_hat <- if (!is.na(T) && (T > mu^2 + eps) && mu > 0) mu / (T - mu^2) else 1e8
+    alpha_hat <- mu * beta_hat
+    list(alpha = alpha_hat, beta = beta_hat, mu = mu)
+  }
+
+  # ------------- Build building-level sufficient stats over pre-COVID -------------
+  # ZIP column for grouping: you already have market_zip created earlier.
+  # Fallback to pm.zip if needed.
+  zip_col <- if ("market_zip" %in% names(bldg_panel)) "market_zip" else if ("pm.zip" %in% names(bldg_panel)) "pm.zip" else NA_character_
+  if (is.na(zip_col)) stop("No ZIP column found for EB ZIP prior (expected market_zip or pm.zip).")
+
+  pre_dt <- bldg_panel[
+    year <= 2019 &
+      !is.na(exposure_occ) & exposure_occ > 0
   ]
-  bldg_panel[
-    ,
-    high_evict := filing_rate >= 0.1
+
+  # One row per PID with pre-period sums
+  eb_pid <- pre_dt[, .(
+    eb_zip = {
+      z <- get(zip_col)
+      z <- z[which.max(!is.na(z))]  # grab first non-missing if any
+      if (length(z) == 0) NA_character_ else as.character(z[1])
+    },
+    Y = sum(num_filings, na.rm = TRUE),
+    E = sum(exposure_occ, na.rm = TRUE),
+    n_years = .N
+  ), by = PID]
+
+  # ------------- CITY PRIOR -------------
+  city_prior <- est_gamma_prior_mom(eb_pid$Y, eb_pid$E)
+  alpha_city <- city_prior$alpha
+  beta_city  <- city_prior$beta
+  mu_city    <- city_prior$mu
+
+  # ------------- ZIP PRIORS (with fallback to city) -------------
+  # Safety thresholds: adjust as you like
+  min_bldgs_per_zip <- 30
+  min_total_E_zip   <- 500
+
+  zip_stats <- eb_pid[!is.na(eb_zip) & E > 0,
+                      .(
+                        n_bldg = .N,
+                        sumE   = sum(E, na.rm = TRUE),
+                        sumY   = sum(Y, na.rm = TRUE)
+                      ),
+                      by = eb_zip
   ]
+
+  # Estimate priors within each ZIP where there’s enough support
+  zip_priors <- zip_stats[, {
+    z <- eb_zip[1]
+    dtz <- eb_pid[eb_zip == z & is.finite(Y) & is.finite(E) & E > 0]
+
+    if (n_bldg[1] >= min_bldgs_per_zip && sumE[1] >= min_total_E_zip && nrow(dtz) > 0) {
+      pr <- est_gamma_prior_mom(dtz$Y, dtz$E)
+      list(alpha_zip = pr$alpha, beta_zip = pr$beta, mu_zip = pr$mu)
+    } else {
+      list(alpha_zip = NA_real_, beta_zip = NA_real_, mu_zip = NA_real_)
+    }
+  }, by = eb_zip]
+
+
+  eb_pid <- merge(eb_pid, zip_priors, by = "eb_zip", all.x = TRUE)
+
+  eb_pid[, alpha_use_zip := fifelse(is.finite(alpha_zip) & is.finite(beta_zip), alpha_zip, alpha_city)]
+  eb_pid[,  beta_use_zip := fifelse(is.finite(alpha_zip) & is.finite(beta_zip),  beta_zip,  beta_city)]
+
+
+  # ------------- Compute pooled EB building intensities -------------
+  eb_pid[, filing_rate_eb_city_pre_covid := (alpha_city + Y) / (beta_city + E)]
+  eb_pid[,  filing_rate_eb_zip_pre_covid := (alpha_use_zip + Y) / (beta_use_zip + E)]
+
+  # Merge back into bldg_panel as building-level covariates
+  bldg_panel <- merge(
+    bldg_panel,
+    eb_pid[, .(PID, filing_rate_eb_city_pre_covid, filing_rate_eb_zip_pre_covid)],
+    by = "PID",
+    all.x = TRUE
+  )
+
+  # Back-compat: keep filing_rate_eb as something sensible (choose city or zip)
+  # For most uses, I’d keep BOTH and set filing_rate_eb to your preferred default.
+  bldg_panel[, filing_rate_eb := filing_rate_eb_city_pre_covid]  # default
+  bldg_panel[, filing_rate_eb_asinh := asinh(filing_rate_eb)]
+  bldg_panel[, filing_rate_raw_asinh := asinh(filing_rate_raw)]
+
+  # High-evict flags based on pooled EB (and raw)
+  bldg_panel[, high_evict_raw := fifelse(!is.na(filing_rate_raw), filing_rate_raw >= 0.10, NA)]
+  bldg_panel[, high_evict_eb_city := fifelse(!is.na(filing_rate_eb_city_pre_covid), filing_rate_eb_city_pre_covid >= 0.10, NA)]
+  bldg_panel[,  high_evict_eb_zip := fifelse(!is.na(filing_rate_eb_zip_pre_covid),  filing_rate_eb_zip_pre_covid  >= 0.10, NA)]
+
+  logf(
+    "EB pooled across years (<=2019). City prior mu=", round(mu_city, 6),
+    "; alpha=", round(alpha_city, 6),
+    "; beta=", round(beta_city, 6),
+    "; ZIP priors: min_bldg=", min_bldgs_per_zip, " min_sumE=", min_total_E_zip,
+    log_file = log_file
+  )
+
+  # Optional: if you want to drop helper columns later:
+  # bldg_panel[, c("exposure_total","exposure_occ") := NULL]
 }
+
+
+# ---- Minimal cleaning / derived covariates ----
+bldg_panel[, year := as.integer(year)]
+bldg_panel[, total_units := as.numeric(total_units)]
+
+# Source label (keep your convention; infer if absent)
+if (!("source" %in% names(bldg_panel))) {
+  bldg_panel[, source := fifelse(rental_from_altos == 1, "altos",
+                                 fifelse(rental_from_evict == 1, "evict", NA_character_))]
+}
+
+# Decade built
+if ("year_built" %in% names(bldg_panel)) {
+  bldg_panel[, year_blt_decade := floor(as.numeric(year_built) / 10) * 10]
+  bldg_panel[, year_blt_decade := fifelse(!is.na(year_built) & year_built < 1900, "pre-1900",
+                                          fifelse(is.na(year_blt_decade), "missing", as.character(year_blt_decade)))]
+} else {
+  bldg_panel[, year_blt_decade := "missing"]
+}
+
+# Unit bins (use existing if present; otherwise create a standard version)
+if (!("num_units_bin" %in% names(bldg_panel))) {
+  bldg_panel[, num_units_bin := cut(
+    total_units,
+    breaks = c(-Inf, 1, 2, 4, 9, 19, 49, Inf),
+    labels = c("1", "2", "3-4", "5-9", "10-19", "20-49", "50+"),
+    include.lowest = TRUE
+  )]
+}
+
+# Optional: stories bin if available
+if ("number_stories" %in% names(bldg_panel) && !("num_stories_bin" %in% names(bldg_panel))) {
+  bldg_panel[, num_stories_bin := fcase(
+    number_stories == 1, "1",
+    number_stories <= 3, "2-3",
+    number_stories <= 5, "4-5",
+    number_stories <= 10, "6-10",
+    number_stories > 10, "11+",
+    default = "missing"
+  )]
+}
+
+# ------------------------------------------------------------------
+# Main eviction intensity for hedonics:
+# Use PRE-COVID (<=2019) building-level EB intensity to avoid endogeneity
+# to contemporaneous rent shocks and policy changes.
+# ------------------------------------------------------------------
+bldg_panel[, filing_rate_eb_pre_covid := {
+  x <- filing_rate_eb[year <= 2019]
+  if (length(x) == 0) NA_real_ else mean(x, na.rm = TRUE)
+}, by = PID]
+
+# Create interpretable bins (match your earlier breakpoints)
+bldg_panel[, filing_rate_eb_cuts := cut(
+  round(filing_rate_eb_pre_covid,2),
+  breaks = c(-Inf, 0.01, 0.05, 0.10, 0.2, Inf),
+  labels = c( "(0-1%]", "(1-5%]", "(5-10%]", "(10-20%]", "20%+"),
+  include.lowest = TRUE
+)]
+
+# A continuous transform for curvature models
+bldg_panel[, filing_rate_eb_pre_covid_asinh := asinh(filing_rate_eb_pre_covid)]
+
 
 ## ------------------------------------------------------------
 ## 7) MARKET SHARES & HHI MEASURES
 ## ------------------------------------------------------------
 
-## Market totals
+## -----------------------------------------------------------
+## 7a) Market-level totals (zip-year)
+##
+## For BLP-style demand estimation, shares must sum to < 1 within each
+## market to leave room for an outside good.  Using total_units (the
+## full housing stock, including vacant) as the denominator guarantees
+## sum(share_zip) <= 1 in each zip-year; after further sample
+## restrictions (apartments only, unit-count floors, etc.) the inside
+## shares will be well below 1.
+## -----------------------------------------------------------
+
 bldg_panel[
   ,
-  total_occupied_units_market := sum(occupied_units, na.rm = TRUE),
+  `:=`(
+    total_units_market    = sum(total_units, na.rm = TRUE),
+    total_occupied_units_market = sum(occupied_units, na.rm = TRUE)
+  ),
   by = .(market_id)
 ]
+
+## share_zip: product share of total housing stock in zip-year
+## Denominator = total_units (all units, incl. vacant) → shares sum ≤ 1
+bldg_panel[
+  ,
+  share_zip := fifelse(
+    total_units_market > 0,
+    occupied_units / total_units_market,
+    NA_real_
+  )
+]
+
+## market_share_units: legacy name, same as share_zip but with occupied
+## denominator (sums to exactly 1 within zip-year). Kept for HHI / owner
+## concentration calculations that need within-market proportions.
 bldg_panel[
   ,
   market_share_units := fifelse(
@@ -429,7 +690,10 @@ bldg_panel <- merge(
   all.x = TRUE
 )
 
-## Unit-bin specific share (optional)
+## -----------------------------------------------------------
+## 7b) Unit-bin level shares (zip-year-bin)
+## -----------------------------------------------------------
+
 bldg_panel[
   ,
   num_units_bin := cut(
@@ -442,9 +706,25 @@ bldg_panel[
 
 bldg_panel[
   ,
-  total_occupied_units_bin := sum(occupied_units, na.rm = TRUE),
+  `:=`(
+    total_units_bin          = sum(total_units, na.rm = TRUE),
+    total_occupied_units_bin = sum(occupied_units, na.rm = TRUE)
+  ),
   by = .(market_id, num_units_bin)
 ]
+
+## share_zip_bin: product share of housing stock in zip-year-bin submarket
+## Denominator = total_units in the bin (incl. vacant)
+bldg_panel[
+  ,
+  share_zip_bin := fifelse(
+    total_units_bin > 0,
+    occupied_units / total_units_bin,
+    NA_real_
+  )
+]
+
+## share_units_zip_unit: legacy name, occupied-denominator version (sums to 1)
 bldg_panel[
   ,
   share_units_zip_unit := fifelse(
@@ -453,6 +733,39 @@ bldg_panel[
     NA_real_
   )
 ]
+
+## -----------------------------------------------------------
+## 7c) Share sanity checks
+## -----------------------------------------------------------
+
+## share_zip should sum to <= 1 within each zip-year
+share_zip_sums <- bldg_panel[, .(share_sum = sum(share_zip, na.rm = TRUE)), by = market_id]
+n_bad_zip <- share_zip_sums[share_sum > 1 + 1e-8, .N]
+if (n_bad_zip > 0) {
+  logf("WARNING: ", n_bad_zip, " markets have share_zip summing to > 1", log_file = log_file)
+}
+stopifnot("share_zip sums > 1 in some markets — check occupancy vs total_units" =
+            n_bad_zip == 0)
+logf("  share_zip: all ", nrow(share_zip_sums), " markets sum to <= 1 — PASSED", log_file = log_file)
+
+## share_zip_bin should sum to <= 1 within each (zip-year, bin)
+share_bin_sums <- bldg_panel[, .(share_sum = sum(share_zip_bin, na.rm = TRUE)),
+                              by = .(market_id, num_units_bin)]
+n_bad_bin <- share_bin_sums[share_sum > 1 + 1e-8, .N]
+if (n_bad_bin > 0) {
+  logf("WARNING: ", n_bad_bin, " (market, bin) cells have share_zip_bin > 1", log_file = log_file)
+}
+stopifnot("share_zip_bin sums > 1 in some (market, bin) cells" =
+            n_bad_bin == 0)
+logf("  share_zip_bin: all ", nrow(share_bin_sums), " (market, bin) cells sum to <= 1 — PASSED",
+     log_file = log_file)
+
+## All shares should be in [0, 1]
+stopifnot("share_zip out of [0,1]" =
+            bldg_panel[!is.na(share_zip), all(share_zip >= 0 & share_zip <= 1)])
+stopifnot("share_zip_bin out of [0,1]" =
+            bldg_panel[!is.na(share_zip_bin), all(share_zip_bin >= 0 & share_zip_bin <= 1)])
+logf("  All shares in [0, 1] — PASSED", log_file = log_file)
 
 ## ------------------------------------------------------------
 ## 8) SIMPLE BLP-STYLE INSTRUMENTS
@@ -577,7 +890,7 @@ logf("Running final assertions...", log_file = log_file)
 
 # Verify key columns exist
 required_cols <- c("PID", "year", "market_id", "owner_mailing_clean", "log_med_rent",
-                   "total_units", "market_share_units")
+                   "total_units", "market_share_units", "share_zip", "share_zip_bin")
 assert_has_cols(bldg_panel, required_cols, "bldg_panel")
 logf("  Required columns present in bldg_panel", log_file = log_file)
 

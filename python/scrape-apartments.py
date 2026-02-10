@@ -1,94 +1,55 @@
-
 """
-fetch_places_and_reviews.py
+scrape-apartments.py
 
-Given a CSV of apartment addresses, call Google Places Text Search + Place Details
-to build:
+Fetch Google Places + Reviews data for large apartment buildings.
 
-1) places_summary.csv   - one row per place_id / apartment
-2) reviews_raw.csv      - one row per review
+Inputs (from config):
+  - bldg_panel_blp: Full rental panel with building characteristics
 
-Expected input: input/addresses.csv with columns:
-    - apt_id          (string/int: your internal ID)
-    - address_query   (string: name/address to feed to Google)
+Outputs (to output_dir):
+  - places_summary.csv: One row per place_id / apartment
+  - reviews_raw.ndjson: One row per review (NDJSON format)
+  - scraped_addresses.csv: Tracking file for already-scraped addresses
+
+Filtering logic:
+  - Parcels with num_units_imp_final >= 10, OR
+  - Parcels with building_type in apartment categories
 
 Environment:
-    - GOOGLE_MAPS_API_KEY must be set (billing-enabled Places API project).
+  - GOOGLE_MAPS_API_KEY must be set (billing-enabled Places API project)
+  - PHILLY_EVICTIONS_CONFIG can point to config file (defaults to config.yml)
 """
-# %%
-import csv
+
+import json
 import os
 import time
-from typing import Dict, Any, List, Optional
-import pandas as pd
-import requests
-# %%
-
-# ------------------------
-# Config
-# ------------------------
-
-API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY")
-
-if not API_KEY:
-    raise RuntimeError("Set GOOGLE_MAPS_API_KEY in environment before running.")
-
-TEXT_SEARCH_URL = "https://maps.googleapis.com/maps/api/place/textsearch/json"
-DETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json"
-
-# Paths (tweak as needed)
-INPUT_ADDRESSES_CSV = "~/Desktop/data/philly-evict/processed/large_apartments.csv"
-OUTPUT_PLACES_CSV = "output/places_summary.csv"
-OUTPUT_REVIEWS_CSV = "output/reviews_raw.csv"
-OUTPUT_REVIEWS_NDJSON = "output/reviews_raw.ndjson"
-
-# Rate limiting: be nice to the API and avoid quota spikes
-REQUEST_SLEEP_SEC = 0.25  # ~4 requests/sec; adjust based on your quota
-
-# %%
-import os
-import time
+from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import requests
 
-# ------------------------
-# Build address_query in pandas
-# ------------------------
-# %%
-addys = pd.read_csv(INPUT_ADDRESSES_CSV)
-sample_addys = addys.sample(10).copy()
-
-# assume n_sn_ss_c and pm.zip exist; cast to string to be safe
-sample_addys["n_sn_ss_c"] = sample_addys["n_sn_ss_c"].astype(str)
-sample_addys["pm.zip"] = sample_addys["pm.zip"].astype(str)
-
-sample_addys["address_query"] = (
-    sample_addys["n_sn_ss_c"]
-    + ", "
-    + "philadelphia"
-    + ", "
-    + "PA"
-    + " "
-    + sample_addys["pm.zip"]
-    + " apartments"
-)
-
-# optionally overwrite the input CSV or write to a new one
-# sample_addys.to_csv(INPUT_ADDRESSES_CSV, index=False)
-# or:
-# sample_addys.to_csv(ENRICHED_ADDRESSES_CSV, index=False)
+from config_helpers import load_config, p_output, p_product
 
 
 # ------------------------
-# API helpers
+# Google Places API
 # ------------------------
+
+API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY")
+
+TEXT_SEARCH_URL = "https://maps.googleapis.com/maps/api/place/textsearch/json"
+DETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json"
+
+# Rate limiting
+REQUEST_SLEEP_SEC = 0.25
+
 
 def text_search(query: str, max_results: int = 5) -> Optional[Dict[str, Any]]:
     """
     Call Places Text Search API for a free-form query.
-    Returns the *top* candidate (dict) or None if ZERO_RESULTS.
+    Returns the top candidate (dict) or None if ZERO_RESULTS.
     """
     params = {
         "query": query,
@@ -104,16 +65,13 @@ def text_search(query: str, max_results: int = 5) -> Optional[Dict[str, Any]]:
     results = data.get("results", [])[:max_results]
     if not results:
         return None
-    # Use the first result as our best candidate
     return results[0]
 
 
 def place_details(place_id: str) -> Dict[str, Any]:
     """
     Call Place Details for a given place_id.
-
-    We request a limited set of fields to control costs:
-      - name, formatted_address, rating, user_ratings_total, url, types, reviews
+    Request limited fields to control costs.
     """
     fields = [
         "name",
@@ -141,87 +99,139 @@ def place_details(place_id: str) -> Dict[str, Any]:
 
 
 # ------------------------
-# ETL logic (pandas-based)
+# Data loading and filtering
 # ------------------------
 
-def load_addresses(path: str) -> pd.DataFrame:
-    """
-    Load addresses as a DataFrame. Requires:
-      - n_sn_ss_c (your apt_id / address ID)
-      - address_query (the query string you constructed above)
-    """
-    df = pd.read_csv(path, dtype=str)
-    required = {"n_sn_ss_c", "pm.zip"}
-    missing = required - set(df.columns)
-    if missing:
-        raise ValueError(f"Input must have columns: {required}, missing: {missing}")
-    return df
+APARTMENT_BUILDING_TYPES = {
+    "LOWRISE_MULTI",
+    "MIDRISE_MULTI",
+    "HIGHRISE_MULTI",
+    "MULTI_BLDG_COMPLEX"
+}
+
+MIN_UNITS_THRESHOLD = 10
 
 
-def init_places_file(path: str):
+def load_rental_panel(cfg: dict) -> pd.DataFrame:
+    """
+    Load the rental panel and filter to large apartments.
+
+    Filter criteria:
+      - num_units_imp_final >= 10, OR
+      - building_type in APARTMENT_BUILDING_TYPES
+    """
+    panel_path = p_product(cfg, "bldg_panel_blp")
+    print(f"[INFO] Loading rental panel from: {panel_path}")
+
+    # Read only needed columns to save memory
+    usecols = None  # Read all, then filter
+    df = pd.read_csv(panel_path, dtype=str, low_memory=False)
+    print(f"[INFO] Loaded {len(df)} rows from rental panel")
+
+    # Convert numeric columns
+    if "num_units_imp_final" in df.columns:
+        df["num_units_imp_final"] = pd.to_numeric(df["num_units_imp_final"], errors="coerce")
+
+    # Apply filters
+    mask_units = df["num_units_imp_final"] >= MIN_UNITS_THRESHOLD
+
+    mask_bldg_type = pd.Series(False, index=df.index)
+    if "building_type" in df.columns:
+        mask_bldg_type = df["building_type"].isin(APARTMENT_BUILDING_TYPES)
+
+    df_filtered = df[mask_units | mask_bldg_type].copy()
+    print(f"[INFO] Filtered to {len(df_filtered)} rows (units >= {MIN_UNITS_THRESHOLD} or apartment building type)")
+
+    # Deduplicate by PID (take most recent year)
+    if "year" in df_filtered.columns:
+        df_filtered["year"] = pd.to_numeric(df_filtered["year"], errors="coerce")
+        df_filtered = df_filtered.sort_values("year", ascending=False)
+
+    df_filtered = df_filtered.drop_duplicates(subset=["PID"], keep="first")
+    print(f"[INFO] After PID dedup: {len(df_filtered)} unique parcels")
+
+    return df_filtered
+
+
+def build_address_query(row: pd.Series) -> str:
+    """
+    Build a Google Places query string from parcel data.
+
+    Tries these address columns in order:
+      - n_sn_ss_c (normalized street address)
+      - location (full address)
+      - street_address
+    """
+    # Try to find best address column
+    address = None
+    for col in ["n_sn_ss_c", "location", "street_address", "address"]:
+        if col in row.index and pd.notna(row[col]) and str(row[col]).strip():
+            address = str(row[col]).strip()
+            break
+
+    if address is None:
+        return None
+
+    # Get zip code
+    zip_code = None
+    for col in ["pm.zip", "zip_code", "zip"]:
+        if col in row.index and pd.notna(row[col]):
+            zip_code = str(row[col]).strip().replace("_", "")[:5]
+            if zip_code and zip_code != "nan":
+                break
+            zip_code = None
+
+    # Build query
+    query_parts = [address, "Philadelphia", "PA"]
+    if zip_code:
+        query_parts.append(zip_code)
+    query_parts.append("apartments")
+
+    return ", ".join(query_parts)
+
+
+# ------------------------
+# Output file management
+# ------------------------
+
+def init_places_file(path: str) -> None:
+    """Initialize places CSV with headers if it doesn't exist."""
     cols = [
-        "apt_id",
+        "PID",
         "place_id",
         "place_name",
         "formatted_address",
         "rating",
         "user_ratings_total",
         "url",
-        "types",  # pipe-separated
+        "types",
         "text_search_query",
+        "scraped_at",
     ]
     if not os.path.exists(path):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         pd.DataFrame(columns=cols).to_csv(path, index=False)
+        print(f"[INFO] Created new places file: {path}")
     else:
-        print(f"[INFO] Places file {path} already exists; appending to it.")
+        print(f"[INFO] Places file exists, will append: {path}")
 
 
-def init_reviews_file(path: str):
-    cols = [
-        "apt_id",
-        "place_id",
-        "place_name",
-        "formatted_address",
-        "review_author_name",
-        "review_author_url",
-        "review_profile_photo_url",
-        "review_language",
-        "review_rating",
-        "review_text",
-        "review_time_unix",
-        "review_relative_time_description",
-    ]
-    if not os.path.exists(path):
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        pd.DataFrame(columns=cols).to_csv(path, index=False)
-    else:
-        print(f"[INFO] Reviews file {path} already exists; appending to it.")
-
-
-def append_place_row(path: str, row: Dict[str, Any]):
+def append_place_row(path: str, row: Dict[str, Any]) -> None:
+    """Append a single place row to CSV."""
     df = pd.DataFrame([row])
-    # append without header
     df.to_csv(path, mode="a", header=False, index=False)
-
-import json
-import os
-from datetime import datetime
-from typing import Any, Dict, List, Optional
 
 
 def reviews_to_ndjson_records(
     *,
-    apt_id: str,
+    pid: str,
     place_id: Optional[str],
     place_name: Optional[str],
     formatted_address: Optional[str],
     reviews: Any,
     fetched_at_utc: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    """
-    Flatten Google Place Details 'reviews' into a list of JSON-serializable dicts.
-    """
+    """Flatten Google Place Details 'reviews' into JSON-serializable dicts."""
     if fetched_at_utc is None:
         fetched_at_utc = datetime.utcnow().isoformat(timespec="seconds") + "Z"
 
@@ -230,48 +240,40 @@ def reviews_to_ndjson_records(
 
     out: List[Dict[str, Any]] = []
     for r in reviews:
-        out.append(
-            {
-                "apt_id": apt_id,
-                "place_id": place_id,
-                "place_name": place_name,
-                "formatted_address": formatted_address,
-                "fetched_at_utc": fetched_at_utc,
-                # raw review fields (keep close to the API payload)
-                "author_name": r.get("author_name"),
-                "author_url": r.get("author_url"),
-                "profile_photo_url": r.get("profile_photo_url"),
-                "language": r.get("language"),
-                "rating": r.get("rating"),
-                "text": r.get("text"),
-                "time_unix": r.get("time"),
-                "relative_time_description": r.get("relative_time_description"),
-                # if you ever request it / it appears
-                "original_language": r.get("original_language"),
-                "translated": r.get("translated"),
-            }
-        )
+        out.append({
+            "PID": pid,
+            "place_id": place_id,
+            "place_name": place_name,
+            "formatted_address": formatted_address,
+            "fetched_at_utc": fetched_at_utc,
+            "author_name": r.get("author_name"),
+            "author_url": r.get("author_url"),
+            "profile_photo_url": r.get("profile_photo_url"),
+            "language": r.get("language"),
+            "rating": r.get("rating"),
+            "text": r.get("text"),
+            "time_unix": r.get("time"),
+            "relative_time_description": r.get("relative_time_description"),
+            "original_language": r.get("original_language"),
+            "translated": r.get("translated"),
+        })
     return out
 
 
 def append_reviews_ndjson(
     path: str,
     *,
-    apt_id: str,
+    pid: str,
     place_id: Optional[str],
     place_name: Optional[str],
     formatted_address: Optional[str],
     details: Dict[str, Any],
 ) -> int:
-    """
-    Append reviews from a Place Details response to an NDJSON file.
-
-    Returns: number of review records written.
-    """
+    """Append reviews from Place Details to NDJSON file. Returns count written."""
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
     records = reviews_to_ndjson_records(
-        apt_id=apt_id,
+        pid=pid,
         place_id=place_id,
         place_name=place_name,
         formatted_address=formatted_address,
@@ -287,138 +289,74 @@ def append_reviews_ndjson(
     return len(records)
 
 
+def load_scraped_pids(places_path: str) -> set:
+    """Load set of PIDs already scraped from places file."""
+    if not os.path.exists(places_path):
+        return set()
 
-def append_review_rows(path: str, rows: List[Dict[str, Any]]):
-    if not rows:
-        return
-    df = pd.DataFrame(rows)
-    df.to_csv(path, mode="a", header=False, index=False)
+    df = pd.read_csv(places_path, dtype=str, usecols=["PID"])
+    return set(df["PID"].dropna().unique())
 
+
+# ------------------------
+# Main
+# ------------------------
 
 def main():
-    # if you created sample_addys above and want to use that in-memory:
-    # addresses = sample_addys.copy()
-    # else: load from disk
-    addresses = load_addresses(INPUT_ADDRESSES_CSV)
-    print(f"[INFO] Loaded {len(addresses)} addresses")
+    # Check API key
+    if not API_KEY:
+        raise RuntimeError("Set GOOGLE_MAPS_API_KEY in environment before running.")
 
-    init_places_file(OUTPUT_PLACES_CSV)
-    init_reviews_file(OUTPUT_REVIEWS_CSV)
+    # Load config
+    cfg = load_config()
+    print(f"[INFO] Loaded config from: {cfg['_config_path']}")
 
-    for idx, row in addresses.iterrows():
-        apt_id = row["n_sn_ss_c"]
+    # Set up paths
+    output_places = p_output(cfg, "places_summary.csv")
+    output_reviews = p_output(cfg, "reviews_raw.ndjson")
+
+    # Load and filter rental panel
+    addresses = load_rental_panel(cfg)
+
+    # Build address queries
+    addresses["address_query"] = addresses.apply(build_address_query, axis=1)
+    addresses = addresses[addresses["address_query"].notna()]
+    print(f"[INFO] {len(addresses)} addresses with valid queries")
+
+    # Load already-scraped PIDs
+    scraped_pids = load_scraped_pids(output_places)
+    print(f"[INFO] {len(scraped_pids)} PIDs already scraped")
+
+    # Filter out already-scraped
+    addresses = addresses[~addresses["PID"].isin(scraped_pids)]
+    print(f"[INFO] {len(addresses)} addresses remaining to scrape")
+
+    if len(addresses) == 0:
+        print("[INFO] No new addresses to scrape. Done.")
+        return
+
+    # Initialize output files
+    init_places_file(output_places)
+
+    # Process each address
+    total = len(addresses)
+    for idx, (_, row) in enumerate(addresses.iterrows()):
+        pid = row["PID"]
         query = row["address_query"]
 
-        print(f"[{idx+1}/{len(addresses)}] Resolving apt_id={apt_id} query={query!r}")
+        print(f"[{idx+1}/{total}] PID={pid} query={query!r}")
 
         try:
-            # --- Text Search ---
+            # Text Search
             candidate = text_search(query)
             time.sleep(REQUEST_SLEEP_SEC)
 
+            scraped_at = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+
             if candidate is None:
-                print(f"  -> NO RESULTS for apt_id={apt_id}")
-                append_place_row(
-                    OUTPUT_PLACES_CSV,
-                    {
-                        "apt_id": apt_id,
-                        "place_id": None,
-                        "place_name": None,
-                        "formatted_address": None,
-                        "rating": None,
-                        "user_ratings_total": None,
-                        "url": None,
-                        "types": None,
-                        "text_search_query": query,
-                    },
-                )
-                continue
-
-            place_id = candidate["place_id"]
-
-            # --- Details + Reviews ---
-            details = place_details(place_id)
-            time.sleep(REQUEST_SLEEP_SEC)
-
-            place_row = {
-                "apt_id": apt_id,
-                "place_id": place_id,
-                "place_name": details.get("name"),
-                "formatted_address": details.get("formatted_address"),
-                "rating": details.get("rating"),
-                "user_ratings_total": details.get("user_ratings_total"),
-                "url": details.get("url"),
-                "types": "|".join(details.get("types", [])) if details.get("types") else None,
-                "text_search_query": query,
-            }
-            append_place_row(OUTPUT_PLACES_CSV, place_row)
-
-            # --- Reviews (up to 5 recent ones, per API) ---
-            # reviews = details.get("reviews", []) or []
-            # review_rows = []
-            # for r in reviews:
-            #     review_rows.append(
-            #         {
-            #             "apt_id": apt_id,
-            #             "place_id": place_id,
-            #             "place_name": details.get("name"),
-            #             "formatted_address": details.get("formatted_address"),
-            #             "review_author_name": r.get("author_name"),
-            #             "review_author_url": r.get("author_url"),
-            #             "review_profile_photo_url": r.get("profile_photo_url"),
-            #             "review_language": r.get("language"),
-            #             "review_rating": r.get("rating"),
-            #             "review_text": r.get("text"),
-            #             "review_time_unix": r.get("time"),
-            #             "review_relative_time_description": r.get("relative_time_description"),
-            #         }
-            #     )
-            # append_review_rows(OUTPUT_REVIEWS_CSV, review_rows)
-
-        except Exception as e:
-            print(f"[ERROR] apt_id={apt_id} {e}")
-            continue
-
-
-#%%
-# main run
-addresses = load_addresses(INPUT_ADDRESSES_CSV)
-parsed_addresses = pd.read_csv(OUTPUT_PLACES_CSV, dtype=str)
-addresses["address_query"] = (
-    addresses["n_sn_ss_c"]
-    + ", "
-    + "philadelphia"
-    + ", "
-    + "PA"
-    + " "
-    + addresses["pm.zip"]
-    + " apartments"
-)
-print(f"[INFO] Loaded {len(addresses)} addresses")
-# drop already-parsed
-# county number already in output places
-
-addresses = addresses[~addresses["address_query"].isin(parsed_addresses["text_search_query"])]
-init_places_file(OUTPUT_PLACES_CSV)
-init_reviews_file(OUTPUT_REVIEWS_CSV)
-
-for idx, row in addresses.iterrows():
-    apt_id = row["n_sn_ss_c"]
-    query = row["address_query"]
-
-    print(f"[{idx+1}/{len(addresses)}] Resolving apt_id={apt_id} query={query!r}")
-
-    try:
-        # --- Text Search ---
-        candidate = text_search(query)
-        time.sleep(REQUEST_SLEEP_SEC)
-
-        if candidate is None:
-            print(f"  -> NO RESULTS for apt_id={apt_id}")
-            append_place_row(
-                OUTPUT_PLACES_CSV,
-                {
-                    "apt_id": apt_id,
+                print(f"  -> NO RESULTS for PID={pid}")
+                append_place_row(output_places, {
+                    "PID": pid,
                     "place_id": None,
                     "place_name": None,
                     "formatted_address": None,
@@ -427,43 +365,49 @@ for idx, row in addresses.iterrows():
                     "url": None,
                     "types": None,
                     "text_search_query": query,
-                },
+                    "scraped_at": scraped_at,
+                })
+                continue
+
+            place_id = candidate["place_id"]
+
+            # Place Details
+            details = place_details(place_id)
+            time.sleep(REQUEST_SLEEP_SEC)
+
+            place_row = {
+                "PID": pid,
+                "place_id": place_id,
+                "place_name": details.get("name"),
+                "formatted_address": details.get("formatted_address"),
+                "rating": details.get("rating"),
+                "user_ratings_total": details.get("user_ratings_total"),
+                "url": details.get("url"),
+                "types": "|".join(details.get("types", [])) if details.get("types") else None,
+                "text_search_query": query,
+                "scraped_at": scraped_at,
+            }
+            append_place_row(output_places, place_row)
+
+            # Append reviews
+            n_written = append_reviews_ndjson(
+                output_reviews,
+                pid=pid,
+                place_id=place_id,
+                place_name=details.get("name"),
+                formatted_address=details.get("formatted_address"),
+                details=details,
             )
+            print(f"  -> {details.get('name')}: {n_written} reviews")
+
+        except Exception as e:
+            print(f"[ERROR] PID={pid}: {e}")
             continue
 
-        place_id = candidate["place_id"]
+    print(f"[INFO] Done. Results written to:")
+    print(f"  - {output_places}")
+    print(f"  - {output_reviews}")
 
-        # # --- Details + Reviews ---
-        details = place_details(place_id)
-        time.sleep(REQUEST_SLEEP_SEC)
 
-        place_row = {
-            "apt_id": apt_id,
-            "place_id": place_id,
-            "place_name": details.get("name"),
-            "formatted_address": details.get("formatted_address"),
-            "rating": details.get("rating"),
-            "user_ratings_total": details.get("user_ratings_total"),
-            "url": details.get("url"),
-            "types": "|".join(details.get("types", [])) if details.get("types") else None,
-            "text_search_query": query,
-        }
-        append_place_row(OUTPUT_PLACES_CSV, place_row)
-        place_name = details.get("name")
-        formatted_address = details.get("formatted_address")
-
-        # append reviews as NDJSON
-        n_written = append_reviews_ndjson(
-            OUTPUT_REVIEWS_NDJSON,  # e.g. "output/reviews.ndjson"
-            apt_id=apt_id,
-            place_id=place_id,
-            place_name=place_name,
-            formatted_address=formatted_address,
-            details=details,
-        )
-        print(f"  -> wrote {n_written} reviews")
-    except Exception as e:
-        print(f"[ERROR] apt_id={apt_id} {e}")
-    continue
-# %%
-
+if __name__ == "__main__":
+    main()
