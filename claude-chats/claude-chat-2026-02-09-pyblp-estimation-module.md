@@ -99,11 +99,58 @@ Section 7 (Market Shares & HHI):
 - **Market = zip × year**: Simpler than zip × year × bin. Unit-size bin is a product characteristic (used for elasticity breakdowns), not a market dimension.
 - **Config-driven**: Every tunable parameter is a named field in `EstimationConfig`. No magic numbers buried in procedural code.
 
+## IV Estimation Investigation
+
+### Motivation
+Following Calder-Wang (2024), attempted to instrument for prices using tax assessment changes, with property (PID) fixed effects to absorb time-invariant unobserved quality and GEOID×year FE to absorb market-time shocks.
+
+### Instruments Tested
+- `change_log_taxable_value` — own-property change in log taxable building value
+- `z_sum_otherfirm_change_taxable_value` — sum of tax changes for other-firm properties in same market
+- `z_sum_otherfirm_change_taxable_value_per_unit` — same, per unit
+- `nest_sizes` — count of products per nest-market
+
+### First-Stage Results by FE Structure
+
+| FE Structure | F-stat | Assessment |
+|---|---|---|
+| None | 94.0 | Strong (cross-sectional) |
+| PID only | 12.2 | Passes Staiger-Stock |
+| Year only | 7.1 | Borderline |
+| PID + Year | 6.3 | Borderline |
+| GEOID + Year | 1.5 | Weak |
+| GEOID×Year | 1.2 | Weak |
+| **PID + GEOID×Year** | **0.03** | **Dead** |
+
+### Root Cause of Weak Instruments
+
+After absorbing PID + GEOID×Year, only **6.3% of rent variation** survives. The tax-value instruments capture:
+- Cross-sectional variation (which building is expensive) — absorbed by PID FE
+- Geographic-by-time variation (which neighborhood is appreciating) — absorbed by GEOID×year FE
+
+The remaining idiosyncratic within-building-within-market-year rent variation has **near-zero correlation** (r ≈ 0.002) with tax assessment changes. Tax assessments simply don't predict building-specific rent deviations from the neighborhood-year trend.
+
+The instruments do retain ~20% of their own variance after demeaning, so it's not that tax changes lack within-variation — it's that this variation is orthogonal to rent residuals.
+
+### Conclusion
+The baseline (no-IV) nested logit is the appropriate specification for now. IV with these instruments requires FE structures too coarse to be credible (PID only, no time controls). Possible future directions:
+- Different instruments (permit activity, renovation timing, utility costs)
+- Longer differencing to amplify within-building signal
+- Cross-market instruments leveraging landlord portfolio exposure
+
+### IV Configuration Added
+The script now supports three IV specs via `--iv [full|pid_year|pid]`:
+- `--iv full`: PID + GEOID×year (Calder-Wang spec, weak instruments)
+- `--iv pid_year`: PID + year (additive, borderline F)
+- `--iv pid`: PID only (strongest first stage, no time controls)
+- Default (no `--iv`): no-IV nested logit (recommended)
+
 ## Environment Note
 
 PyBLP estimation requires the `pyblp-env` conda environment:
 ```bash
 conda activate pyblp-env
-python python/pyblp_estimation.py
+python python/pyblp_estimation.py        # baseline (recommended)
+python python/pyblp_estimation.py --iv   # IV with PID + year FE
 ```
 The base anaconda env has a NumPy 1.x/2.x incompatibility that prevents pandas from loading.

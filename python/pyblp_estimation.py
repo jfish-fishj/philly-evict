@@ -70,6 +70,13 @@ class EstimationConfig:
         " + C(quality_grade_fixed_coarse)"
     )
 
+    # --- Instruments ---
+    # If non-empty, these columns are used as excluded instruments for prices.
+    # When empty, demand_instruments0 = prices (no IV, just-identified logit).
+    excluded_instruments: Tuple[str, ...] = ()
+    # Whether to add nest sizes as an additional instrument
+    include_nest_size_instrument: bool = True
+
     # --- Solver ---
     rho_init: float = 0.2
     solve_kwargs: Dict[str, Any] = field(default_factory=dict)
@@ -566,9 +573,9 @@ def build_estimation_sample(df: pd.DataFrame, est_cfg: EstimationConfig) -> pd.D
     print(f"[sample] Inside share sums: mean={remaining_sums.mean():.3f}, "
           f"median={remaining_sums.median():.3f}, max={remaining_sums.max():.3f}")
 
-    # Building type filter — check both possible column names
+    # Building type filter — prefer the descriptive column over coded column
     bldg_col = None
-    for candidate in ["building_code_description_new_fixed", "building_code_description_new"]:
+    for candidate in ["building_code_description_new_fixed", "building_code_description_new", "building_type"]:
         if candidate in df.columns:
             bldg_col = candidate
             break
@@ -664,27 +671,148 @@ def build_estimation_sample(df: pd.DataFrame, est_cfg: EstimationConfig) -> pd.D
 
 
 def build_instruments(df: pd.DataFrame, est_cfg: EstimationConfig) -> pd.DataFrame:
-    """Construct demand_instruments{k} columns."""
+    """
+    Construct demand_instruments{k} columns.
+
+    If est_cfg.excluded_instruments is non-empty, those columns are used as
+    excluded instruments for prices (IV estimation). Otherwise falls back to
+    demand_instruments0 = prices (no IV, just-identified).
+    """
     # Drop any pre-existing demand instrument columns
     old_inst = [c for c in df.columns if c.startswith("demand_instruments")]
     df = df.drop(columns=old_inst)
 
-    # demand_instruments0: prices (baseline; IV approach uses this slot)
-    df["demand_instruments0"] = df["prices"]
+    idx = 0
+    if est_cfg.excluded_instruments:
+        # IV mode: use specified columns as excluded instruments
+        for inst_col in est_cfg.excluded_instruments:
+            if inst_col not in df.columns:
+                print(f"[instruments] WARNING: {inst_col} not in data, skipping")
+                continue
+            df[f"demand_instruments{idx}"] = df[inst_col]
+            print(f"[instruments] demand_instruments{idx} <- {inst_col} "
+                  f"(non-NA: {df[inst_col].notna().sum():,}, "
+                  f"nonzero: {(df[inst_col] != 0).sum():,})")
+            idx += 1
+    else:
+        # No IV: just-identified with prices as own instrument
+        df[f"demand_instruments{idx}"] = df["prices"]
+        print(f"[instruments] demand_instruments{idx} <- prices (no IV)")
+        idx += 1
 
-    # demand_instruments1: nest sizes (count of products per market x nest)
-    nest_sizes = df.groupby(["market_ids", "nesting_ids"])["product_ids"].transform("size")
-    inst_idx = df.filter(like="demand_instruments").shape[1]
-    df[f"demand_instruments{inst_idx}"] = nest_sizes
+    # Nest sizes instrument
+    if est_cfg.include_nest_size_instrument:
+        nest_sizes = df.groupby(["market_ids", "nesting_ids"])["product_ids"].transform("size")
+        df[f"demand_instruments{idx}"] = nest_sizes
+        print(f"[instruments] demand_instruments{idx} <- nest_sizes")
+        idx += 1
 
-    # Clean up infinities
+    # Clean up infinities and drop NAs in instrument columns
     df = df.replace([np.inf, -np.inf], np.nan)
     inst_cols = [c for c in df.columns if c.startswith("demand_instruments")]
     n = len(df)
     df = df.dropna(subset=inst_cols)
     print(f"[instruments] After cleaning instrument NAs: {len(df):,} (dropped {n - len(df):,})")
+    print(f"[instruments] Total excluded instruments: {len(inst_cols)}")
 
     return df
+
+
+def run_first_stage_diagnostics(
+    df: pd.DataFrame,
+    est_cfg: EstimationConfig,
+) -> Optional[Dict[str, Any]]:
+    """
+    Run first-stage diagnostics for the IV specification.
+
+    Residualizes prices and instruments against the absorbed FEs, then reports:
+    - Pairwise correlations of residualized instruments with residualized prices
+    - First-stage F-statistic (Staiger-Stock rule of thumb: F > 10)
+    - Partial R^2 of instruments
+
+    Returns None if no excluded instruments are configured.
+    """
+    if not est_cfg.excluded_instruments:
+        print("[first-stage] No excluded instruments — skipping diagnostics")
+        return None
+
+    import re
+
+    inst_cols = [c for c in df.columns if c.startswith("demand_instruments")]
+
+    # Extract FE columns from absorb formula
+    fe_cols = re.findall(r"C\((\w+)\)", est_cfg.absorb_formula)
+    fe_cols = [c for c in fe_cols if c in df.columns]
+
+    # For interaction terms like C(GEOID)*C(year), create a combined FE column
+    # since the residualizer works with single-column groupings
+    absorb_str = est_cfg.absorb_formula
+    interaction_pattern = re.findall(r"C\((\w+)\)\*C\((\w+)\)", absorb_str)
+    combined_fe_cols = []
+    for c1, c2 in interaction_pattern:
+        if c1 in df.columns and c2 in df.columns:
+            combo_name = f"_fe_{c1}_{c2}"
+            df[combo_name] = df[c1].astype(str) + "_" + df[c2].astype(str)
+            combined_fe_cols.append(combo_name)
+    # Also add any non-interacted C() terms
+    simple_fe = re.findall(r"(?<!\*)C\((\w+)\)(?!\*)", absorb_str)
+    for c in simple_fe:
+        if c in df.columns and c not in [x for pair in interaction_pattern for x in pair]:
+            combined_fe_cols.append(c)
+
+    # If PID is in the FE set, add it
+    if "PID" in fe_cols and "PID" not in combined_fe_cols:
+        combined_fe_cols.append("PID")
+
+    print(f"[first-stage] Residualizing against FEs: {combined_fe_cols}")
+    print(f"[first-stage] Instruments: {inst_cols}")
+    print(f"[first-stage] Endogenous variable: prices")
+
+    # Use the existing residualizer
+    try:
+        result = instrument_relevance_after_fe(
+            df=df,
+            endog="prices",
+            instruments=inst_cols,
+            fe_cols=combined_fe_cols,
+        )
+
+        print("\n" + "=" * 60)
+        print("  FIRST-STAGE DIAGNOSTICS")
+        print("=" * 60)
+
+        print("\n  Correlations (residualized instruments vs residualized prices):")
+        for inst, corr_val in result["corr"].sort_values(ascending=False).items():
+            print(f"    {inst}: {corr_val: .4f}")
+
+        print(f"\n  Partial R^2 (instruments | FE): {result['partial_R2']:.4f}")
+        print(f"  F-statistic: F({result['df_num']}, {result['df_den']}) = {result['F_stat']:.2f}")
+        print(f"  F p-value: {result['F_pvalue']:.4g}")
+
+        if result["F_stat"] < 10:
+            print("\n  *** WARNING: F < 10 — instruments may be WEAK ***")
+            print("  Staiger-Stock rule of thumb: F > 10 for reliable IV inference")
+        elif result["F_stat"] < 20:
+            print("\n  CAUTION: 10 < F < 20 — instruments are marginal")
+        else:
+            print(f"\n  F = {result['F_stat']:.1f} > 10 — instruments pass Staiger-Stock threshold")
+
+        print("=" * 60 + "\n")
+
+        # Clean up temp FE columns
+        for c in combined_fe_cols:
+            if c.startswith("_fe_"):
+                df.drop(columns=[c], inplace=True, errors="ignore")
+
+        return result
+
+    except Exception as e:
+        print(f"[first-stage] Error in diagnostics: {e}")
+        # Clean up temp FE columns
+        for c in combined_fe_cols:
+            if c.startswith("_fe_"):
+                df.drop(columns=[c], inplace=True, errors="ignore")
+        return None
 
 
 def define_formulation(est_cfg: EstimationConfig) -> blp.Formulation:
@@ -1084,6 +1212,10 @@ def main(
     print(f"[main] Config: {cfg['_config_path']}")
     print(f"[main] EstimationConfig: year_range={est_cfg.year_range}, "
           f"min_units={est_cfg.min_units}, rho_init={est_cfg.rho_init}")
+    if est_cfg.excluded_instruments:
+        print(f"[main] IV mode: instruments={est_cfg.excluded_instruments}")
+    else:
+        print("[main] No IV (just-identified logit)")
 
     # 1) Load and prepare
     raw_df = load_and_prepare_data(cfg, est_cfg)
@@ -1094,17 +1226,20 @@ def main(
     # 3) Build instruments
     est_df = build_instruments(est_df, est_cfg)
 
-    # 4) Define formulation and estimate
+    # 4) First-stage diagnostics (if IV)
+    first_stage = run_first_stage_diagnostics(est_df, est_cfg)
+
+    # 5) Define formulation and estimate
     X1 = define_formulation(est_cfg)
     problem, results = estimate_model(X1, est_df, est_cfg)
 
-    # 5) Post-estimation
+    # 6) Post-estimation
     post_est = compute_post_estimation(results, problem, est_df, est_cfg)
 
-    # 6) Console summary
+    # 7) Console summary
     print_summary(results, est_df, post_est, est_cfg)
 
-    # 7) Export tables
+    # 8) Export tables
     out_dir = export_tables(results, problem, est_df, post_est, est_cfg, cfg)
 
     return {
@@ -1116,9 +1251,110 @@ def main(
         "problem": problem,
         "results": results,
         "post_est": post_est,
+        "first_stage": first_stage,
         "out_dir": out_dir,
     }
 
 
+# ============================================================
+# Pre-built estimation configurations
+# ============================================================
+
+def iv_config(**overrides) -> EstimationConfig:
+    """
+    IV nested logit with property FE + GEOID*year (full Calder-Wang spec).
+
+    WARNING: First-stage F ≈ 0.03 — instruments are dead under this FE structure.
+    The tax-value instruments capture cross-sectional and geography-by-time variation
+    but have zero correlation with within-PID, within-GEOID*year residual rents.
+
+    Use iv_config_pid_year() for a feasible specification (F ≈ 6-12).
+    """
+    defaults = dict(
+        x1_formula="0 + prices + log_market_value + log_total_area",
+        absorb_formula="C(PID) + C(GEOID)*C(year)",
+        excluded_instruments=(
+            "change_log_taxable_value",
+            "z_sum_otherfirm_change_taxable_value",
+            "z_sum_otherfirm_change_taxable_value_per_unit",
+        ),
+        include_nest_size_instrument=True,
+        min_obs_per_pid=2,
+        output_subdir="pyblp_summaries_iv",
+    )
+    defaults.update(overrides)
+    return EstimationConfig(**defaults)
+
+
+def iv_config_pid_year(**overrides) -> EstimationConfig:
+    """
+    IV nested logit with PID FE + year FE (additive, no GEOID interaction).
+
+    First-stage F ≈ 6-12. Trades off GEOID*year controls for instrument power.
+    PID absorbs time-invariant building quality; year absorbs aggregate trends.
+    Identification: within-building over-time variation not explained by year shocks.
+    """
+    defaults = dict(
+        x1_formula="0 + prices + log_market_value + log_total_area",
+        absorb_formula="C(PID) + C(year)",
+        excluded_instruments=(
+            "change_log_taxable_value",
+            "z_sum_otherfirm_change_taxable_value",
+            "z_sum_otherfirm_change_taxable_value_per_unit",
+        ),
+        include_nest_size_instrument=True,
+        min_obs_per_pid=2,
+        output_subdir="pyblp_summaries_iv_pid_year",
+    )
+    defaults.update(overrides)
+    return EstimationConfig(**defaults)
+
+
+def iv_config_pid(**overrides) -> EstimationConfig:
+    """
+    IV nested logit with PID FE only (strongest first-stage, F ≈ 12).
+
+    No time or geography*time controls — relies entirely on building FE
+    to absorb unobserved quality. Suitable as a robustness check.
+    """
+    defaults = dict(
+        x1_formula="0 + prices + log_market_value + log_total_area",
+        absorb_formula="C(PID)",
+        excluded_instruments=(
+            "change_log_taxable_value",
+            "z_sum_otherfirm_change_taxable_value",
+            "z_sum_otherfirm_change_taxable_value_per_unit",
+        ),
+        include_nest_size_instrument=True,
+        min_obs_per_pid=2,
+        output_subdir="pyblp_summaries_iv_pid",
+    )
+    defaults.update(overrides)
+    return EstimationConfig(**defaults)
+
+
+IV_CONFIGS = {
+    "full": iv_config,           # PID + GEOID*year (weak instruments)
+    "pid_year": iv_config_pid_year,  # PID + year (feasible, F~6-12)
+    "pid": iv_config_pid,        # PID only (strongest first stage)
+}
+
+
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="PyBLP nested logit estimation")
+    parser.add_argument(
+        "--iv", nargs="?", const="pid_year", default=None,
+        choices=list(IV_CONFIGS.keys()),
+        help="IV specification: 'pid_year' (default, feasible), 'pid' (strongest), 'full' (Calder-Wang, weak)",
+    )
+    parser.add_argument("--config", type=str, default=None, help="Path to config.yml")
+    args = parser.parse_args()
+
+    if args.iv:
+        est_cfg = IV_CONFIGS[args.iv]()
+    else:
+        est_cfg = EstimationConfig()
+
+    main(config_path=args.config, est_cfg=est_cfg)

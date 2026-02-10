@@ -13,22 +13,23 @@ User's question: $ARGUMENTS
 **Identifiers:**
 - `PID` — parcel ID (product_ids)
 - `pm.zip` — ZIP code
-- `owner_grp` — owner group (firm_ids)
+- `owner_1` — owner name (firm_ids)
 - `year` — year
-- `census_tract` — census tract
+- `GEOID` — census tract GEOID
 
 **Price / Share:**
 - `log_med_rent` — log median rent (→ `prices`)
-- `share_units_zip_unit` — market share by units in zip (→ `shares`)
-- `total_market_share_units_bins` — total market share by unit-size bin
+- `share_zip` — product share of total housing stock in zip-year (BLP-ready, sums ≤ 1)
+- `share_zip_bin` — product share of housing stock in zip-year-bin
+- `share_units_zip_unit` — legacy share (sums to 1, NOT for BLP)
 
 **Building characteristics:**
-- `num_units_imp` / `total_units` — number of units (legacy / current)
-- `num_units_bins` — binned unit count category
+- `total_units` — number of units (current); `num_units_imp` (legacy fallback)
+- `num_units_bin` — binned unit count category
 - `num_units_zip` — total units in the ZIP
 - `total_area` — total building area (sq ft)
 - `year_built` — year built
-- `building_code_description_new_fixed` — building type (Apartment, Coop, Mixed Use, etc.)
+- `building_code_description_new` — building type (APARTMENTS - BLT AS RESID, APTS - HIGH RISE, etc.)
 - `quality_grade` — quality grade (A+, A, A-, B+, B, etc.)
 - `market_value` — assessed market value
 - `total_tax` — total tax assessment
@@ -36,13 +37,14 @@ User's question: $ARGUMENTS
 
 **Eviction / Filing:**
 - `filing_rate` — eviction filing rate
-- `filing_rate_preCOVID` — pre-COVID filing rate (used for nesting threshold)
+- `filing_rate_eb_pre_covid` — pre-COVID filing rate (empirical Bayes; used for nesting threshold)
 - `num_filings` — number of filings
 
-**Instruments (constructed in pipeline):**
-- `demand_instruments0` — prices (slot for IV)
-- `demand_instruments1` — nest sizes
-- `z_cnt_1to3km`, `z_mean_1to3km_log_taxable_value`, etc. — spatial instruments (if present)
+**Tax / Cost Instruments:**
+- `change_log_taxable_value` — own-property change in log taxable building value
+- `z_sum_otherfirm_change_taxable_value` — sum of tax changes for other-firm properties
+- `z_sum_otherfirm_change_taxable_value_per_unit` — same, per unit
+- Other `z_sum_*`, `z_cnt_*`, `z_mean_*` columns (spatial instruments)
 
 **Other:**
 - `adj_occ_rate` — adjusted occupancy rate
@@ -56,9 +58,8 @@ User's question: $ARGUMENTS
 ### Formulation
 ```python
 import pyblp as blp
-# Linear characteristics (no random coefficients in simple/nested logit)
 X1 = blp.Formulation("0 + prices + log_market_value + log_total_area + year_built",
-                      absorb="C(census_tract)*C(year) + C(building_code_description_new_fixed)")
+                      absorb="C(GEOID)*C(year) + C(building_code_description_new)")
 ```
 - `0 +` suppresses the intercept (absorbed by FEs)
 - `C(var)` creates categorical dummies
@@ -67,17 +68,15 @@ X1 = blp.Formulation("0 + prices + log_market_value + log_total_area + year_buil
 
 ### Problem & Solve
 ```python
-problem = blp.Problem(X1, df)  # df must have: market_ids, firm_ids, product_ids, prices, shares, nesting_ids, demand_instruments{k}
+problem = blp.Problem(X1, df)
 results = problem.solve(rho=0.2)  # rho = nesting parameter initial value
 ```
+Required df columns: `market_ids`, `firm_ids`, `product_ids`, `prices`, `shares`, `nesting_ids`, `demand_instruments{k}`
 
 ### Post-Estimation
 ```python
 elasticities = results.compute_elasticities()       # J×J per market
 diversions = results.compute_diversion_ratios()      # J×J per market
-own_means = results.extract_diagonal_means(elasticities)  # mean own-elasticity per market
-
-# Key attributes:
 results.beta       # linear parameter estimates
 results.beta_se    # standard errors
 results.rho        # estimated nesting parameter
@@ -95,53 +94,76 @@ results.xi         # demand unobservables
 | `min_units` | `5` | Drop buildings with fewer units |
 | `max_units` | `500` | Drop buildings with more units |
 | `min_units_zip` | `100` | Min total units in ZIP |
-| `building_type_regex` | `"Apartment\|Coop\|Mixed Use"` | Regex filter on building_code_description_new_fixed |
+| `building_type_regex` | `"Apartment\|Apt\|Coop\|Condo\|Mixed"` | Regex filter on building type (case-insensitive) |
 | `max_abs_change_log_taxable_value` | `1.25` | Max year-over-year tax value change |
 | `max_annualized_change_log_rent` | `0.2` | Max annualized rent change |
-| `require_log_market_value_positive` | `True` | Require log(market_value) > 0 |
-| `min_obs_per_pid` | `1` | Min observations per product |
-| `market_cols` | `("pm.zip", "year", "num_units_bins")` | Columns defining market IDs |
-| `firm_col` | `"owner_grp"` | Column for firm IDs |
+| `min_obs_per_pid` | `1` | Min observations per product (set ≥2 for IV with PID FE) |
+| `market_cols` | `("pm.zip", "year")` | Columns defining market IDs |
+| `firm_col` | `"owner_1"` | Column for firm IDs |
 | `product_col` | `"PID"` | Column for product IDs |
-| `nest_threshold_col` | `"filing_rate_preCOVID"` | Column for nest assignment |
+| `shares_col` | `"share_zip"` | Share variable (must sum < 1 per market) |
+| `nest_threshold_col` | `"filing_rate_eb_pre_covid"` | Column for nest assignment |
 | `nest_threshold` | `0.1` | Threshold: >= this → first nest label |
 | `nest_labels` | `("high", "low")` | (above_threshold, below_threshold) |
 | `x1_formula` | `"0 + prices + ..."` | PyBLP Formulation string |
-| `absorb_formula` | `"C(census_tract)*C(year) + ..."` | Absorbed FEs |
+| `absorb_formula` | `"C(GEOID)*C(year) + ..."` | Absorbed FEs |
+| `excluded_instruments` | `()` | Columns for IV (empty = no IV) |
+| `include_nest_size_instrument` | `True` | Add nest sizes as instrument |
 | `rho_init` | `0.2` | Initial nesting parameter |
-| `diversion_target_nest` | `"low"` | Nest to bump in post-estimation |
-| `diversion_pct_increase` | `0.10` | Price increase for counterfactuals |
+| `output_subdir` | `"pyblp_summaries"` | Subdir in output/ for LaTeX tables |
+
+---
+
+## Pre-built Configurations
+
+```python
+from pyblp_estimation import EstimationConfig, iv_config, iv_config_pid_year, iv_config_pid, main
+
+# Baseline (recommended) — no IV, GEOID*year + building type FE
+out = main()
+
+# IV with PID + GEOID*year (WEAK instruments, F≈0.03)
+out = main(est_cfg=iv_config())
+
+# IV with PID + year (borderline, F≈6)
+out = main(est_cfg=iv_config_pid_year())
+
+# IV with PID only (strongest first stage, F≈12, but no time controls)
+out = main(est_cfg=iv_config_pid())
+```
+
+CLI: `python python/pyblp_estimation.py --iv [full|pid_year|pid]`
 
 ---
 
 ## Diagnostic Guidance
 
-### Weak Instruments
-- Check `demand_instruments0` correlation with endogenous `prices` after absorbing FE
-- Use `report_instrument_checks(est_df, "prices", ["demand_instruments0"], fe_cols=["market_ids"])`
-- F-stat < 10 → weak instruments; consider adding spatial instruments (`z_cnt_1to3km`, etc.)
+### IV / Weak Instruments
+Tax assessment instruments (`change_log_taxable_value`, `z_sum_otherfirm_*`) are **weak under PID + GEOID×year FE** (F=0.03). The instruments capture cross-sectional and geographic-time variation, which is exactly what the FEs absorb. Within-building, within-market-year correlation between rent and tax changes is ≈0.002.
+
+**IV is only feasible with coarser FE**: PID only (F≈12) or PID + year (F≈6). The baseline no-IV spec is currently the best option.
 
 ### Convergence Issues
-- If `solve()` doesn't converge: try different `rho_init` (0.1, 0.3, 0.5)
-- Check `results.converged` — if False, results are unreliable
-- Reduce sample complexity: fewer FE interactions, simpler formulation
+- Try different `rho_init` (0.1, 0.3, 0.5)
+- Check `results.converged`
+- Singular weighting matrix → collinearity in instruments or too many FE
+- `log_total_area` is time-invariant → collinear with PID FE (drop from IV specs)
 
 ### Elasticity Sanity Checks
-- Own-price elasticities should be **negative** (price up → demand down)
-- Typical range for rental housing: -0.3 to -2.0
-- If all near zero: check that prices have sufficient within-market variation
-- If implausibly large (< -5): possible share measurement issues
+- Own-price elasticities should be **negative** (typical: -0.3 to -3.0)
+- If positive: wrong-sign price coefficient (endogeneity or share issue)
+- If near zero: insufficient within-market price variation
+- Baseline results: mean ≈ -1.96
 
 ### Nesting Parameter (rho)
-- `rho = 0` → standard logit (no within-nest correlation)
-- `rho → 1` → products within a nest are perfect substitutes
-- Typical reasonable values: 0.1–0.7
-- If `rho` hits boundary (0 or ~1): nesting may not be identified
+- `rho = 0` → standard logit; `rho → 1` → perfect substitutes within nest
+- Typical: 0.1–0.7; baseline estimate: 0.156
+- If hits boundary (0 or ~0.99): nesting not identified (check shares!)
 
-### Common Errors
-- "shares do not sum to less than 1" → filter markets with total shares >= 1
-- NaN in instruments → check for zero-valued variables before log transforms
-- "singular matrix" → perfect collinearity in FE + covariates; simplify absorb formula
+### Share Issues
+- Shares MUST sum < 1 per market (outside good required)
+- `share_zip` uses total housing stock denominator — safe
+- If shares sum to 1.0: using wrong share variable or wrong market definition
 
 ---
 
@@ -150,25 +172,22 @@ results.xi         # demand unobservables
 ```python
 from pyblp_estimation import EstimationConfig, main
 
-# 1) Run with defaults
+# 1) Run baseline
 out = main()
 
-# 2) Inspect results
-print(out["results"])
-print(out["post_est"]["own_elasticities"].mean())
+# 2) Inspect
+out["results"].beta          # coefficients
+out["post_est"]["own_elasticities"].mean()  # mean own elasticity
 
-# 3) Iterate — change config
-cfg2 = EstimationConfig(year_range=(2016, 2019), min_units=10, rho_init=0.3)
+# 3) Iterate
+cfg2 = EstimationConfig(year_range=(2016, 2019), min_units=10)
 out2 = main(est_cfg=cfg2)
 
-# 4) Compare
-print(f"Baseline rho: {float(out['results'].rho):.3f}")
-print(f"New rho: {float(out2['results'].rho):.3f}")
-
-# 5) First-stage diagnostics
+# 4) First-stage diagnostics (for IV)
 from pyblp_estimation import report_instrument_checks
-report_instrument_checks(out["est_df"], "prices", ["demand_instruments0"],
-                         fe_cols=["market_ids"])
+report_instrument_checks(out["est_df"], "prices",
+    ["demand_instruments0", "demand_instruments1"],
+    fe_cols=["PID", "year"])
 ```
 
 ---
