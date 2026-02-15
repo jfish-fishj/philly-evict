@@ -1,0 +1,39 @@
+\begingroup
+\centering
+\begin{tabular}{lccccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{5}{c}{log\_price}\\
+   Model:                           & (1)            & (2)            & (3)            & (4)           & (5)\\  
+   \midrule
+   \emph{Variables}\\
+   high\_evict\_num                 & -0.211$^{***}$ & 0.086$^{***}$  &                & 0.112$^{***}$ &   \\   
+                                    & (0.007)        & (0.006)        &                & (0.011)       &   \\   
+   log\_units                       & 0.068$^{**}$   & 0.100$^{***}$  & 0.104$^{***}$  & 0.187$^{***}$ & 0.131$^{**}$\\   
+                                    & (0.028)        & (0.023)        & (0.023)        & (0.043)       & (0.058)\\   
+   log\_violations\_p1              & -0.211$^{***}$ & -0.155$^{***}$ & -0.157$^{***}$ &               & -0.078$^{***}$\\   
+                                    & (0.005)        & (0.004)        & (0.004)        &               & (0.013)\\   
+   filing\_rate\_eb\_pre\_covid     &                &                & 0.227$^{***}$  &               & 0.277$^{***}$\\   
+                                    &                &                & (0.043)        &               & (0.031)\\   
+   longrun\_rent                    &                &                &                & 0.278$^{***}$ &   \\   
+                                    &                &                &                & (0.018)       &   \\   
+   log\_rent                        &                &                &                &               & 0.287$^{***}$\\   
+                                    &                &                &                &               & (0.026)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   year                             & Yes            &                &                & Yes           & \\  
+   building\_type                   & Yes            & Yes            & Yes            & Yes           & Yes\\  
+   year\_blt\_decade                & Yes            & Yes            & Yes            & Yes           & Yes\\  
+   quality\_grade                   & Yes            & Yes            & Yes            &               & Yes\\  
+   num\_units\_bin                  & Yes            & Yes            & Yes            & Yes           & Yes\\  
+   num\_stories\_bin                & Yes            & Yes            & Yes            & Yes           & Yes\\  
+   GEOID-year                       &                & Yes            & Yes            &               & Yes\\  
+   GEOID                            &                &                &                & Yes           & \\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                     & 225,860        & 224,402        & 224,402        & 45,251        & 19,057\\  
+   Adjusted R$^2$                   & 0.35344        & 0.64650        & 0.64731        & 0.64829       & 0.76533\\  
+   \midrule \midrule
+   \multicolumn{6}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{6}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

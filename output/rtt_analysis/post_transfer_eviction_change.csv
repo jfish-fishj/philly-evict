@@ -1,0 +1,7 @@
+group,n,mean_pre_rate,mean_post_rate,mean_change
+high_evict=FALSE,170376,0.0169,0.0204,0.0036
+high_evict=TRUE,27900,0.1815,0.2149,0.0334
+buyer=Corporate,67797,0.0504,0.0823,0.032
+buyer=Individual,133841,0.0346,0.0303,-0.0043
+sheriff_deed=FALSE,180637,0.0414,0.046,0.0045
+sheriff_deed=TRUE,21001,0.0265,0.0637,0.0372

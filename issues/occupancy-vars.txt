@@ -1,0 +1,6 @@
+Here are some basic issues im having with the occupancy vars and blp estimation:
+
+1. little variation in shares
+2. infousa household counts mostly but not entirely agree with the imputed units. often there are large apartments with no people or addresses with many people that dont match a rental property. sometimes, this is because the rental license is registered to an admin building that doesnt have any people, but often it's a sign that the unit imputation is going crazy. ideally, it should be the case that total units are very correlated with households, especially for larger apartments. we definitely dont want a lot of cases where there is big disagreement
+3. bad unit imputation and occupancy assignment messes up filing counts and eventual shares
+4. Price-per-unit from RTT transfers should be reasonably similar across building types (within the same neighborhood/year). If high-rises that get assigned too few units mechanically have inflated filing rates AND inflated price-per-unit, that's a sign total_units is wrong — not that they're actually more expensive or higher-evicting per unit. Cross-check: compare median(price_per_unit) across building_type bins in the RTT analysis and flag cases where high-rise price/unit is way above midrise/lowrise within the same block group.

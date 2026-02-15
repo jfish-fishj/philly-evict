@@ -1,0 +1,17 @@
+term,estimate,std_error,t_value,p_value,spec,n,r2
+high_evict_num,-0.2114,0.0074,-28.75,0,year_fe,225860,0.3534
+log_units,0.0675,0.0282,2.39,0.0168,year_fe,225860,0.3534
+log_violations_p1,-0.2105,0.0053,-39.83,0,year_fe,225860,0.3534
+high_evict_num,0.0861,0.0058,14.8,0,bg_x_year_fe,224402,0.6465
+log_units,0.0998,0.0229,4.36,0,bg_x_year_fe,224402,0.6465
+log_violations_p1,-0.1554,0.0043,-36.33,0,bg_x_year_fe,224402,0.6465
+filing_rate_eb_pre_covid,0.2267,0.0426,5.32,0,bg_x_year_fe_cont,224402,0.6473
+log_units,0.1035,0.0228,4.54,0,bg_x_year_fe_cont,224402,0.6473
+log_violations_p1,-0.1565,0.0043,-36.65,0,bg_x_year_fe_cont,224402,0.6473
+high_evict_num,0.112,0.0112,9.97,0,bg_x_year_fe_rent,45251,0.6483
+log_units,0.1867,0.0428,4.36,0,bg_x_year_fe_rent,45251,0.6483
+longrun_rent,0.2781,0.0177,15.68,0,bg_x_year_fe_rent,45251,0.6483
+filing_rate_eb_pre_covid,0.2772,0.0313,8.86,0,bg_x_year_fe_cont_rent,19057,0.7653
+log_units,0.1312,0.0575,2.28,0.0227,bg_x_year_fe_cont_rent,19057,0.7653
+log_violations_p1,-0.0781,0.0135,-5.81,0,bg_x_year_fe_cont_rent,19057,0.7653
+log_rent,0.2869,0.026,11.03,0,bg_x_year_fe_cont_rent,19057,0.7653

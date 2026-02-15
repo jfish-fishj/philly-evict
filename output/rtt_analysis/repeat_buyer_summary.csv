@@ -1,0 +1,3 @@
+repeat_buyer,n_transfers,n_buyers,avg_filing_rate,avg_violations,median_price_per_unit
+FALSE,129696,129696,0.0452,0.36,127000
+TRUE,100693,24984,0.0599,0.54,51347

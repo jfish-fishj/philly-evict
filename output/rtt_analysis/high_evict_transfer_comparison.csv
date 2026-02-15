@@ -1,0 +1,3 @@
+high_evict_eb_city,n_transfers,n_pids,transfer_rate_per_bldg_yr,median_price,median_price_per_unit,pct_sheriff,share_violations
+FALSE,193259,110302,1.752,105000,90000,9.9,0.0943759410945933
+TRUE,32603,17773,1.834,70000,65000,11.4,0.12814771646781

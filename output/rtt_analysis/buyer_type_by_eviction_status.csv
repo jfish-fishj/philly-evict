@@ -1,0 +1,3 @@
+high_evict_eb_city,n_transfers,pct_corp_buyer,pct_corp_seller,Corporate -> Corporate,Corporate -> Individual,Individual -> Corporate,Individual -> Individual
+FALSE,193259,30.9,30.7,12.2,18.5,18.7,50.6
+TRUE,32603,41.3,37.1,19,18.1,22.3,40.6

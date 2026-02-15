@@ -1,0 +1,3 @@
+high_evict,n_buildings,mean_transfers,median_transfers,median_interval_yrs,pct_flipped
+FALSE,110302,1.75,1,5,48.5
+TRUE,17773,1.83,2,5,51.3

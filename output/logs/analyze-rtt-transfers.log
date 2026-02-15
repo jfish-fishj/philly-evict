@@ -1,0 +1,215 @@
+[2026-02-15 13:47:18] === Starting analyze-rtt-transfers.R === 
+[2026-02-15 13:47:18] --- SECTION 0: Loading data --- 
+[2026-02-15 13:47:22]   rtt_clean:  675236  rows,  352770  unique PIDs 
+[2026-02-15 13:47:54]   bldg_panel_blp:  3584326  rows,  192939  unique PIDs 
+[2026-02-15 13:47:57]   Merged RTT x bldg_panel:  230389  /  675236  RTT rows matched ( 34.1 %) 
+[2026-02-15 13:47:57]   Unique PIDs in merged:  131429 
+[2026-02-15 13:47:58]   Sheriff's deeds:  23163  /  230389  ( 10.1 %) 
+[2026-02-15 13:47:58]   Price winsorized at [ 2700 ,  1476375.08 ] 
+[2026-02-15 13:47:58] --- SECTION 1: Basic summary stats --- 
+[2026-02-15 13:47:58]   Table 1: transfer_summary_by_year.csv ( 19  rows) 
+[2026-02-15 13:48:10] === Starting analyze-rtt-transfers.R === 
+[2026-02-15 13:48:10] --- SECTION 0: Loading data --- 
+[2026-02-15 13:48:12]   rtt_clean:  675236  rows,  352770  unique PIDs 
+[2026-02-15 13:48:33]   bldg_panel_blp:  3584326  rows,  192939  unique PIDs 
+[2026-02-15 13:48:36]   Merged RTT x bldg_panel:  230389  /  675236  RTT rows matched ( 34.1 %) 
+[2026-02-15 13:48:36]   Unique PIDs in merged:  131429 
+[2026-02-15 13:48:36]   Sheriff's deeds:  23163  /  230389  ( 10.1 %) 
+[2026-02-15 13:48:36]   Price winsorized at [ 2700 ,  1476375.08 ] 
+[2026-02-15 13:48:36] --- SECTION 1: Basic summary stats --- 
+[2026-02-15 13:48:36]   Table 1: transfer_summary_by_year.csv ( 19  rows) 
+[2026-02-15 13:48:36]   Table 2: transfer_summary_by_type.csv ( 9  rows) 
+[2026-02-15 13:48:36]   Table 3: transfer_summary_by_year_type.csv ( 170  rows) 
+[2026-02-15 13:48:37]   Figure 1: rtt_transfers_by_year.png 
+[2026-02-15 13:48:37]   Figure 2: rtt_price_by_building_type.png 
+[2026-02-15 13:48:37] --- SECTION 2: Transfer frequency --- 
+[2026-02-15 13:49:10] === Starting analyze-rtt-transfers.R === 
+[2026-02-15 13:49:10] --- SECTION 0: Loading data --- 
+[2026-02-15 13:49:13]   rtt_clean:  675236  rows,  352770  unique PIDs 
+[2026-02-15 13:49:54]   bldg_panel_blp:  3584326  rows,  192939  unique PIDs 
+[2026-02-15 13:49:59]   Merged RTT x bldg_panel:  230389  /  675236  RTT rows matched ( 34.1 %) 
+[2026-02-15 13:49:59]   Unique PIDs in merged:  131429 
+[2026-02-15 13:49:59]   Sheriff's deeds:  23163  /  230389  ( 10.1 %) 
+[2026-02-15 13:49:59]   Price winsorized at [ 2700 ,  1476375.08 ] 
+[2026-02-15 13:49:59] --- SECTION 1: Basic summary stats --- 
+[2026-02-15 13:49:59]   Table 1: transfer_summary_by_year.csv ( 19  rows) 
+[2026-02-15 13:49:59]   Table 2: transfer_summary_by_type.csv ( 9  rows) 
+[2026-02-15 13:49:59]   Table 3: transfer_summary_by_year_type.csv ( 170  rows) 
+[2026-02-15 13:50:00]   Figure 1: rtt_transfers_by_year.png 
+[2026-02-15 13:50:01]   Figure 2: rtt_price_by_building_type.png 
+[2026-02-15 13:50:01] --- SECTION 2: Transfer frequency --- 
+[2026-02-15 13:50:05]   Table 4: transfer_frequency_by_type.csv ( 9  rows) 
+[2026-02-15 13:50:05]   Table 5: transfer_frequency_by_eviction_status.csv 
+[2026-02-15 13:50:05]   Figure 3: rtt_transfer_freq_by_eviction.png 
+[2026-02-15 13:50:05] --- SECTION 3: High-evicting building transfers --- 
+[2026-02-15 13:50:06]   Table 6: high_evict_transfer_comparison.csv 
+[2026-02-15 13:50:06]   Table 7: transfer_by_filing_rate_bin.csv ( 6  rows) 
+[2026-02-15 13:50:07]   Figure 4: rtt_price_per_unit_by_filing_rate.png 
+[2026-02-15 13:50:07]   Figure 5: rtt_sheriff_share_by_eviction_bin.png 
+[2026-02-15 13:50:07] --- SECTION 4: Buyer composition --- 
+[2026-02-15 13:50:53]   Table 8: buyer_type_by_eviction_status.csv 
+[2026-02-15 13:50:59]   Table 9: top_buyers_high_evict.csv ( 20  rows) 
+[2026-02-15 13:51:00]   Table 10: repeat_buyer_summary.csv 
+[2026-02-15 13:51:00]   Computing pre/post transfer filing rates... 
+[2026-02-15 13:51:01]   Table 11: post_transfer_eviction_change.csv ( 5  rows) 
+[2026-02-15 13:51:01]   Figure 6: rtt_eviction_around_transfer.png 
+[2026-02-15 13:51:01]   Table 12: sheriff_deed_profile.csv 
+[2026-02-15 13:51:01] --- SECTION 5: Price analysis --- 
+[2026-02-15 13:51:02]   Table 13: price_hedonic_summary.csv ( 30  coefficients) 
+[2026-02-15 13:51:02]   Hedonic R2 =  0.2345 , N =  230389 
+[2026-02-15 13:51:02]   High-evict coefficient:  -0.3026  (se= 0.0065 , p= 0 ) 
+[2026-02-15 13:51:02]   Figure 7: rtt_price_per_unit_timeseries.png 
+[2026-02-15 13:51:02] === Finished analyze-rtt-transfers.R === 
+[2026-02-15 13:51:02]   Tables written to:  /Users/joefish/Documents/GitHub/philly-evictions/output/rtt_analysis 
+[2026-02-15 13:51:02]   Figures written to:  /Users/joefish/Documents/GitHub/philly-evictions/figs 
+[2026-02-15 13:55:25] === Starting analyze-rtt-transfers.R === 
+[2026-02-15 13:55:25] --- SECTION 0: Loading data --- 
+[2026-02-15 13:55:28]   rtt_clean:  675236  rows,  352770  unique PIDs 
+[2026-02-15 13:55:58]   bldg_panel_blp:  3584326  rows,  192939  unique PIDs 
+[2026-02-15 13:56:01]   Merged RTT x bldg_panel:  230389  /  675236  RTT rows matched ( 34.1 %) 
+[2026-02-15 13:56:01]   Unique PIDs in merged:  131429 
+[2026-02-15 13:56:01]   Sheriff's deeds:  23163  /  230389  ( 10.1 %) 
+[2026-02-15 13:56:01]   Price winsorized at [ 2700 ,  1476375.08 ] 
+[2026-02-15 13:56:01] --- SECTION 1: Basic summary stats --- 
+[2026-02-15 13:56:01]   Table 1: transfer_summary_by_year.csv ( 19  rows) 
+[2026-02-15 13:56:01]   Table 2: transfer_summary_by_type.csv ( 9  rows) 
+[2026-02-15 13:56:01]   Table 3: transfer_summary_by_year_type.csv ( 170  rows) 
+[2026-02-15 13:56:02]   Figure 1: rtt_transfers_by_year.png 
+[2026-02-15 13:56:02]   Figure 2: rtt_price_by_building_type.png 
+[2026-02-15 13:56:02] --- SECTION 2: Transfer frequency --- 
+[2026-02-15 13:56:05]   Table 4: transfer_frequency_by_type.csv ( 9  rows) 
+[2026-02-15 13:56:05]   Table 5: transfer_frequency_by_eviction_status.csv 
+[2026-02-15 13:56:06]   Figure 3: rtt_transfer_freq_by_eviction.png 
+[2026-02-15 13:56:06] --- SECTION 3: High-evicting building transfers --- 
+[2026-02-15 13:56:06]   Table 6: high_evict_transfer_comparison.csv 
+[2026-02-15 13:56:06]   Table 7: transfer_by_filing_rate_bin.csv ( 6  rows) 
+[2026-02-15 13:56:06]   Figure 4: rtt_price_per_unit_by_filing_rate.png 
+[2026-02-15 13:56:06]   Figure 5: rtt_sheriff_share_by_eviction_bin.png 
+[2026-02-15 13:56:06] --- SECTION 4: Buyer composition --- 
+[2026-02-15 13:58:57] === Starting analyze-rtt-transfers.R === 
+[2026-02-15 13:58:57] --- SECTION 0: Loading data --- 
+[2026-02-15 13:58:59]   rtt_clean:  675236  rows,  352770  unique PIDs 
+[2026-02-15 13:59:24]   bldg_panel_blp:  3584326  rows,  192939  unique PIDs 
+[2026-02-15 13:59:27]   Merged RTT x bldg_panel:  230389  /  675236  RTT rows matched ( 34.1 %) 
+[2026-02-15 13:59:27]   Unique PIDs in merged:  131429 
+[2026-02-15 13:59:28]   Sheriff's deeds:  23163  /  230389  ( 10.1 %) 
+[2026-02-15 13:59:28]   Price winsorized at [ 2700 ,  1476375.08 ] 
+[2026-02-15 13:59:28] --- SECTION 1: Basic summary stats --- 
+[2026-02-15 13:59:28]   Table 1: transfer_summary_by_year.csv ( 19  rows) 
+[2026-02-15 13:59:28]   Table 2: transfer_summary_by_type.csv ( 9  rows) 
+[2026-02-15 13:59:28]   Table 3: transfer_summary_by_year_type.csv ( 170  rows) 
+[2026-02-15 13:59:28]   Figure 1: rtt_transfers_by_year.png 
+[2026-02-15 13:59:29]   Figure 2: rtt_price_by_building_type.png 
+[2026-02-15 13:59:29] --- SECTION 2: Transfer frequency --- 
+[2026-02-15 13:59:32]   Table 4: transfer_frequency_by_type.csv ( 9  rows) 
+[2026-02-15 13:59:32]   Table 5: transfer_frequency_by_eviction_status.csv 
+[2026-02-15 13:59:32]   Figure 3: rtt_transfer_freq_by_eviction.png 
+[2026-02-15 13:59:32] --- SECTION 3: High-evicting building transfers --- 
+[2026-02-15 13:59:32]   Table 6: high_evict_transfer_comparison.csv 
+[2026-02-15 13:59:33]   Table 7: transfer_by_filing_rate_bin.csv ( 6  rows) 
+[2026-02-15 13:59:33]   Figure 4: rtt_price_per_unit_by_filing_rate.png 
+[2026-02-15 13:59:33]   Figure 5: rtt_sheriff_share_by_eviction_bin.png 
+[2026-02-15 13:59:33] --- SECTION 4: Buyer composition --- 
+[2026-02-15 14:00:23]   Table 8: buyer_type_by_eviction_status.csv 
+[2026-02-15 14:00:31]   Table 9: top_buyers_high_evict.csv ( 20  rows) 
+[2026-02-15 14:00:32]   Table 10: repeat_buyer_summary.csv 
+[2026-02-15 14:00:32]   Computing pre/post transfer filing rates... 
+[2026-02-15 14:00:35]   Table 11: post_transfer_eviction_change.csv ( 5  rows) 
+[2026-02-15 14:00:36]   Figure 6: rtt_eviction_around_transfer.png 
+[2026-02-15 14:00:36]   Table 12: sheriff_deed_profile.csv 
+[2026-02-15 14:00:36] --- SECTION 5: Descriptive price regressions --- 
+[2026-02-15 14:00:36]   GEOID (block group) available:  1329  block groups 
+[2026-02-15 14:00:36]   Estimating Spec 1: year FE + building controls... 
+[2026-02-15 14:00:37]   [ year_fe ] adj-R2= 0.3516 , N= 225860 
+[2026-02-15 14:00:37]     high_evict:  -0.2203  (se= 0.007 , p= 0 ) 
+[2026-02-15 14:00:37]   Estimating Spec 2: GEOID x year FE + building controls... 
+[2026-02-15 14:00:39]   [ bg_x_year_fe ] adj-R2= 0.6591 , N= 224402 
+[2026-02-15 14:00:39]     high_evict:  0.077  (se= 0.0055 , p= 0 ) 
+[2026-02-15 14:00:39]   Estimating Spec 3: GEOID x year FE, continuous filing rate... 
+[2026-02-15 14:00:40]   [ bg_x_year_fe_cont ] adj-R2= 0.6592 , N= 224402 
+[2026-02-15 14:00:40]     filing_rate_eb:  0.1464  (se= 0.0298 ) 
+[2026-02-15 14:00:40]   Estimating Spec 4: GEOID x year FE + controls + log(rent) (N= 25361 )... 
+[2026-02-15 14:00:40]   [ bg_x_year_fe_rent ] adj-R2= 0.7547 , N= 19057 
+[2026-02-15 14:00:40]     high_evict:  0.128  (se= 0.0164 , p= 0 ) 
+[2026-02-15 14:00:40]     log_rent:  0.3012  (se= 0.0245 ) 
+[2026-02-15 14:00:40]   Estimating Spec 5: GEOID x year FE + cont filing rate + log(rent) (N= 24621 )... 
+[2026-02-15 14:00:41]   [ bg_x_year_fe_cont_rent ] adj-R2= 0.755 , N= 19057 
+[2026-02-15 14:00:41]     filing_rate_eb:  0.1533  (se= 0.0227 ) 
+[2026-02-15 14:00:41]     log_rent:  0.2815  (se= 0.0243 ) 
+[2026-02-15 14:00:41]   Table 13: price_hedonic_summary.csv ( 17  rows,  5  specs) 
+[2026-02-15 14:00:41]   LaTeX table: price_hedonic_etable.tex 
+[2026-02-15 14:00:41]   Figure 7: rtt_price_per_unit_timeseries.png 
+[2026-02-15 14:00:41] === Finished analyze-rtt-transfers.R === 
+[2026-02-15 14:00:41]   Tables written to:  /Users/joefish/Documents/GitHub/philly-evictions/output/rtt_analysis 
+[2026-02-15 14:00:41]   Figures written to:  /Users/joefish/Documents/GitHub/philly-evictions/figs 
+[2026-02-15 14:03:21] === Starting analyze-rtt-transfers.R === 
+[2026-02-15 14:03:24] --- SECTION 0: Loading data --- 
+[2026-02-15 14:03:29]   rtt_clean:  675236  rows,  352770  unique PIDs 
+[2026-02-15 14:03:49]   bldg_panel_blp:  3584326  rows,  192939  unique PIDs 
+[2026-02-15 14:08:50]   Merged RTT x bldg_panel:  230389  /  675236  RTT rows matched ( 34.1 %) 
+[2026-02-15 14:08:53]   Unique PIDs in merged:  131429 
+[2026-02-15 14:08:55]   Sheriff's deeds:  23163  /  230389  ( 10.1 %) 
+[2026-02-15 14:08:57]   Price winsorized at [ 2700 ,  1476375.08 ] 
+[2026-02-15 14:09:00] --- SECTION 1: Basic summary stats --- 
+[2026-02-15 14:16:01]   Price winsorized at [ 2700 ,  1476375.08 ] 
+[2026-02-15 14:16:03] --- SECTION 1: Basic summary stats --- 
+[2026-02-15 14:17:20] --- SECTION 2: Transfer frequency --- 
+[2026-02-15 14:21:38]   Table 9: top_buyers_high_evict.csv ( 20  rows) 
+[2026-02-15 14:22:14]   GEOID (block group) available:  1329  block groups 
+[2026-02-15 14:22:20]   Estimating Spec 1: year FE + building controls... 
+[2026-02-15 14:26:11]   Estimating Spec 4: GEOID x year FE + controls + log(longrun_rent) (N= 46231 )... 
+[2026-02-15 14:35:40] === Starting analyze-rtt-transfers.R === 
+[2026-02-15 14:35:40] --- SECTION 0: Loading data --- 
+[2026-02-15 14:35:43]   rtt_clean:  675236  rows,  352770  unique PIDs 
+[2026-02-15 14:36:03]   bldg_panel_blp:  3584326  rows,  192939  unique PIDs 
+[2026-02-15 14:36:05]   Merged RTT x bldg_panel:  230389  /  675236  RTT rows matched ( 34.1 %) 
+[2026-02-15 14:36:05]   Unique PIDs in merged:  131429 
+[2026-02-15 14:36:05]   Sheriff's deeds:  23163  /  230389  ( 10.1 %) 
+[2026-02-15 14:36:05]   Price range:  100  to  550641567 
+[2026-02-15 14:36:05] --- SECTION 1: Basic summary stats --- 
+[2026-02-15 14:36:05]   Table 1: transfer_summary_by_year.csv ( 19  rows) 
+[2026-02-15 14:36:05]   Table 2: transfer_summary_by_type.csv ( 9  rows) 
+[2026-02-15 14:36:05]   Table 3: transfer_summary_by_year_type.csv ( 170  rows) 
+[2026-02-15 14:36:06]   Figure 1: rtt_transfers_by_year.png 
+[2026-02-15 14:36:06]   Figure 2: rtt_price_by_building_type.png 
+[2026-02-15 14:36:06] --- SECTION 2: Transfer frequency --- 
+[2026-02-15 14:36:09]   Table 4: transfer_frequency_by_type.csv ( 9  rows) 
+[2026-02-15 14:36:09]   Table 5: transfer_frequency_by_eviction_status.csv 
+[2026-02-15 14:36:09]   Figure 3: rtt_transfer_freq_by_eviction.png 
+[2026-02-15 14:36:09] --- SECTION 3: High-evicting building transfers --- 
+[2026-02-15 14:36:10]   Table 6: high_evict_transfer_comparison.csv 
+[2026-02-15 14:36:10]   Table 7: transfer_by_filing_rate_bin.csv ( 6  rows) 
+[2026-02-15 14:36:10]   Figure 4: rtt_price_per_unit_by_filing_rate.png 
+[2026-02-15 14:36:10]   Figure 5: rtt_sheriff_share_by_eviction_bin.png 
+[2026-02-15 14:36:10] --- SECTION 4: Buyer composition --- 
+[2026-02-15 14:36:12]   Table 8: buyer_type_by_eviction_status.csv 
+[2026-02-15 14:36:13]   Table 9: top_buyers_high_evict.csv ( 20  rows) 
+[2026-02-15 14:36:13]   Table 10: repeat_buyer_summary.csv 
+[2026-02-15 14:36:13]   Computing pre/post transfer filing rates... 
+[2026-02-15 14:36:15]   Table 11: post_transfer_eviction_change.csv ( 6  rows) 
+[2026-02-15 14:36:15]   Figure 6: rtt_eviction_around_transfer.png 
+[2026-02-15 14:36:15]   Table 12: sheriff_deed_profile.csv 
+[2026-02-15 14:36:15] --- SECTION 5: Descriptive price regressions --- 
+[2026-02-15 14:36:15]   GEOID (block group) available:  1329  block groups 
+[2026-02-15 14:36:15]   Estimating Spec 1: year FE + building controls... 
+[2026-02-15 14:36:16]   [ year_fe ] adj-R2= 0.3534 , N= 225860 
+[2026-02-15 14:36:16]     high_evict:  -0.2114  (se= 0.0074 , p= 0 ) 
+[2026-02-15 14:36:16]   Estimating Spec 2: GEOID x year FE + building controls... 
+[2026-02-15 14:36:17]   [ bg_x_year_fe ] adj-R2= 0.6465 , N= 224402 
+[2026-02-15 14:36:17]     high_evict:  0.0861  (se= 0.0058 , p= 0 ) 
+[2026-02-15 14:36:17]   Estimating Spec 3: GEOID x year FE, continuous filing rate... 
+[2026-02-15 14:36:19]   [ bg_x_year_fe_cont ] adj-R2= 0.6473 , N= 224402 
+[2026-02-15 14:36:19]     filing_rate_eb:  0.2267  (se= 0.0426 ) 
+[2026-02-15 14:36:19]   Estimating Spec 4: GEOID x year FE + controls + log(longrun_rent) (N= 46231 )... 
+[2026-02-15 14:36:19]   [ bg_x_year_fe_rent ] adj-R2= 0.6483 , N= 45251 
+[2026-02-15 14:36:19]     high_evict:  0.112  (se= 0.0112 , p= 0 ) 
+[2026-02-15 14:36:19]   Estimating Spec 5: GEOID x year FE + cont filing rate + log(rent) (N= 24621 )... 
+[2026-02-15 14:36:19]   [ bg_x_year_fe_cont_rent ] adj-R2= 0.7653 , N= 19057 
+[2026-02-15 14:36:19]     filing_rate_eb:  0.2772  (se= 0.0313 ) 
+[2026-02-15 14:36:19]     log_rent:  0.2869  (se= 0.026 ) 
+[2026-02-15 14:36:19]   Table 13: price_hedonic_summary.csv ( 16  rows,  5  specs) 
+[2026-02-15 14:36:19]   LaTeX table: price_hedonic_etable.tex 
+[2026-02-15 14:36:19]   Figure 7: rtt_price_per_unit_timeseries.png 
+[2026-02-15 14:36:19] === Finished analyze-rtt-transfers.R === 
+[2026-02-15 14:36:19]   Tables written to:  /Users/joefish/Documents/GitHub/philly-evictions/output/rtt_analysis 
+[2026-02-15 14:36:19]   Figures written to:  /Users/joefish/Documents/GitHub/philly-evictions/figs 
