@@ -214,6 +214,7 @@ business_words <- c(
   "TRUST", "TRUSTS",
   "HOUS","HOUSING","APARTMENTS","APTS?","REAL",
   "ESTATE","REALTY","MANAGEMENT","MGMT",
+  "RESTAURANT","RESTARAUNT","ACADEMY",
   "DEV","DEVELOPMENT","DEVELOPS","DEVELOPERS",
   "THE"
 )
@@ -406,7 +407,8 @@ extract_stories_from_code <- function(bldg_code_desc) {
 #'         \item "MIDRISE_MULTI" - 20-49 units or 4-6 stories
 #'         \item "HIGHRISE_MULTI" - 50+ units or 7+ stories, single building
 #'         \item "MULTI_BLDG_COMPLEX" - multiple buildings on parcel (garden-style)
-#'         \item "COMMERCIAL" - commercial properties (both columns agree)
+#'         \item "COMMERCIAL" - commercial properties (both columns agree, or standalone hotel)
+#'         \item "GROUP_QUARTERS" - boarding houses, dormitories, rooming houses
 #'         \item "OTHER" - unable to classify
 #'       }
 #'     \item is_condo: Logical vector indicating if parcel is a condo
@@ -473,7 +475,15 @@ standardize_building_type <- function(bldg_code_desc,
                                   "HSE\\s*WORSHIP|CEMETERY|PUB\\s*UTIL)", old_desc) &
                            !grepl("APT|APTS|APARTMENT|RESID|DWELLING", old_desc)
 
-  is_commercial <- is_commercial_both | is_clearly_commercial
+  # Standalone hotel detection: if EITHER column says HOTEL and neither says
+
+  # APT/APARTMENT/RESID, classify as COMMERCIAL. The "both columns agree" rule
+  # above misses hotels with only one column populated.
+  is_hotel_either <- (grepl("HOTEL", old_desc) | grepl("HOTEL", new_desc)) &
+                     !grepl("APT|APARTMENT|RESID", old_desc) &
+                     !grepl("APT|APARTMENT|RESID", new_desc)
+
+  is_commercial <- is_commercial_both | is_clearly_commercial | is_hotel_either
   result[is_commercial] <- "COMMERCIAL"
 
   # -------------------------------------------------------------------------
@@ -565,9 +575,20 @@ standardize_building_type <- function(bldg_code_desc,
   result[is_row_conv_apt & is.na(result)] <- "SMALL_MULTI_2_4"
 
   # -------------------------------------------------------------------------
-  # Priority 6: Catch remaining apartment patterns
+  # Priority 6a: Group quarters — BOARDING/DORMITORY/ROOMING
+  # These are not commercial (they house people) but not standard residential.
+  # In make-occupancy-vars.r, GROUP_QUARTERS is excluded from is_def_res but
+
+  # can enter via is_ambig if the parcel has rental evidence.
   # -------------------------------------------------------------------------
-  is_apt_other <- grepl("APT|APTS|APARTMENT|BOARDING|DORMITORY", old_desc) |
+  is_group_quarters <- grepl("BOARDING|DORMITORY|ROOMING", old_desc) &
+                       !grepl("APT|APTS|APARTMENT|RESID", old_desc)
+  result[is_group_quarters & is.na(result)] <- "GROUP_QUARTERS"
+
+  # -------------------------------------------------------------------------
+  # Priority 6b: Catch remaining apartment patterns
+  # -------------------------------------------------------------------------
+  is_apt_other <- grepl("APT|APTS|APARTMENT", old_desc) |
                   grepl("APARTMENT", new_desc)
   result[is_apt_other & is.na(result)] <- "LOWRISE_MULTI"
 
@@ -585,4 +606,38 @@ standardize_building_type <- function(bldg_code_desc,
 # Helper for string concatenation (avoids paste0 verbosity)
 `%+%` <- function(a, b) paste0(a, b)
 
+# Empirical Bayes Poisson-Gamma shrinkage for rates:
+# y_i ~ Poisson(exposure_i * lambda_i), lambda_i ~ Gamma(alpha, beta)
+# Posterior mean: (alpha + y_i) / (beta + exposure_i)
+eb_shrink_poisson_gamma <- function(y, exposure, prior_year = NULL, year = NULL) {
+  stopifnot(length(y) == length(exposure))
+  y <- as.numeric(y)
+  exposure <- pmax(as.numeric(exposure), 0)
 
+  ok <- is.finite(y) & is.finite(exposure) & exposure > 0
+  if (!is.null(prior_year) && !is.null(year)) {
+    ok <- ok & (year <= prior_year)
+  }
+  if (!any(ok)) return(list(rate_eb = rep(NA_real_, length(y)), alpha = NA_real_, beta = NA_real_))
+
+  yy <- y[ok]
+  ee <- exposure[ok]
+
+  S1 <- sum(yy, na.rm = TRUE)
+  E1 <- sum(ee, na.rm = TRUE)
+  mu <- if (E1 > 0) S1 / E1 else 0
+
+  yy1 <- sum(yy * pmax(yy - 1, 0), na.rm = TRUE)
+  E2  <- sum(ee^2, na.rm = TRUE)
+  T   <- if (E2 > 0) yy1 / E2 else NA_real_
+
+  eps <- 1e-12
+  beta_hat <- if (!is.na(T) && (T > mu^2 + eps) && mu > 0) mu / (T - mu^2) else 1e8
+  alpha_hat <- mu * beta_hat
+
+  rate_eb <- rep(NA_real_, length(y))
+  ok2 <- is.finite(y) & is.finite(exposure) & exposure > 0
+  rate_eb[ok2] <- (alpha_hat + y[ok2]) / (beta_hat + exposure[ok2])
+
+  list(rate_eb = rate_eb, alpha = alpha_hat, beta = beta_hat, mu = mu)
+}

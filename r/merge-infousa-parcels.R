@@ -56,6 +56,24 @@ philly_infousa_dt[, pm.zip := str_remove(as.character(pm.zip), "^_") %>%
 philly_parcels[, pm.zip := str_remove(as.character(pm.zip), "^_") %>%
                  str_pad(5, "left", "0")]
 
+# Direction normalization for merge rules:
+# If an InfoUSA address has a direction, allow matching to parcels with either
+# the same direction or no direction. Never allow opposite/different direction.
+norm_dir <- function(x) {
+  y <- str_to_lower(str_squish(as.character(x)))
+  y[y %in% c("", "na", "n/a", "null")] <- NA_character_
+  y <- case_when(
+    y %in% c("n", "north") ~ "n",
+    y %in% c("s", "south") ~ "s",
+    y %in% c("e", "east")  ~ "e",
+    y %in% c("w", "west")  ~ "w",
+    TRUE ~ y
+  )
+  y
+}
+philly_infousa_dt[, pm.dir_concat := norm_dir(pm.dir_concat)]
+philly_parcels[, pm.dir_concat := norm_dir(pm.dir_concat)]
+
 philly_infousa_dt[,GEOID.longitude := as.numeric(ge_longitude_2010)]
 philly_infousa_dt[,GEOID.latitude := as.numeric(ge_latitude_2010)]
 
@@ -83,11 +101,11 @@ philly_parcel_addys[,pm.house := as.character(pm.house)]
 # merge the philly_infousa_dt_address_agg data back
 num_st_sfx_dir_zip_merge = philly_infousa_dt_addys %>%
   # merge with address data
-  # only let merge with parcels that have units aka residential ones
+  # Match on house/street/suffix/zip, then apply directional guardrail.
   merge(philly_parcel_addys[,.( pm.house, pm.street,pm.zip,pm.dir_concat,
                                 pm.streetSuf,PID
   )],
-  ,by = c("pm.house", "pm.street", "pm.streetSuf", "pm.dir_concat", "pm.zip")
+  ,by = c("pm.house", "pm.street", "pm.streetSuf", "pm.zip")
   ,all.x= T,
   allow.cartesian = T
   ) %>%
@@ -96,6 +114,17 @@ num_st_sfx_dir_zip_merge = philly_infousa_dt_addys %>%
   )
 
 setDT(num_st_sfx_dir_zip_merge)
+# Directional rule:
+# - If InfoUSA has no direction -> keep all candidates.
+# - If InfoUSA has direction -> keep parcel direction equal to InfoUSA OR missing.
+num_st_sfx_dir_zip_merge[
+  ,
+  keep_dir := is.na(pm.dir_concat.x) |
+    is.na(pm.dir_concat.y) |
+    pm.dir_concat.x == pm.dir_concat.y
+]
+num_st_sfx_dir_zip_merge <- num_st_sfx_dir_zip_merge[keep_dir == TRUE]
+num_st_sfx_dir_zip_merge[, c("keep_dir", "pm.dir_concat.x", "pm.dir_concat.y") := NULL]
 num_st_sfx_dir_zip_merge[,num_pids := uniqueN(PID,na.rm = T), by = n_sn_ss_c]
 ## save the merges that are unique ##
 num_st_sfx_dir_zip_merge[,matched := num_pids==1]
@@ -144,7 +173,7 @@ num_st_merge = philly_infousa_dt_addys %>%
   # merge with address data
   # only let merge with parcels that have units aka residential ones
   merge(philly_parcel_addys[,.( pm.house, pm.street,pm.zip,
-                                pm.streetSuf, pm.sufDir, pm.preDir,PID
+                                pm.streetSuf, pm.sufDir, pm.preDir, pm.dir_concat, PID
   )],
   ,by = c("pm.house", "pm.street",'pm.zip')
   ,all.x= T,
@@ -155,6 +184,14 @@ num_st_merge = philly_infousa_dt_addys %>%
   )
 
 setDT(num_st_merge)
+num_st_merge[
+  ,
+  keep_dir := is.na(pm.dir_concat.x) |
+    is.na(pm.dir_concat.y) |
+    pm.dir_concat.x == pm.dir_concat.y
+]
+num_st_merge <- num_st_merge[keep_dir == TRUE]
+num_st_merge[, c("keep_dir", "pm.dir_concat.x", "pm.dir_concat.y") := NULL]
 num_st_merge[,num_pids := uniqueN(PID,na.rm = T), by = n_sn_ss_c]
 
 ## keep the merges that are unique ##
@@ -179,7 +216,9 @@ unique(num_st_merge, by = "n_sn_ss_c")[,.N, by = .(num_pids==0)][,per := round(N
 
 
 #### num st sfx merge ####
-num_st_sfx_merge = philly_infousa_dt_address_agg  %>%
+# Keep fallback matching at unique-address level (not year-level address rows),
+# so merge cardinality and "unique merge" logic are driven by address keys only.
+num_st_sfx_merge = philly_infousa_dt_addys  %>%
   filter(
     !n_sn_ss_c %in% matched_num_st_sfx_dir_zip &
       !n_sn_ss_c %in% matched_num_st
@@ -187,7 +226,7 @@ num_st_sfx_merge = philly_infousa_dt_address_agg  %>%
   # merge with address data
   # only let merge with parcels that have units aka residential ones
   merge(philly_parcel_addys[,.( pm.house, pm.street,
-                                pm.streetSuf,PID
+                                pm.streetSuf, pm.dir_concat, PID
   )],
   ,by = c("pm.house", "pm.street","pm.streetSuf")
   ,all.x= T,
@@ -199,6 +238,14 @@ num_st_sfx_merge = philly_infousa_dt_address_agg  %>%
 
 
 setDT(num_st_sfx_merge)
+num_st_sfx_merge[
+  ,
+  keep_dir := is.na(pm.dir_concat.x) |
+    is.na(pm.dir_concat.y) |
+    pm.dir_concat.x == pm.dir_concat.y
+]
+num_st_sfx_merge <- num_st_sfx_merge[keep_dir == TRUE]
+num_st_sfx_merge[, c("keep_dir", "pm.dir_concat.x", "pm.dir_concat.y") := NULL]
 num_st_sfx_merge[,num_pids := uniqueN(PID,na.rm = T), by = n_sn_ss_c]
 
 ## keep the merges that are unique ##
@@ -270,11 +317,71 @@ unique(spatial_join_sf_join, by = "n_sn_ss_c")[,.N, by = num_pids_st][,per := (N
 #View(sample_n(spatial_join_sf_join[num_pids_st == 0][,count :=.N, by = n_sn_ss_c] ,1000))
 
 
+#### Tier 5: Fuzzy house-number match ####
+# Target: addresses that failed all 4 tiers AND have >=5 total InfoUSA obs.
+# Strategy: match on same street + zip, allow house number within ±10.
+# Only keep unique matches (exactly one candidate parcel within the window).
+
+all_matched_so_far <- c(matched_num_st_sfx_dir_zip, matched_num_st,
+                        matched_num_st_sfx, matched_spatial)
+
+# Aggregate total observations across years for unmatched addresses
+unmatched_for_fuzzy <- philly_infousa_dt_address_agg[
+  !n_sn_ss_c %in% all_matched_so_far,
+  .(total_obs = sum(num_obs)),
+  by = .(n_sn_ss_c, pm.house, pm.street, pm.zip)
+]
+unmatched_for_fuzzy <- unmatched_for_fuzzy[total_obs >= 5 & !is.na(pm.house) & pm.house != ""]
+unmatched_for_fuzzy[, pm.house_num := as.numeric(pm.house)]
+unmatched_for_fuzzy <- unmatched_for_fuzzy[!is.na(pm.house_num)]
+
+logf("  [Tier 5] Fuzzy house-number candidates: ", nrow(unmatched_for_fuzzy),
+     " unmatched addresses with >=5 obs", log_file = log_file)
+
+if (nrow(unmatched_for_fuzzy) > 0) {
+  # Prepare parcel addresses with numeric house numbers
+  parcel_fuzzy <- philly_parcel_addys[!is.na(pm.house) & pm.house != "",
+                                      .(pm.house, pm.street, pm.zip, PID)]
+  parcel_fuzzy[, pm.house_num := as.numeric(pm.house)]
+  parcel_fuzzy <- parcel_fuzzy[!is.na(pm.house_num)]
+
+  # Join on street + zip, then filter by house number within ±10
+  fuzzy_merge <- merge(
+    unmatched_for_fuzzy[, .(n_sn_ss_c, pm.house_num, pm.street, pm.zip)],
+    parcel_fuzzy[, .(pm.house_num_parcel = pm.house_num, pm.street, pm.zip, PID)],
+    by = c("pm.street", "pm.zip"),
+    allow.cartesian = TRUE
+  )
+  fuzzy_merge[, house_diff := abs(pm.house_num - pm.house_num_parcel)]
+  fuzzy_merge <- fuzzy_merge[house_diff > 0 & house_diff <= 10]
+
+  # Only keep unique matches (exactly one candidate parcel)
+  fuzzy_merge[, num_candidates := uniqueN(PID), by = n_sn_ss_c]
+  fuzzy_unique <- fuzzy_merge[num_candidates == 1]
+  fuzzy_unique[, merge := "fuzzy_house_num"]
+
+  matched_fuzzy <- unique(fuzzy_unique$n_sn_ss_c)
+
+  logf("  [Tier 5] Fuzzy house-number matches: ", length(matched_fuzzy),
+       " unique addresses matched (of ", nrow(unmatched_for_fuzzy), " candidates)",
+       log_file = log_file)
+  if (nrow(fuzzy_merge) > 0) {
+    logf("  [Tier 5] Multi-candidate (excluded): ",
+         fuzzy_merge[num_candidates > 1, uniqueN(n_sn_ss_c)],
+         " addresses", log_file = log_file)
+  }
+} else {
+  fuzzy_unique <- data.table(PID = character(), n_sn_ss_c = character(),
+                             merge = character())
+  matched_fuzzy <- character(0)
+}
+
 matched_ids = c(
   matched_num_st_sfx_dir_zip,
   matched_num_st,
   matched_num_st_sfx,
-  matched_spatial
+  matched_spatial,
+  matched_fuzzy
 )
 
 
@@ -299,8 +406,8 @@ xwalk_unique = bind_rows(list(
   num_st_sfx_merge[num_pids == 1, .(PID,n_sn_ss_c, merge)] %>% distinct(),
   spatial_join_sf_join[num_pids_st == 1, .(PID_2,n_sn_ss_c, merge)]  %>%
     distinct()%>%
-    rename(PID = PID_2)
-  #fuzzy_match[num_matches==1, .(PID_match, n_sn_ss_c, merge)] %>% rename(PID = PID_match) %>% distinct()
+    rename(PID = PID_2),
+  fuzzy_unique[, .(PID, n_sn_ss_c, merge)] %>% distinct()
 )
 ) %>%
   mutate(unique = T) %>%
@@ -396,4 +503,3 @@ fwrite(xwalk_listing, out_xwalk_listing)
 logf("  Wrote xwalk_listing: ", nrow(xwalk_listing), " rows to ", out_xwalk_listing, log_file = log_file)
 
 logf("=== Finished merge-infousa-parcels.R ===", log_file = log_file)
-

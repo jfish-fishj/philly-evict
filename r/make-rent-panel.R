@@ -145,6 +145,7 @@ prep_parcel_backbone <- function(philly_parcels, philly_bg) {
       building_type %in% c("SMALL_MULTI_2_4", "OTHER"), "APARTMENTS OTHER",
       building_type == "DETACHED", "OTHER",
       building_type == "COMMERCIAL", "OTHER",
+      building_type == "GROUP_QUARTERS", "OTHER",
       default = "OTHER"
     )]
   } else if ("building_code_description_new" %in% names(parcels_dt)) {
@@ -186,8 +187,32 @@ prep_rent_altos_simple <- function(philly_lic, philly_altos) {
         by = .(opa_account_num, ownercontact1name)]
   }
 
+  # Explicit non-residential categories to exclude
+  nonres_categories <- c("Hotel", "Rooming House / Boarding House")
+
+  # Tag owner-parcels that have ANY non-residential category in their history
+  lic[, has_nonres := any(rentalcategory %in% nonres_categories, na.rm = TRUE),
+      by = .(opa_account_num)]
+
+  # Log excluded license counts by category
+  n_before <- nrow(lic[licensetype == "Rental"])
+  n_hotel <- lic[licensetype == "Rental" & modal_rentalcategory == "Hotel", .N]
+  n_rooming <- lic[licensetype == "Rental" &
+                     modal_rentalcategory == "Rooming House / Boarding House", .N]
+  n_other_nonres <- lic[licensetype == "Rental" &
+                          modal_rentalcategory == "Other" & has_nonres == TRUE, .N]
+
+  # Keep "Residential Dwellings" always;
+  # Keep "Other" (blank) only if the owner-parcel has no non-residential evidence
   lic <- lic[licensetype == "Rental" &
-               (modal_rentalcategory %in% c("Residential Dwellings", "Other"))]
+               (modal_rentalcategory == "Residential Dwellings" |
+                (modal_rentalcategory == "Other" & has_nonres == FALSE))]
+
+  n_after <- nrow(lic)
+  message(sprintf(
+    "  License filter: %d -> %d (excluded: %d Hotel, %d Rooming House, %d Other-with-nonres-evidence)",
+    n_before, n_after, n_hotel, n_rooming, n_other_nonres
+  ))
 
   lic[, start_year := as.numeric(substr(initialissuedate, 1, 4))]
   lic[, end_year   := as.numeric(substr(expirationdate, 1, 4))]
@@ -351,20 +376,17 @@ prep_evictions_simple <- function(philly_evict, evict_xwalk) {
 ## 3) ASSEMBLE EVER-RENTAL PANEL
 ## ============================================================
 
-build_ever_rentals_panel <- function(parcel_backbone,
-                                     rent_list,
+build_ever_rentals_panel <- function(rent_list,
                                      evict_agg) {
 
-  parcel_dt <- copy(parcel_backbone)
   rent      <- copy(rent_list$rent)
   lic_long  <- copy(rent_list$lic_long_min)
   lic_units <- copy(rent_list$lic_units)
   ev_pid_year <- copy(evict_agg)
 
-  setDT(parcel_dt); setDT(rent); setDT(lic_long); setDT(lic_units); setDT(ev_pid_year)
+  setDT(rent); setDT(lic_long); setDT(lic_units); setDT(ev_pid_year)
 
   ## Ensure PIDs are padded
-  parcel_dt[,     PID := normalize_pid(PID)]
   rent[,          PID := normalize_pid(PID)]
   lic_long[,      PID := normalize_pid(PID)]
   lic_units[,     PID := normalize_pid(PID)]
@@ -390,10 +412,10 @@ build_ever_rentals_panel <- function(parcel_backbone,
   ]
   pid_summary[, ever_rental_any := (ever_rental_altos | ever_rental_license | ever_rental_evict)]
 
-  ## Attach parcel-level covariates
+  ## Attach license unit summaries (mean, median, mode); NA when missing
   pid_summary <- merge(
     pid_summary,
-    parcel_dt,
+    lic_units[, .(PID, num_units, mean_num_units, mode_num_units)],
     by = "PID",
     all.x = TRUE
   )
@@ -423,7 +445,8 @@ build_ever_rentals_panel <- function(parcel_backbone,
     .(
       num_filings              = sum(num_filings, na.rm = TRUE),
       num_filings_with_ha      = sum(num_filings_with_ha, na.rm = TRUE),
-      med_eviction_rent        = median(med_eviction_rent, na.rm = TRUE)
+      med_eviction_rent        = median(med_eviction_rent, na.rm = TRUE),
+      pm.zip                   = first(pm.zip)
     ),
     by = .(PID, year)
   ]
@@ -441,6 +464,15 @@ build_ever_rentals_panel <- function(parcel_backbone,
     x = list(panel_skeleton, rent_year, lic_year, ev_year)
   )
 
+  ## Coalesce pm.zip: license > eviction, then fill within PID
+  if ("pm.zip.x" %in% names(ever_panel) && "pm.zip.y" %in% names(ever_panel)) {
+    ever_panel[, pm.zip := coalesce(pm.zip.x, pm.zip.y)]
+    ever_panel[, c("pm.zip.x", "pm.zip.y") := NULL]
+  }
+  ## Normalize empty / garbage zips to NA, then fill within PID
+  ever_panel[pm.zip == "" | is.na(pm.zip), pm.zip := NA_character_]
+  ever_panel[, pm.zip := pm.zip[!is.na(pm.zip)][1], by = PID]
+
   ever_panel[
     ,
     `:=`(
@@ -454,289 +486,173 @@ build_ever_rentals_panel <- function(parcel_backbone,
     ever_rental_any_year := (rental_from_altos | rental_from_license | rental_from_evict)
   ]
 
-  ever_panel <- merge(
-    ever_panel,
-    parcel_dt,
-    by = "PID",
-    all.x = TRUE
-  )
-
   list(
     ever_rentals_pid   = pid_summary[],
     ever_rentals_panel = ever_panel[]
   )
 }
 
+
 ## ============================================================
-## 4) UNIT IMPUTATION (UNITS_MODEL-STYLE)
+## 4) ASSIGN P(RENTAL)
 ## ============================================================
-## This is a simplified version of the make-occupancy-vars logic.
-## It:
-##  - Builds parcel-level features (buildings, households, licenses)
-##  - Fits a feols regression to predict units
-##  - Creates num_units_imp per parcel
-##  - DOES NOT do BG-level raking / occupancy; you can layer that on
-##    later if you want the full constrained version.
+#' Add rental evidence intensity scores to a PID x year panel (data.table)
+#'
+#' Expected columns (some optional):
+#'   - pid (or parcel id), year
+#'   - n_altos_listings (optional; defaults to 0)
+#'   - num_filings (optional; defaults to 0)
+#'   - num_filings_with_ha (optional; defaults to 0)
+#'   - lic_num_units (optional; used as license presence indicator)
+#'
+#' Adds (per year):
+#'   - intensity_altos_y
+#'   - intensity_evict_y
+#'   - intensity_license_y
+#'   - intensity_total_y
+#'   - intensity_total_y_recent (decayed by recency vs as_of_year)
+#'
+#' Notes:
+#'   - Altos & eviction components are robust-normalized *within year* to reduce coverage drift.
+#'   - License is treated as a presence indicator by default (can be changed).
+#'   - This function does NOT infer units; it is an evidence strength score only.
+add_rental_intensity <- function(
+    dt,
+    id_col = "pid",
+    year_col = "year",
+    altos_count_col = "n_altos_listings",
+    evict_count_col = "num_filings",
+    evict_ha_count_col = "num_filings_with_ha",
+    license_units_col = "lic_num_units",
+    weights = list(altos = 0.7, evict = 0.7, license = 1.0, evict_ha = 0.0),
+    decay_base = 0.7,
+    as_of_year = NULL,
+    clamp_component_at_zero = TRUE
+) {
+  stopifnot(data.table::is.data.table(dt))
 
-build_units_imputation <- function(philly_parcels,
-                                   philly_building_df,
-                                   philly_infousa_dt,
-                                   info_usa_xwalk,
-                                   philly_rentals) {
-
-  parcels <- copy(philly_parcels)
-  bldgs   <- copy(philly_building_df)
-  iu      <- copy(philly_infousa_dt)
-  xwalk   <- copy(info_usa_xwalk)
-  rents   <- copy(philly_rentals)
-
-  setDT(parcels); setDT(bldgs); setDT(iu); setDT(xwalk); setDT(rents)
-
-  parcels[, PID := as.numeric(parcel_number)]
-  bldgs[,   PID := as.numeric(PID)]
-  rents[,   PID := as.numeric(PID)]
-  xwalk[,   PID := as.numeric(PID)]
-
-  ## --- Building aggregates (by PID) ---
-  ## You may need to adjust column names here
-  bldg_agg <- bldgs[
-    ,
-    .(
-      num_bldgs_imp      = .N,
-      total_area         = sum(square_ft, na.rm = TRUE),
-      #total_livable_area = sum(livable_area, na.rm = TRUE),
-      num_stories_imp    = median(round(max_hgt/10) , na.rm = TRUE)
-    ),
-    by = PID
-  ]
-
-  parcel_bldg <- merge(
-    parcels,
-    bldg_agg,
-    by    = "PID",
-    all.x = TRUE
-  )
-
-  ## --- License-based units per PID ---
-  rents[, numberofunits := as.numeric(numberofunits)]
-  lic_units <- rents[
-    !is.na(numberofunits),
-    .(
-      num_units       = median(numberofunits, na.rm = TRUE),
-      mode_num_units  = Mode(numberofunits, na.rm = TRUE),
-      mean_num_units  = mean(numberofunits, na.rm = TRUE)
-    ),
-    by = PID
-  ]
-
-  parcel_bldg <- merge(
-    parcel_bldg,
-    lic_units,
-    by    = "PID",
-    all.x = TRUE
-  )
-
-  ## --- InfoUSA households per PID (restrict to unique matches) ---
-  xwalk_1 <- xwalk[num_parcels_matched == 1 & !is.na(PID)]
-
-  iu_m <- merge(
-    iu,
-    xwalk_1[, .(n_sn_ss_c, PID)],
-    by    = "n_sn_ss_c",
-    all.x = FALSE
-  )
-
-  iu_m[,num_households := .N, by = .(PID, year)]
-
-  ## Assumes iu has a num_households var; adjust if needed
-  if (!"num_households" %in% names(iu_m)) {
-    stop("philly_infousa_dt / iu_m must have a num_households column for this template.")
+  # --- helpers ---
+  robust_z <- function(x) {
+    x <- as.numeric(x)
+    med <- stats::median(x, na.rm = TRUE)
+    madv <- stats::mad(x, constant = 1, na.rm = TRUE) # constant=1 for a pure MAD scale
+    if (!is.finite(madv) || madv <= 0) {
+      return(rep(0, length(x)))
+    }
+    z <- (x - med) / madv
+    z[!is.finite(z)] <- 0
+    z
   }
 
-  hh_agg <- iu_m[
-    ,
-    .(
-      max_households    = max(num_households, na.rm = TRUE),
-      median_households = median(num_households, na.rm = TRUE),
-      mean_households   = mean(num_households, na.rm = TRUE)
-    ),
-    by = PID
+  clamp0 <- function(x) {
+    if (!clamp_component_at_zero) return(x)
+    x[!is.finite(x)] <- 0
+    pmax(0, x)
+  }
+
+  # --- column existence / defaults ---
+  if (!id_col %in% names(dt)) stop(sprintf("Missing id_col '%s' in dt.", id_col))
+  if (!year_col %in% names(dt)) stop(sprintf("Missing year_col '%s' in dt.", year_col))
+
+  if (!altos_count_col %in% names(dt)) dt[, (altos_count_col) := 0L]
+  if (!evict_count_col %in% names(dt)) dt[, (evict_count_col) := 0L]
+  if (!evict_ha_count_col %in% names(dt)) dt[, (evict_ha_count_col) := 0L]
+  if (!license_units_col %in% names(dt)) dt[, (license_units_col) := NA_real_]
+
+  if (is.null(as_of_year)) {
+    as_of_year <- max(dt[[year_col]], na.rm = TRUE)
+    if (!is.finite(as_of_year)) as_of_year <- NA_integer_
+  }
+
+  # Ensure numeric counts
+  dt[, (altos_count_col) := as.numeric(get(altos_count_col))]
+  dt[, (evict_count_col) := as.numeric(get(evict_count_col))]
+  dt[, (evict_ha_count_col) := as.numeric(get(evict_ha_count_col))]
+
+  # License presence indicator (you can swap this to a log1p(lic_num_units) if desired)
+  dt[, intensity_license_y := as.numeric(!is.na(get(license_units_col)) & get(license_units_col) > 0)]
+
+  # Per-year robust-normalized components to account for coverage drift
+  dt[, altos_log := log1p(pmax(0, get(altos_count_col)))]
+  dt[, evict_log := log1p(pmax(0, get(evict_count_col)))]
+  dt[, evict_ha_log := log1p(pmax(0, get(evict_ha_count_col)))]
+
+  dt[, altos_z := robust_z(altos_log), by = year_col]
+  dt[, evict_z := robust_z(evict_log), by = year_col]
+  dt[, evict_ha_z := robust_z(evict_ha_log), by = year_col]
+
+  dt[, intensity_altos_y := clamp0(altos_z)]
+  dt[, intensity_evict_y := clamp0(evict_z)]
+  dt[, intensity_evict_ha_y := clamp0(evict_ha_z)]
+
+  # Total intensity (per year)
+  wA <- weights$altos
+  wE <- weights$evict
+  wL <- weights$license
+  wEH <- weights$evict_ha
+
+  dt[, intensity_total_y :=
+       wA * intensity_altos_y +
+       wE * intensity_evict_y +
+       wEH * intensity_evict_ha_y +
+       wL * intensity_license_y
   ]
 
-  parcel_agg_for_model <- merge(
-    parcel_bldg,
-    hh_agg,
-    by    = "PID",
-    all.x = TRUE
-  )
-
-  ## --- Clean num_units for modeling ---
-  parcel_agg_for_model[
-    ,
-    num_units_fixed := as.integer(num_units)
-  ]
-  parcel_agg_for_model[
-    num_units_fixed <= 0,
-    num_units_fixed := NA_integer_
-  ]
-
-  parcel_agg_for_model[,total_area := coalesce(total_area.x, total_area.y)]
-  parcel_agg_for_model[,num_stories_imp := coalesce(num_stories_imp, number_stories)]
-  parcel_agg_for_model[,num_bldgs_imp := coalesce(num_bldgs_imp, 1)]
-  ## Year built decade (if you have year_built)
-  if ("year_built" %in% names(parcel_agg_for_model)) {
-    parcel_agg_for_model[
-      ,
-      year_built_decade := floor(year_built / 10) * 10
-    ]
+  # Recency decay (optional; if as_of_year missing, set to NA)
+  if (is.finite(as_of_year)) {
+    dt[, intensity_total_y_recent := intensity_total_y * (decay_base ^ pmax(0, as_of_year - get(year_col)))]
   } else {
-    parcel_agg_for_model[, year_built_decade := NA_integer_]
+    dt[, intensity_total_y_recent := NA_real_]
   }
 
-  ## --- Fit units_model (similar to make-occupancy-vars) ---
-  ## Requires quality_grade_fixed & building_code_description_new_fixed; if not
-  ## present, we just treat them as factors directly from existing columns.
-  if (!"quality_grade_fixed" %in% names(parcel_agg_for_model) &&
-      "quality_grade" %in% names(parcel_agg_for_model)) {
-    parcel_agg_for_model[, quality_grade_fixed := as.factor(quality_grade)]
-  }
+  # Clean up temporary cols (keep if you want diagnostics)
+  dt[, c("altos_log", "evict_log", "evict_ha_log", "altos_z", "evict_z", "evict_ha_z") := NULL]
 
-  # Extract stories and standardize building type if not already done
-  if (!"stories_from_code" %in% names(parcel_agg_for_model) &&
-      "building_code_description" %in% names(parcel_agg_for_model)) {
-    parcel_agg_for_model[, stories_from_code := extract_stories_from_code(building_code_description)]
-  }
-
-  if (!"building_type" %in% names(parcel_agg_for_model) &&
-      all(c("building_code_description", "building_code_description_new") %in% names(parcel_agg_for_model))) {
-    bldg_result <- standardize_building_type(
-      bldg_code_desc = parcel_agg_for_model$building_code_description,
-      bldg_code_desc_new = parcel_agg_for_model$building_code_description_new,
-      num_bldgs = if ("num_bldgs_imp" %in% names(parcel_agg_for_model)) parcel_agg_for_model$num_bldgs_imp else NA_integer_,
-      num_stories = if ("num_stories_imp" %in% names(parcel_agg_for_model)) parcel_agg_for_model$num_stories_imp else parcel_agg_for_model$stories_from_code
-    )
-    parcel_agg_for_model[, building_type := bldg_result$building_type]
-    parcel_agg_for_model[, is_condo := bldg_result$is_condo]
-  }
-
-  # Create legacy column for model (mapping from new building_type)
-  if ("building_type" %in% names(parcel_agg_for_model)) {
-    parcel_agg_for_model[, building_code_description_new_fixed := fcase(
-      building_type == "ROW", "ROW",
-      building_type == "TWIN", "TWIN",
-      building_type == "LOWRISE_MULTI", "LOW RISE APARTMENTS",
-      building_type == "MIDRISE_MULTI", "MID RISE APARTMENTS",
-      building_type == "HIGHRISE_MULTI", "HIGH RISE APARTMENTS",
-      building_type == "MULTI_BLDG_COMPLEX", "GARDEN APARTMENTS",
-      building_type %in% c("SMALL_MULTI_2_4", "OTHER"), "APARTMENTS OTHER",
-      building_type == "DETACHED", "OTHER",
-      building_type == "COMMERCIAL", "OTHER",
-      default = "OTHER"
-    )]
-  } else if ("building_code_description_new" %in% names(parcel_agg_for_model)) {
-    # Fallback to legacy behavior if building_type not available
-    parcel_agg_for_model[, building_code_description_new_fixed := fcase(
-      grepl("ROW", building_code_description_new, ignore.case = TRUE), "ROW",
-      grepl("TWIN", building_code_description_new, ignore.case = TRUE), "TWIN",
-      grepl("APARTMENTS|APTS", building_code_description_new, ignore.case = TRUE) &
-        grepl("LOW", building_code_description_new, ignore.case = TRUE), "LOW RISE APARTMENTS",
-      grepl("APARTMENTS|APTS", building_code_description_new, ignore.case = TRUE) &
-        grepl("MID", building_code_description_new, ignore.case = TRUE), "MID RISE APARTMENTS",
-      grepl("APARTMENTS|APTS", building_code_description_new, ignore.case = TRUE) &
-        grepl("HIGH", building_code_description_new, ignore.case = TRUE), "HIGH RISE APARTMENTS",
-      grepl("APARTMENTS|APTS", building_code_description_new, ignore.case = TRUE) &
-        grepl("GARDEN", building_code_description_new, ignore.case = TRUE), "GARDEN APARTMENTS",
-      grepl("APARTMENTS|APTS", building_code_description_new, ignore.case = TRUE), "APARTMENTS OTHER",
-      grepl("CONDO", building_code_description_new, ignore.case = TRUE), "CONDO",
-      grepl("OLD", building_code_description_new, ignore.case = TRUE), "OLD STYLE",
-      is.na(building_code_description_new), NA_character_,
-      default = "OTHER"
-    )]
-  }
-  # make logs
-  parcel_agg_for_model[,log_total_area :=  log(total_area)]
-  parcel_agg_for_model[,log_total_livable_area := log(total_livable_area)]
-
-  # drop infinites
-  parcel_agg_for_model[
-    log_total_area == -Inf | is.na(log_total_area),
-    log_total_area := NA_real_
-  ]
-  parcel_agg_for_model[
-    log_total_livable_area == -Inf | is.na(log_total_livable_area),
-    log_total_livable_area := NA_real_
-  ]
-
-
-  units_model <- feols(
-    num_units_fixed ~
-      log_total_area + I(log_total_area^2) +
-      log_total_livable_area + I(log_total_livable_area^2) +
-      median_households + I(median_households^2) +
-      num_bldgs_imp + I(num_bldgs_imp^2) +
-      num_stories_imp + I(num_stories_imp^2) +
-      #quality_grade_fixed +
-      building_code_description_new_fixed +
-      year_built_decade,
-    data          = parcel_agg_for_model,
-    combine.quick = FALSE,
-    cluster = ~PID
-  )
-
-  message("[units_model] summary:")
-  print(summary(units_model))
-
-  parcel_agg_for_model[
-    ,
-    num_units_pred_new := predict(units_model, newdata = parcel_agg_for_model)
-  ]
-
-  ## --- Build num_units_imp ---
-  parcel_agg_for_model[
-    ,
-    num_units_imp := fifelse(
-      is.na(num_units),
-      round(num_units_pred_new),
-      round(num_units)
-    )
-  ]
-  parcel_agg_for_model[
-    ,
-    num_units_imp := fifelse(num_units_imp <= 0, 1L, num_units_imp)
-  ]
-
-  ## Harmonize extreme gaps between num_units and max_households
-  parcel_agg_for_model[
-    !is.na(num_units) & !is.na(max_households) &
-      abs(num_units_pred_new - num_units) > 50 &
-      abs(max_households - num_units) > 50,
-    num_units_imp := round(num_units_pred_new / 2)
-  ]
-
-  parcel_agg_for_model[
-    (num_units_imp - max_households) > 100,
-    num_units_imp := NA_integer_
-  ]
-  parcel_agg_for_model[
-    (num_units_imp / pmax(1, max_households)) > 3,
-    num_units_imp := NA_integer_
-  ]
-
-  ## Final PID-level table; drop down to just rentals
-  out_units <- parcel_agg_for_model[
-   # PID %in% rents$PID ,
-   , .(
-      PID              = normalize_pid(PID),
-      num_units_imp    = num_units_imp,
-      num_units_raw    = num_units,
-      num_units_pred   = num_units_pred_new,
-      max_households   = max_households,
-      median_households = median_households
-    )
-  ]
-
-  out_units[]
+  # Return dt invisibly (modified by reference)
+  invisible(dt)
 }
+
+#' Collapse PID x year intensities to PID-level summary table
+summarize_intensity_to_pid <- function(
+    dt_panel,
+    id_col = "pid",
+    year_col = "year"
+) {
+  stopifnot(data.table::is.data.table(dt_panel))
+  if (!id_col %in% names(dt_panel)) stop(sprintf("Missing id_col '%s' in dt_panel.", id_col))
+  if (!year_col %in% names(dt_panel)) stop(sprintf("Missing year_col '%s' in dt_panel.", year_col))
+
+  required <- c("intensity_total_y", "intensity_total_y_recent",
+                "intensity_altos_y", "intensity_evict_y", "intensity_license_y")
+  missing_req <- setdiff(required, names(dt_panel))
+  if (length(missing_req) > 0) {
+    stop(sprintf(
+      "dt_panel missing required columns: %s. Did you run add_rental_intensity() first?",
+      paste(missing_req, collapse = ", ")
+    ))
+  }
+
+  out <- dt_panel[, .(
+    intensity_total_sum    = sum(intensity_total_y, na.rm = TRUE),
+    intensity_total_mean   = mean(intensity_total_y, na.rm = TRUE),
+    intensity_total_recent = sum(intensity_total_y_recent, na.rm = TRUE),
+
+    intensity_altos_sum    = sum(intensity_altos_y, na.rm = TRUE),
+    intensity_evict_sum    = sum(intensity_evict_y, na.rm = TRUE),
+    intensity_license_sum  = sum(intensity_license_y, na.rm = TRUE),
+
+    years_any_evidence     = sum(intensity_total_y > 0, na.rm = TRUE),
+    years_altos            = sum(intensity_altos_y > 0, na.rm = TRUE),
+    years_evict            = sum(intensity_evict_y > 0, na.rm = TRUE),
+    years_license          = sum(intensity_license_y > 0, na.rm = TRUE),
+
+    first_year             = suppressWarnings(min(get(year_col), na.rm = TRUE)),
+    last_year              = suppressWarnings(max(get(year_col), na.rm = TRUE))
+  ), by = id_col]
+
+  out[]
+}
+
 
 
 ## ============================================================
@@ -764,7 +680,6 @@ logf("  evict_agg: ", nrow(evict_agg), " rows, (PID, year) unique - PASSED", log
 
 ## 5.4 Ever-rentals panel
 ever_rental_out <- build_ever_rentals_panel(
-  parcel_backbone = parcel_backbone,
   rent_list       = rent_list,
   evict_agg       = evict_agg
 )
@@ -778,42 +693,27 @@ logf("  ever_rentals_pid: ", nrow(ever_rentals_pid), " rows, PID unique - PASSED
 assert_unique(ever_rentals_panel, c("PID", "year"), "ever_rentals_panel")
 logf("  ever_rentals_panel: ", nrow(ever_rentals_panel), " rows, (PID, year) unique - PASSED", log_file = log_file)
 
-## 5.5 Unit imputation (parcel-level)
-## For renters, you probably want a rentals-only version of philly_rentals
-## that corresponds to the license_long_min from rent_list
-philly_rentals_for_units <- rent_list$lic_long
+# ADD rental intensity scores
+library(data.table)
 
-parcel_units <- build_units_imputation(
-  philly_parcels     = philly_parcels,
-  philly_building_df = philly_building_df,
-  philly_infousa_dt  = philly_infousa_dt,
-  info_usa_xwalk     = info_usa_xwalk,
-  philly_rentals     = philly_rentals_for_units
-)
+# ever_rentals_panel is PID x year
+add_rental_intensity(
+  ever_rentals_panel,
+  id_col = "PID"
+  )
 
-assert_unique(parcel_units, "PID", "parcel_units")
-logf("  parcel_units: ", nrow(parcel_units), " rows, PID unique - PASSED", log_file = log_file)
+pid_intensity <- summarize_intensity_to_pid(ever_rentals_panel, id_col = "PID")
 
-## 5.6 Merge units onto ever-rentals
-logf("Merging units onto ever-rentals...", log_file = log_file)
-
+# Merge onto your parcel list or ever_rentals_pid summary
 ever_rentals_pid <- merge(
   ever_rentals_pid,
-  parcel_units,
-  by    = "PID",
+  pid_intensity,
+  by = "PID",
   all.x = TRUE
 )
-assert_unique(ever_rentals_pid, "PID", "ever_rentals_pid after units merge")
-logf("  ever_rentals_pid after units merge: ", nrow(ever_rentals_pid), " rows, PID unique - PASSED", log_file = log_file)
 
-ever_rentals_panel <- merge(
-  ever_rentals_panel,
-  parcel_units,
-  by    = "PID",
-  all.x = TRUE
-)
-assert_unique(ever_rentals_panel, c("PID", "year"), "ever_rentals_panel after units merge")
-logf("  ever_rentals_panel after units merge: ", nrow(ever_rentals_panel), " rows, (PID, year) unique - PASSED", log_file = log_file)
+
+
 
 ## 5.7 Export
 logf("Writing outputs...", log_file = log_file)
@@ -826,9 +726,6 @@ out_panel <- p_product(cfg, "ever_rentals_panel")
 fwrite(ever_rentals_panel, out_panel)
 logf("  Wrote ever_rentals_panel: ", nrow(ever_rentals_panel), " rows to ", out_panel, log_file = log_file)
 
-out_units <- p_product(cfg, "ever_rental_parcel_units")
-fwrite(parcel_units, out_units)
-logf("  Wrote ever_rental_parcel_units: ", nrow(parcel_units), " rows to ", out_units, log_file = log_file)
 
 logf("=== Finished make-rent-panel.R ===", log_file = log_file)
 
