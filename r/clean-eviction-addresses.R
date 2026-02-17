@@ -13,11 +13,12 @@
 ##
 ## Workflow:
 ##   1. Load raw eviction summary data
-##   2. Extract short address from defendant_address
-##   3. Parse address components using postmastr
-##   4. Standardize street names, directions, suffixes
-##   5. Create composite address key (n_sn_ss_c)
-##   6. Export cleaned data
+##   2-7. Parse defendant_address via postmastr → n_sn_ss_c_def
+##   8. Parse clean_address via light regex pipeline → n_sn_ss_c_ca
+##      (only for rows where defendant_address parsing failed)
+##   9. Coalesce: n_sn_ss_c = coalesce(n_sn_ss_c_def, n_sn_ss_c_ca)
+##      Track provenance in addr_source column
+##  10. Export cleaned data
 ## ============================================================
 
 suppressPackageStartupMessages({
@@ -206,20 +207,20 @@ philly_evict_adds_sample = philly_evict_adds_sample %>%
     pm.street = str_remove_all(pm.street, "\\s[lL]a$")
   )
 
-# ---- Step 6: Create composite address key ----
-logf("Step 6: Creating composite address key", log_file = log_file)
+# ---- Step 6: Create composite address key (defendant_address) ----
+logf("Step 6: Creating composite address key (defendant_address)", log_file = log_file)
 
 philly_evict_adds_sample_c = philly_evict_adds_sample %>%
   mutate(across(c(pm.sufDir, pm.street, pm.streetSuf, pm.preDir), ~str_squish(str_to_lower(replace_na(.x, ""))))) %>%
   mutate(
-    n_sn_ss_c = str_squish(str_to_lower(paste(pm.house, pm.preDir, pm.street, pm.streetSuf, pm.sufDir))),
+    n_sn_ss_c_def = str_squish(str_to_lower(paste(pm.house, pm.preDir, pm.street, pm.streetSuf, pm.sufDir))),
     pm.dir_concat = coalesce(pm.preDir, pm.sufDir)
   )
 
 setDT(philly_evict_adds_sample_c)
 setDT(philly_evict_sample)
 
-# ---- Step 7: Merge and finalize ----
+# ---- Step 7: Merge defendant_address results back ----
 logf("Step 7: Merging parsed addresses back to original data", log_file = log_file)
 
 philly_evict_adds_sample_m = merge(
@@ -231,6 +232,171 @@ philly_evict_adds_sample_m = merge(
 )
 
 logf("After merge: ", nrow(philly_evict_adds_sample_m), " rows", log_file = log_file)
+
+n_def_parsed <- philly_evict_adds_sample_m[!is.na(n_sn_ss_c_def) & nzchar(n_sn_ss_c_def), .N]
+logf("defendant_address parsed: ", n_def_parsed, " / ", nrow(philly_evict_adds_sample_m),
+     " (", round(100 * n_def_parsed / nrow(philly_evict_adds_sample_m), 1), "%)", log_file = log_file)
+
+# ============================================================
+# Step 8: Light-weight clean_address parsing (complementary)
+# ============================================================
+# clean_address is pre-cleaned (e.g., "4203 MANTUA AVE, PHILADELPHIA, PA")
+# and cannot go through postmastr pm_prep (which drops 77% of rows).
+# Instead, use regex-based extraction: comma-split → house/street/suffix/dir.
+# ============================================================
+
+logf("Step 8: Parsing clean_address (light regex pipeline)", log_file = log_file)
+
+setDT(philly_evict_adds_sample_m)
+
+# Add a unique row index for safe join-back (pm.uid is NOT unique per row)
+philly_evict_adds_sample_m[, .row_idx := .I]
+
+# Only attempt for rows where defendant_address parsing failed
+ca_rows <- philly_evict_adds_sample_m[
+  (is.na(n_sn_ss_c_def) | !nzchar(n_sn_ss_c_def)) & !is.na(clean_address) & nzchar(clean_address)
+]
+logf("  Rows needing clean_address fallback: ", nrow(ca_rows), log_file = log_file)
+
+if (nrow(ca_rows) > 0) {
+
+  # --- 8a: Extract street portion (everything before first comma) ---
+  ca_rows[, ca_street_part := str_to_lower(str_trim(str_extract(clean_address, "^[^,]+")))]
+  ca_rows[, ca_street_part := str_remove_all(ca_street_part, "\\.")]
+
+  # --- 8b: Regex-extract house number and remainder ---
+  # Pattern: leading digits (possibly with dash for ranges like "123-125"),
+  #          optional letter suffix, then the street remainder
+  ca_rows[, ca_house_raw := str_extract(ca_street_part, "^[0-9]+(\\s?-\\s?[0-9]+)?[a-z]?")]
+  ca_rows[, ca_remainder := str_trim(str_remove(ca_street_part, "^[0-9]+(\\s?-\\s?[0-9]+)?[a-z]?\\s*"))]
+
+  # Parse house number (take first number for ranges)
+  ca_house_parsed <- parse_letter(ca_rows$ca_house_raw)
+  ca_house_range  <- parse_range(ca_house_parsed$clean_address)
+  ca_rows[, ca_house := as.numeric(coalesce(ca_house_range$range1, ca_house_range$og_address))]
+  ca_rows[, ca_house2 := as.numeric(ca_house_range$range2)]
+  ca_rows[, ca_house_letter := ca_house_parsed$letter]
+
+  # --- 8c: Extract directional prefix (N/S/E/W at start of remainder) ---
+  ca_rows[, ca_preDir := str_extract(ca_remainder, "^[nsew](?=\\s)")]
+  ca_rows[, ca_remainder := str_trim(str_remove(ca_remainder, "^[nsew]\\s+"))]
+
+  # --- 8d: Extract suffix (last token if it matches known suffixes) ---
+  # Build suffix set from postmastr dictionary
+  ca_suffix_set <- c(
+    postmastr::dic_us_suffix %>% pull(suf.input),
+    postmastr::dic_us_suffix %>% pull(suf.type),
+    postmastr::dic_us_suffix %>% pull(suf.output)
+  ) %>%
+    str_to_lower() %>%
+    unique() %>%
+    c("st", "la", "blv", "bld")
+
+  ca_rows[, ca_last_token := str_extract(ca_remainder, "[a-z]+$")]
+  ca_rows[, ca_has_suffix := ca_last_token %chin% ca_suffix_set]
+  ca_rows[ca_has_suffix == TRUE, ca_streetSuf := ca_last_token]
+  ca_rows[ca_has_suffix == TRUE, ca_street := str_trim(str_remove(ca_remainder, "\\s*[a-z]+$"))]
+  ca_rows[ca_has_suffix != TRUE | is.na(ca_has_suffix), ca_street := ca_remainder]
+  ca_rows[ca_has_suffix != TRUE | is.na(ca_has_suffix), ca_streetSuf := NA_character_]
+
+  # --- 8e: Extract suffix directional (e.g., trailing N/S/E/W after suffix) ---
+  ca_rows[, ca_sufDir := NA_character_]
+
+  # --- 8f: Unit parsing (clean_address may contain units) ---
+  ca_units_r1 <- parse_unit(ca_rows$ca_street)
+  ca_units_r2 <- parse_unit(ca_units_r1$clean_address %>% str_squish())
+  ca_units_r3 <- parse_unit_extra(ca_units_r2$clean_address %>% str_squish())
+  ca_rows[, ca_street := ca_units_r3$clean_address %>% str_squish()]
+  ca_rows[, ca_unit := coalesce(ca_units_r1$unit, ca_units_r2$unit, ca_units_r3$unit)]
+
+  # --- 8g: Ordinal word → number conversion ---
+  ca_rows[, ca_street := ord_words_to_nums(ca_street)]
+
+  # --- 8h: Street name standardization (same as defendant_address pipeline) ---
+  ca_rows[, ca_street := ca_street %>%
+    str_replace_all("berkeley", "berkley") %>%
+    str_replace_all("[Mm]t ", "mount ") %>%
+    str_replace_all("[Mm]c ", "mc") %>%
+    str_replace_all("[Ss]t ", "saint ")]
+
+  # --- 8i: Oracle canonicalization ---
+  # Build a temporary dt with pm.* columns for canonicalize_parsed_addresses()
+  ca_canon <- data.table(
+    row_idx   = seq_len(nrow(ca_rows)),
+    pm.house  = ca_rows$ca_house,
+    pm.preDir = ca_rows$ca_preDir,
+    pm.street = ca_rows$ca_street,
+    pm.streetSuf = ca_rows$ca_streetSuf,
+    pm.sufDir = ca_rows$ca_sufDir
+  )
+
+  # Replace NAs for canonicalization
+  ca_canon[is.na(pm.preDir), pm.preDir := ""]
+  ca_canon[is.na(pm.sufDir), pm.sufDir := ""]
+  ca_canon[is.na(pm.streetSuf), pm.streetSuf := ""]
+
+  ca_canon <- canonicalize_parsed_addresses(
+    ca_canon,
+    cfg,
+    source = "evictions_clean_address",
+    export_qa = TRUE,
+    log_file = log_file
+  )
+
+  # Fix "la" suffix (same as defendant_address pipeline)
+  ca_canon[, pm.streetSuf := fifelse(
+    is.na(pm.streetSuf) & str_detect(pm.street, "\\s[lL]a$"), "ln", pm.streetSuf
+  )]
+  ca_canon[, pm.street := str_remove_all(pm.street, "\\s[lL]a$")]
+
+  # --- 8j: Build n_sn_ss_c_ca key ---
+  ca_canon[, n_sn_ss_c_ca := {
+    p_preDir <- str_squish(str_to_lower(replace_na(pm.preDir, "")))
+    p_street <- str_squish(str_to_lower(replace_na(pm.street, "")))
+    p_suf    <- str_squish(str_to_lower(replace_na(pm.streetSuf, "")))
+    p_sufDir <- str_squish(str_to_lower(replace_na(pm.sufDir, "")))
+    str_squish(paste(pm.house, p_preDir, p_street, p_suf, p_sufDir))
+  }]
+
+  # Mark empty/invalid keys as NA
+  ca_canon[n_sn_ss_c_ca == "" | is.na(pm.house) | pm.street == "", n_sn_ss_c_ca := NA_character_]
+
+  # Write back to ca_rows
+  ca_rows[, n_sn_ss_c_ca := ca_canon$n_sn_ss_c_ca]
+
+  n_ca_parsed <- ca_rows[!is.na(n_sn_ss_c_ca) & nzchar(n_sn_ss_c_ca), .N]
+  logf("  clean_address parsed: ", n_ca_parsed, " / ", nrow(ca_rows),
+       " (", round(100 * n_ca_parsed / nrow(ca_rows), 1), "%)", log_file = log_file)
+
+  # Merge clean_address keys back to main table (use row index, NOT pm.uid which is non-unique)
+  philly_evict_adds_sample_m[ca_rows, n_sn_ss_c_ca := i.n_sn_ss_c_ca, on = ".row_idx"]
+
+} else {
+  philly_evict_adds_sample_m[, n_sn_ss_c_ca := NA_character_]
+}
+
+# ============================================================
+# Step 9: Coalesce and add provenance
+# ============================================================
+logf("Step 9: Coalescing address keys and adding provenance", log_file = log_file)
+
+# Clean up temporary row index
+philly_evict_adds_sample_m[, .row_idx := NULL]
+
+philly_evict_adds_sample_m[, n_sn_ss_c := coalesce(n_sn_ss_c_def, n_sn_ss_c_ca)]
+
+philly_evict_adds_sample_m[, addr_source := fcase(
+  !is.na(n_sn_ss_c_def) & nzchar(n_sn_ss_c_def), "defendant_address",
+  !is.na(n_sn_ss_c_ca) & nzchar(n_sn_ss_c_ca),  "clean_address",
+  default = NA_character_
+)]
+
+# Log provenance breakdown
+addr_source_counts <- philly_evict_adds_sample_m[, .N, by = addr_source][order(-N)]
+for (i in seq_len(nrow(addr_source_counts))) {
+  logf("  addr_source = ", addr_source_counts$addr_source[i], ": ",
+       addr_source_counts$N[i], log_file = log_file)
+}
 
 # Fill in defaults
 # Add "_" prefix to pm.zip to ensure character type on read (e.g., "_19104")
@@ -264,9 +430,14 @@ if (length(missing_cols) > 0) {
   logf("WARNING: Missing columns: ", paste(missing_cols, collapse = ", "), log_file = log_file)
 }
 
-# Log address parsing success rate
+# Log address parsing success rate (coalesced)
 n_with_address <- philly_evict_adds_sample_m[!is.na(n_sn_ss_c) & nzchar(n_sn_ss_c), .N]
-logf("Addresses parsed: ", n_with_address, " (", round(100 * n_with_address / n_total, 1), "%)", log_file = log_file)
+logf("Addresses parsed (coalesced): ", n_with_address, " (", round(100 * n_with_address / n_total, 1), "%)",
+     log_file = log_file)
+logf("  defendant_address only: ", n_def_parsed, " (", round(100 * n_def_parsed / n_total, 1), "%)",
+     log_file = log_file)
+logf("  clean_address fallback added: ", n_with_address - n_def_parsed,
+     " (+", round(100 * (n_with_address - n_def_parsed) / n_total, 1), " pp)", log_file = log_file)
 
 # ---- Write output ----
 output_path <- p_product(cfg, "evictions_clean")
