@@ -626,6 +626,54 @@ parcel_agg <- parcel_agg[suspect_commercial == FALSE]
 logf("  [Step 3] Removed ", n_suspect, " suspect commercial parcels from res universe",
      log_file = log_file)
 
+# -------------------------------
+# 5b) Refine structure_bin using num_units_base
+# -------------------------------
+# The initial building_type → structure_bin mapping has two problems:
+#   1. No building type maps to u_5_9_units (27K Census units unassigned)
+#   2. TWIN → u_2_units regardless of actual unit count (many are 1-unit or 3-4)
+# Now that num_units_base is available, override structure_bin for mismatches.
+# This preserves the building_type label but corrects the Census bin assignment.
+
+units_to_structure_bin <- function(u) {
+  fcase(
+    u < 1.5,  "u_1_attached",   # effectively 1 unit
+    u < 2.5,  "u_2_units",
+    u < 4.5,  "u_3_4_units",
+    u < 9.5,  "u_5_9_units",
+    u < 19.5, "u_10_19_units",
+    u < 49.5, "u_20_49_units",
+    default = "u_50plus_units"
+  )
+}
+
+# Detached and ROW stay in their Census structural categories regardless of unit count.
+# Census classifies by structure type: a row home with 2 apartments is still "1 attached".
+# Only refine types where unit count meaningfully distinguishes Census bins.
+parcel_agg[, structure_bin_refined := fcase(
+  building_type == "DETACHED", "u_1_detached",
+  building_type == "ROW",      "u_1_attached",
+  default = units_to_structure_bin(num_units_base)
+)]
+
+n_changed <- parcel_agg[structure_bin != structure_bin_refined, .N]
+logf("  [structure_bin refinement] ", n_changed, " PIDs reassigned using num_units_base",
+     log_file = log_file)
+
+# Log the transitions
+if (n_changed > 0) {
+  transitions <- parcel_agg[structure_bin != structure_bin_refined,
+                            .N, by = .(from = structure_bin, to = structure_bin_refined)]
+  setorder(transitions, -N)
+  for (i in seq_len(min(15, nrow(transitions)))) {
+    logf("    ", transitions$from[i], " -> ", transitions$to[i], ": ", transitions$N[i],
+         log_file = log_file)
+  }
+}
+
+parcel_agg[, structure_bin := structure_bin_refined]
+parcel_agg[, structure_bin_refined := NULL]
+
 # Expand to parcel-building table to preserve within-parcel heterogeneity across buildings
 parcel_building <- merge(
   parcel_agg[, .(
@@ -666,25 +714,105 @@ bins <- grep("^u_", names(bg_targets), value = TRUE)
 parcel_bg[, units_raked := NA_real_]
 
 # 6a) Rake within BG×structure_bin for ≤2010 stock
-for (b in bins) {
+# Small-building bins: skip raking entirely (preserve seed units)
+# ROW/TWIN/DETACHED homes are individual structures; raking gives them fractional units
+small_bins <- c("u_1_detached", "u_1_attached", "u_2_units")
+rakeable_bins <- setdiff(bins, small_bins)
+
+# Small bins: keep seed directly
+parcel_bg[structure_bin %in% small_bins & post2010 == FALSE,
+          units_raked := units_per_bldg_seed]
+
+# Larger bins: rake only when our inventory covers >= 70% of Census target
+for (b in rakeable_bins) {
   parcel_bg[
     structure_bin == b & post2010 == FALSE,
+    `:=`(
+      seed_sum   = sum(units_per_bldg_seed, na.rm = TRUE),
+      bin_target = unique(get(b))
+    ),
+    by = GEOID
+  ]
+  # Only rake if coverage is adequate
+
+  parcel_bg[
+    structure_bin == b & post2010 == FALSE &
+      !is.na(bin_target) & bin_target > 0 & seed_sum / bin_target >= 0.70,
     units_raked := scale_to_target_simple(units_per_bldg_seed, unique(get(b))),
     by = GEOID
   ]
 }
+# Everything else (low-coverage bins, post-2010) keeps seed
 parcel_bg[is.na(units_raked), units_raked := units_per_bldg_seed]
 
-# 6b) Rake within BG to match total HU (≤2010 stock)
-parcel_bg[, by_bg_sum_2010 := sum(units_raked[post2010 == FALSE], na.rm = TRUE), by = GEOID]
-parcel_bg[
-  post2010 == FALSE & !is.na(hu_bg_target) & by_bg_sum_2010 > 0,
-  units_raked := units_raked * (hu_bg_target / by_bg_sum_2010),
-  by = GEOID
-]
+# Log raking stats per bin
+for (b in small_bins) {
+  n_total <- parcel_bg[structure_bin == b & post2010 == FALSE, .N]
+  logf("  Raking [", b, "]: raked=0 skipped=", n_total, " (small bin, no raking)", log_file = log_file)
+}
+for (b in rakeable_bins) {
+  n_raked   <- parcel_bg[structure_bin == b & post2010 == FALSE &
+                           !is.na(bin_target) & bin_target > 0 &
+                           seed_sum / bin_target >= 0.70, .N]
+  n_skipped <- parcel_bg[structure_bin == b & post2010 == FALSE, .N] - n_raked
+  logf("  Raking [", b, "]: raked=", n_raked, " skipped=", n_skipped, log_file = log_file)
+}
+# Clean up temp cols (only exist if rakeable_bins was non-empty)
+if (length(rakeable_bins) > 0) parcel_bg[, c("seed_sum", "bin_target") := NULL]
+
+# 6b) REMOVED: BG-level total HU raking
+# Previously re-scaled ALL pre-2010 buildings within each BG to hit hu_bg_target.
+# This undid the selective raking decisions above (e.g., giving ROW homes fractional units).
+# With selective bin-level raking and coverage checks, BG-wide raking is no longer appropriate.
 
 # Optional: very conservative caps (no floors) to prevent a few buildings soaking huge mass
 parcel_bg[, units_raked := cap_units_building(structure_bin, units_raked)]
+
+# --- Diagnostic: raked units vs Census targets per bin ---
+logf("--- Unit raking diagnostics (pre-2010 stock, post-cap) ---", log_file = log_file)
+total_raked_all <- 0
+total_census_all <- 0
+for (b in bins) {
+  # Our pipeline's raked units for this bin
+  pipeline_units <- parcel_bg[structure_bin == b & post2010 == FALSE, sum(units_raked, na.rm = TRUE)]
+  # Census target: sum of unique BG-level targets (each BG contributes once)
+  census_target <- parcel_bg[structure_bin == b & post2010 == FALSE,
+                             sum(unique_val <- tapply(get(b), GEOID, function(x) unique(x)[1]),
+                                 na.rm = TRUE)]
+  # Simpler: aggregate at BG level first
+  bg_level <- parcel_bg[post2010 == FALSE & !is.na(get(b)),
+                        .(pipeline = sum(units_raked[structure_bin == b], na.rm = TRUE),
+                          census   = unique(get(b))[1]),
+                        by = GEOID]
+  pipeline_total <- bg_level[, sum(pipeline, na.rm = TRUE)]
+  census_total   <- bg_level[census > 0, sum(census, na.rm = TRUE)]
+  ratio <- fifelse(census_total > 0, pipeline_total / census_total, NA_real_)
+  n_bldgs <- parcel_bg[structure_bin == b & post2010 == FALSE, .N]
+  # Correlation at BG level
+  bg_corr <- if (nrow(bg_level[pipeline > 0 & census > 0]) >= 10) {
+    round(cor(bg_level[pipeline > 0 & census > 0]$pipeline,
+              bg_level[pipeline > 0 & census > 0]$census), 3)
+  } else NA_real_
+  logf("  [", b, "] buildings=", n_bldgs,
+       " pipeline_units=", round(pipeline_total),
+       " census_target=", round(census_total),
+       " ratio=", round(ratio, 3),
+       " BG_corr=", bg_corr,
+       log_file = log_file)
+  total_raked_all  <- total_raked_all + pipeline_total
+  total_census_all <- total_census_all + census_total
+}
+logf("  [TOTAL] pipeline_units=", round(total_raked_all),
+     " census_target=", round(total_census_all),
+     " ratio=", round(total_raked_all / total_census_all, 3),
+     log_file = log_file)
+# Also compare to hu_bg_target (total HU from Census)
+hu_census <- parcel_bg[post2010 == FALSE & !is.na(hu_bg_target),
+                       sum(tapply(hu_bg_target, GEOID, function(x) unique(x)[1]), na.rm = TRUE)]
+logf("  [HU total] pipeline=", round(total_raked_all),
+     " census_hu_bg_target=", round(hu_census),
+     " ratio=", round(total_raked_all / hu_census, 3),
+     log_file = log_file)
 
 # Collapse back to PID totals for the 2010 snapshot
 parcel_keep_2010_units <- parcel_bg[, .(
@@ -781,10 +909,52 @@ parcel_bg[, sum_raw := sum(renters_raw, na.rm = TRUE), by = GEOID]
 # scale to BG renter_occ totals
 parcel_bg[, renters_scaled := fifelse(sum_raw > 0, renters_raw * (renter_occ / sum_raw), 0)]
 
-# enforce renters <= units and re-normalize to hit BG totals
-parcel_bg[, renters_capped := pmin(renters_scaled, units_raked)]
-parcel_bg[, sum_cap := sum(renters_capped, na.rm = TRUE), by = GEOID]
-parcel_bg[, renters_final := fifelse(sum_cap > 0, renters_capped * (renter_occ / sum_cap), renters_capped)]
+# Enforce renters <= units (no BG-level re-normalization)
+# Previously re-normalized to hit Census BG renter totals, but this inflated buildings
+# above their unit limits when Census renter counts exceeded our pipeline's raked units
+# (686/1,325 BGs, 75K panel rows affected). Now we simply cap at units_raked and accept
+# that BG renter totals won't match Census exactly. The gap is absorbed by the outside good.
+parcel_bg[, renters_final := pmin(renters_scaled, units_raked)]
+
+# --- Diagnostic: renter allocation vs Census per bin ---
+logf("--- Renter allocation diagnostics (pre-2010 stock) ---", log_file = log_file)
+total_renters_pipeline <- 0
+for (b in bins) {
+  renters_bin <- parcel_bg[structure_bin == b & post2010 == FALSE, sum(renters_final, na.rm = TRUE)]
+  units_bin   <- parcel_bg[structure_bin == b & post2010 == FALSE, sum(units_raked, na.rm = TRUE)]
+  n_rental    <- parcel_bg[structure_bin == b & post2010 == FALSE & renters_final > 0, .N]
+  occ_rate    <- fifelse(units_bin > 0, renters_bin / units_bin, NA_real_)
+  logf("  [", b, "] rental_bldgs=", n_rental,
+       " renters=", round(renters_bin),
+       " units=", round(units_bin),
+       " occ_rate=", round(occ_rate, 3),
+       log_file = log_file)
+  total_renters_pipeline <- total_renters_pipeline + renters_bin
+}
+# Census total renters across all BGs
+census_renters <- parcel_bg[post2010 == FALSE & !is.na(renter_occ),
+                            sum(tapply(renter_occ, GEOID, function(x) unique(x)[1]), na.rm = TRUE)]
+n_capped_renters <- parcel_bg[post2010 == FALSE & renters_scaled > units_raked, .N]
+logf("  [RENTER TOTAL] pipeline=", round(total_renters_pipeline),
+     " census_bg_renters=", round(census_renters),
+     " ratio=", round(total_renters_pipeline / census_renters, 3),
+     " buildings_capped=", n_capped_renters,
+     log_file = log_file)
+
+# BG-level correlation: pipeline renters vs Census renters
+bg_renter_compare <- parcel_bg[post2010 == FALSE,
+                               .(pipeline_renters = sum(renters_final, na.rm = TRUE),
+                                 census_renters   = unique(renter_occ)[1]),
+                               by = GEOID]
+bg_renter_compare <- bg_renter_compare[!is.na(census_renters) & census_renters > 0]
+bg_renter_corr <- round(cor(bg_renter_compare$pipeline_renters,
+                            bg_renter_compare$census_renters), 3)
+bg_renter_mean_dev <- round(bg_renter_compare[, mean(pipeline_renters / census_renters)], 3)
+bg_renter_med_dev  <- round(bg_renter_compare[, median(pipeline_renters / census_renters)], 3)
+logf("  [BG-level] corr(pipeline, census)=", bg_renter_corr,
+     " mean_ratio=", bg_renter_mean_dev,
+     " median_ratio=", bg_renter_med_dev,
+     log_file = log_file)
 
 # Collapse to PID 2010 renters
 parcel_keep_2010_renters <- parcel_bg[, .(
@@ -1067,9 +1237,10 @@ logf(sprintf(
 ), log_file = log_file)
 
 # Step 5: Defensive clamp — renter_occ cannot exceed total_units.
-# Interpolation via occ_rate_filled * total_units can push renter_occ above
-# total_units due to rounding. The initial pmin at renter_occ construction
-# only applies at initial creation; interpolated values bypass it.
+# Root cause: Section 7 BG renter re-normalization (line ~787). After capping
+# renters at building units, the code re-normalizes to hit BG totals, which
+# pushes uncapped buildings ABOVE their unit limits. 100% of clamped rows
+# come from the renters_2010 path (years 2006-2010). See output/qa/ for details.
 n_clamped <- panel[!is.na(renter_occ) & renter_occ > total_units, .N]
 panel[!is.na(renter_occ) & renter_occ > total_units,
       renter_occ := as.integer(total_units)]

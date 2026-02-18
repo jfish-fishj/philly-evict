@@ -4,3 +4,291 @@ Here are some basic issues im having with the occupancy vars and blp estimation:
 2. infousa household counts mostly but not entirely agree with the imputed units. often there are large apartments with no people or addresses with many people that dont match a rental property. sometimes, this is because the rental license is registered to an admin building that doesnt have any people, but often it's a sign that the unit imputation is going crazy. ideally, it should be the case that total units are very correlated with households, especially for larger apartments. we definitely dont want a lot of cases where there is big disagreement
 3. bad unit imputation and occupancy assignment messes up filing counts and eventual shares
 4. Price-per-unit from RTT transfers should be reasonably similar across building types (within the same neighborhood/year). If high-rises that get assigned too few units mechanically have inflated filing rates AND inflated price-per-unit, that's a sign total_units is wrong — not that they're actually more expensive or higher-evicting per unit. Cross-check: compare median(price_per_unit) across building_type bins in the RTT analysis and flag cases where high-rise price/unit is way above midrise/lowrise within the same block group.
+
+---
+
+Updates implemented (2026-02-15):
+
+1) Share construction / pyblp interface
+- Added explicit BLP share columns and market definitions:
+  - `share_zip_all_bins` for zip-year markets
+  - `share_zip_bin` for zip-year-bin markets
+- `python/pyblp_estimation.py` now uses a top-level toggle for share/market mode.
+- Legacy `share_zip` is no longer used for pyblp.
+
+2) Merge/rental-scope fixes
+- `make-analytic-sample.R` keeps all occupancy rows when merging events (`all.x=TRUE`) so denominator rows are not silently dropped.
+- Occupancy scaling uses rental PIDs only (market is rental units).
+
+3) Occupancy missingness treatment
+- Forced-zero occupancy behavior retained for `occupancy_rate` when `renter_occ` is missing.
+- This avoids small parcels defaulting to 100% occupancy due to missing households.
+
+4) Unit imputation fixes for condo/address splits
+- Unit model moved to address cluster level (`n_sn_ss_c`) to reduce PID-level condo split bias.
+- Added valuation signal (`log_mkt_value_addr`) and household-informed lower bounds.
+- Added household-based `structure_bin` floor before raking/caps.
+- Added post-raking household lower bound guardrail in final panel `total_units`.
+
+5) Diagnostics added to `make-occupancy-vars.r`
+- Logs now include correlation between `total_units` and `max_households`.
+- Added thresholds using `<=2` units / households (not just exact zero).
+- Writes worst offenders:
+  - `output/qa/units_vs_max_households_worst_offenders.csv`
+  - `output/qa/rtt_price_per_unit_offenders.csv`
+- Counts logged:
+  - `n(total_units <= 2 & max_households > 10)`
+  - `n(total_units > 10 & max_households <= 2)`
+  - RTT `price_per_unit > 2e6` and small-unit subsets.
+
+Updates implemented (2026-02-16):
+
+6) Fix occupancy rates — three targeted fixes in `make-occupancy-vars.r`
+
+Problem: Occupancy rates were systematically too low (weighted means 0.55-0.70 for large
+buildings, 2011-2019). Philadelphia rental vacancy is ~9%, so occupancy should be ~0.91.
+Root causes: (a) 43% of rental buildings had ZERO InfoUSA data, treated as 0 occupancy;
+(b) unit over-imputation for large buildings; (c) scale factors amplified errors.
+
+Fix 1: Soft ceiling on total_units using max_households.
+- If InfoUSA ever observed max_households >= 5 at a PID, cap total_units at 1.5× max_households.
+- Applied in both 2010 snapshot (parcel_keep_2010_units) and final panel.
+- Result: 746 PIDs capped at 2010 level, 6,371 panel rows capped.
+
+Fix 2: Replace forced-zero with within-PID interpolation + BG fallback.
+- Step A: For PIDs with SOME InfoUSA data, carry forward/backward occupancy_rate (LOCF/NOCB).
+- Step B: For PIDs with NO InfoUSA data ever, use BG×structure_bin×year average occupancy rate.
+- Result: 2M missing rows reduced to 10K (99.5% reduction). Previously 40% of buildings
+  appeared vacant when they simply had no data.
+
+Fix 3: Scale factor guard.
+- Added warning if any scale_factor > 1.5 after fixes 1-2.
+- Bins 1, 2-5, 6-20: scale factors ~1.1 (healthy, near 1.0).
+- Bins 21-50 (1.72) and 51+ (1.62): still elevated due to InfoUSA structural undercoverage
+  in large buildings. Scaling compensates, bringing post-scaling rates to 0.88-0.91.
+
+7) InfoUSA address coverage diagnostics (new QA outputs)
+
+Added diagnostics for potential address mismatches where residents report a different address
+than the parcel record (e.g., "133 Main St" vs parcel's "123 Main St").
+
+- Part A: Unmatched high-household addresses — InfoUSA addresses with >=5 households
+  that have NO parcel match. Found 1,635 addresses with 37,344 total unmatched households.
+  Output: `output/qa/infousa_unmatched_high_hh_addresses.csv`
+
+- Part B: Oversubscribed addresses — matched PIDs where max_households >> total_units
+  (ratio > 2, hh >= 10). Found 1,336 PIDs with median ratio 10:1 and 14,414 excess
+  households. Enriched with nearby unmatched addresses in same zip for cross-referencing.
+  Output: `output/qa/infousa_oversubscribed_addresses.csv`
+
+8) Fix 2 diagnostic deep-dive and Step B restriction
+
+Investigated the composition of the ~2M missing renter_occ rows (2011-2019):
+
+Missing by unit size (building-years):
+  bin=1:    585,672/3,725,580  (15.7%) — almost all have data in other years (LOCF fills)
+  bin=2:     85,902/355,119    (24.2%)
+  bin=3-5:   61,059/172,478    (35.4%)
+  bin=6-20:  36,549/84,447     (43.3%) — highest miss rate
+  bin=21-50:  1,174/7,699      (15.2%)
+  bin=51+:    1,242/6,194      (20.1%)
+
+Missing by building_type:
+  OTHER:      95,291/142,634   (66.8%) — 15K PIDs, 95% are u_1_attached (row homes with weird codes)
+  COMMERCIAL: 27,782/48,071    (57.8%) — 5K PIDs, 95% u_1_attached (mixed-use storefronts)
+  HIGHRISE:      437/1,745     (25.0%) — 258 PIDs total, 43 never in InfoUSA, 49 partial
+  ROW:       499,338/2,928,950 (17.0%)
+
+Key finding: The overwhelming majority of missing rows come from PIDs that DO have data
+in other years (Step A / LOCF). Only 1,279 PIDs have NO InfoUSA data in any year
+(Step B candidates). Of those:
+  - 823 are 1-2 units (probably not rentals)
+  - 212 are 21+ units (suspicious — large building never seen by InfoUSA)
+  - 686 have ZERO rental evidence (license/altos/evict) — likely not rentals at all
+  - 593 have some rental evidence
+
+Action: Restricted Step B (BG fallback) to only fill PIDs with actual rental evidence.
+PIDs with no InfoUSA AND no rental evidence now keep renter_occ=NA (treated as 0 in
+occupancy_rate). This prevents inflating occupancy for non-rental buildings.
+
+Result: Step B fills 7,857 rows (down from 8,290), skips 1,202 rows with no evidence.
+
+High-rise investigation:
+  - 43 high-rise PIDs never in InfoUSA: includes 4 misclassified 1-unit parcels, plus
+    buildings from 9-390 units. Half built pre-1980 (should have InfoUSA → likely
+    institutional/commercial), half built 2015-2019 (too new for coverage).
+  - 49 high-rise PIDs with partial coverage: median 2 years missing. Some are suspicious:
+    PID 881116113 has 306 imputed units but max_hh=2 (likely admin parcel or condo master).
+    LOCF carries forward their tiny occupancy rate, dragging down the bin.
+  - These misclassified large-building parcels with max_hh << total_units are the main
+    remaining driver of low raw occupancy in the 21-50 and 51+ bins.
+
+OTHER/COMMERCIAL type composition (year=2015):
+  - OTHER: 15,352 PIDs, of which 14,647 (95%) are u_1_attached. Only 1,271 have rental
+    evidence that year, 4,843 have InfoUSA households. 9,884 have NEITHER — dead weight
+    that entered the panel from signals in other years.
+  - COMMERCIAL: 5,334 PIDs, of which 5,091 (95%) are u_1_attached. Same pattern.
+
+Remaining issues (not yet addressed):
+  - Large-building parcels with max_hh << total_units (e.g., 306 units, 2 households)
+    are probably admin parcels or misclassified. These poison the LOCF interpolation by
+    carrying forward near-zero occupancy. Potential fix: flag PIDs where max_hh < 0.1 *
+    total_units and total_units > 20 as suspect, exclude from occupancy scaling or treat
+    as missing.
+  - The 21-50 and 51+ scale factors (1.72, 1.62) remain elevated. The 1.5× unit ceiling
+    helps but doesn't fully resolve because many large buildings simply have sparse InfoUSA
+    coverage rather than wrong units.
+
+Current status after all fixes:
+- Occupancy rates reasonable across all bins after scaling (0.88-0.91 for 2015-2019).
+- Step B restricted to PIDs with rental evidence — no longer imputing occupancy for non-rentals.
+- Address mismatch diagnostics identify ~3K problem addresses/PIDs for future crosswalk improvement.
+- Severe condo undercount signature resolved. Residual bias concentrated in large-building admin parcels.
+
+Updates implemented (2026-02-17):
+
+9) Commercial misclassification and address mismatch fixes (4 files, 5 steps)
+
+Commit: 84198ca
+
+Step 1: Tighter license filter in `make-rent-panel.R`
+- Added explicit exclusion for "Hotel" and "Rooming House / Boarding House" categories.
+- "Other" (blank) category licenses now only pass if the owner-parcel has no non-residential
+  evidence elsewhere.
+- Result: No-op in current data (these categories were already excluded by old filter).
+  Preventive guard for future data loads.
+
+Step 2: Building type classification fixes in `helper-functions.R`
+- (2a) Hotel detection: Added standalone `is_hotel_either` flag so hotels with only one
+  building code column populated are caught. Previously required BOTH old and new columns
+  to say HOTEL.
+- (2b) New building type `GROUP_QUARTERS` for BOARDING/DORMITORY/ROOMING patterns. Previously
+  these were caught by the Priority 6 apartment catch-all and classified as LOWRISE_MULTI.
+  GROUP_QUARTERS is excluded from `is_def_res` but can enter via `is_ambig` if rental evidence
+  exists — same treatment as OTHER/COMMERCIAL.
+
+Step 3: Suspect commercial parcel filter in `make-occupancy-vars.r`
+- Flags parcels with: num_units_base >= 20, max_households <= 2 or NA, building_type in
+  {COMMERCIAL, OTHER, GROUP_QUARTERS, MIDRISE_MULTI, HIGHRISE_MULTI, LOWRISE_MULTI,
+  MULTI_BLDG_COMPLEX}, AND no rental evidence (license, Altos, evictions).
+- Removed 734 parcels: 434 COMMERCIAL, 248 OTHER, 35 MULTI_BLDG_COMPLEX, 10 LOWRISE_MULTI,
+  5 MIDRISE_MULTI, 2 HIGHRISE_MULTI.
+- QA output: `output/qa/suspect_commercial_parcels.csv`
+
+Step 4: Fuzzy house-number matching in `merge-infousa-parcels.R`
+- Added Tier 5 to address crosswalk: for InfoUSA addresses that failed all 4 existing tiers
+  and have >= 5 total observations, match on same street + zip with house number within ±10.
+- Only keeps unique matches (exactly 1 candidate parcel).
+- Result: 86 addresses matched (of 1,641 candidates), 941 excluded as ambiguous.
+
+Step 5: Renter_occ clamp in `make-occupancy-vars.r`
+- After all LOCF/NOCB and BG fallback interpolation, enforce renter_occ <= total_units.
+- Clamped 75,236 rows (15,175 unique PIDs).
+- Root cause investigated: see item 10 below.
+
+10) Root cause investigation: renter_occ > total_units (75K clamped rows)
+
+All 75,236 clamped rows come from `renters_2010` source (years 2006-2010 only). The root
+cause is the BG renter re-normalization in Section 7 (line ~787):
+
+  renters_final = renters_capped * (renter_occ / sum_cap)
+
+The algorithm:
+  1. Allocate Census BG renters to buildings proportional to units_raked × p_rent
+  2. Cap each building's renters at its units_raked
+  3. Re-normalize remaining buildings to still hit BG renter total
+
+Step 3 is the problem. When Census BG renter counts exceed our pipeline's total raked units
+(which happens in 686/1,325 BGs, median ratio 1.26×), re-normalization pushes buildings
+back above their unit limits, completely undoing the cap.
+
+This is NOT a structure_bin misclassification issue. It's a BG-level mismatch between Census
+renter counts and our building inventory. Our pipeline has fewer total units than Census says
+exist, because:
+  - Buildings excluded by residential filter
+  - Unmatchable parcels
+  - BG boundary misalignment
+  - Parcels lost to suspect_commercial or other filters
+
+Diagnostic findings:
+
+BG-level:
+  - 686/1,325 BGs (52%) have at least one overallocated building
+  - Median excess ratio in bad BGs: 1.3×
+  - Median n_buildings in bad BGs: 118.5 (NOT sparse BGs)
+  - 116 BGs have renter_occ > 2× total_units_raked (extreme cases)
+  - Worst: GEOID 421010364001 (5 buildings, 0.065 total raked units, 19 Census renters = 293×)
+
+Per-bin breakdown of overallocated buildings:
+  u_1_attached:   46,859 buildings, median 1.18×, total excess 17,255
+  u_50plus_units:  2,412 buildings, median 1.48×, total excess  9,267
+  u_3_4_units:    15,197 buildings, median 1.39×, total excess  8,693
+  u_10_19_units:   2,927 buildings, median 1.29×, total excess  4,988
+  u_2_units:      11,403 buildings, median 1.33×, total excess  4,023
+  u_20_49_units:   1,656 buildings, median 1.29×, total excess  3,383
+  u_1_detached:    2,490 buildings, median 1.42×, total excess  1,969
+
+Census bin target vs building count (overallocated buildings only):
+  u_1_attached:   census_target=329, buildings_in_bin=112, census/bldg=2.8, units_raked=0.9
+  u_1_detached:   census_target=60,  buildings_in_bin=11,  census/bldg=6.8, units_raked=0.8
+  u_3_4_units:    census_target=34,  buildings_in_bin=48,  census/bldg=0.6, units_raked=0.6
+  u_10_19_units:  census_target=22,  buildings_in_bin=15,  census/bldg=1.5, units_raked=0.9
+  u_20_49_units:  census_target=28,  buildings_in_bin=17,  census/bldg=2.2, units_raked=1.3
+  u_50plus_units: census_target=36,  buildings_in_bin=50,  census/bldg=0.9, units_raked=0.8
+
+The u_1_attached bin is the biggest contributor: many ROW homes get <1 unit after raking
+(Census says 329 attached units in the BG, but we have 112 buildings → each gets ~2.9 from
+Census, but after HU raking in step 6b, they can shrink below 1). Meanwhile the BG-level
+renter allocation pushes all Census renters through these tiny-unit buildings.
+
+QA outputs:
+  - `output/qa/renter_overalloc_bg_diagnostic.csv` — BG-level summary of bad BGs
+  - `output/qa/renter_overalloc_bldg_diagnostic.csv` — building-level detail for overallocated buildings
+  - `output/qa/step5_clamped_rows_diagnostic.csv` — top 5,000 clamped panel rows by excess
+
+Proposed fix (IMPLEMENTED 2026-02-17):
+  Three changes to `make-occupancy-vars.r`:
+
+  11a) Selective unit raking (Section 6a):
+  - Small-building bins (u_1_detached, u_1_attached, u_2_units) skip raking entirely — they
+    keep their imputed seed units. ROW homes now get 1 unit instead of fractional (e.g., 0.9).
+  - Larger bins (u_3_4_units through u_50plus_units) only rake when pipeline coverage >= 70%
+    of Census bin target. Low-coverage BG×bins keep seed units.
+  - Log output shows per-bin raking counts (raked vs skipped).
+
+  11b) Remove BG-level total HU raking (Section 6b):
+  - Previously re-scaled ALL pre-2010 buildings within each BG to hit Census hu_bg_target.
+  - This undid the selective raking decisions (e.g., giving ROW homes fractional units again).
+  - Removed entirely. Conservative caps (cap_units_building) still apply.
+
+  11c) Drop renter re-normalization (Section 7):
+  - Replaced `renters_capped * (renter_occ / sum_cap)` with `pmin(renters_scaled, units_raked)`.
+  - No BG re-scaling. Buildings cannot exceed their unit limits.
+  - BG renter totals may fall short of Census — gap absorbed by the outside good.
+  - The downstream hard clamp (renter_occ <= total_units) should now be near-zero.
+
+  11d) Structure bin refinement using num_units_base (Section 5b):
+  - Previous mapping: building_type → structure_bin had two gaps:
+    (a) All TWINs → u_2_units regardless of actual size (many are 1-unit or 3-4 conversions)
+    (b) No building_type maps to u_5_9_units (27K Census units completely unassigned)
+  - Fix: After num_units_base is computed, override structure_bin using imputed unit count.
+    ROW and DETACHED keep their Census structural categories (Census classifies by structure
+    type, not unit count). All other types refined by num_units_base thresholds.
+  - Result: 98K PIDs reassigned. Key transitions:
+    - 51K TWINs with ~1 unit moved u_2 → u_1_attached
+    - 20K SMALL_MULTI with ~2 units moved u_3_4 → u_2
+    - 2.4K LOWRISE_MULTI moved u_10_19 → u_5_9 (filling the gap)
+    - 3.3K OTHER/COMMERCIAL moved u_1_attached → u_50plus
+  - Pipeline vs Census after refinement:
+    u_1_attached: 1.13× (BG corr 0.80, was 0.56)
+    u_2_units:    1.32× (BG corr 0.55, was 0.17)
+    u_5_9_units:  0.77× (BG corr 0.85, was 0/NA)
+    u_10_19:      1.30× (was 1.43×)
+    u_50plus:     1.08× (was 0.82×)
+  - Adjacent bin pairs match Census well: u_2+u_3_4 ≈ 105K vs 101K Census (1.04×),
+    u_5_9+u_10_19 ≈ 41K vs 42K Census (0.96×). Bleed between adjacent bins is expected
+    given imputation uncertainty.
+
+  Conceptual shift: `sum(total_units)` in market shares is now the pipeline's observed rental
+  stock, not Census-matched. The outside good includes vacant units, uncaptured buildings, and
+  correctly excluded properties. Share formula unchanged.
