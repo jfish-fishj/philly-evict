@@ -1,0 +1,459 @@
+---
+title: "Retaliatory Evictions: Complaints and Filing Dynamics"
+author: "Philly Evictions Project"
+date: today
+format:
+  pdf:
+    documentclass: article
+    geometry: margin=1in
+    fontsize: 11pt
+    keep-tex: true
+    number-sections: true
+    toc: true
+    include-in-header:
+      text: |
+        \usepackage{booktabs}
+        \usepackage{dcolumn}
+        \usepackage{longtable}
+        \usepackage{adjustbox}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = here::here())
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 10,
+  fig.height = 7,
+  dpi = 300
+)
+```
+
+# Overview
+
+This document summarizes the retaliatory eviction analysis from `r/retaliatory-evictions.r`. The script investigates whether tenant complaints (code enforcement, maintenance, etc.) are associated with subsequent eviction filings --- a pattern consistent with retaliatory eviction.
+
+**Unit of analysis:** Building (PID) $\times$ period (month or quarter) panel.
+
+**Sample:** Rental buildings from the analytic sample, 2007--2024, with a pre-COVID subsample ($\leq$ 2019).
+
+**Key data inputs:**
+
+- `building_data_rental_month.parquet` --- monthly complaint and violation counts by building
+- `analytic_sample.csv` --- PID universe filter
+- `evictions_clean` + `evict_address_xwalk` --- filing-level eviction data aggregated to PID $\times$ period
+- `bldg_panel_blp` --- tenant composition (race/gender from InfoUSA)
+
+# Empirical Strategy
+
+## Complaint Definitions
+
+Complaints are categorized into three types:
+
+- **Any complaint:** `total_complaints > 0`
+- **Severe complaints:** Heat, fire, drainage, property maintenance (categories most likely to indicate habitability concerns)
+- **Non-severe complaints:** Building, emergency service, zoning, trash/weeds, license/business, program initiative, vacant property
+
+## Model 1: Distributed Lag
+
+For each complaint type $c \in \{\text{any}, \text{severe}, \text{non-severe}\}$:
+
+$$
+\text{filed\_eviction}_{it} = \sum_{k=-h}^{h} \beta_k \cdot \mathbb{1}[\text{complaint}_{i,t+k}] + \alpha_i + \gamma_t + \varepsilon_{it}
+$$
+
+where $h$ is the horizon (default 12 months or 4 quarters), $\alpha_i$ are building FE, and $\gamma_t$ are period FE. Standard errors clustered by PID.
+
+## Model 2: Local Projections DiD (LP-DiD)
+
+Uses the `lpdid` package (Girardi) to estimate dynamic treatment effects of complaint filing on eviction filings, with:
+
+- Window selection: prefers $\pm$24 periods, falls back to $\pm$12 if treated-unit retention drops below 60%
+- Non-absorbing treatment (complaints can recur)
+- Clustered by PID
+
+## Model 3: Same-Period Retaliation
+
+Baseline:
+$$
+\text{filed\_eviction}_{it} = \beta \cdot \text{filed\_complaint}_{it} + \alpha_i + \gamma_t + \varepsilon_{it}
+$$
+
+Tenant-composition augmented (tests whether retaliation varies with building demographics):
+$$
+\text{filed\_eviction}_{it} = \beta_0 \cdot C_{it} + \beta_1 \cdot C_{it} \times \widetilde{\text{Black}}_i + \beta_2 \cdot C_{it} \times \widetilde{\text{Female}}_i + \beta_3 \cdot C_{it} \times \widetilde{\text{Black}\times\text{Female}}_i + \beta_4 \cdot C_{it} \times \widetilde{\text{Coverage}}_i + \delta \cdot M_i + \alpha_i + \gamma_t + \varepsilon_{it}
+$$
+
+where $\widetilde{\cdot}$ denotes demeaned tenant composition and $M_i$ flags missing composition.
+
+## Model 4: Retaliatory Targeting
+
+Among building-periods with an eviction filing, is the eviction more likely to be retaliatory (complaint nearby) in buildings with more Black/female tenants?
+
+$$
+\text{retaliatory}_{it} = \beta_1 \cdot \widetilde{\text{Black}}_i + \beta_2 \cdot \widetilde{\text{Female}}_i + \beta_3 \cdot \widetilde{\text{Black} \times \text{Female}}_i + \delta M_i + \alpha_{\text{geo}} + \gamma_t + \varepsilon_{it}
+$$
+
+Sample restricted to eviction-filing periods. Estimated with both tract and block group FE, clustered accordingly.
+
+## Model 5: Complaint Suppression
+
+Conditional on maintenance activity (permits) and building conditions (violations), do buildings with more Black/female tenants file fewer complaints?
+
+$$
+\text{filed\_complaint}_{it} = \beta_1 \cdot \widetilde{\text{Black}}_i + \gamma_1 \cdot \text{Permits}_{it} + \gamma_2 \cdot \text{Violations}_{it} + \delta M_i + \alpha_{\text{geo}} + \gamma_t + \varepsilon_{it}
+$$
+
+Estimated with tract and block group FE on the full panel.
+
+## Bandwidth Analysis
+
+Computes the share of eviction filings that occur within $b = 1, \ldots, B$ periods of a complaint, decomposed into:
+
+- Same-period filings
+- Within-bandwidth (but not same-period)
+- Non-retaliatory (no nearby complaint)
+
+```{r load-data}
+suppressPackageStartupMessages({
+  library(data.table)
+  library(fixest)
+  library(knitr)
+  library(kableExtra)
+})
+source("r/config.R")
+cfg <- read_config()
+out_dir <- p_out(cfg, "retaliatory")
+proj_root <- here::here()
+include_tex_table <- function(path, max_width = "\\textwidth") {
+  if (!file.exists(path)) { cat("Table not found:", path); return(invisible(NULL)) }
+  lines <- readLines(path)
+  txt <- paste(lines, collapse = "\n")
+  has_float <- grepl("\\\\begin\\{table\\}", txt)
+  if (has_float) {
+    is_float <- grepl("^\\s*\\\\begin\\{table\\}|^\\s*\\\\end\\{table\\}", lines)
+    is_meta  <- grepl("^\\s*\\\\caption|^\\s*\\\\label|^\\s*\\\\centering", lines)
+    cap_lines <- trimws(lines[is_meta])
+    inner <- lines[!is_float & !is_meta]
+    cat("\\begin{table}[htbp]\n\\centering\n")
+    cat(cap_lines, sep = "\n")
+    cat("\n\\begin{adjustbox}{max width=", max_width, "}\n", sep = "")
+    cat(inner, sep = "\n")
+    cat("\n\\end{adjustbox}\n\\end{table}\n")
+  } else {
+    cat("\\begin{adjustbox}{max width=", max_width, "}\n", sep = "")
+    cat(lines, sep = "\n")
+    cat("\n\\end{adjustbox}\n")
+  }
+}
+```
+
+# Results
+
+## Bandwidth Summary
+
+What share of eviction filings occur near a complaint?
+
+```{r bandwidth-table}
+band_path <- file.path(out_dir, "retaliatory_monthly_bandwidth_summary.csv")
+if (file.exists(band_path)) {
+  band <- fread(band_path)
+  # Handle both old (bandwidth_months/same_month_share) and new column names
+  bw_col <- intersect(c("bandwidth_periods", "bandwidth_months"), names(band))[1]
+  sp_col <- intersect(c("same_period_share", "same_month_share"), names(band))[1]
+  band_show <- band[, .(
+    `Bandwidth (months)` = get(bw_col),
+    `Eviction rows` = format(eviction_rows, big.mark = ","),
+    `Same period` = paste0(round(100 * get(sp_col), 1), "%"),
+    `Within BW` = paste0(round(100 * within_bw_share, 1), "%"),
+    `Plausible only` = paste0(round(100 * plausible_only_share, 1), "%"),
+    `Non-retaliatory` = paste0(round(100 * non_retaliatory_share, 1), "%")
+  )]
+  kable(band_show, booktabs = TRUE,
+        caption = "Share of eviction filings near a complaint, by bandwidth") |>
+    kable_styling(latex_options = c("hold_position", "scale_down"))
+} else {
+  cat("Bandwidth summary not found. Run retaliatory-evictions.r first.")
+}
+```
+
+\newpage
+
+## Distributed Lag Estimates
+
+```{r distlag-plot, fig.cap="Distributed-lag coefficients: effect of complaint indicator at lag/lead $k$ on eviction filing indicator. PID and period FE; clustered by PID."}
+plot_path <- file.path(proj_root, out_dir, "retaliatory_monthly_distlag_coefficients.png")
+if (file.exists(plot_path)) {
+  knitr::include_graphics(plot_path)
+} else {
+  cat("Distributed lag plot not found.")
+}
+```
+
+```{r distlag-table}
+coef_path <- file.path(out_dir, "retaliatory_monthly_distlag_coefficients.csv")
+if (file.exists(coef_path)) {
+  coef_dist <- fread(coef_path)
+  # Show t-2 through t+3 for each sample x stem
+  key_timings <- coef_dist[timing >= -2 & timing <= 3]
+  key_wide <- dcast(key_timings,
+    sample + stem ~ timing,
+    value.var = "estimate"
+  )
+  setnames(key_wide, old = as.character(-2:3),
+           new = c("$t-2$", "$t-1$", "$t$", "$t+1$", "$t+2$", "$t+3$"))
+  kable(key_wide, booktabs = TRUE, escape = FALSE, digits = 4,
+        caption = "Distributed lag coefficients at $t-2$ through $t+3$") |>
+    kable_styling(latex_options = c("hold_position", "scale_down"))
+}
+```
+
+\newpage
+
+## Same-Period Retaliation with Tenant Composition
+
+```{r same-period-table, results='asis'}
+include_tex_table(file.path(out_dir, "retaliatory_monthly_same_period_tenant_model_table.tex"))
+```
+
+## Tenant Composition Interactions
+
+Do buildings with higher shares of Black tenants or female-headed households face more retaliatory eviction filings after a complaint? The interaction terms below test this: a positive coefficient on `Complaint × % Black` means that a complaint in a building with a higher Black tenant share is associated with a larger increase in eviction filings.
+
+```{r tenant-coefs}
+tc_path <- file.path(out_dir, "retaliatory_monthly_same_period_tenant_coefficients.csv")
+if (file.exists(tc_path)) {
+  tc <- fread(tc_path)
+  # Clean up term labels
+  tc_int <- tc[spec == "tenant_augmented" & grepl("tc_|^filed_", term)]
+  tc_int[, Term := fcase(
+    grepl("^filed_.*:tc_black_c$|^tc_black_c:filed_", term), "Complaint x % Black",
+    grepl("^filed_.*:tc_female_c$|^tc_female_c:filed_", term), "Complaint x % Female",
+    grepl("^filed_.*:tc_black_female_c$|^tc_black_female_c:filed_", term), "Complaint x % Black Female",
+    grepl("^filed_.*:tc_cov_c$|^tc_cov_c:filed_", term), "Complaint x Demog Coverage",
+    grepl("^filed_complaint$|^filed_severe$|^filed_non_severe$", term), "Complaint (main effect)",
+    default = term
+  )]
+  tc_show <- tc_int[,
+    .(Sample = fifelse(sample == "pre", "Pre-COVID", "Full"),
+      `Complaint type` = fcase(
+        stem == "complaint", "Any",
+        stem == "severe", "Severe",
+        stem == "non_severe", "Non-severe",
+        default = stem),
+      Term,
+      Estimate = round(estimate, 4),
+      SE = round(std_error, 4),
+      `$p$` = round(p_value, 3))
+  ]
+  kable(tc_show, booktabs = TRUE, escape = FALSE,
+        caption = "Same-period retaliation: complaint main effects and tenant composition interactions") |>
+    kable_styling(latex_options = c("hold_position", "scale_down"), font_size = 9)
+}
+```
+
+\newpage
+
+## Tract FE Specification (Cross-Building Variation)
+
+The main models above use building (PID) fixed effects, identifying off *within-building* time variation in complaints and evictions. The tract FE models below replace PID FE with census tract FE, also exploiting *cross-building* variation within neighborhoods. Comparison of the two identifies whether the complaint--eviction relationship is driven by within-building dynamics or cross-sectional sorting.
+
+```{r tract-fe-table, results='asis'}
+tract_tex_path <- file.path(out_dir, "retaliatory_monthly_tract_fe_model_table.tex")
+if (file.exists(tract_tex_path)) {
+  include_tex_table(tract_tex_path)
+} else {
+  cat("Tract FE model table not found. Re-run retaliatory-evictions.r to generate.")
+}
+```
+
+```{r tract-fe-coefs}
+tract_path <- file.path(out_dir, "retaliatory_monthly_tract_fe_coefficients.csv")
+if (file.exists(tract_path)) {
+  tc_tract <- fread(tract_path)
+  tc_tract_int <- tc_tract[spec == "tract_tenant_augmented" & grepl("tc_|^filed_", term)]
+  tc_tract_int[, Term := fcase(
+    grepl("^filed_.*:tc_black_c$|^tc_black_c:filed_", term), "Complaint x % Black",
+    grepl("^filed_.*:tc_female_c$|^tc_female_c:filed_", term), "Complaint x % Female",
+    grepl("^filed_.*:tc_black_female_c$|^tc_black_female_c:filed_", term), "Complaint x % Black Female",
+    grepl("^filed_.*:tc_cov_c$|^tc_cov_c:filed_", term), "Complaint x Demog Coverage",
+    grepl("^filed_complaint$|^filed_severe$|^filed_non_severe$", term), "Complaint (main effect)",
+    default = term
+  )]
+  tc_tract_show <- tc_tract_int[,
+    .(Sample = fifelse(sample == "pre", "Pre-COVID", "Full"),
+      `Complaint type` = fcase(
+        stem == "complaint", "Any",
+        stem == "severe", "Severe",
+        stem == "non_severe", "Non-severe",
+        default = stem),
+      Term,
+      Estimate = round(estimate, 4),
+      SE = round(std_error, 4),
+      `$p$` = round(p_value, 3))
+  ]
+  kable(tc_tract_show, booktabs = TRUE, escape = FALSE,
+        caption = "Tract FE: same-period retaliation with tenant composition interactions") |>
+    kable_styling(latex_options = c("hold_position", "scale_down"), font_size = 9)
+}
+```
+
+\newpage
+
+## Retaliatory Targeting by Tenant Demographics
+
+Among all eviction filings, are the *retaliatory* ones disproportionately concentrated in buildings with more Black or female tenants? This model conditions on **having an eviction filing** and asks whether the probability that it is retaliatory (complaint filed nearby) is higher in buildings with certain demographic compositions.
+
+$$
+\text{retaliatory}_{it} = \beta_1 \cdot \widetilde{\text{Black}}_i + \beta_2 \cdot \widetilde{\text{Female}}_i + \beta_3 \cdot \widetilde{\text{Black} \times \text{Female}}_i + \beta_4 \cdot \widetilde{\text{Coverage}}_i + \delta M_i + \alpha_{\text{geo}} + \gamma_t + \varepsilon_{it}
+$$
+
+**Sample:** Building-periods with at least one eviction filing. **Outcome:** Whether a complaint was filed in the same period ("same") or within $\pm B$ periods ("bw"). **FE:** Tract or block group.
+
+A positive $\beta_1$ means that, among buildings filing evictions, those with more Black tenants are more likely to be retaliating against a complaint --- i.e., retaliatory eviction is disproportionately targeted at Black-occupied buildings.
+
+```{r targeting-table, results='asis'}
+tgt_tex_path <- file.path(out_dir, "retaliatory_monthly_targeting_model_table.tex")
+if (file.exists(tgt_tex_path)) {
+  include_tex_table(tgt_tex_path)
+} else {
+  cat("Targeting model table not found. Re-run retaliatory-evictions.r to generate.")
+}
+```
+
+```{r targeting-coefs}
+tgt_path <- file.path(out_dir, "retaliatory_monthly_targeting_coefficients.csv")
+if (file.exists(tgt_path)) {
+  tgt <- fread(tgt_path)
+  tgt_show <- tgt[grepl("tc_", term), .(
+    Sample = fifelse(sample == "pre", "Pre-COVID", "Full"),
+    Outcome = fifelse(outcome == "same", "Same period", "Within BW"),
+    FE = fifelse(fe == "tract", "Tract", "Block Group"),
+    Term = fcase(
+      grepl("tc_black_c$", term), "% Black",
+      grepl("tc_female_c$", term), "% Female",
+      grepl("tc_black_female_c$", term), "% Black Female",
+      grepl("tc_cov_c$", term), "Demog Coverage",
+      default = term),
+    Estimate = round(estimate, 4),
+    SE = round(std_error, 4),
+    `$p$` = round(p_value, 3)
+  )]
+  kable(tgt_show, booktabs = TRUE, escape = FALSE,
+        caption = "Period-level targeting: among eviction-periods, is retaliation more likely in Black/female buildings?") |>
+    kable_styling(latex_options = c("hold_position", "scale_down"), font_size = 9)
+}
+```
+
+\newpage
+
+## Building-Year Retaliatory Share
+
+The period-level model above treats each month as a separate observation. An alternative aggregates to the **building $\times$ year** level: for each PID-year with at least one eviction, what share of eviction-months are retaliatory? This is regressed on tenant demographics and building observables (log area, log market value) with FE for unit count bin, building type, construction decade, stories bin, year, and tract/BG.
+
+$$
+\text{share\_retaliatory}_{iy} = \beta_1 \cdot \widetilde{\text{Black}}_i + \beta_2 \cdot \widetilde{\text{Female}}_i + \delta' X_i + \alpha_{\text{geo}} + \gamma_y + \phi_b + \varepsilon_{iy}
+$$
+
+**Sample:** PID-years with $\geq 1$ eviction filing. **FE:** Year + tract/BG + building type + unit bin + decade built + stories bin. **Controls:** log(total area), log(market value).
+
+```{r bldg-year-targeting-table, results='asis'}
+byt_tex_path <- file.path(out_dir, "retaliatory_monthly_bldg_year_targeting_model_table.tex")
+if (file.exists(byt_tex_path)) {
+  include_tex_table(byt_tex_path)
+} else {
+  cat("Building-year targeting model table not found. Re-run retaliatory-evictions.r to generate.")
+}
+```
+
+```{r bldg-year-targeting-coefs}
+byt_path <- file.path(out_dir, "retaliatory_monthly_bldg_year_targeting_coefficients.csv")
+if (file.exists(byt_path)) {
+  byt <- fread(byt_path)
+  byt_show <- byt[grepl("tc_|log_total_area|log_market_value", term), .(
+    Sample = fifelse(sample == "pre", "Pre-COVID", "Full"),
+    Outcome = fifelse(outcome == "same", "Same period", "Within BW"),
+    FE = fifelse(fe == "tract", "Tract", "Block Group"),
+    Term = fcase(
+      grepl("tc_black_c$", term), "% Black",
+      grepl("tc_female_c$", term), "% Female",
+      grepl("tc_black_female_c$", term), "% Black Female",
+      grepl("tc_cov_c$", term), "Demog Coverage",
+      term == "log_total_area", "log(Area)",
+      term == "log_market_value", "log(Mkt Value)",
+      default = term),
+    Estimate = round(estimate, 4),
+    SE = round(std_error, 4),
+    `$p$` = round(p_value, 3)
+  )]
+  kable(byt_show, booktabs = TRUE, escape = FALSE,
+        caption = "Building-year targeting: share of evictions that are retaliatory by building demographics") |>
+    kable_styling(latex_options = c("hold_position", "scale_down"), font_size = 9)
+}
+```
+
+\newpage
+
+## Complaint Suppression
+
+Controlling for maintenance activity (permits as a proxy for landlord investment) and building conditions (violations), do buildings with more Black or female tenants file fewer complaints? A negative coefficient on % Black would indicate complaint suppression --- Black tenants may be less likely to complain even when conditions warrant it, possibly due to fear of retaliation.
+
+$$
+\text{filed\_complaint}_{it} = \beta_1 \cdot \widetilde{\text{Black}}_i + \beta_2 \cdot \widetilde{\text{Female}}_i + \beta_3 \cdot \widetilde{\text{Black} \times \text{Female}}_i + \gamma_1 \cdot \text{Permits}_{it} + \gamma_2 \cdot \text{Violations}_{it} + \delta' X_i + M_i + \alpha_{\text{geo}} + \gamma_t + \phi_b + \varepsilon_{it}
+$$
+
+**Sample:** All building-periods. **Controls:** log(total area), log(market value), permits, violations. **FE:** Period + tract/BG + unit count bin + building type + decade built + stories bin.
+
+```{r suppression-table, results='asis'}
+sup_tex_path <- file.path(out_dir, "retaliatory_monthly_suppression_model_table.tex")
+if (file.exists(sup_tex_path)) {
+  include_tex_table(sup_tex_path)
+} else {
+  cat("Suppression model table not found. Re-run retaliatory-evictions.r to generate.")
+}
+```
+
+```{r suppression-coefs}
+sup_path <- file.path(out_dir, "retaliatory_monthly_suppression_coefficients.csv")
+if (file.exists(sup_path)) {
+  sup <- fread(sup_path)
+  sup_show <- sup[grepl("tc_|total_permits|total_violations", term), .(
+    Sample = fifelse(sample == "pre", "Pre-COVID", "Full"),
+    `Complaint type` = fcase(
+      stem == "complaint", "Any",
+      stem == "severe", "Severe",
+      stem == "non_severe", "Non-severe",
+      default = stem),
+    FE = fifelse(fe == "tract", "Tract", "Block Group"),
+    Term = fcase(
+      grepl("tc_black_c$", term), "% Black",
+      grepl("tc_female_c$", term), "% Female",
+      grepl("tc_black_female_c$", term), "% Black Female",
+      grepl("tc_cov_c$", term), "Demog Coverage",
+      term == "total_permits", "Permits",
+      term == "total_violations", "Violations",
+      default = term),
+    Estimate = round(estimate, 4),
+    SE = round(std_error, 4),
+    `$p$` = round(p_value, 3)
+  )]
+  kable(sup_show, booktabs = TRUE, escape = FALSE,
+        caption = "Complaint suppression: fewer complaints in buildings with more Black/female tenants?") |>
+    kable_styling(latex_options = c("hold_position", "scale_down"), font_size = 9)
+}
+```
+
+# Interpretation
+
+The distributed lag model tests whether eviction filings increase *after* a complaint is filed --- a temporal pattern consistent with landlord retaliation. The key coefficients are the positive leads ($k > 0$), which indicate elevated eviction filings in the periods following a complaint.
+
+The same-period model estimates the contemporaneous correlation, while the tenant-composition augmented version tests whether retaliatory behavior differs by the racial or gender composition of the building's tenants.
+
+The tract FE models provide a less restrictive comparison: if the PID FE and tract FE estimates are similar, the complaint--eviction relationship is not merely a cross-sectional feature of buildings that both complain and evict at higher rates; it persists within the same building over time.
+
+The **retaliatory targeting** analysis flips the question: among evictions that do happen, are retaliatory ones disproportionately concentrated in buildings with more Black/female tenants? This directly tests whether retaliation is a mechanism of demographic targeting.
+
+The **complaint suppression** analysis tests the complementary channel: controlling for maintenance and building conditions, do Black/female-occupied buildings file fewer complaints? Combined with the targeting results, this maps the full complaint--retaliation cycle and identifies where demographic disparities enter.
+
+The bandwidth analysis provides a complementary non-parametric measure: what fraction of eviction filings are "plausibly retaliatory" (occurring within $b$ periods of a complaint)?

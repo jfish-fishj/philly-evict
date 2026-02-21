@@ -1,0 +1,235 @@
+---
+title: "Hedonic Rent Regressions: Eviction Filing Intensity"
+author: "Philly Evictions Project"
+date: today
+format:
+  pdf:
+    documentclass: article
+    geometry: margin=1in
+    fontsize: 11pt
+    keep-tex: true
+    number-sections: true
+    toc: true
+    include-in-header:
+      text: |
+        \usepackage{booktabs}
+        \usepackage{dcolumn}
+        \usepackage{longtable}
+        \usepackage{adjustbox}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = here::here())
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 10,
+  fig.height = 7,
+  dpi = 300
+)
+```
+
+# Overview
+
+This document summarizes the hedonic rent regressions from `r/price-regs-eb.R`. The script estimates the relationship between eviction filing intensity (empirical Bayes shrinkage rate) and rent levels, controlling for building and neighborhood characteristics.
+
+**Unit of analysis:** Building (PID) $\times$ year panel, 2014--2019.
+
+**Key data inputs:**
+
+- `analytic_sample.csv` --- PID $\times$ year panel with rents, filing rates, building characteristics, and tenant demographics
+
+**Sample restrictions:**
+
+- Years 2014--2019 (pre-COVID hedonic)
+- Non-missing EB filing rate (pre-COVID)
+- EB filing rate $\leq 0.75$ (excludes extreme outliers)
+
+```{r load-data}
+suppressPackageStartupMessages({
+  library(data.table)
+  library(knitr)
+  library(kableExtra)
+})
+source("r/config.R")
+cfg <- read_config()
+tab_dir <- p_out(cfg, "tables")
+fig_dir <- p_out(cfg, "figs")
+proj_root <- here::here()
+include_tex_table <- function(path, max_width = "\\textwidth") {
+  if (!file.exists(path)) { cat("Table not found:", path); return(invisible(NULL)) }
+  lines <- readLines(path)
+  txt <- paste(lines, collapse = "\n")
+  has_float <- grepl("\\\\begin\\{table\\}", txt)
+  if (has_float) {
+    is_float <- grepl("^\\s*\\\\begin\\{table\\}|^\\s*\\\\end\\{table\\}", lines)
+    is_meta  <- grepl("^\\s*\\\\caption|^\\s*\\\\label|^\\s*\\\\centering", lines)
+    cap_lines <- trimws(lines[is_meta])
+    inner <- lines[!is_float & !is_meta]
+    cat("\\begin{table}[htbp]\n\\centering\n")
+    cat(cap_lines, sep = "\n")
+    cat("\n\\begin{adjustbox}{max width=", max_width, "}\n", sep = "")
+    cat(inner, sep = "\n")
+    cat("\n\\end{adjustbox}\n\\end{table}\n")
+  } else {
+    cat("\\begin{adjustbox}{max width=", max_width, "}\n", sep = "")
+    cat(lines, sep = "\n")
+    cat("\n\\end{adjustbox}\n")
+  }
+}
+```
+
+# Eviction Intensity Measures
+
+Two representations of eviction filing intensity are used:
+
+- **Binned:** Pre-COVID EB filing rate cut at 0, 5\%, 10\%, 20\%, with reference category (5--10\%]
+- **Continuous:** Raw EB filing rate (pre-COVID), entering linearly
+
+# Empirical Strategy
+
+## Fixed Effects and Controls
+
+All specifications include a rich set of fixed effects:
+
+- **Year** (absorbs rent trends)
+- **GEOID** (census tract --- absorbs neighborhood-level rent premia)
+- **Year built decade** (construction vintage)
+- **Rent source** (Altos vs other)
+- **Unit count bin** (building size category)
+- **Building type** (structural type)
+- **Quality grade** (A/B/C/D, standardized)
+- **Number of stories bin**
+
+Additional controls: $\log(\text{total area})$, $\log(\text{market value})$.
+
+Regressions are weighted by total units and clustered by PID.
+
+## Model 1: Binned Eviction Intensity (Baseline)
+
+$$
+\log(\text{rent}_{it}) = \sum_{b} \beta_b \cdot \mathbb{1}[\text{EB bin}_i = b] + \gamma_1 \cdot \text{ViolFlag}_i + \gamma_2 \cdot \text{ComplaintFlag}_i + \delta' X_i + \alpha_{\text{tract}} + \phi_t + \varepsilon_{it}
+$$
+
+where $\text{ViolFlag}_i$ indicates any unsafe/dangerous/hazardous violation and $\text{ComplaintFlag}_i$ indicates any heat/fire/drainage/plumbing complaint. Reference bin: (5--10\%].
+
+## Model 2: Continuous EB Filing Rate
+
+$$
+\log(\text{rent}_{it}) = \beta \cdot \text{EB rate}_i + \delta' X_i + \alpha_{\text{tract}} + \phi_t + \varepsilon_{it}
+$$
+
+## Models 3--4: Tenant Composition Controls
+
+Models 1 and 2 augmented with additive tenant composition controls:
+
+- `infousa_pct_black_imp` (share Black, mean-imputed)
+- `infousa_pct_female_imp` (share female HoH, mean-imputed)
+- `infousa_pct_black_female_imp` (share Black female HoH)
+- `infousa_share_persons_demog_ok_imp` (demographic coverage)
+- `tenant_comp_missing` (indicator for missing composition)
+
+## Model 5: Complaint $\times$ High-Eviction Interaction
+
+$$
+\log(\text{rent}_{it}) = \beta_1 \cdot \text{ComplaintFlag}_i + \beta_2 \cdot \text{HighEvict}_i + \beta_3 \cdot \text{ComplaintFlag}_i \times \text{HighEvict}_i + \delta' X_i + \alpha_{\text{tract}} + \phi_t + \varepsilon_{it}
+$$
+
+where $\text{HighEvict}_i = \mathbb{1}[\text{EB rate}_i > 0.20]$. Uses a sparser FE set (year + GEOID + unit count bin).
+
+# Results
+
+## Baseline: Binned and Continuous Specifications
+
+```{r baseline-table, results='asis'}
+include_tex_table(file.path(tab_dir, "hedonic_eviction_intensity_eb.tex"))
+```
+
+## Full Table: With Tenant Composition Controls
+
+```{r full-table, results='asis'}
+include_tex_table(file.path(tab_dir, "hedonic_eviction_intensity_eb_with_tenant_composition.tex"))
+```
+
+## Coefficient Comparison: Eviction Intensity Across Specifications
+
+```{r coef-compare}
+cc_path <- file.path(tab_dir, "hedonic_eviction_intensity_eb_tenant_composition_coef_compare.csv")
+if (file.exists(cc_path)) {
+  cc <- fread(cc_path)
+  if (nrow(cc)) {
+    cc_show <- cc[, .(
+      Model = model,
+      Term = gsub("filing_rate_longrun_pre2019_cuts::", "", term),
+      Estimate = round(estimate, 4),
+      SE = round(std_error, 4),
+      `$p$` = round(p_value, 3)
+    )]
+    kable(cc_show, booktabs = TRUE, escape = FALSE,
+          caption = "Eviction intensity coefficients: baseline vs tenant-composition controlled") |>
+      kable_styling(latex_options = c("hold_position", "scale_down"), font_size = 9)
+  }
+}
+```
+
+## Coefficient Plot: Binned Model
+
+```{r coefplot, fig.cap="Hedonic rent penalty by eviction intensity bin (baseline specification). Reference category: (5--10\\%]. Tract and year FE with building controls."}
+plot_path <- file.path(proj_root, fig_dir, "coefplot_hedonic_eviction_intensity_eb.png")
+if (file.exists(plot_path)) {
+  knitr::include_graphics(plot_path)
+} else {
+  cat("Coefficient plot not found. Run price-regs-eb.R first.")
+}
+```
+
+\newpage
+
+# Exploratory Diagnostics
+
+These plots residualize both rent and eviction intensity on the same controls and fixed effects used in the hedonic regressions, then examine the remaining relationship.
+
+## Residual Variation in EB Filing Rate
+
+```{r resid-hist, fig.cap="Distribution of residualized EB eviction filing rate (pre-COVID). Residualized on year + tract + building controls; weighted by total units."}
+resid_hist_path <- file.path(proj_root, fig_dir, "resid_eviction_intensity_eb_pre_covid_hist.png")
+if (file.exists(resid_hist_path)) {
+  knitr::include_graphics(resid_hist_path)
+} else {
+  cat("Residual histogram not found. Run price-regs-eb.R first.")
+}
+```
+
+## Residualized Rent vs Eviction Intensity: Bin Scatter
+
+```{r binscatter, fig.cap="Binned scatter of residualized log rent vs residualized EB filing rate. Both residualized on the same controls/FE; weighted by total units."}
+bs_path <- file.path(proj_root, fig_dir, "binscatter_resid_rent_vs_eviction.png")
+if (file.exists(bs_path)) {
+  knitr::include_graphics(bs_path)
+} else {
+  cat("Bin scatter not found. Run price-regs-eb.R first.")
+}
+```
+
+## Spline-Implied Stigma Curve
+
+```{r spline-curve, fig.cap="Spline-implied stigma curve with partial-residual binned means. The curve shows the fitted spline component of log rent as a function of EB filing rate (relative to never-filers), with 95\\% confidence band. Points are binned means of partial residuals."}
+spline_path <- file.path(proj_root, fig_dir, "spline_stigma_curve.png")
+if (file.exists(spline_path)) {
+  knitr::include_graphics(spline_path)
+} else {
+  cat("Spline stigma curve not found. Run price-regs-eb.R first.")
+}
+```
+
+\newpage
+
+# Interpretation
+
+The hedonic regressions estimate the **rent penalty** (or premium) associated with eviction filing intensity, conditional on neighborhood (tract FE) and building observables. Key quantities:
+
+- **Binned model (Model 1):** The coefficient on the 20\%+ bin relative to (5--10\%] gives the rent differential for the highest-evicting buildings vs moderate-evicting buildings *within the same tract and building type*.
+- **Continuous model (Model 2):** A one-unit increase in EB filing rate (e.g., from 0 to 1, which spans the entire range) is associated with a $\beta$-log-point change in rent. For typical variation (0 to 0.20), multiply by 0.20.
+- **Tenant composition stability:** If adding tenant composition controls (Models 3--4) substantially attenuates the eviction intensity coefficients, it suggests the rent--eviction relationship partly reflects sorting by demographics. If coefficients are stable, the relationship is robust to observable tenant composition.
+- **Complaint $\times$ high-eviction interaction (Model 5):** Tests whether buildings with both habitability complaints and high eviction rates have differentially lower rents, consistent with a "stigma" or quality channel.

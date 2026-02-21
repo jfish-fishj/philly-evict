@@ -1,1544 +1,1407 @@
-# ============================================================
-# Philly permits × evictions: ingest, clean, panel, regressions
-# Memory-conscious version (data.table-heavy)
-# ============================================================
-
-# ---- Threads / libs ----
-Sys.setenv("OMP_THREAD_LIMIT" = as.integer(parallel::detectCores() %/% 2))
-data.table::setDTthreads(parallel::detectCores() %/% 2)
+## ============================================================
+## retaliatory-evictions.r
+## ============================================================
+## Purpose: Distributed-lag and local-projections DiD relationship
+## between complaint activity and eviction filings (PID x period panel),
+## using rental-only building panels. Time unit toggles between month
+## and quarter via config/CLI, plus retaliatory bandwidth summaries.
+##
+## Inputs:
+##   - processed/panels/building_data_rental_month.parquet (default)
+##   - processed/analytic/analytic_sample.csv (PID universe filter)
+##   - processed/products evictions_clean + evict_address_xwalk
+##
+## Outputs:
+##   - output/retaliatory/*
+##   - output/logs/retaliatory-evictions.log
+## ============================================================
 
 suppressPackageStartupMessages({
   library(data.table)
   library(stringr)
-  library(lubridate)
   library(fixest)
   library(ggplot2)
-  # broom only for tidy(); if you want to drop this dep, replace with manual coeftable parsing
-  library(broom)
 })
 
-# ---- Helper sourcing (optional) ----
-safe_source <- function(f) if (file.exists(f)) source(f, chdir = TRUE)
-safe_source("r/helper-functions.R")   # may define business_regex, clean_name, theme_philly_evict
+source("r/config.R")
 
-# ---- Helpers (lightweight) ----
-to_yq <- function(d) { d <- as.IDate(d); sprintf("%d_Q%d", year(d), quarter(d)) }
-
-if (!exists("business_regex", inherits = TRUE)) {
-  business_terms <- c("LLC","L\\.?L\\.?C\\.?","INC","INC\\.","COMPANY","CO\\.","CO\\b",
-                      "LP\\b","L\\.?P\\.?","PLC","CORP\\.?","TRUST","ENTERPRISES?",
-                      "INVEST(OR|MENTS)?","PROPERT(Y|IES)","HOLDINGS?","MANAGEMENT",
-                      "GROUP","LLP","PC\\b","P\\.?C\\.?")
-  business_regex <- regex(paste0("(", paste(business_terms, collapse="|"), ")"), ignore_case = TRUE)
-}
-if (!exists("clean_name", inherits = TRUE)) {
-  clean_name <- function(x) {
-    x <- toupper(x)
-    x <- str_replace_all(x, "[^A-Z0-9\\s]", " ")
-    str_squish(x)
+parse_cli_args <- function(args) {
+  out <- list()
+  if (length(args) == 0L) return(out)
+  for (arg in args) {
+    if (!startsWith(arg, "--")) next
+    arg <- sub("^--", "", arg)
+    parts <- strsplit(arg, "=", fixed = TRUE)[[1L]]
+    key <- gsub("-", "_", parts[1L])
+    val <- if (length(parts) >= 2L) paste(parts[-1L], collapse = "=") else "TRUE"
+    out[[key]] <- val
   }
+  out
 }
 
-# ---- Paths ----
-permits_path      <- "~/Desktop/data/philly-evict/open-data/building_data_quarter.csv"
-parcels_path      <- "~/Desktop/data/philly-evict/processed/parcel_building_2024.csv"
-evict_path        <- "~/Desktop/data/philly-evict/evict_address_cleaned.csv"
-rentals_panel     <- "~/Desktop/data/philly-evict/processed/final_panel.csv"
-rentals_list_path <- "~/Desktop/data/philly-evict/processed/rent_licenses.csv"
-xwalk_path        <- "~/Desktop/data/philly-evict/philly_evict_address_agg_xwalk.csv"
-
-# ============================================================
-# 1) READ
-# ============================================================
-permits <- fread(permits_path)
-parcels <- fread(parcels_path)
-ev      <- fread(evict_path)
-rentals_data <- fread(rentals_panel, select = "PID")
-rentals_list <- fread(rentals_list_path, select = "PID")
-ev_xwalk <- fread(xwalk_path, select = c("PID","num_parcels_matched","n_sn_ss_c"))
-
-# rentals universe
-rentals <- unique(rbindlist(list(rentals_data, rentals_list), use.names = TRUE, fill = TRUE))
-rm(rentals_data, rentals_list); gc()
-
-# ============================================================
-# 2) EVICTIONS: CLEAN + FILTER
-# ============================================================
-# Pick a date column
-date_candidates <- c("d_filing","filing_date","filed_date","date")
-have_date <- intersect(names(ev), date_candidates)
-if (length(have_date) == 0L) stop("No filing date column found in evictions data.")
-date_col_ev <- have_date[1]
-
-d_e <- suppressWarnings(ymd(ev[[date_col_ev]]))
-na_mask <- is.na(d_e)
-if (any(na_mask)) d_e[na_mask] <- suppressWarnings(ymd_hms(ev[[date_col_ev]][na_mask]))
-ev[, date := as.IDate(d_e)]
-ev <- ev[!is.na(date)]
-
-# defendant cleanup + commercial flag
-if (!"defendant" %in% names(ev)) stop("Column 'defendant' not found in evictions data.")
-ev[, clean_defendant_name := clean_name(defendant)]
-ev[, commercial_alt := str_detect(clean_defendant_name, business_regex)]
-
-# address key
-addr_keys <- intersect(names(ev), c("n_sn_ss_c","normalized_address","address_key"))
-if (length(addr_keys) == 0L) stop("Need an address key column (e.g., n_sn_ss_c).")
-addr_key <- addr_keys[1]
-
-# dedup (address × plaintiff × defendant × date)
-plaintiff_col <- if ("plaintiff" %in% names(ev)) "plaintiff" else addr_key
-ev[, dup := .N, by = c(addr_key, plaintiff_col, "clean_defendant_name", date_col_ev)]
-ev[, dup := dup > 1]
-
-# additional columns if missing
-if (!"total_rent" %in% names(ev)) ev[, total_rent := NA_real_]
-if (!"commercial" %in% names(ev)) ev[, commercial := NA_character_]
-
-ev[, year := year(date)]
-ev[, year_quarter := to_yq(date)]
-
-# filter
-ev <- ev[
-  (is.na(commercial) | commercial != "t") &
-    commercial_alt == FALSE &
-    dup == FALSE &
-    year %in% 2006:2024 &
-    (is.na(total_rent) | total_rent <= 5e4) &
-    !is.na(get(addr_key))
-]
-
-# free early columns not used later
-ev[, c("dup") := NULL]; gc()
-
-# ============================================================
-# 3) EVICTION ↔ PID XWALK AND AGG TO PID×YQ
-# ============================================================
-ev_xwalk <- ev_xwalk[num_parcels_matched == 1L]
-# pad PID
-ev_xwalk[, PID := str_pad(PID, 9, "left", "0")]
-setnames(ev_xwalk, "n_sn_ss_c", addr_key)
-
-# attach PID to evictions
-setkeyv(ev_xwalk, addr_key); setkeyv(ev, addr_key)
-ev <- ev[ev_xwalk, on = addr_key, nomatch = 0L]
-
-# aggregate to PID × year_quarter
-ev_agg <- ev[!is.na(PID), .(num_evictions = .N), by = .(PID, year_quarter)]
-
-# ---- A) keep a tiny eviction frame for ev_m_par before removing 'ev' ----
-# Keep only what we need for ev_m_par
-ev_light <- ev[, .(PID, year, year_quarter,
-                   plaintiff = get(if ("plaintiff" %in% names(ev)) "plaintiff" else addr_key),
-                   defendant, total_rent = if ("total_rent" %in% names(ev)) total_rent else NA_real_,
-                   ongoing_rent = if ("ongoing_rent" %in% names(ev)) ongoing_rent else NA_real_,
-                   date)]
-
-# Minimal cleaning for rent fields & IDs
-ev_light[, PID := stringr::str_pad(PID, 9, "left", "0")]
-ev_light[, pid_yq := paste(PID, year_quarter)]
-
-
-rm(ev, ev_xwalk); gc()
-
-# ============================================================
-# 4) PERMITS CLEAN + MERGE EVICTIONS
-# ============================================================
-# Standardize PID
-if ("parcel_number" %in% names(permits)) {
-  permits[, PID := str_pad(parcel_number, 9, "left", "0")]
-} else if ("PID" %in% names(permits)) {
-  permits[, PID := str_pad(PID, 9, "left", "0")]
-} else stop("permits needs 'parcel_number' or 'PID'.")
-
-# Normalize period -> year_quarter
-if ("period" %in% names(permits)) {
-  permits[, year_quarter := str_replace(period, "-", "_")]
-} else if (!"year_quarter" %in% names(permits)) {
-  stop("permits needs 'period' or 'year_quarter'.")
+to_int <- function(x, default) {
+  if (is.null(x) || length(x) == 0L) return(as.integer(default))
+  x1 <- x[[1L]]
+  if (is.na(x1) || !nzchar(as.character(x1))) return(as.integer(default))
+  v <- suppressWarnings(as.integer(x1))
+  if (is.na(v)) as.integer(default) else v
 }
 
-# Keep only rentals PIDs (reduce size before merge)
-rentals[, PID := str_pad(PID, 9, "left", "0")]
-setkey(permits, PID); setkey(rentals, PID)
-permits <- permits[rentals, on = "PID", nomatch = 0L]
-rm(rentals); gc()
-
-# merge eviction counts
-setkey(permits, PID, year_quarter); setkey(ev_agg, PID, year_quarter)
-permits <- ev_agg[permits]                         # left join permits; NA → 0 below
-permits[is.na(num_evictions), num_evictions := 0L]
-rm(ev_agg); gc()
-
-# year
-permits[, year := as.integer(str_sub(year_quarter, 1, 4))]
-# filter years now to shrink data before more work
-permits <- permits[year %in% 2007:2024]
-gc()
-
-# ============================================================
-# 5) OUTCOMES + (Severe / Non-Severe) FLAGS
-# ============================================================
-
-# outcome
-permits[, filed_eviction := as.integer(num_evictions > 0)]
-
-# -- Severe vs Non-Severe complaint families (binary contemporaneous flags) --
-# Severe = heat, fire, drainage, property maintenance
-permits[, filed_severe := as.integer(
-  (get("heat_complaint_count"              ) >= 1) |
-    (get("fire_complaint_count"              ) >= 1) |
-    (get("drainage_complaint_count"          ) >= 1) |
-    (get("property_maintenance_complaint_count") >= 1)
-)]
-
-# Non-Severe = building, emergency service, zoning, trash/weeds, license business, program initiative, vacant property
-permits[, filed_non_severe := as.integer(
-  (get("building_complaint_count"            ) >= 1) |
-    (get("emergency_service_complaint_count"   ) >= 1) |
-    (get("zoning_complaint_count"              ) >= 1) |
-    (get("trash_weeds_complaint_count"         ) >= 1) |
-    (get("license_business_complaint_count"    ) >= 1) |
-    (get("program_initiative_complaint_count"  ) >= 1) |
-    (get("vacant_property_complaint_count"     ) >= 1)
-)]
-
-# order by panel keys
-setorder(permits, PID, year_quarter)
-
-# convenient horizon for this script
-H <- 4L  # 1-year lead/lag window
-
-# lags/leads ONLY for the severe/non-severe indicators
-permits[, paste0("lag_severe_",       1:H) := lapply(1:H, function(h) data.table::shift(filed_severe,       n=h, type="lag")),  by = PID]
-permits[, paste0("lead_severe_",      1:H) := lapply(1:H, function(h) data.table::shift(filed_severe,       n=h, type="lead")), by = PID]
-permits[, paste0("lag_non_severe_",   1:H) := lapply(1:H, function(h) data.table::shift(filed_non_severe,   n=h, type="lag")),  by = PID]
-permits[, paste0("lead_non_severe_",  1:H) := lapply(1:H, function(h) data.table::shift(filed_non_severe,  n=h, type="lead")), by = PID]
-permits[, paste0("lag_complaint_",       1:H) := lapply(1:H, function(h) data.table::shift(filed_complaint,       n=h, type="lag")),  by = PID]
-permits[, paste0("lead_complaint_",       1:H) := lapply(1:H, function(h) data.table::shift(filed_complaint,       n=h, type="lead")),  by = PID]
-
-# Build a compact RHS constructor for severe/non-severe
-lead_lag_terms_stem <- function(stem, H) {
-  c(paste0("lag_", stem, "_", H:1L), paste0("filed_", stem), paste0("lead_", stem, "_", 1L:H))
-}
-rhs_from_spec_simple <- function(stem, H, controls = character(0)) {
-  paste(c(lead_lag_terms_stem(stem, H), controls), collapse = " + ")
+to_bool <- function(x, default = FALSE) {
+  if (is.null(x) || is.na(x)) return(default)
+  tolower(as.character(x)) %chin% c("1", "true", "t", "yes", "y")
 }
 
-# ============================================================
-# 6) MERGE PARCEL CHARACTERISTICS (trim to avoid collisions)
-# ============================================================
-parcels[, PID := str_pad(PID, 9, "left", "0")]
-drop_cols <- setdiff(intersect(names(parcels), names(permits)), "PID")
-if (length(drop_cols)) parcels[, (drop_cols) := NULL]
-
-setkey(parcels, PID); setkey(permits, PID)
-permits <- parcels[permits]  # join parcels onto permits
-
-# small parcel slice (for ev_m_par later)
-parcels_min <- copy(parcels[, .(PID, num_units, total_livable_area, market_value, building_code_description_new_fixed)])
-parcels_min[, PID := stringr::str_pad(PID, 9, "left", "0")]
-
-rm(parcels); gc()
-
-# light imputations
-if (!"num_units" %in% names(permits))           permits[, num_units := NA_real_]
-if (!"total_livable_area" %in% names(permits))  permits[, total_livable_area := NA_real_]
-if (!"market_value" %in% names(permits))        permits[, market_value := NA_real_]
-
-grp_col <- if ("building_code_description_new_fixed" %in% names(permits)) "building_code_description_new_fixed" else "PID"
-permits[, num_units_imp_alt :=
-          fifelse(is.na(num_units), mean(num_units, na.rm = TRUE), num_units),
-        by = grp_col]
-
-# 'retaliatory' labeling and pid_yq
-permits[, pid_yq := paste(PID, year_quarter)]
-if (!"filed_complaint" %in% names(permits)) permits[, filed_complaint := as.integer(total_complaints >= 1)]
-if (!"lag_complaint_1" %in% names(permits)) permits[, lag_complaint_1  := data.table::shift(filed_complaint, 1L, type="lag"), by=PID]
-if (!"lead_complaint_1" %in% names(permits)) permits[, lead_complaint_1 := data.table::shift(filed_complaint, 1L, type="lead"), by=PID]
-
-permits[, retaliatory := fifelse(
-  filed_eviction == 1 & filed_complaint == 1, "Retaliatory",
-  fifelse(filed_eviction == 1 & (lag_complaint_1 == 1 | lead_complaint_1 == 1), "Pluasibly Retaliatory",
-          fifelse(filed_eviction == 1, "Non-Retaliatory", NA_character_))
-)]
-ret_tab <- permits[, .(pid_yq, retaliatory)]
-setkey(ret_tab, pid_yq)
-
-gc()
-
-# ============================================================
-# 7) REGRESSION SPEC
-# ============================================================
-REG_Y        <- "filed_eviction"
-REG_CONTROLS <- c()   # e.g., c("log1p(total_livable_area)", "log1p(market_value)")
-REG_FE       <- c("year_quarter", "PID")
-REG_CLUSTER  <- "~ PID"
-REG_WEIGHTS  <- NULL
-
-# cast FE as factors
-for (fe in REG_FE) if (fe %in% names(permits) && !is.factor(permits[[fe]])) permits[, (fe) := as.factor(get(fe))]
-
-build_fml <- function(y, x_string, fe_vec) {
-  fe_string <- if (length(fe_vec)) paste(fe_vec, collapse = " + ") else ""
-  as.formula(if (nzchar(fe_string)) sprintf("%s ~ %s | %s", y, x_string, fe_string)
-             else sprintf("%s ~ %s", y, x_string))
+normalize_time_unit <- function(x) {
+  x1 <- tolower(trimws(as.character(x %||% "")))
+  if (x1 %chin% c("month", "months", "m")) return("month")
+  if (x1 %chin% c("quarter", "quarters", "q", "year_quarter", "year-quarter", "yq")) return("quarter")
+  stop("Unsupported time_unit='", x1, "'. Use 'month' or 'quarter'.")
 }
 
-# ============================================================
-# 8) DEFINE SAMPLES
-# ============================================================
-# base_keep <- permits[total_livable_area > 1 & total_livable_area < 5e6 & !is.na(PID)]
-# dt_full <- base_keep[]
-# dt_pre  <- base_keep[year <= 2019]
-# dt_post <- base_keep[year >  2021]
-rm(permits); gc()
-
-# ============================================================
-# 9) DISTRIBUTED-LAG REGS with SEVERE / NON-SEVERE
-# ============================================================
-# Severe DL
-m_severe <- feols(
-  build_fml(REG_Y, rhs_from_spec_simple("severe", H, REG_CONTROLS), REG_FE),
-  data    = dt_pre,
-  cluster = as.formula(REG_CLUSTER),
-  weights = if (is.null(REG_WEIGHTS)) NULL else as.formula(REG_WEIGHTS)
-)
-
-# Non-Severe DL
-m_non_severe <- feols(
-  build_fml(REG_Y, rhs_from_spec_simple("non_severe", H, REG_CONTROLS), REG_FE),
-  data    = dt_pre,
-  cluster = as.formula(REG_CLUSTER),
-  weights = if (is.null(REG_WEIGHTS)) NULL else as.formula(REG_WEIGHTS)
-)
-
-cat("\n==== ETable: Distributed lags (Pre-COVID) ====\n")
-print(etable(list(Severe = m_severe, NonSevere = m_non_severe),
-             se.below = TRUE, digits = 3, signif.code = TRUE))
-
-# Compare plots
-coef_df <- rbind(
-  broom::tidy(m_severe)[, `:=`(family = "Severe")],
-  broom::tidy(m_non_severe)[, `:=`(family = "Non-Severe")]
-)
-coef_df <- coef_df[
-  grepl("^(lag_severe_|lead_severe_|filed_severe$|lag_non_severe_|lead_non_severe_|filed_non_severe$)", term)
-]
-coef_df[, timing := fifelse(grepl("^lag_", term), -as.integer(stringr::str_extract(term, "\\d+$")),
-                            fifelse(grepl("^lead_", term),  as.integer(stringr::str_extract(term, "\\d+$")), 0L))]
-setorder(coef_df, family, timing)
-
-theme_tpl <- if (exists("theme_philly_evict")) theme_philly_evict() else theme_minimal()
-p_dl <- ggplot(coef_df, aes(x = timing, y = estimate, color = family)) +
-  geom_point() +
-  geom_errorbar(aes(ymin = estimate - 1.96 * std.error, ymax = estimate + 1.96 * std.error), width = 0.2) +
-  scale_x_reverse(breaks = -H:H) +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  labs(title = "Distributed Lags (Pre-COVID): Severe vs Non-Severe",
-       caption = "Severe: heat, fire, drainage, property maintenance; Non-severe: building, emergency service, zoning, trash/weeds, license business, program initiative, vacant property.",
-       x = "Quarters relative to complaint", y = "Coefficient") +
-  theme_tpl
-print(p_dl)
-
-# ============================================================
-# 10) LP-DiD with 1-year fade-out (using lpdid)
-# ============================================================
-# Ensure package (safe install if missing)
-if (!requireNamespace("lpdid", quietly = TRUE)) {
-  tryCatch({
-    if (!requireNamespace("devtools", quietly = TRUE)) install.packages("devtools")
-    devtools::install_github("alexCardazzi/lpdid")
-  }, error = function(e) message("Install lpdid manually if needed: alexCardazzi/lpdid"))
+build_pid_filter_cmd <- function(pid_file, csv_file) {
+  sprintf(
+    "awk -F, 'NR==FNR{keep[$1]=1; next} FNR==1 || ($1 in keep)' %s %s",
+    shQuote(pid_file),
+    shQuote(csv_file)
+  )
 }
-library(lpdid)
 
-# prepare panel for lpdid
-#DTlp <- copy(dt_pre)
-DTlp = base_keep[year <= 2019]#[PID %in% sample(PID, 1000)]
-DTlp[, year_quarter := as.factor(year_quarter)]  # time FE handled internally
-# convert year_quarter to time index
-DTlp[,t_idx := as.integer(as.factor(year_quarter))]
-horiz <- 0:4  # 1 year in quarters
-DTlp_sample = DTlp[]
-# any complaint as treatment
-fit_lp_comp <- lpdid(
-  df       = DTlp_sample,
-  y          = "filed_eviction",
-  treat_status          = "filed_complaint",
-  unit_index         = "PID",
-  time_index          = "t_idx",
-  nonabsorbing_lag          = 6,
-  window = c(-4,4),
-  #ylags      = 1,                             # include ∆y lag
-  #covariates = REG_CONTROLS,                  # optional level covariates
-  cluster    = "PID"                          # cluster by PID
-)
+make_leads_lags <- function(dt, stem, h) {
+  filed_col <- paste0("filed_", stem)
+  for (k in seq_len(h)) {
+    lag_col <- paste0("lag_", stem, "_", k)
+    lead_col <- paste0("lead_", stem, "_", k)
+    dt[, (lag_col) := shift(get(filed_col), n = k, type = "lag"), by = PID]
+    dt[, (lead_col) := shift(get(filed_col), n = k, type = "lead"), by = PID]
+    dt[is.na(get(lag_col)), (lag_col) := 0L]
+    dt[is.na(get(lead_col)), (lead_col) := 0L]
+  }
+  invisible(dt)
+}
 
-# Severe as treatment
-fit_lp_sev <- lpdid(
-  df       = DTlp,
-  y          = "filed_eviction",
-  treat_status          = "filed_severe",
-  unit_index         = "PID",
-  time_index          = "t_idx",
-  nonabsorbing_lag          = 6,
-  window = c(-4,4),
-  #ylags      = 1,                             # include ∆y lag
-  #covariates = REG_CONTROLS,                  # optional level covariates
-  cluster    = "PID"                          # cluster by PID
-)
+build_rhs <- function(stem, h) {
+  terms <- c(
+    paste0("lag_", stem, "_", h:1L),
+    paste0("filed_", stem),
+    paste0("lead_", stem, "_", 1L:h)
+  )
+  paste(terms, collapse = " + ")
+}
 
-# Non-Severe as treatment
-fit_lp_nsev <-lpdid(
-  df       = DTlp,
-  y          = "filed_eviction",
-  treat_status          = "filed_non_severe",
-  unit_index         = "PID",
-  time_index          = "t_idx",
-  nonabsorbing_lag          = 6,
-  window = c(-4,4),
-  #ylags      = 1,                             # include ∆y lag
-  #covariates = REG_CONTROLS,                  # optional level covariates
-  cluster    = "PID"                          # cluster by PID
-)
+fit_dist_lag <- function(dt, stem, h, y = "filed_eviction") {
+  rhs <- build_rhs(stem, h)
+  fml <- as.formula(paste0(y, " ~ ", rhs, " | period_fe + PID"))
+  feols(fml, data = dt, cluster = ~PID, lean = TRUE)
+}
 
-# Tidy IRFs (package returns standard elements; fall back to broom if needed)
-tidy_lp <- function(fit) {
-  df = fit$coeftable
+extract_dist_lag_coefs <- function(model, stem, sample_name) {
+  ct <- as.data.table(summary(model)$coeftable, keep.rownames = "term")
+  setnames(
+    ct,
+    c("Estimate", "Std. Error", "t value", "Pr(>|t|)"),
+    c("estimate", "std_error", "t_value", "p_value")
+  )
+  pat <- paste0("^(lag_", stem, "_|filed_", stem, "$|lead_", stem, "_)")
+  ct <- ct[grepl(pat, term)]
+  if (!nrow(ct)) return(data.table())
+  ct[, timing := fifelse(
+    grepl("^lag_", term), -as.integer(str_extract(term, "\\d+$")),
+    fifelse(grepl("^lead_", term), as.integer(str_extract(term, "\\d+$")), 0L)
+  )]
+  ct[, `:=`(
+    sample = sample_name,
+    stem = stem,
+    model = "distributed_lag",
+    conf_low = estimate - 1.96 * std_error,
+    conf_high = estimate + 1.96 * std_error
+  )]
+  setorder(ct, sample, stem, timing)
+  ct
+}
+
+choose_lpdid_window <- function(dt, stem, preferred_periods = 24L, fallback_periods = 12L, min_retention = 0.60) {
+  treat_col <- paste0("filed_", stem)
+  if (!treat_col %in% names(dt)) {
+    stop("Missing treatment column for lpdid window choice: ", treat_col)
+  }
+
+  first_treat <- dt[get(treat_col) == 1L, .(first_t = min(time_index)), by = PID]
+  min_t <- suppressWarnings(min(dt$time_index, na.rm = TRUE))
+  max_t <- suppressWarnings(max(dt$time_index, na.rm = TRUE))
+
+  if (!nrow(first_treat) || !is.finite(min_t) || !is.finite(max_t)) {
+    return(data.table(
+      chosen_window_periods = fallback_periods,
+      preferred_window_periods = preferred_periods,
+      fallback_window_periods = fallback_periods,
+      treated_units = nrow(first_treat),
+      preferred_eligible_units = 0L,
+      preferred_retention = NA_real_,
+      min_retention = min_retention,
+      used_fallback = TRUE
+    ))
+  }
+
+  pref_eligible <- first_treat[
+    first_t >= (min_t + preferred_periods) & first_t <= (max_t - preferred_periods),
+    .N
+  ]
+  pref_retention <- pref_eligible / nrow(first_treat)
+  used_fallback <- is.na(pref_retention) || pref_retention < min_retention
+  chosen <- if (used_fallback) fallback_periods else preferred_periods
+
   data.table(
-    h    = as.integer(rownames(df)) -5,
-    beta = df[, "Estimate"],
-    lo   = df[, "Estimate"] - 1.96 * df[, "Std. Error"],
-    hi   = df[, "Estimate"] + 1.96 * df[, "Std. Error"]
+    chosen_window_periods = chosen,
+    preferred_window_periods = preferred_periods,
+    fallback_window_periods = fallback_periods,
+    treated_units = nrow(first_treat),
+    preferred_eligible_units = pref_eligible,
+    preferred_retention = pref_retention,
+    min_retention = min_retention,
+    used_fallback = used_fallback
   )
 }
 
-irf_sev  <- tidy_lp(fit_lp_sev)[, family := "Severe"]
-irf_nsev <- tidy_lp(fit_lp_nsev)[, family := "Non-Severe"]
-irf_both <- rbind(irf_sev, irf_nsev)
-
-p_lp <- ggplot(irf_both, aes(x = h, y = beta, color = family)) +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  geom_point() +
-  geom_errorbar(aes(ymin = lo, ymax = hi), width = 0.15) +
-  scale_x_continuous(breaks = -4:4) +
-  scale_y_continuous(limits = c(-0.03, 0.09), breaks = seq(-0.03, 0.09,0.01)) +
-  labs(x = "Horizon h (quarters)", y = "Effect on Δ^h filed_eviction",
-       subtitle = "6-quarter fade out",
-       caption = "Severe is heat, fire, drainage, property maintenance; Non-severe is building, emergency service, zoning, trash/weeds, license business, program initiative, vacant property.",
-       title = "Local Projections DiD (Pre-COVID): Severe vs Non-Severe") +
-  theme_philly_evict()
-print(p_lp)
-
-# save
-ggsave(
-  filename = "/Users/joefish/Documents/GitHub/philly-evictions/figs/lp_did_severe_nonsevere.png",
-  plot     = p_lp,
-  width    = 10,
-  height   = 7,
-  dpi      = 300,
-  bg = "white"
-)
-
-# do just complaints
-irf_comp  <- tidy_lp(fit_lp_comp)[, family := "Any Complaint"]
-p_lp_comp <- ggplot(irf_comp, aes(x = h, y = beta))
-p_lp_comp <- p_lp_comp +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  geom_point() +
-  geom_errorbar(aes(ymin = lo, ymax = hi), width = 0.15) +
-  scale_x_continuous(breaks = -4:4) +
-  scale_y_continuous(limits = c(-0.03, 0.09), breaks = seq(-0.03, 0.09,0.01)) +
-  labs(x = "Horizon h (quarters)", y = "Effect on Δ^h filed_eviction",
-       subtitle = "6-quarter fade out",
-       title = "Local Projections DiD (Pre-COVID): Any Complaint") +
-  theme_philly_evict()
-
-print(p_lp_comp)
-
-# (Optional) save tables/plots here as needed
-# save
-ggsave(
-  filename = "/Users/joefish/Documents/GitHub/philly-evictions/figs/lp_did_any_complaint.png",
-  plot     = p_lp_comp,
-  width    = 10,
-  height   = 7,
-  dpi      = 300,
-  bg = "white"
-)
-permits[,t_idx := as.integer(as.factor(year_quarter))]
-permits_sample = permits[PID %in% sample(PID, 1000)]
-
-# now fit on retaliation
-fit_lp_retaliatory <- lpdid(
-  df       = permits_sample,
-  y          = "per_no_grace",
-  treat_status          = "retaliatory",
-  unit_index         = "PID",
-  time_index          = "t_idx",
-  nonabsorbing_lag          = 12,
-  window = c(-4,8),
-  #ylags      = 1,                             # include ∆y lag
-  #covariates = REG_CONTROLS,                  # optional level covariates
-  cluster    = "PID"                          # cluster by PID
-)
-
-# now plot retaliatory
-irf_retaliatory  <- tidy_lp(fit_lp_retaliatory)[, family := "Retaliatory Status"]
-p_lp_retaliatory <- ggplot(irf_retaliatory, aes(x = h, y = beta)) +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  geom_point() +
-  geom_errorbar(aes(ymin = lo, ymax = hi), width = 0.15) +
-  scale_x_continuous(breaks = -4:4) +
-  #scale_y_continuous(limits = c(-0.03, 0.09), breaks = seq(-0.03, 0.09,0.01)) +
-  labs(x = "Horizon h (quarters)", y = "Effect on Δ^h",
-       subtitle = "Local Projections DiD (Pre-COVID): 6-quarter fade out",
-       title = "Percent of Cases for <= 1 month backrent") +
-  theme_philly_evict()
-
-print(p_lp_retaliatory)
-
-# save
-ggsave(
-  filename = "/Users/joefish/Documents/GitHub/philly-evictions/figs/lp_did_retaliatory_status.png",
-  plot     = p_lp_retaliatory,
-  width    = 10,
-  height   = 7,
-  dpi      = 300,
-  bg = "white"
-)
-permits_sample = permits[PID %in% sample(PID,1000)]
-# now do lpm w/ leads + lags
-retaliate_lpm <- feols(
-  filed_eviction ~ lead_complaint_1 + lead_complaint_2 + lead_complaint_3 + lead_complaint_4 +
-    filed_complaint +
-    lag_complaint_1 + lag_complaint_2 + lag_complaint_3 + lag_complaint_4
-  ,data    = permits_sample
-)
-
-retaliate_severe_lpm <- feols(
-  filed_eviction ~ lead_severe_1 + lead_severe_2 + lead_severe_3 + lead_severe_4 +
-    filed_severe +
-    lag_severe_1 + lag_severe_2 + lag_severe_3 + lag_severe_4
-  ,data    = permits_sample
-)
-
-retaliate_nonsevere_lpm <- feols(
-  filed_eviction ~ lead_non_severe_1 + lead_non_severe_2 + lead_non_severe_3 + lead_non_severe_4 +
-    filed_non_severe +
-    lag_non_severe_1 + lag_non_severe_2 + lag_non_severe_3 + lag_non_severe_4
-  ,data    = permits_sample
-)
-
-plot_dist_lag <- function(df_lag){
-  df_lag %>%
-    broom::tidy() %>%
-    filter(str_detect(term, "^(lag|lead|filed)")) %>%
-    mutate(timing = case_when(
-      str_detect(term, "lag_") ~ -as.integer(str_extract(term, "\\d+$")),
-      str_detect(term, "lead_") ~ as.integer(str_extract(term, "\\d+$")),
-      str_detect(term, "filed") ~ 0L
-    )) %>%
-    # add row at t= -1
-    bind_rows(tibble(
-      term = "lead_1",
-      estimate = 0,
-      std.error = 0,
-      timing = 1L
-    )) %>%
-    arrange(timing) %>%
-    ggplot(aes(x = timing, y = estimate)) +
-    geom_point() +
-    geom_errorbar(aes(ymin = estimate - 1.96 * std.error, ymax = estimate + 1.96 * std.error), width = 0.2) +
-    scale_x_reverse(breaks = -H:H) +
-    geom_hline(yintercept = 0, linetype = "dashed") +
-    labs(x = "Quarters relative to complaint", y = "Coefficient") +
-    theme_philly_evict()
-}
-retaliate_plot <- plot_dist_lag(retaliate_lpm) + labs(title = "Distributed Lags: Any Complaint")
-retaliate_severe_plot <- plot_dist_lag(retaliate_severe_lpm) + labs(title = "Distributed Lags: Severe Complaint")
-retaliate_nonsevere_plot <- plot_dist_lag(retaliate_nonsevere_lpm) + labs(title = "Distributed Lags: Non-Severe Complaint")
-
-ggsave(
-  filename = "/Users/joefish/Documents/GitHub/philly-evictions/figs/lpm_retaliatory_any_complaint.png",
-  plot     = retaliate_plot,
-  width    = 10,
-  height   = 7,
-  dpi      = 300,
-  bg = "white"
-)
-
-ggsave(
-  filename = "/Users/joefish/Documents/GitHub/philly-evictions/figs/lpm_retaliatory_severe_complaint.png",
-  plot     = retaliate_severe_plot,
-  width    = 10,
-  height   = 7,
-  dpi      = 300,
-  bg = "white"
-)
-
-ggsave(
-  filename = "/Users/joefish/Documents/GitHub/philly-evictions/figs/lpm_retaliatory_nonsevere_complaint.png",
-  plot     = retaliate_nonsevere_plot,
-  width    = 10,
-  height   = 7,
-  dpi      = 300,
-  bg = "white"
-)
-
-
-# mean number of permits by year built + market value + building type bin
-permits_agg = permits[,list(
-  total_permits = sum(total_permits),
-  electrical_permit_count = sum(electrical_permit_count),
-  mechanical_permit_count = sum(mechanical_permit_count),
-  residential_building_permit_count = sum(residential_building_permit_count),
-  plumbing_permit_count = sum(plumbing_permit_count),
-  market_value = mean(market_value, na.rm=TRUE),
-  total_livable_area = mean(total_livable_area, na.rm=TRUE),
-  total_area = mean(total_area, na.rm=TRUE),
-  num_units_imp_alt = mean(num_units_imp_alt, na.rm=TRUE),
-  num_evictions = sum(num_evictions, na.rm=TRUE),
-  building_code_description_new_fixed = first(building_code_description_new_fixed),
-  year_built = first(year_built),
-  quality_grade_fixed = first(quality_grade_fixed),
-  num_years = .N
-), by = PID]
-
-permits_agg[,eviction_filings_per_unit := num_evictions / num_units_imp_alt]
-permits_agg[,high_filing := eviction_filings_per_unit > quantile(eviction_filings_per_unit, 0.75, na.rm=TRUE)]
-permits_agg[,year_built_decade := floor(year_built / 10) * 10]
-fixest::fepois(
-  total_permits ~ high_filing + log(market_value) + log(total_livable_area) + log(num_units_imp_alt) |  year_built_decade+ building_code_description_new_fixed + quality_grade_fixed,
-  data = permits_agg[]
-)
-
-fixest::fepois(
-  residential_building_permit_count ~ high_filing + log(market_value) + log(total_livable_area) + log(num_units_imp_alt) |  year_built_decade+ building_code_description_new_fixed + quality_grade_fixed,
-  data = permits_agg[]
-)
-
-fixest::fepois(
-  mechanical_permit_count ~ high_filing + log(market_value) + log(total_livable_area) + log(num_units_imp_alt) |  year_built_decade+ building_code_description_new_fixed + quality_grade_fixed,
-  data = permits_agg[]
-)
-
-fixest::fepois(
-  electrical_permit_count ~ high_filing + log(market_value) + log(total_livable_area) + log(num_units_imp_alt) |  year_built_decade+ building_code_description_new_fixed + quality_grade_fixed,
-  data = permits_agg[]
-)
-rentals_agg = rentals_data[year <= 2019,list(
-  log_med_rent = mean(log_med_rent, na.rm=TRUE),
-  year = round(mean(year))
-), by=.(PID = as.integer(PID))]
-# merge rental data with permits
-rental_m = merge(
-  rentals_agg,
-  permits_agg %>% mutate(PID = as.integer(PID) ), by = "PID"
-)
-
-fixest::fepois(
-  total_permits ~ log_med_rent + high_filing + log(market_value) + log(total_livable_area) + log(num_units_imp_alt) | year+ year_built_decade+ building_code_description_new_fixed + quality_grade_fixed,
-  data = rental_m[]
-)
-
-
-# ============================================================
-# APPENDIX (OPTIONAL): Per-complaint lags/leads (moved to end)
-# ============================================================
-# If you still want the old per-complaint mk_lags_leads, keep it here and run after all above.
-# complaint_stems <- c("heat_complaint","emergency_service_complaint","fire_complaint",
-#   "building_complaint","complaint","vacant_property_complaint","drainage_complaint",
-#   "property_maintenance_complaint","zoning_complaint","trash_weeds_complaint",
-#   "license_business_complaint","program_initiative_complaint")
-complaint_stems <- c("filed_complaint", )
-mk_lags_leads <- function(DT, stem, H=5L) {
-  lag_names  <- paste0("lag_",  stem, "_", 1:H)
-  lead_names <- paste0("lead_", stem, "_", 1:H)
-  filed_col  <- paste0("filed_", stem)
-  if (!filed_col %in% names(DT)) DT[, (filed_col) := 0L]
-  for (h in 1:H) {
-    DT[, (lag_names[h])  := data.table::shift(get(filed_col),  n=h, type="lag"),  by=PID]
-    DT[, (lead_names[h]) := data.table::shift(get(filed_col),  n=h, type="lead"), by=PID]
+fit_lpdid <- function(dt, stem, window_periods, nonabsorbing_lag = NULL, y = "filed_eviction") {
+  if (!requireNamespace("lpdid", quietly = TRUE)) {
+    stop("Package 'lpdid' is required. Install from https://github.com/danielegirardi/lpdid")
   }
-}
-for (s in complaint_stems) mk_lags_leads(base_keep, s, H=5L)
+  treat_col <- paste0("filed_", stem)
+  if (!treat_col %in% names(dt)) stop("Missing treatment column for lpdid: ", treat_col)
 
+  if (is.null(nonabsorbing_lag) || is.na(nonabsorbing_lag)) {
+    nonabsorbing_lag <- as.integer(window_periods)
+  }
 
-# ============================================================
-# 6) MERGE PARCEL CHARACTERISTICS (trim to avoid collisions)
-# ============================================================
-parcels[, PID := str_pad(PID, 9, "left", "0")]
-# drop overlapping columns (except PID) in parcels IN-PLACE before merge
-drop_cols <- setdiff(intersect(names(parcels), names(permits)), "PID")
-if (length(drop_cols)) parcels[, (drop_cols) := NULL]
+  dat_lp <- dt[, .(
+    PID,
+    time_index,
+    y = as.numeric(get(y)),
+    treat = as.integer(get(treat_col))
+  )]
 
-setkey(parcels, PID); setkey(permits, PID)
-permits <- parcels[permits]  # join parcels onto permits
-# ---- B) small parcel slice used later for ev_m_par ----
-parcels_min <- parcels[, .(PID,
-                           num_units,
-                           total_livable_area,
-                           market_value,
-                           building_code_description_new_fixed)]
-parcels_min[, PID := stringr::str_pad(PID, 9, "left", "0")]
-
-
-rm(parcels); gc()
-
-# imputations (light)
-if (!"num_units" %in% names(permits)) permits[, num_units := NA_real_]
-if (!"total_livable_area" %in% names(permits)) permits[, total_livable_area := NA_real_]
-if (!"market_value" %in% names(permits)) permits[, market_value := NA_real_]
-
-grp_col <- if ("building_code_description_new_fixed" %in% names(permits)) "building_code_description_new_fixed" else "PID"
-permits[, num_units_imp_alt :=
-          fifelse(is.na(num_units), mean(num_units, na.rm = TRUE), num_units),
-        by = grp_col]
-
-gc()
-# ---- C) 'retaliatory' labeling off the permits panel ----
-# Ensure these exist (you already built them a few steps earlier)
-if (!"filed_complaint" %in% names(permits)) permits[, filed_complaint := 0L]
-if (!"filed_eviction" %in% names(permits))  permits[, filed_eviction := as.integer(num_evictions > 0)]
-if (!"lag_complaint_1" %in% names(permits)) permits[, lag_complaint_1 := data.table::shift(filed_complaint, 1L, type = "lag"), by = PID]
-if (!"lead_complaint_1" %in% names(permits)) permits[, lead_complaint_1 := data.table::shift(filed_complaint, 1L, type = "lead"), by = PID]
-
-permits[, pid_yq := paste(PID, year_quarter)]
-permits[, retaliatory := fifelse(
-  filed_eviction == 1 & filed_complaint == 1, "Retaliatory",
-  fifelse(filed_eviction == 1 & (lag_complaint_1 == 1 | lead_complaint_1 == 1), "Pluasibly Retaliatory",
-          fifelse(filed_eviction == 1, "Non-Retaliatory", NA_character_))
-)]
-ret_tab <- permits[, .(pid_yq, retaliatory)]
-setkey(ret_tab, pid_yq)
-
-
-
-# ============================================================
-# 7) STANDARDIZED REGRESSION BLOCK (single-edit spec)
-# ============================================================
-
-# ===== REGRESSION SPEC — EDIT HERE =====
-REG_Y        <- "filed_eviction"
-REG_CONTROLS <-c() #c("log1p(total_livable_area)", "log1p(market_value)")
-REG_FE       <-c("year_quarter","PID")
-# If you want PID FE globally, add "PID" to REG_FE
-REG_CLUSTER  <- "~PID"
-REG_WEIGHTS  <- NULL      # e.g., "~num_units" or NULL
-H            <- 4L        # lead/lag horizon used in models & plots
-# =======================================
-
-# cast FE as factors (in-place)
-for (fe in REG_FE) if (fe %in% names(permits) && !is.factor(permits[[fe]])) permits[, (fe) := as.factor(get(fe))]
-
-# Build RHS per family
-lead_lag_terms <- function(stem, H) c(paste0("lag_", stem, "_", H:1L),
-                                      paste0("filed_", stem),
-                                      paste0("lead_", stem, "_", 1L:H))
-rhs_from_spec <- function(stem, H, controls) paste(c(lead_lag_terms(stem, H), controls), collapse = " + ")
-fe_part <- function(FE) if (length(FE)) paste(FE, collapse = " + ") else ""
-build_fml <- function(y, x_string, fe_vec) {
-  fe_string <- fe_part(fe_vec)
-  as.formula(if (nzchar(fe_string)) sprintf("%s ~ %s | %s", y, x_string, fe_string)
-             else sprintf("%s ~ %s", y, x_string))
-}
-
-# Complaint families (order is output order)
-complaint_families <- data.table(
-  name = c("Heat","Fire","Building","Any","Zoning","Vacant","Drainage","PropertyMaint",
-           "EmergencyService","TrashWeeds","LicenseBusiness","ProgramInitiative"
-           ),
-  base = c("heat_complaint","fire_complaint","building_complaint","complaint",
-           "zoning_complaint","vacant_property_complaint","drainage_complaint",
-           "property_maintenance_complaint",  "emergency_service_complaint",
-           "trash_weeds_complaint","license_business_complaint",
-           "program_initiative_complaint"
-
-           )
-)
-
-fit_family <- function(dt, fam_base) {
-  x_str <- rhs_from_spec(fam_base, H, REG_CONTROLS)
-  fml  <- build_fml(REG_Y, x_str, REG_FE)
-  feols(
-    fml,
-    data    = dt,
-    cluster = as.formula(REG_CLUSTER),
-    weights = if (is.null(REG_WEIGHTS)) NULL else as.formula(REG_WEIGHTS)
+  lpdid::lpdid(
+    df = dat_lp,
+    y = "y",
+    treat_status = "treat",
+    unit_index = "PID",
+    time_index = "time_index",
+    nonabsorbing_lag = as.integer(nonabsorbing_lag),
+    window = c(-as.integer(window_periods), as.integer(window_periods)),
+    cluster = "PID"
   )
 }
 
-coef_plot <- function(model, base_stem, title, subtitle = NULL) {
-  theme_tpl <- if (exists("theme_philly_evict")) theme_philly_evict() else theme_minimal()
-  td <- broom::tidy(model)
-  # keep only stem terms
-  td <- td[str_detect(td$term, base_stem), ]
-  if (nrow(td) == 0L) return(ggplot() + labs(title = paste(title, "(no matched terms)")) + theme_tpl)
+extract_lpdid_coefs <- function(model, stem, sample_name) {
+  ct <- as.data.table(model$coeftable)
+  if (!nrow(ct)) return(data.table())
+  if (!all(c("Estimate", "Std. Error", "Pr(>|t|)") %in% names(ct))) {
+    stop("Unexpected lpdid coeftable columns.")
+  }
 
-  # build timing from term
-  timing <- rep(NA_integer_, nrow(td))
-  lag_idx  <- str_detect(td$term, "^lag_")
-  lead_idx <- str_detect(td$term, "^lead_")
-  zero_idx <- str_detect(td$term, paste0("^filed_", base_stem, "$"))
-  timing[lag_idx]  <- -as.integer(str_extract(td$term[lag_idx], "\\d+$"))
-  timing[lead_idx] <-  as.integer(str_extract(td$term[lead_idx], "\\d+$"))
-  timing[zero_idx] <- 0L
+  h_seq <- seq.int(from = as.integer(model$window[1L]), to = as.integer(model$window[2L]))
+  if (length(h_seq) == nrow(ct)) {
+    ct[, timing := h_seq]
+  } else {
+    ct[, timing := seq_len(.N) - ceiling(.N / 2L)]
+  }
 
-  td$timing <- timing
-  setDT(td); setorder(td, timing)
+  setnames(
+    ct,
+    c("Estimate", "Std. Error", "Pr(>|t|)"),
+    c("estimate", "std_error", "p_value")
+  )
+  if ("t value" %in% names(ct)) setnames(ct, "t value", "t_value")
+  if (!"t_value" %in% names(ct)) ct[, t_value := NA_real_]
 
-  ggplot(td, aes(x = timing, y = estimate)) +
-    geom_point() +
-    geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
-                      ymax = estimate + 1.96 * std.error), width = 0.2) +
-    scale_y_continuous() +
-    scale_x_reverse(breaks = -H:H) +
-    geom_hline(yintercept = 0, linetype = "dashed") +
-    labs(title = title, subtitle = subtitle, x = "Quarters relative to complaint", y = "Coefficient") +
-    theme_tpl
+  ct[, `:=`(
+    sample = sample_name,
+    stem = stem,
+    model = "lpdid",
+    conf_low = estimate - 1.96 * std_error,
+    conf_high = estimate + 1.96 * std_error
+  )]
+
+  ct[, .(
+    sample, stem, model, timing, estimate, std_error, t_value, p_value, conf_low, conf_high
+  )]
 }
 
-run_block <- function(dt, label_for_titles, subtitle_for_plots = NULL) {
-  # Fit in declared order
-  models <- vector("list", nrow(complaint_families))
-  names(models) <- complaint_families$name
-  for (i in seq_len(nrow(complaint_families))) {
-    base_i <- complaint_families$base[i]
-    models[[i]] <- fit_family(dt, base_i)
-    gc()
-  }
-
-  # Plots (on-demand)
-  plots <- vector("list", nrow(complaint_families))
-  names(plots) <- complaint_families$name
-  for (i in seq_len(nrow(complaint_families))) {
-    plots[[i]] <- coef_plot(models[[i]],
-                            base_stem = complaint_families$base[i],
-                            title     = sprintf("%s — %s", names(models)[i], label_for_titles),
-                            subtitle  = subtitle_for_plots)
-  }
-
-  et <- fixest::etable(models,
-                       order = names(models),
-                       se.below = TRUE,
-                       digits = 3)
-
-  list(models = models, plots = plots, etable = et)
-}
-
-# ============================================================
-# 8) DEFINE SAMPLES (shrink early to save memory)
-# ============================================================
-# global base filter
-base_keep <- permits[
-  total_livable_area > 1 & total_livable_area < 5e6 & !is.na(PID)
-]
-rm(permits); gc()
-# split
-dt_full <- base_keep[]
-dt_pre  <- base_keep[year <= 2019]
-dt_post <- base_keep[year > 2021]
-# free master after split if tight on RAM
-# rm( base_keep); gc()
-
-# ============================================================
-# 9) RUN & OUTPUT
-# ============================================================
-blk_full <- run_block(dt_full, "Full sample (2007–2024)")
-blk_pre  <- run_block(dt_pre,  "Pre-COVID (≤2019)", "Positive quarters = future complaints")
-#blk_post <- run_block(dt_post, "Post-2021 (>2021)", "Positive quarters = future complaints")
-
-# free split data if not needed further
-rm(dt_full, dt_pre, dt_post); gc()
-
-cat("\n==== ETable: Full sample ====\n");  print(blk_full$etable)
-cat("\n==== ETable: Pre-COVID ====\n");   print(blk_pre$etable)
-cat("\n==== ETable: Post-2021 ====\n");  print(blk_post$etable)
-
-# ------- Optional: save etables/plots (commented) -------
-# etable(blk_full$models, file = "etable_full.html")
-# etable(blk_pre$models,  file = "etable_pre.html")
-# etable(blk_post$models, file = "etable_post.html")
-# for (nm in names(blk_full$plots)) ggsave(sprintf("coef_full_%s.png", nm), blk_full$plots[[nm]], width=7, height=4, dpi=300)
-# for (nm in names(blk_pre$plots))  ggsave(sprintf("coef_pre_%s.png",  nm), blk_pre$plots[[nm]],  width=7, height=4, dpi=300)
-# for (nm in names(blk_post$plots)) ggsave(sprintf("coef_post_%s.png", nm), blk_post$plots[[nm]], width=7, height=4, dpi=300)
-
-# ============================================================
-# make_block_outputs(): combine plots + genericize etable names
-# ============================================================
-# Inputs:
-#   block : list(models, plots, etable) returned by run_block()
-#   label : character, shown in the plot title/subtitle
-# Returns:
-#   list(plot = ggplot object, etable = fixest etable)
-#
-make_block_outputs <- function(block, label = NULL) {
-  stopifnot(is.list(block), !is.null(block$models))
-  models <- block$models
-  fam_names <- names(models)
-  if (is.null(fam_names) || anyNA(fam_names)) fam_names <- paste0("M", seq_along(models))
-
-  # === 1) Build one combined coefficient-data.frame for plotting ===
-  # tidy all models and parse timing from term names
-  all_dt <- data.table::rbindlist(
-    lapply(seq_along(models), function(i) {
-      m <- models[[i]]
-      td <- broom::tidy(m)
-      if (!nrow(td)) return(NULL)
-
-      # keep only lead/lag/impact terms
-      keep <- grepl("^(lag_|lead_|filed_)", td$term)
-      td <- td[keep, , drop = FALSE]
-      if (!nrow(td)) return(NULL)
-
-      # timing: lag_k -> -k; lead_k -> +k; filed_* -> 0
-      timing <- rep(NA_integer_, nrow(td))
-      lag_idx  <- grepl("^lag_",  td$term)
-      lead_idx <- grepl("^lead_", td$term)
-      zero_idx <- grepl("^filed_", td$term)
-
-      # extract trailing integer for lag/lead
-      get_k <- function(x) {
-        k <- stringr::str_extract(x, "\\d+$")
-        as.integer(k)
-      }
-      timing[lag_idx]  <- -get_k(td$term[lag_idx])
-      timing[lead_idx] <-  get_k(td$term[lead_idx])
-      timing[zero_idx] <-  0L
-
-      data.table::data.table(
-        family   = fam_names[i],
-        term     = td$term,
-        estimate = td$estimate,
-        std.error= td$std.error,
-        timing   = timing
-      )
-    }),
-    use.names = TRUE, fill = TRUE
-  )
-  if (is.null(all_dt) || !nrow(all_dt)) {
-    warning("No lead/lag terms found across models; returning empty plot and original etable.")
-    return(list(plot = ggplot() + theme_minimal(), etable = block$etable))
-  }
-
-  # order for nicer lines
-  data.table::setorder(all_dt, family, timing)
-  all_dt[,severe := fifelse(str_detect(family, "Fire|Heat|PropertyMain|Drainage"), "Severe Complaint", "non-Severe Complaint")]
-
-  # pick end points for simple text labels (last available timing per family)
-  end_pts <- all_dt[, .SD[.N], by = family]  # last row within each family
-
-  # choose theme if available
-  theme_tpl <- if (exists("theme_philly_evict")) theme_philly_evict() else ggplot2::theme_minimal()
-
-  plt <- ggplot2::ggplot(all_dt, ggplot2::aes(x = timing, y = estimate, group = family, color = family)) +
-    ggplot2::geom_hline(yintercept = 0, linetype = "dashed") +
-    ggplot2::geom_line() +
-    ggplot2::geom_point() +
-    ggplot2::geom_errorbar(
-      ggplot2::aes(ymin = estimate - 1.96 * std.error,
-                   ymax = estimate + 1.96 * std.error),
-      width = 0.2, alpha = 0.6
-    ) +
-    # annotate which are severe / non-severe in upper right corner
-    ggplot2::scale_x_reverse(breaks = sort(unique(all_dt$timing))) +
-    ggplot2::labs(
-      title = if (is.null(label)) "Lead/Lag Coefficients" else paste0("Lead/Lag Coefficients — ", label),
-      x = "Quarters relative to complaint",
-      y = "Coefficient"
-    ) +
-    ggplot2::guides(linetype = "none", shape = "none") +  # legend replaced by end labels
-    theme_tpl +
-    ggplot2::coord_cartesian(clip = "off") +
-    ggplot2::theme(plot.margin = ggplot2::margin(5.5, 30, 5.5, 5.5)) + # room for right-side labels
-    facet_wrap(~severe, ncol=2)
-  # === 2) Rebuild etable with generic lead/lag names ===
-  # Build a dict that maps e.g. 'lag_fire_complaint_3' -> 'lag_3', 'lead_heat_complaint_2' -> 'lead_2',
-  # and 'filed_*' -> 'lag_0'
-  unique_terms <- unique(unlist(lapply(models, function(m) rownames(fixest::coeftable(m)))))
-  # some models may include FEs etc. coeftable rows are only coefficients, so this is fine.
-
-  map_term <- function(term) {
-    if (grepl("^lag_.*_(\\d+)$", term)) {
-      k <- stringr::str_replace(term, "^lag_.*_(\\d+)$", "\\1")
-      return(paste0("lag_", k))
-    }
-    if (grepl("^lead_.*_(\\d+)$", term)) {
-      k <- stringr::str_replace(term, "^lead_.*_(\\d+)$", "\\1")
-      return(paste0("lead_", k))
-    }
-    if (grepl("^filed_", term)) {
-      return("lag_0")
-    }
-    # keep other covariates / controls as-is
-    term
-  }
-  dict_vec <- stats::setNames(vapply(unique_terms, map_term, character(1L)), unique_terms)
-
-  # Fresh etable using the dict
-  et_generic <- fixest::etable(
-    models,
-    dict = dict_vec,
-    order = names(models),
-    se.below = TRUE,
-    digits = 3
-  )
-
-  list(plot = plt, etable = et_generic)
-}
-
-out_pre  <- make_block_outputs(blk_pre,  label = "Pre-COVID (≤2019)")
-out_pre$etable
-end_pts = out_pre$plot$data[, .SD[.N], by = family]
-# make the severe non-severe string as a paste(collapse = "\n)
-end_pts_str = out_pre$plot$data[, .(severe_str = paste0(unique(family), collapse = "\n")), by = severe]
-end_pts_str[,family := NA]
-out_pre$plot +
-  #scale_x_reverse(breaks = seq(-4,4)) +
-  geom_vline(aes(xintercept = 1), linetype=2)+
-  ggplot2::geom_text(
-    data = end_pts_str,
-    ggplot2::aes(
-      x = 4,  # nudge right
-      y = 0.15,
-      label = severe_str,
-
-    ),
-    hjust = 0,
-    vjust = 1,
-    size = 4,
-    show.legend = FALSE,
-    color = "Black"
-  )
-  # break legend into severe / non-sever
-
-#### no grace ####
-# ============================================================
-# No-grace (indicator) block: clustered means, plot, regression
-# ============================================================
-
-suppressPackageStartupMessages({
-  library(dplyr)
-  library(purrr)
-  library(tidyr)
-  library(broom)
-  library(forcats)
-  library(ggplot2)
-  library(ggrepel)
-  library(fixest)
-})
-
-make_no_grace_block <- function(
-    ev_m_par,
-    years        = 2010:2019,
-    bins_order   = c("1","2-4","5-9","10-19","20-49","50-99","100-199","200+"),
-    keep_groups  = c("Non-Retaliatory","Pluasibly Retaliatory","Retaliatory"),
-    ref_group    = "Non-Retaliatory",
-    ref_bin      = "1"
-) {
-  # Ensure num_units_bins exists; if not, create the standard one
-  if (!"num_units_bins" %in% names(ev_m_par)) {
-    ev_m_par <- ev_m_par %>%
-      mutate(num_units_bins = cut(
-        num_units_imp_alt %||% num_units,
-        breaks = c(-Inf,1,4,9,19,49,99,199, Inf),
-        labels = c("1","2-4","5-9","10-19","20-49","50-99","100-199","200+"),
-        ordered_result = TRUE
-      ))
-  }
-
-  # 0) Filter + factor setup
-  dat0 <- ev_m_par %>%
-    filter(year %in% years) %>%
-    filter(!is.na(no_grace), !is.na(num_units_bins), retaliatory %in% keep_groups) %>%
-    mutate(
-      units_bin   = factor(as.character(num_units_bins), levels = bins_order, ordered = TRUE),
-      retaliatory = factor(retaliatory, levels = keep_groups)
+pretty_stem <- function(stem) {
+  fifelse(
+    stem == "complaint", "Any Complaint",
+    fifelse(
+      stem == "severe", "Severe Complaint",
+      fifelse(stem == "non_severe", "Non-Severe Complaint", stem)
     )
+  )
+}
 
-  # --- helper: mean with PID-clustered CI via feols(y ~ 1) ---
-  fit_mean_ci <- function(df) {
-    m <- feols(no_grace ~ 1, cluster = ~ PID, data = df)
-    out <- tidy(m, conf.int = TRUE)
-    tibble(
-      mean = out$estimate[1],
-      lo   = out$conf.low[1],
-      hi   = out$conf.high[1],
-      n    = nrow(df),
-      n_pid= dplyr::n_distinct(df$PID)
-    )
+read_panel_slice <- function(panel_path, select_cols, pid_filter = NULL) {
+  ext <- tolower(tools::file_ext(panel_path))
+  if (ext == "parquet") {
+    if (!requireNamespace("arrow", quietly = TRUE)) {
+      stop("Package 'arrow' is required to read parquet: ", panel_path)
+    }
+    ds <- arrow::open_dataset(panel_path, format = "parquet")
+    avail <- names(ds)
+    keep <- intersect(select_cols, avail)
+    dt <- as.data.table(arrow::read_parquet(panel_path, col_select = keep))
+  } else {
+    hdr <- names(fread(panel_path, nrows = 0L))
+    keep <- intersect(select_cols, hdr)
+    if (!is.null(pid_filter) && length(pid_filter)) {
+      pid_file <- tempfile(fileext = ".txt")
+      writeLines(pid_filter, pid_file)
+      on.exit(unlink(pid_file), add = TRUE)
+      cmd <- build_pid_filter_cmd(pid_file, panel_path)
+      dt <- fread(cmd = cmd, select = keep)
+    } else {
+      dt <- fread(panel_path, select = keep)
+    }
   }
 
-  # 1) Clustered means for every (bin × group)
-  means_df <- dat0 %>%
-    group_by(units_bin, retaliatory) %>%
-    group_modify(~ fit_mean_ci(.x)) %>%
-    ungroup()
+  assert_has_cols(dt, c("parcel_number", "period", "total_complaints"), "building panel slice")
+  setDT(dt)
+  setnames(dt, "parcel_number", "PID")
+  dt[, PID := str_pad(as.character(PID), width = 9L, side = "left", pad = "0")]
 
-  # 2) Baseline per bin (weighted by cell size, like your GRACE code)
-  baseline <- means_df %>%
-    group_by(units_bin) %>%
-    summarise(base_mean = weighted.mean(mean, w = n), .groups = "drop")
+  if (!is.null(pid_filter) && length(pid_filter)) {
+    dt <- dt[PID %chin% pid_filter]
+  }
+  dt
+}
 
-  plot_df <- means_df %>%
-    left_join(baseline, by = "units_bin") %>%
-    mutate(delta_vs_base = mean - base_mean)
+compute_bandwidth_tables <- function(dt, max_bw, time_unit) {
+  out_summary <- vector("list", max_bw)
+  out_status <- vector("list", max_bw)
 
-  # 3) Plot
-  pd <- position_dodge(width = 0.55)
-  theme_tpl <- if (exists("theme_philly_evict")) theme_philly_evict() else theme_minimal(base_size = 12)
+  ev_rows <- dt[filed_eviction == 1L, .(PID, period, filed_complaint)]
+  if (!nrow(ev_rows)) {
+    stop("No eviction rows available after period-level merge.")
+  }
 
-  p <- ggplot(plot_df, aes(x = units_bin, y = mean, color = retaliatory)) +
-    geom_hline(yintercept = mean(plot_df$mean), linetype = 2, linewidth = 0.3) +
-    geom_errorbar(aes(ymin = lo, ymax = hi), width = 0, position = pd) +
-    geom_point(size = 2.2, position = pd) +
-    geom_point(
-      data = plot_df,
-      aes(x = units_bin, y = base_mean),
-      inherit.aes = FALSE, shape = 21, size = 3, stroke = 0.7, fill = NA, color = "black"
-    ) +
-    ggrepel::geom_text_repel(
-      data = plot_df %>% filter(retaliatory != ref_group),
-      aes(label = scales::label_number(accuracy = 0.1, suffix = " pp")(100 * delta_vs_base)),
-      position = position_dodge(width = 1.55),
-      vjust = -0.9, size = 3, show.legend = FALSE
-    ) +
-    scale_color_discrete(NULL) +
-    labs(
-      x = "Number of Units (bins)",
-      y = "NO GRACE (group mean, PID-clustered 95% CI)",
-      title = "No-Grace by Retaliation Status within Unit Bins",
-      subtitle = "Open black circle = baseline mean per bin; labels = difference vs baseline (percentage points)",
-      caption = "Means/CIs from feols(no_grace ~ 1, cluster = ~PID) run within each bin × group."
-    ) +
-    theme_tpl +
-    theme(legend.position = "top")
+  for (b in seq_len(max_bw)) {
+    lag_cols <- paste0("lag_complaint_", seq_len(b))
+    lead_cols <- paste0("lead_complaint_", seq_len(b))
+    win_cols <- c(lag_cols, lead_cols)
+    win_cols <- win_cols[win_cols %in% names(dt)]
 
-  # 4) Regression with bin × group interactions (LPM, PID FE optional via your upstream pipeline)
-  #    Ref levels set by factors above; this uses ref_group as the base in i()
-  dat0 <- dat0 %>%
-    mutate(
-      units_bin   = fct_relevel(units_bin, ref_bin),
-      retaliatory = fct_relevel(retaliatory, ref_group)
-    )
+    tmp <- dt[filed_eviction == 1L, c("PID", "period", "filed_complaint", win_cols), with = FALSE]
+    if (length(win_cols)) {
+      tmp[, nearby_any := as.integer(rowSums(.SD, na.rm = TRUE) > 0L), .SDcols = win_cols]
+    } else {
+      tmp[, nearby_any := 0L]
+    }
+    tmp[, within_bw := as.integer(filed_complaint == 1L | nearby_any == 1L)]
+    tmp[, status := fifelse(
+      filed_complaint == 1L, "same_period",
+      fifelse(nearby_any == 1L, "within_bw_not_same_period", "non_retaliatory")
+    )]
 
-  m_no_grace <- feols(
-    no_grace ~ i(units_bin, retaliatory, ref = ref_bin) | PID,
-    data = dat0,
-    cluster = ~ PID
-    # optionally: family = "binomial"  # but LPM is fine w/ clustered SEs
-  )
+    s <- tmp[, .(
+      bandwidth_periods = b,
+      eviction_rows = .N,
+      same_period_n = sum(filed_complaint == 1L),
+      within_bw_n = sum(within_bw == 1L),
+      plausible_only_n = sum(status == "within_bw_not_same_period"),
+      non_retaliatory_n = sum(status == "non_retaliatory")
+    )]
+    s[, `:=`(
+      time_unit = time_unit,
+      same_period_share = same_period_n / eviction_rows,
+      within_bw_share = within_bw_n / eviction_rows,
+      plausible_only_share = plausible_only_n / eviction_rows,
+      non_retaliatory_share = non_retaliatory_n / eviction_rows
+    )]
+    # Backward-compatible aliases for existing month-based consumers.
+    s[, `:=`(
+      same_month_n = if (time_unit == "month") same_period_n else NA_integer_,
+      same_month_share = if (time_unit == "month") same_period_share else NA_real_
+    )]
 
-  et_no_grace <- etable(m_no_grace, se.below = TRUE, digits = 3)
+    st <- tmp[, .N, by = status][order(status)]
+    st[, `:=`(
+      bandwidth_periods = b,
+      time_unit = time_unit,
+      share = N / sum(N)
+    )]
+
+    out_summary[[b]] <- s
+    out_status[[b]] <- st
+  }
 
   list(
-    data      = dat0,
-    means_df  = means_df,
-    plot_df   = plot_df,
-    plot      = p,
-    model     = m_no_grace,
-    etable    = et_no_grace
+    summary = rbindlist(out_summary, use.names = TRUE, fill = TRUE),
+    status = rbindlist(out_status, use.names = TRUE, fill = TRUE)
   )
 }
 
-# ===== Example usage =====
-# ---- D) ev_m_par: merge evictions + parcels + retaliatory labels ----
-# Backrent logic
-ev_light[, months_backrent := fifelse(!is.na(ongoing_rent) & ongoing_rent > 0, total_rent / ongoing_rent, NA_real_)]
-ev_light[, no_grace := as.integer(months_backrent <= 1)]
-ev_light[, grace    := as.integer(months_backrent > 1)]
-ev_light[, missing_rent := as.integer(is.na(ongoing_rent) | ongoing_rent == 0)]
+add_tenant_composition <- function(dt, bldg_panel_path, start_year, end_year, pid_filter = NULL) {
+  tenant_cols <- c(
+    "infousa_pct_black",
+    "infousa_pct_female",
+    "infousa_pct_black_female",
+    "infousa_share_persons_demog_ok"
+  )
+  bldg_obs_cols <- c(
+    "total_area", "total_units", "market_value",
+    "building_type", "num_units_bin", "year_blt_decade",
+    "num_stories_bin", "quality_grade"
+  )
+  hdr <- names(fread(bldg_panel_path, nrows = 0L))
+  keep <- intersect(c("PID", "year", "GEOID", tenant_cols, bldg_obs_cols), hdr)
+  bldg <- fread(bldg_panel_path, select = keep)
+  setDT(bldg)
+  bldg[, PID := str_pad(as.character(PID), width = 9L, side = "left", pad = "0")]
+  bldg[, year := suppressWarnings(as.integer(year))]
+  if (!is.null(pid_filter) && length(pid_filter)) bldg <- bldg[PID %chin% pid_filter]
+  bldg <- bldg[year >= start_year & year <= end_year]
+  for (cc in tenant_cols) {
+    if (!(cc %in% names(bldg))) bldg[, (cc) := NA_real_]
+    bldg[, (cc) := suppressWarnings(as.numeric(get(cc)))]
+  }
+  extra_cols <- intersect(c("GEOID", bldg_obs_cols), names(bldg))
+  bldg <- unique(bldg[, c("PID", "year", extra_cols, tenant_cols), with = FALSE], by = c("PID", "year"))
+  assert_unique(bldg, c("PID", "year"), "bldg tenant composition (PID-year)")
 
-# Optional plaintiff standardization
-plaintiff_clean_fun <- if (exists("standardize_owner_names")) standardize_owner_names else clean_name
-ev_light[, plaintiff_clean := plaintiff_clean_fun(plaintiff)]
+  setkey(dt, PID, year)
+  setkey(bldg, PID, year)
+  dt <- bldg[dt]
+  for (cc in tenant_cols) {
+    dt[, (cc) := suppressWarnings(as.numeric(get(cc)))]
+  }
+  dt[, tenant_comp_missing := as.integer(
+    is.na(infousa_pct_black) |
+      is.na(infousa_pct_female) |
+      is.na(infousa_pct_black_female) |
+      is.na(infousa_share_persons_demog_ok)
+  )]
 
-# Join parcel attributes (units, area, value)
-setkey(parcels_min, PID); setkey(ev_light, PID)
-ev_m_par <- parcels_min[ev_light, on = "PID"]
+  center_or_zero <- function(x) {
+    mu <- mean(x, na.rm = TRUE)
+    if (!is.finite(mu)) mu <- 0
+    out <- fifelse(is.na(x), mu, x) - mu
+    as.numeric(out)
+  }
+  dt[, tc_black_c := center_or_zero(infousa_pct_black)]
+  dt[, tc_female_c := center_or_zero(infousa_pct_female)]
+  dt[, tc_black_female_c := center_or_zero(infousa_pct_black_female)]
+  dt[, tc_cov_c := center_or_zero(infousa_share_persons_demog_ok)]
+  dt
+}
 
-# Impute units (by building type if available, otherwise PID)
-grp_col_ev <- if ("building_code_description_new_fixed" %in% names(ev_m_par)) "building_code_description_new_fixed" else "PID"
-ev_m_par[, num_units_imp_alt := fifelse(is.na(num_units), mean(num_units, na.rm = TRUE), num_units), by = grp_col_ev]
+fit_same_period_retaliatory <- function(dt, stem, y = "filed_eviction") {
+  treat_col <- paste0("filed_", stem)
+  fml <- as.formula(paste0(y, " ~ ", treat_col, " | period_fe + PID"))
+  feols(fml, data = dt, cluster = ~PID, lean = TRUE)
+}
 
-# Unit bins
-ev_m_par[, num_units_bins := cut(
-  num_units_imp_alt,
-  breaks = c(-Inf,1,4,9,19,49, Inf),
-  labels = c("1","2-4","5-9","10-19","20-49","50+"),
-  ordered_result = TRUE
-)]
+fit_same_period_retaliatory_tenant <- function(dt, stem, y = "filed_eviction") {
+  treat_col <- paste0("filed_", stem)
+  fml <- as.formula(
+    paste0(
+      y, " ~ ", treat_col,
+      " + ", treat_col, ":tc_black_c",
+      " + ", treat_col, ":tc_female_c",
+      " + ", treat_col, ":tc_black_female_c",
+      " + ", treat_col, ":tc_cov_c",
+      " + tenant_comp_missing | period_fe + PID"
+    )
+  )
+  feols(fml, data = dt, cluster = ~PID, lean = TRUE)
+}
 
-# Attach retaliatory label from the permits panel
-setkey(ev_m_par, pid_yq)
-ev_m_par <- ret_tab[ev_m_par, on = "pid_yq"]
+fit_same_period_tract <- function(dt, stem, y = "filed_eviction") {
+  treat_col <- paste0("filed_", stem)
+  fml <- as.formula(paste0(y, " ~ ", treat_col, " | period_fe + GEOID"))
+  feols(fml, data = dt, cluster = ~GEOID, lean = TRUE)
+}
 
-# Tidy the outcome & year filter if you want a default narrow set later
-# (You can skip filtering here; your plotting/helper handles years.)
-# ev_m_par <- ev_m_par[year %in% 2007:2019]
+fit_same_period_tract_tenant <- function(dt, stem, y = "filed_eviction") {
+  treat_col <- paste0("filed_", stem)
+  fml <- as.formula(
+    paste0(
+      y, " ~ ", treat_col,
+      " + ", treat_col, ":tc_black_c",
+      " + ", treat_col, ":tc_female_c",
+      " + ", treat_col, ":tc_black_female_c",
+      " + ", treat_col, ":tc_cov_c",
+      " + tenant_comp_missing | period_fe + GEOID"
+    )
+  )
+  feols(fml, data = dt, cluster = ~GEOID, lean = TRUE)
+}
 
-# attach retaliatory aggs to ret_tab
-ev_m_par_agg = ev_m_par[,list(any_no_grace = as.integer(any(no_grace == 1)),
-                              months_backrent = mean(months_backrent, na.rm=TRUE),
-                              sum_no_grace = sum(no_grace==1) ), by = .(PID, year_quarter)]
-# Housekeeping (free sources you no longer need)
-rm(ret_tab, ev_light)  # keep parcels_min if you want it elsewhere
-gc()
+extract_tenant_comp_coefs <- function(model, stem, sample_name, spec_name) {
+  ct <- as.data.table(summary(model)$coeftable, keep.rownames = "term")
+  if (!nrow(ct)) return(data.table())
+  setnames(
+    ct,
+    c("Estimate", "Std. Error", "t value", "Pr(>|t|)"),
+    c("estimate", "std_error", "t_value", "p_value")
+  )
+  treat_col <- paste0("^filed_", stem, "$")
+  int_pat <- paste0(
+    "(^filed_", stem, ":tc_|^tc_.*:filed_", stem, "$)"
+  )
+  ct <- ct[grepl(treat_col, term) | grepl(int_pat, term)]
+  if (!nrow(ct)) return(data.table())
+  ct[, `:=`(
+    sample = sample_name,
+    stem = stem,
+    spec = spec_name,
+    model = "same_period",
+    conf_low = estimate - 1.96 * std_error,
+    conf_high = estimate + 1.96 * std_error
+  )]
+  ct[]
+}
 
-permits <- merge(permits, ev_m_par_agg, by = c("PID","year_quarter"), all.x = TRUE)
-permits[,any_no_grace := fifelse(is.na(any_no_grace), 0L, any_no_grace)]
-permits[,sum_no_grace := fifelse(is.na(sum_no_grace), 0L, sum_no_grace)]
-permits[,per_no_grace := fifelse(num_evictions > 0, sum_no_grace / num_evictions, 0)]
-permits[,ever_filed_severe := max(filed_severe), by = PID]
-grace_model <- feols(per_no_grace ~  lead_severe_4 +
-       lead_severe_3 + lead_severe_2  +lead_severe_1+
-        filed_severe + lag_severe_1 + lag_severe_2 + lag_severe_3 + lag_severe_4 | year_quarter + PID,
-      data = permits[year %in% 2010:2019 & num_evictions > 0], cluster = ~PID)
+opts <- parse_cli_args(commandArgs(trailingOnly = TRUE))
+cfg <- read_config(opts$config %||% Sys.getenv("PHILLY_EVICTIONS_CONFIG", unset = "config.yml"))
 
-coefplot(grace_model)
+time_unit_in <- opts$time_unit %||% opts$retaliatory_time_unit
+if (is.null(time_unit_in) || !nzchar(as.character(time_unit_in))) {
+  cfg_time <- cfg$run$retaliatory_time_unit %||% ""
+  if (!nzchar(as.character(cfg_time))) {
+    bdl <- tolower(as.character(cfg$run$building_data_agg_level %||% ""))
+    cfg_time <- if (bdl %chin% c("month", "quarter")) bdl else "month"
+  }
+  time_unit_in <- cfg_time
+}
+time_unit <- normalize_time_unit(time_unit_in)
+periods_per_year <- if (time_unit == "quarter") 4L else 12L
+period_label <- if (time_unit == "quarter") "quarter" else "month"
+period_label_title <- if (time_unit == "quarter") "Quarterly" else "Monthly"
+period_label_plural <- if (time_unit == "quarter") "quarters" else "months"
+out_prefix <- paste0("retaliatory_", if (time_unit == "quarter") "quarterly" else "monthly")
 
-out_ng <- make_no_grace_block(ev_m_par)
-print(out_ng$etable)
-print(out_ng$plot)
+panel_path_default <- if (time_unit == "quarter") {
+  p_product(cfg, "building_data_rental_quarter")
+} else {
+  p_product(cfg, "building_data_rental_month")
+}
+panel_path <- opts$building_data_panel %||%
+  if (time_unit == "quarter") {
+    opts$building_data_quarter %||% panel_path_default
+  } else {
+    opts$building_data_month %||% panel_path_default
+  }
+analytic_path <- opts$analytic_sample %||% p_product(cfg, "analytic_sample")
+bldg_panel_path <- opts$bldg_panel_blp %||% p_product(cfg, "bldg_panel_blp")
+evictions_path <- opts$evictions_clean %||% p_product(cfg, "evictions_clean")
+evict_xwalk_path <- opts$evict_address_xwalk %||% p_product(cfg, "evict_address_xwalk")
+out_dir <- opts$output_dir %||% p_out(cfg, "retaliatory")
+log_file <- p_out(cfg, "logs", "retaliatory-evictions.log")
+dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
-grace_coef_df = grace_model %>%
-  broom::tidy() %>%
-  filter(str_detect(term, "^(lag_severe_|lead_severe_|filed_severe$)")) %>%
-  mutate(timing = case_when(
-    str_detect(term, "lag_severe_") ~ -as.integer(str_extract(term, "\\d+$")),
-    str_detect(term, "lead_severe_") ~ as.integer(str_extract(term, "\\d+$")),
-    str_detect(term, "filed_severe") ~ 0L
-  )) %>%
-  # add row at t= -1
-  bind_rows(tibble(
-    term = "lag_severe_-1",
-    estimate = 0,
-    std.error = 0,
-    timing = 1L
-  )) %>%
-  arrange(timing)
+start_year <- to_int(opts$start_year, 2007L)
+end_year <- to_int(opts$end_year, 2024L)
+pre_covid_end <- to_int(opts$pre_covid_end, 2019L)
+h_default <- if (time_unit == "quarter") 4L else 12L
+h <- to_int(opts$horizon, h_default)
+if (h < 1L) h <- 1L
+max_bw_default <- if (time_unit == "quarter") 2L else 6L
+max_bw <- to_int(opts$max_bandwidth, max_bw_default)
+if (max_bw < 1L) max_bw <- 1L
+max_lead_lag <- max(h, max_bw)
+lp_window_default <- 2L * periods_per_year
+lp_fallback_default <- 1L * periods_per_year
+lp_window_periods <- to_int(opts$lp_window_periods %||% opts$lp_window_months, lp_window_default)
+lp_fallback_window_periods <- to_int(opts$lp_fallback_window_periods %||% opts$lp_fallback_window_months, lp_fallback_default)
+if (lp_window_periods < 1L) lp_window_periods <- lp_window_default
+if (lp_fallback_window_periods < 1L) lp_fallback_window_periods <- lp_fallback_default
+if (lp_fallback_window_periods > lp_window_periods) lp_fallback_window_periods <- lp_window_periods
+lp_nonabsorbing_lag <- suppressWarnings(as.integer(opts$lp_nonabsorbing_lag %||% NA))
+if (length(lp_nonabsorbing_lag) == 0L || is.na(lp_nonabsorbing_lag[1L])) {
+  lp_nonabsorbing_lag <- NA_integer_
+} else {
+  lp_nonabsorbing_lag <- as.integer(lp_nonabsorbing_lag[1L])
+}
+lp_min_treated_retention <- suppressWarnings(as.numeric(opts$lp_min_treated_retention %||% "0.60"))
+if (!is.finite(lp_min_treated_retention)) lp_min_treated_retention <- 0.60
+lp_min_treated_retention <- min(max(lp_min_treated_retention, 0), 1)
 
-grace_plt <- ggplot(grace_coef_df, aes(x = timing, y = estimate)) +
-  geom_point() +
-  geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
-                    ymax = estimate + 1.96 * std.error), width = 0.2) +
-  scale_y_continuous() +
-  scale_x_reverse(breaks = -H:H) +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  labs(title = "Distributed Lag Model:\nEffect on Percent of Cases for <= 1 month back rent",
-       subtitle = "Conditional on filing > 1 eviction",
-       x = "Quarters relative to severe complaint",
-       y = "Coefficient") +
-  theme_philly_evict()
-grace_plt
+sample_mode <- to_bool(opts$sample_mode, cfg$run$sample_mode %||% FALSE)
+sample_n <- to_int(opts$sample_n, cfg$run$sample_n %||% 200000L)
+seed <- to_int(opts$seed, cfg$run$seed %||% 123L)
+use_pid_filter <- to_bool(opts$use_pid_filter, TRUE)
+skip_lpdid <- to_bool(opts$skip_lpdid, cfg$run$retaliatory_skip_lpdid %||% TRUE)
 
-
-ggsave("figs/grace_plt.png", grace_plt, width=12, height=10, dpi=300, bg = "white")
-
-no_grace_aggs = permits[num_evictions > 0, .(
-  mean(per_no_grace),
-  count = .N
-), by = .(PID, retaliatory)]
-
-no_grace_aggs[,parcel_mean := weighted.mean(V1, w = count,na.rm = T), by = PID]
-no_grace_aggs[,rel_freq := (V1 - parcel_mean) ]
-no_grace_aggs[,mean(rel_freq,na.rm =T), by = retaliatory]
-
-retal_model <- feols(per_no_grace ~ retaliatory + log(num_evictions)|  year_quarter + PID,
-      data = permits[year <= 2019 & num_evictions > 0], cluster = ~PID)
-
-summary(retal_model)
-setFixest_dict(c("retaliatoryPluasibly Retaliatory" = "Plausibly Retaliatory",
-                      "retaliatoryRetaliatory" = "Retaliatory", "per_no_grace" = "Percent No Grace"))
-baseline_mean = permits[year <= 2019 & num_evictions > 0, mean(per_no_grace, na.rm=TRUE)]
-etable(retal_model, extralines = glue::glue("Baseline MeanL {scales::percent(baseline_mean, accuracy = 0.1)}"), se.below = TRUE, digits = 3)
-
-
-# group all non-severe into one category for regressions
-dt_pre[,non_severe := as.numeric(filed_vacant_property_complaint |
-                      filed_zoning_complaint |
-         filed_building_complaint |
-         filed_emergency_service_complaint|
-                      filed_trash_weeds_complaint |
-                      filed_license_business_complaint |
-                      filed_program_initiative_complaint
-        )]
-dt_pre[,filed_non_severe := as.integer(non_severe > 0)]
-# lead lags of non-severe
-dt_pre[,
-                 `:=`(
-                   lag_non_severe_1 = data.table::shift((filed_non_severe),  n = 1, type = "lag"),
-                   lag_non_severe_2 = data.table::shift((filed_non_severe),  n = 2, type = "lag"),
-                   lag_non_severe_3 = data.table::shift((filed_non_severe),  n = 3, type = "lag"),
-                   lag_non_severe_4 = data.table::shift((filed_non_severe),  n = 4, type = "lag"),
-                   lag_non_severe_5 = data.table::shift((filed_non_severe),  n = 5, type = "lag"),
-                   lead_non_severe_1= data.table::shift((filed_non_severe),  n = 1, type = "lead"),
-                   lead_non_severe_2= data.table::shift((filed_non_severe),  n = 2, type = "lead"),
-                   lead_non_severe_3= data.table::shift((filed_non_severe),  n = 3, type = "lead"),
-                   lead_non_severe_4= data.table::shift((filed_non_severe),  n = 4, type = "lead"),
-                   lead_non_severe_5= data.table::shift((filed_non_severe),  n = 5, type = "lead")
-                 ),  by = PID]
-
-dt_pre[,filed_severe := as.integer(filed_heat_complaint |
-                             filed_fire_complaint |
-                             filed_property_maintenance_complaint |
-                             filed_drainage_complaint
-)]
-
-# severe leads / lags
-dt_pre[,
-        `:=`(
-          lag_severe_1 = data.table::shift((filed_sever),  n = 1, type = "lag"),
-          lag_severe_2 = data.table::shift((filed_sever),  n = 2, type = "lag"),
-          lag_severe_3 = data.table::shift((filed_sever),  n = 3, type = "lag"),
-          lag_severe_4 = data.table::shift((filed_sever),  n = 4, type = "lag"),
-          lag_severe_5 = data.table::shift((filed_sever),  n = 5, type = "lag"),
-          lead_severe_1= data.table::shift((filed_sever),  n = 1, type = "lead"),
-          lead_severe_2= data.table::shift((filed_sever),  n = 2, type = "lead"),
-          lead_severe_3= data.table::shift((filed_sever),  n = 3, type = "lead"),
-          lead_severe_4= data.table::shift((filed_sever),  n = 4, type = "lead"),
-          lead_severe_5= data.table::shift((filed_sever),  n = 5, type = "lead")
-        ),  by = PID]
-
-
-# regressions
-m_non_severe <- feols(
-  build_fml(
-    REG_Y,
-    rhs_from_spec("non_severe", H, REG_CONTROLS),
-    REG_FE
-  ),
-  data    = dt_pre,
-  cluster = as.formula(REG_CLUSTER),
-  weights = if (is.null(REG_WEIGHTS)) NULL else as.formula(REG_WEIGHTS)
+logf("=== Starting retaliatory-evictions.r ===", log_file = log_file)
+logf("Config: ", cfg$meta$config_path, log_file = log_file)
+logf(period_label_title, " panel input: ", panel_path, log_file = log_file)
+logf("Analytic PID universe input: ", analytic_path, log_file = log_file)
+logf("BLP panel input (tenant composition): ", bldg_panel_path, log_file = log_file)
+logf("Output dir: ", out_dir, log_file = log_file)
+logf(
+  "Time unit=", time_unit,
+  ", periods_per_year=", periods_per_year,
+  ", settings: years=", start_year, "-", end_year,
+  ", pre_covid_end=", pre_covid_end,
+  ", horizon=", h,
+  ", max_bandwidth=", max_bw,
+  ", lp_window_periods=", lp_window_periods,
+  ", lp_fallback_window_periods=", lp_fallback_window_periods,
+  ", lp_min_treated_retention=", lp_min_treated_retention,
+  ", lp_nonabsorbing_lag=", if (is.na(lp_nonabsorbing_lag)) "auto" else lp_nonabsorbing_lag,
+  ", skip_lpdid=", skip_lpdid,
+  ", sample_mode=", sample_mode,
+  ", sample_n=", sample_n,
+  ", use_pid_filter=", use_pid_filter,
+  log_file = log_file
 )
 
-feols(filed_eviction ~ lag_non_severe_4 + lag_non_severe_3 + lag_non_severe_2 +
-        lag_non_severe_1 + filed_non_severe + lead_non_severe_1 +
-        lead_non_severe_2 + lead_non_severe_3 + lead_non_severe_4 |year_quarter + PID, data = dt_pre, cluster = ~PID) |>
-  summary()
+if (!file.exists(panel_path)) stop(period_label_title, " building panel not found: ", panel_path)
+if (!file.exists(analytic_path)) stop("Analytic sample not found: ", analytic_path)
+if (!file.exists(bldg_panel_path)) stop("BLP panel not found: ", bldg_panel_path)
+if (!file.exists(evictions_path)) stop("Evictions clean not found: ", evictions_path)
+if (!file.exists(evict_xwalk_path)) stop("Eviction xwalk not found: ", evict_xwalk_path)
+if (!skip_lpdid && !requireNamespace("lpdid", quietly = TRUE)) {
+  stop("Package 'lpdid' is required. Install from https://github.com/danielegirardi/lpdid")
+}
 
-m_severe <- feols(
-  build_fml(
-    REG_Y,
-    rhs_from_spec("severe", H, REG_CONTROLS),
-    REG_FE
-  ),
-  data    = dt_pre,
-  cluster = as.formula(REG_CLUSTER),
-  weights = if (is.null(REG_WEIGHTS)) NULL else as.formula(REG_WEIGHTS)
+pid_filter <- NULL
+if (use_pid_filter) {
+  pid_dt <- fread(analytic_path, select = "PID")
+  pid_dt[, PID := str_pad(as.character(PID), width = 9L, side = "left", pad = "0")]
+  pid_dt <- unique(pid_dt[!is.na(PID) & nzchar(PID)], by = "PID")
+  if (!nrow(pid_dt)) stop("No PID rows found in analytic sample.")
+
+  if (sample_mode && sample_n > 0L && sample_n < nrow(pid_dt)) {
+    set.seed(seed)
+    pid_dt <- pid_dt[sample(.N, sample_n)]
+    logf("Sample mode active: retained ", nrow(pid_dt), " PIDs", log_file = log_file)
+  }
+  pid_filter <- pid_dt$PID
+}
+
+complaint_candidates <- c(
+  "heat_complaint_count", "fire_complaint_count", "drainage_complaint_count",
+  "property_maintenance_complaint_count", "building_complaint_count",
+  "emergency_service_complaint_count", "zoning_complaint_count",
+  "trash_weeds_complaint_count", "license_business_complaint_count",
+  "program_initiative_complaint_count", "vacant_property_complaint_count"
 )
-summary(m_severe)
-coefplot(m_severe)
 
-# extract and plot severe; non severe
-coef_df = broom::tidy(m_severe) %>%
-  mutate(family = "Severe Complaint") %>%
-  bind_rows(broom::tidy(m_non_severe) %>%
-              mutate(family = "Non-Severe Complaint")) %>%
-  filter(str_detect(term, "^(lag_severe_|lead_severe_|lag_non_severe_|lead_non_severe_|filed_severe$|filed_non_severe$)")) %>%
-  mutate(timing = case_when(
-    str_detect(term, "^lag_severe_") ~ -as.integer(str_extract(term, "\\d+$")),
-    str_detect(term, "^lead_severe_") ~  as.integer(str_extract(term, "\\d+$")),
-    str_detect(term, "^lag_non_severe_") ~ -as.integer(str_extract(term, "\\d+$")),
-    str_detect(term, "^lead_non_severe_") ~  as.integer(str_extract(term, "\\d+$")),
-    str_detect(term, "^filed_severe$") ~ 0L,
-    str_detect(term, "^filed_non_severe$") ~ 0L,
-    TRUE ~ NA_integer_
-  )) %>%
-  arrange(family, timing)
+need_cols <- c("parcel_number", "period", "total_complaints", "total_severe_complaints",
+               "total_permits", "total_violations", complaint_candidates)
+dt <- read_panel_slice(panel_path, need_cols, pid_filter = pid_filter)
+assert_has_cols(dt, c("PID", "period", "total_complaints"), paste0(period_label, " building panel slice"))
 
+dt[, period := as.character(period)]
+dt[, year := suppressWarnings(as.integer(substr(period, 1L, 4L)))]
+if (time_unit == "month") {
+  dt[, period_num := suppressWarnings(as.integer(substr(period, 6L, 7L)))]
+} else {
+  dt[, period := gsub("_", "-", toupper(period))]
+  dt[, period_num := suppressWarnings(as.integer(str_extract(period, "(?<=Q)[1-4]$")))]
+}
+dt <- dt[!is.na(PID) & !is.na(year) & !is.na(period_num)]
+dt <- dt[year >= start_year & year <= end_year]
+dt <- add_tenant_composition(
+  dt,
+  bldg_panel_path = bldg_panel_path,
+  start_year = start_year,
+  end_year = end_year,
+  pid_filter = pid_filter
+)
+assert_unique(dt, c("PID", "period"), paste0("retaliatory ", period_label, " panel (PID-period)"))
 
-ggplot(coef_df, aes(x = timing, y = estimate, color = family)) +
-  geom_point() +
-  geom_errorbar(aes(ymin = estimate - 1.96 * std.error,
-                    ymax = estimate + 1.96 * std.error), width = 0.2) +
-  scale_y_continuous() +
+# Derive census tract from block-group GEOID for tract FE models
+if ("GEOID" %in% names(dt)) {
+  dt[, census_tract := substr(as.character(GEOID), 1L, 11L)]
+}
 
-  scale_x_reverse(breaks = -H:H) +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  labs(title = "Severe Complaints Lead/Lag Coefficients - Pre-COVID",
-       caption = "Severe complaints: heat, fire, drainage, property maintenance. \nNon-severe complaints: building, emergency service, zoning, trash/weeds, license business,",
-       x = "Quarters relative to complaint", y = "Coefficient") +
-  theme_philly_evict()
+logf(period_label_title, " panel rows loaded: ", nrow(dt), ", PIDs: ", uniqueN(dt$PID), log_file = log_file)
+logf(
+  "Tenant composition non-missing share: black=",
+  round(mean(!is.na(dt$infousa_pct_black), na.rm = TRUE), 4),
+  ", female=", round(mean(!is.na(dt$infousa_pct_female), na.rm = TRUE), 4),
+  ", black_female=", round(mean(!is.na(dt$infousa_pct_black_female), na.rm = TRUE), 4),
+  ", demog_ok=", round(mean(!is.na(dt$infousa_share_persons_demog_ok), na.rm = TRUE), 4),
+  log_file = log_file
+)
 
+# Period-level eviction filings from evictions_clean + xwalk.
+ev <- fread(evictions_path, select = c("d_filing", "n_sn_ss_c", "commercial"))
+xw <- fread(evict_xwalk_path, select = c("PID", "n_sn_ss_c", "num_parcels_matched"))
+setDT(ev)
+setDT(xw)
+assert_has_cols(ev, c("d_filing", "n_sn_ss_c"), "evictions_clean (subset)")
+assert_has_cols(xw, c("PID", "n_sn_ss_c", "num_parcels_matched"), "evict_address_xwalk (subset)")
 
-#### maintence stuff ####
-permits[,quality_grade_coarse := fifelse(
-  quality_grade_fixed %in% c("A+","A","A-"), "A",
-  fifelse(quality_grade_fixed %in% c("B+","B","B-"), "B",
-          fifelse(quality_grade_fixed %in% c("C+","C","C-"), "C",
-                  fifelse(quality_grade_fixed %in% c("D+","D","D-"), "D",
-                          fifelse(quality_grade_fixed %in% c("F+","F","F-"), "F", "Unknown")))))
+xw <- xw[num_parcels_matched == 1L]
+xw[, PID := str_pad(as.character(PID), width = 9L, side = "left", pad = "0")]
+xw <- unique(xw[, .(PID, n_sn_ss_c)], by = c("PID", "n_sn_ss_c"))
+setkey(xw, n_sn_ss_c)
+setkey(ev, n_sn_ss_c)
+ev <- ev[xw, nomatch = 0L]
+ev <- ev[is.na(commercial) | tolower(commercial) != "t"]
+
+ev[, filing_date_chr := substr(as.character(d_filing), 1L, 10L)]
+ev[, filing_date := as.IDate(filing_date_chr, format = "%Y-%m-%d")]
+ev <- ev[!is.na(filing_date)]
+ev[, year := as.integer(substr(as.character(filing_date), 1L, 4L))]
+ev <- ev[year >= start_year & year <= end_year]
+if (time_unit == "month") {
+  ev[, period := substr(as.character(filing_date), 1L, 7L)]
+} else {
+  ev[, mm := suppressWarnings(as.integer(substr(as.character(filing_date), 6L, 7L)))]
+  ev[, qtr := as.integer((mm - 1L) %/% 3L + 1L)]
+  ev <- ev[!is.na(qtr)]
+  ev[, period := paste0(year, "-Q", qtr)]
+}
+ev_agg <- ev[, .(num_filings = .N), by = .(PID, period)]
+assert_unique(ev_agg, c("PID", "period"), paste0(period_label, " eviction aggregates"))
+
+setkey(dt, PID, period)
+setkey(ev_agg, PID, period)
+dt[ev_agg, num_filings := i.num_filings]
+dt[is.na(num_filings), num_filings := 0L]
+
+num_cols <- setdiff(names(dt), c("PID", "period"))
+for (cc in num_cols) {
+  suppressWarnings(dt[, (cc) := as.numeric(get(cc))])
+  dt[is.na(get(cc)), (cc) := 0]
+}
+
+if ("total_severe_complaints" %in% names(dt) &&
+    dt[, any(total_severe_complaints > total_complaints, na.rm = TRUE)]) {
+  stop("Invalid panel: total_severe_complaints exceeds total_complaints for at least one PID-period.")
+}
+
+dt[, filed_eviction := as.integer(num_filings > 0)]
+dt[, filed_complaint := as.integer(total_complaints > 0)]
+
+severe_candidates <- c(
+  "heat_complaint_count", "fire_complaint_count",
+  "drainage_complaint_count", "property_maintenance_complaint_count"
+)
+non_severe_candidates <- c(
+  "building_complaint_count", "emergency_service_complaint_count",
+  "zoning_complaint_count", "trash_weeds_complaint_count",
+  "license_business_complaint_count", "program_initiative_complaint_count",
+  "vacant_property_complaint_count"
+)
+
+severe_cols <- intersect(severe_candidates, names(dt))
+non_severe_cols <- intersect(non_severe_candidates, names(dt))
+if (!length(non_severe_cols)) stop("No non-severe complaint columns available in ", period_label, " panel.")
+
+if ("total_severe_complaints" %in% names(dt)) {
+  dt[, filed_severe := as.integer(as.numeric(total_severe_complaints) > 0)]
+  severe_source <- "total_severe_complaints"
+} else {
+  if (!length(severe_cols)) stop("No severe complaint columns available in ", period_label, " panel.")
+  dt[, filed_severe := as.integer(rowSums(.SD > 0, na.rm = TRUE) > 0L), .SDcols = severe_cols]
+  severe_source <- paste(severe_cols, collapse = ",")
+}
+dt[, filed_non_severe := as.integer(rowSums(.SD > 0, na.rm = TRUE) > 0L), .SDcols = non_severe_cols]
+
+dt[, time_index := year * periods_per_year + period_num]
+setorder(dt, PID, time_index)
+
+make_leads_lags(dt, stem = "complaint", h = max_lead_lag)
+make_leads_lags(dt, stem = "severe", h = max_lead_lag)
+make_leads_lags(dt, stem = "non_severe", h = max_lead_lag)
+
+dt[, period_fe := as.factor(period)]
+
+# No separate panel_pre copy — filter inline via dt[year <= pre_covid_end] to save memory
+n_pre <- dt[year <= pre_covid_end, .N]
+if (n_pre == 0L) stop("Pre-COVID sample is empty after filters.")
+
+logf("Panel rows (full, ", period_label, "): ", nrow(dt), ", PIDs: ", uniqueN(dt$PID), log_file = log_file)
+logf("Panel rows (pre-covid, ", period_label, "): ", n_pre, ", PIDs: ", dt[year <= pre_covid_end, uniqueN(PID)], log_file = log_file)
+logf("Eviction filing rate (full): ", round(mean(dt$filed_eviction, na.rm = TRUE), 6), log_file = log_file)
+logf("Any complaint rate (full): ", round(mean(dt$filed_complaint, na.rm = TRUE), 6), log_file = log_file)
+logf("Severe complaint source: ", severe_source, log_file = log_file)
+
+model_specs <- data.table(
+  sample = c("full", "full", "full", "pre", "pre", "pre"),
+  stem = c("complaint", "severe", "non_severe", "complaint", "severe", "non_severe")
+)
+
+# Distributed lag specs.
+# NOTE: model objects are discarded after coef extraction to avoid OOM on large panels.
+# etable is called per-model and concatenated, instead of storing all models in memory.
+etable_dist_lines <- list()
+coef_dist_list <- list()
+for (i in seq_len(nrow(model_specs))) {
+  s <- model_specs$sample[i]
+  stem <- model_specs$stem[i]
+  key <- paste0(s, "_", stem)
+  dat <- if (s == "pre") dt[year <= pre_covid_end] else dt
+  m <- fit_dist_lag(dat, stem = stem, h = h)
+  coef_dist_list[[key]] <- extract_dist_lag_coefs(m, stem = stem, sample_name = s)
+  etable_dist_lines[[key]] <- capture.output(etable(m, se.below = TRUE, digits = 3))
+  logf("Fitted dist-lag model: ", key, " | N=", nobs(m), log_file = log_file)
+  rm(m, dat); gc()
+}
+coef_dist <- rbindlist(coef_dist_list, use.names = TRUE, fill = TRUE)
+coef_dist[, stem_label := pretty_stem(stem)]
+coef_dist[, sample_label := fifelse(sample == "pre", paste0("Pre-COVID (<=", pre_covid_end, ")"), "Full Sample")]
+
+# Local projections DiD specs.
+models_lpdid <- list()
+coef_lpdid <- data.table(
+  sample = character(),
+  stem = character(),
+  model = character(),
+  timing = integer(),
+  estimate = numeric(),
+  std_error = numeric(),
+  t_value = numeric(),
+  p_value = numeric(),
+  conf_low = numeric(),
+  conf_high = numeric(),
+  stem_label = character(),
+  sample_label = character()
+)
+lpdid_windows <- data.table(
+  sample = character(),
+  stem = character(),
+  nonabsorbing_lag = integer(),
+  chosen_window_periods = integer(),
+  preferred_window_periods = integer(),
+  fallback_window_periods = integer(),
+  treated_units = integer(),
+  preferred_eligible_units = integer(),
+  preferred_retention = numeric(),
+  min_retention = numeric(),
+  used_fallback = logical()
+)
+
+if (!skip_lpdid) {
+  coef_lpdid_list <- list()
+  lpdid_window_list <- list()
+  for (i in seq_len(nrow(model_specs))) {
+    s <- model_specs$sample[i]
+    stem <- model_specs$stem[i]
+    key <- paste0(s, "_", stem)
+    dat <- if (s == "pre") dt[year <= pre_covid_end] else dt
+
+    w_info <- choose_lpdid_window(
+      dat,
+      stem = stem,
+      preferred_periods = lp_window_periods,
+      fallback_periods = lp_fallback_window_periods,
+      min_retention = lp_min_treated_retention
+    )
+    chosen_w <- as.integer(w_info$chosen_window_periods[1L])
+    chosen_nonabsorbing <- if (is.na(lp_nonabsorbing_lag)) chosen_w else as.integer(lp_nonabsorbing_lag)
+
+    m_lp <- fit_lpdid(
+      dat,
+      stem = stem,
+      window_periods = chosen_w,
+      nonabsorbing_lag = chosen_nonabsorbing,
+      y = "filed_eviction"
+    )
+    models_lpdid[[key]] <- m_lp
+    coef_lpdid_list[[key]] <- extract_lpdid_coefs(m_lp, stem = stem, sample_name = s)
+    lpdid_window_list[[key]] <- cbind(
+      data.table(sample = s, stem = stem, nonabsorbing_lag = chosen_nonabsorbing),
+      w_info
+    )
+    logf(
+      "Fitted lpdid model: ", key,
+      " | N=", m_lp$nobs,
+      ", window=+/-", chosen_w,
+      ", fallback=", isTRUE(w_info$used_fallback[1L]),
+      ", preferred_retention=", round(w_info$preferred_retention[1L], 3),
+      log_file = log_file
+    )
+  }
+  coef_lpdid <- rbindlist(coef_lpdid_list, use.names = TRUE, fill = TRUE)
+  coef_lpdid[, stem_label := pretty_stem(stem)]
+  coef_lpdid[, sample_label := fifelse(sample == "pre", paste0("Pre-COVID (<=", pre_covid_end, ")"), "Full Sample")]
+  lpdid_windows <- rbindlist(lpdid_window_list, use.names = TRUE, fill = TRUE)
+} else {
+  logf("Skipping LP-DiD block (--skip_lpdid=TRUE).", log_file = log_file)
+}
+
+# Same-period retaliation models: baseline + tenant-composition augmented.
+etable_same_period_lines <- list()
+etable_same_period_tex_lines <- list()
+coef_same_period_list <- list()
+for (i in seq_len(nrow(model_specs))) {
+  s <- model_specs$sample[i]
+  stem <- model_specs$stem[i]
+  key <- paste0(s, "_", stem)
+  dat <- if (s == "pre") dt[year <= pre_covid_end] else dt
+
+  m_base <- fit_same_period_retaliatory(dat, stem = stem, y = "filed_eviction")
+  m_tenant <- fit_same_period_retaliatory_tenant(dat, stem = stem, y = "filed_eviction")
+
+  coef_same_period_list[[paste0(key, "_base")]] <- extract_tenant_comp_coefs(
+    m_base, stem = stem, sample_name = s, spec_name = "baseline"
+  )
+  coef_same_period_list[[paste0(key, "_tenant")]] <- extract_tenant_comp_coefs(
+    m_tenant, stem = stem, sample_name = s, spec_name = "tenant_augmented"
+  )
+  etable_same_period_lines[[key]] <- capture.output(
+    etable(m_base, m_tenant, se.below = TRUE, digits = 3)
+  )
+  etable_same_period_tex_lines[[key]] <- capture.output(
+    etable(m_base, m_tenant, se.below = TRUE, digits = 3, tex = TRUE)
+  )
+  logf("Fitted same-period models: ", key, " (baseline + tenant)", log_file = log_file)
+  rm(m_base, m_tenant, dat); gc()
+}
+coef_same_period <- rbindlist(coef_same_period_list, use.names = TRUE, fill = TRUE)
+coef_same_period[, stem_label := pretty_stem(stem)]
+coef_same_period[, sample_label := fifelse(sample == "pre", paste0("Pre-COVID (<=", pre_covid_end, ")"), "Full Sample")]
+coef_same_period_main <- coef_same_period[
+  grepl("^filed_", term) & !grepl(":", term),
+  .(sample, stem, spec, term, estimate, std_error, p_value)
 ]
-# Row; SFH; Apartment; Large Apartment; Other
-permits[,building_code_description_new_fixed_coarse :=case_when(
-  str_detect(building_code_description_new_fixed, "ROW|TWIN") ~ "Row",
-  str_detect(building_code_description_new_fixed, "HIGH RISE") ~ "High Rise Apartment",
-  str_detect(building_code_description_new_fixed, "LOW|MID") ~ "Mid Size Apartment",
-  str_detect(building_code_description_new_fixed, "APARTMENT") ~ "Other Apartment",
-  TRUE ~ "Other"
-)]
-permits[,filed_permit := total_permits > 0]
-permits[,violated := total_violations > 0]
-permits_qm <- feols(filed_permit ~ quality_grade_coarse + log(num_units_imp_alt)|t_idx, data = permits, cluster = ~PID)
-evicts_qm <- feols(filed_eviction ~ quality_grade_coarse + log(num_units_imp_alt)|t_idx, data = permits, cluster = ~PID)
-complaints_qm <- feols(filed_complaint ~ quality_grade_coarse + log(num_units_imp_alt)|t_idx, data = permits, cluster = ~PID)
-complaints_sever_qm <- feols(filed_severe ~ quality_grade_coarse + log(num_units_imp_alt)|t_idx, data = permits, cluster = ~PID)
-violations_qm <- feols(violated ~ quality_grade_coarse + log(num_units_imp_alt)|t_idx, data = permits, cluster = ~PID)
+coef_same_period_wide <- dcast(
+  coef_same_period_main,
+  sample + stem + term ~ spec,
+  value.var = "estimate"
+)
+if ("baseline" %in% names(coef_same_period_wide) && "tenant_augmented" %in% names(coef_same_period_wide)) {
+  coef_same_period_wide[, estimate_delta := tenant_augmented - baseline]
+}
 
-setFixest_dict(
-  c(
-    "quality_grade_coarseB" = "Quality B vs A",
-    "quality_grade_coarseC" = "Quality C vs A",
-    "quality_grade_coarseD" = "Quality D vs A",
-    "quality_grade_coarseF" = "Quality F vs A",
-    "quality_grade_coarseUnknown" = "Quality Unknown vs A",
-    "t_idx" = "Time FE",
-    "log(num_units_imp_alt)" = "Log(Number of Units)",
-    "permits_qm" = "Permit Filed",
-    "evicts_qm" = "Eviction Filed",
-    "complaints_qm" = "Any Complaint Filed",
-    "complaints_sever_qm" = "Severe Complaint Filed",
-    "violations_qm" = "Violation Recorded"
+# Same-period retaliation models with TRACT FE (GEOID) instead of PID FE.
+# Identifies off cross-building variation within neighborhoods.
+has_geoid <- "GEOID" %in% names(dt) && dt[!is.na(GEOID) & nzchar(as.character(GEOID)), .N] > 0
+etable_tract_lines <- list()
+etable_tract_tex_lines <- list()
+coef_tract_list <- list()
+if (has_geoid) {
+  for (i in seq_len(nrow(model_specs))) {
+    s <- model_specs$sample[i]
+    stem <- model_specs$stem[i]
+    key <- paste0(s, "_", stem)
+    dat <- if (s == "pre") dt[year <= pre_covid_end] else dt
+
+    m_base_tract <- fit_same_period_tract(dat, stem = stem, y = "filed_eviction")
+    m_tenant_tract <- fit_same_period_tract_tenant(dat, stem = stem, y = "filed_eviction")
+
+    coef_tract_list[[paste0(key, "_base")]] <- extract_tenant_comp_coefs(
+      m_base_tract, stem = stem, sample_name = s, spec_name = "tract_baseline"
+    )
+    coef_tract_list[[paste0(key, "_tenant")]] <- extract_tenant_comp_coefs(
+      m_tenant_tract, stem = stem, sample_name = s, spec_name = "tract_tenant_augmented"
+    )
+    etable_tract_lines[[key]] <- capture.output(
+      etable(m_base_tract, m_tenant_tract, se.below = TRUE, digits = 3)
+    )
+    etable_tract_tex_lines[[key]] <- capture.output(
+      etable(m_base_tract, m_tenant_tract, se.below = TRUE, digits = 3, tex = TRUE)
+    )
+    logf("Fitted tract FE same-period models: ", key, " (baseline + tenant)", log_file = log_file)
+    rm(m_base_tract, m_tenant_tract, dat); gc()
+  }
+} else {
+  logf("Skipping tract FE models: GEOID not available in panel.", log_file = log_file)
+}
+coef_tract <- rbindlist(coef_tract_list, use.names = TRUE, fill = TRUE)
+if (nrow(coef_tract)) {
+  coef_tract[, stem_label := pretty_stem(stem)]
+  coef_tract[, sample_label := fifelse(sample == "pre", paste0("Pre-COVID (<=", pre_covid_end, ")"), "Full Sample")]
+}
+etable_tract_txt <- unlist(etable_tract_lines)
+etable_tract_tex <- unlist(etable_tract_tex_lines)
+
+# ======================================================================
+# Retaliatory Targeting: among eviction filings, are retaliatory ones
+# disproportionately in buildings with more Black / female tenants?
+# Sample: building-periods WITH an eviction filing
+# Outcome: retaliatory_flag (complaint within bandwidth)
+# FE: period + tract (within-neighborhood comparison)
+# ======================================================================
+has_tract <- "census_tract" %in% names(dt)
+targeting_coef_list <- list()
+targeting_etable_lines <- list()
+targeting_etable_tex_lines <- list()
+bldg_year_targeting_coef_list <- list()
+bldg_year_targeting_etable_lines <- list()
+bldg_year_targeting_etable_tex_lines <- list()
+
+if (has_geoid && has_tract) {
+  # Build retaliatory flags: same-period and within-bandwidth
+  dt[, retaliatory_same := as.integer(filed_eviction == 1L & filed_complaint == 1L)]
+  bw_lag_cols <- paste0("lag_complaint_", seq_len(max_bw))
+  bw_lead_cols <- paste0("lead_complaint_", seq_len(max_bw))
+  bw_all_cols <- intersect(c(bw_lag_cols, bw_lead_cols), names(dt))
+  if (length(bw_all_cols)) {
+    dt[, retaliatory_bw := as.integer(
+      filed_eviction == 1L & (filed_complaint == 1L | rowSums(.SD > 0, na.rm = TRUE) > 0L)
+    ), .SDcols = bw_all_cols]
+  } else {
+    dt[, retaliatory_bw := retaliatory_same]
+  }
+
+  ev_dt <- dt[filed_eviction == 1L]
+  logf(
+    "Retaliatory targeting sample: ", nrow(ev_dt), " eviction-periods; ",
+    "retaliatory_same=", round(mean(ev_dt$retaliatory_same, na.rm = TRUE), 4),
+    ", retaliatory_bw=", round(mean(ev_dt$retaliatory_bw, na.rm = TRUE), 4),
+    log_file = log_file
   )
-)
-# row means
-row_means <- permits[,list(
-  permit_rate    = mean(filed_permit/num_units_imp_alt, na.rm=TRUE),
-  eviction_rate  = mean(filed_eviction/num_units_imp_alt, na.rm=TRUE),
-  complaint_rate = mean(filed_complaint/num_units_imp_alt, na.rm=TRUE),
-  severe_rate    = mean(filed_severe/num_units_imp_alt, na.rm=TRUE),
-  violation_rate = mean(violated/num_units_imp_alt, na.rm=TRUE)
-)]
 
-# rows as char vector
-row_means_vec = list("per unit mean" =c(
-#'Mean',
-row_means$permit_rate,
-row_means$eviction_rate,
-row_means$complaint_rate,
-row_means$severe_rate
-))
+  for (outcome_name in c("same", "bw")) {
+    y_col <- paste0("retaliatory_", outcome_name)
+    for (s in c("full", "pre")) {
+      dat <- if (s == "pre") ev_dt[year <= pre_covid_end] else ev_dt
+      if (nrow(dat) < 100L) next
+      key <- paste0(s, "_", outcome_name)
 
-etable(permits_qm, evicts_qm, complaints_qm, complaints_sever_qm,
-       fitstat = c("n","r2"),
-       se.below = TRUE, digits = 3, extralines = row_means_vec, tex = T) %>%
-  writeLines("tables/quality_grade_effects.tex")
+      # Tract FE
+      fml_tract <- as.formula(paste0(
+        y_col, " ~ tc_black_c + tc_female_c + tc_black_female_c + tc_cov_c",
+        " + tenant_comp_missing | period_fe + census_tract"
+      ))
+      m_tract <- feols(fml_tract, data = dat, cluster = ~census_tract, lean = TRUE)
 
-# maintence regs
-permits[,total_filings := sum(num_evictions), by=PID]
-permits[,filing_rate := total_filings / num_units_imp_alt]
-permits[,filing_rate_cuts := cut(
-  filing_rate,
-  breaks = c(-Inf,0,0.01,0.02,0.05,0.1, Inf),
-  labels = c("0","(0,1%]","(1%,2%]","(2%,5%]","(5%,10%]","10%+"),
-  ordered_result = TRUE
-)]
+      # BG FE
+      fml_bg <- as.formula(paste0(
+        y_col, " ~ tc_black_c + tc_female_c + tc_black_female_c + tc_cov_c",
+        " + tenant_comp_missing | period_fe + GEOID"
+      ))
+      m_bg <- feols(fml_bg, data = dat, cluster = ~GEOID, lean = TRUE)
 
-permits_agg <- permits[year <= 2019, list(
-  total_permits = sum(total_permits),
-  total_plumbing_permit_count = sum(plumbing_permit_count,na.rm = T),
-  total_electrical_permit_count = sum(electrical_permit_count,na.rm = T),
-  total_mechanical_permit_count = sum(mechanical_permit_count,na.rm = T),
-  total_filings = sum(num_evictions),
-  total_complaints = sum(total_complaints),
-  total_severe = sum(filed_severe),
-  total_non_severe = sum(filed_non_severe),
-  quality_grade_fixed = first(quality_grade_fixed),
-  building_code_description_new_fixed = first(building_code_description_new_fixed),
-  total_area = first(total_area),
-  year_built = first(year_built),
-  num_units_imp_alt = first(num_units_imp_alt),
-  GEOID = first(GEOID),
-  CT_ID_10 = first(CT_ID_10)
-), by=.(PID = as.integer(PID))]
+      ct_tract <- as.data.table(summary(m_tract)$coeftable, keep.rownames = "term")
+      ct_bg <- as.data.table(summary(m_bg)$coeftable, keep.rownames = "term")
+      setnames(ct_tract, c("Estimate", "Std. Error", "t value", "Pr(>|t|)"),
+               c("estimate", "std_error", "t_value", "p_value"))
+      setnames(ct_bg, c("Estimate", "Std. Error", "t value", "Pr(>|t|)"),
+               c("estimate", "std_error", "t_value", "p_value"))
+      ct_tract[, `:=`(sample = s, outcome = outcome_name, fe = "tract")]
+      ct_bg[, `:=`(sample = s, outcome = outcome_name, fe = "bg")]
+      targeting_coef_list[[paste0(key, "_tract")]] <- ct_tract
+      targeting_coef_list[[paste0(key, "_bg")]] <- ct_bg
 
-permits_agg[,filing_rate := total_filings / num_units_imp_alt / 12]
-permits_agg[,high_filing := filing_rate > 0.1]
-permits_agg[,year_built_decade := floor(year_built / 10) * 10]
-maintence <- fepois(total_permits ~ high_filing  + log(num_units_imp_alt)  ,
-       data = permits_agg, cluster = ~PID)
+      targeting_etable_lines[[key]] <- capture.output(
+        etable(m_tract, m_bg, se.below = TRUE, digits = 4,
+               headers = c("Tract FE", "BG FE"))
+      )
+      targeting_etable_tex_lines[[key]] <- capture.output(
+        etable(m_tract, m_bg, se.below = TRUE, digits = 4, tex = TRUE,
+               headers = c("Tract FE", "BG FE"))
+      )
+      logf("Fitted targeting model: ", key, " | N_tract=", nobs(m_tract),
+           ", N_bg=", nobs(m_bg), log_file = log_file)
+      rm(m_tract, m_bg, dat); gc()
+    }
+  }
+  # ------------------------------------------------------------------
+  # Building-year level targeting: collapse to PID x year, then regress
+  # share_retaliatory ~ demographics + building observables | tract/BG
+  # ------------------------------------------------------------------
+  # Prepare building observables
+  for (cc in c("total_area", "total_units", "market_value")) {
+    if (cc %in% names(ev_dt)) ev_dt[, (cc) := suppressWarnings(as.numeric(get(cc)))]
+  }
+  # Standardize quality_grade if present
+  has_quality_grade <- "quality_grade" %in% names(ev_dt)
+  if (has_quality_grade) {
+    ev_dt[, quality_grade := as.character(quality_grade)]
+    ev_dt[, quality_grade_std := fifelse(
+      stringr::str_detect(quality_grade, "[ABCDabcd]"), quality_grade, NA_character_
+    )]
+    ev_dt[, quality_grade_std := stringr::str_remove_all(quality_grade_std, "[+-]")]
+    ev_dt[is.na(quality_grade_std), quality_grade_std := "Unknown"]
+  } else {
+    ev_dt[, quality_grade_std := NA_character_]
+  }
 
-maintence_prop_chars <- fepois(total_permits ~ high_filing  + log(num_units_imp_alt) + log(total_area)|GEOID + building_code_description_new_fixed + quality_grade_fixed +year_built_decade,
-                        data = permits_agg, cluster = ~PID)
+  pid_year_ev <- ev_dt[, .(
+    n_evictions = .N,
+    n_retaliatory_same = sum(retaliatory_same, na.rm = TRUE),
+    n_retaliatory_bw = sum(retaliatory_bw, na.rm = TRUE),
+    tc_black_c = tc_black_c[1L],
+    tc_female_c = tc_female_c[1L],
+    tc_black_female_c = tc_black_female_c[1L],
+    tc_cov_c = tc_cov_c[1L],
+    tenant_comp_missing = tenant_comp_missing[1L],
+    GEOID = GEOID[1L],
+    census_tract = census_tract[1L],
+    total_area = total_area[1L],
+    total_units = total_units[1L],
+    market_value = market_value[1L],
+    building_type = building_type[1L],
+    num_units_bin = num_units_bin[1L],
+    year_blt_decade = year_blt_decade[1L],
+    num_stories_bin = num_stories_bin[1L],
+    quality_grade_std = quality_grade_std[1L]
+  ), by = .(PID, year)]
 
-rentals_data <- fread(rentals_panel)
-rentals_inf_adj <- feols(log_med_rent ~ year, data = rentals_data)
-rentals_data[,rent_inf_adj := log_med_rent - predict(rentals_inf_adj, newdata = rentals_data)]
-rent_agg = rentals_data[,list(
-  avg_rent_inf_adj = mean(rent_inf_adj, na.rm=TRUE),
-  log_med_rent = mean(log_med_rent, na.rm=TRUE),
-  source = first(source)
-), by=.(PID)]
+  pid_year_ev[, share_retaliatory_same := n_retaliatory_same / n_evictions]
+  pid_year_ev[, share_retaliatory_bw := n_retaliatory_bw / n_evictions]
+  pid_year_ev[, log_total_area := suppressWarnings(log(total_area))]
+  pid_year_ev[, log_market_value := suppressWarnings(log(market_value))]
+  pid_year_ev[!is.finite(log_total_area), log_total_area := NA_real_]
+  pid_year_ev[!is.finite(log_market_value), log_market_value := NA_real_]
 
-permits_agg = merge(
-permits_agg,
-rent_agg, by="PID", all.x=TRUE
-)
-
-maintence_prop_chars_rent <- fepois(total_permits ~ high_filing  + log(num_units_imp_alt) + log(total_area)  +  log_med_rent  |GEOID + building_code_description_new_fixed + quality_grade_fixed +year_built_decade,
-                        data = permits_agg, cluster = ~PID)
-
-mechanical_prop_chars_rent <- fepois(total_mechanical_permit_count ~ high_filing  + log(num_units_imp_alt) + log(total_area)  +  log_med_rent  |GEOID + building_code_description_new_fixed + quality_grade_fixed +year_built_decade,
-                                    data = permits_agg, cluster = ~PID)
-
-electrical_prop_chars_rent <- fepois(total_electrical_permit_count ~ high_filing  + log(num_units_imp_alt) + log(total_area)  +  log_med_rent  |GEOID + building_code_description_new_fixed + quality_grade_fixed +year_built_decade,
-                                  data = permits_agg, cluster = ~PID)
-
-setFixest_dict(
-  c(
-    "high_filingTRUE" = "High Filing Rate",
-    "log(num_units_imp_alt)" = "Log(Number of Units)",
-    "log(total_area)" = "Log(Total Area)",
-    "log_med_rent" = "Log(Median Rent)",
-    "GEOID" = "Census Block Group FE",
-    "building_code_description_new_fixed" = "Building Type FE",
-    "quality_grade_fixed" = "Quality Grade FE",
-    "year_built_decade" = "Year Built Decade FE"
+  logf(
+    "Building-year targeting sample: ", nrow(pid_year_ev), " PID-years; ",
+    "mean share_retaliatory_same=", round(mean(pid_year_ev$share_retaliatory_same, na.rm = TRUE), 4),
+    ", mean share_retaliatory_bw=", round(mean(pid_year_ev$share_retaliatory_bw, na.rm = TRUE), 4),
+    log_file = log_file
   )
+
+  bldg_year_targeting_coef_list <- list()
+  bldg_year_targeting_etable_lines <- list()
+  bldg_year_targeting_etable_tex_lines <- list()
+
+  obs_rhs <- paste0(
+    " + log_total_area + log_market_value"
+  )
+  obs_fe <- " + num_units_bin + building_type + year_blt_decade + num_stories_bin"
+
+  for (outcome_name in c("same", "bw")) {
+    y_col <- paste0("share_retaliatory_", outcome_name)
+    for (s in c("full", "pre")) {
+      dat <- if (s == "pre") pid_year_ev[year <= pre_covid_end] else pid_year_ev
+      if (nrow(dat) < 100L) next
+      key <- paste0(s, "_", outcome_name)
+
+      # Tract FE + building observables
+      fml_tract <- as.formula(paste0(
+        y_col, " ~ tc_black_c + tc_female_c + tc_black_female_c + tc_cov_c",
+        " + tenant_comp_missing", obs_rhs,
+        " | year + census_tract", obs_fe
+      ))
+      m_tract <- feols(fml_tract, data = dat, cluster = ~census_tract, lean = TRUE)
+
+      # BG FE + building observables
+      fml_bg <- as.formula(paste0(
+        y_col, " ~ tc_black_c + tc_female_c + tc_black_female_c + tc_cov_c",
+        " + tenant_comp_missing", obs_rhs,
+        " | year + GEOID", obs_fe
+      ))
+      m_bg <- feols(fml_bg, data = dat, cluster = ~GEOID, lean = TRUE)
+
+      ct_tract <- as.data.table(summary(m_tract)$coeftable, keep.rownames = "term")
+      ct_bg <- as.data.table(summary(m_bg)$coeftable, keep.rownames = "term")
+      setnames(ct_tract, c("Estimate", "Std. Error", "t value", "Pr(>|t|)"),
+               c("estimate", "std_error", "t_value", "p_value"))
+      setnames(ct_bg, c("Estimate", "Std. Error", "t value", "Pr(>|t|)"),
+               c("estimate", "std_error", "t_value", "p_value"))
+      ct_tract[, `:=`(sample = s, outcome = outcome_name, fe = "tract", level = "bldg_year")]
+      ct_bg[, `:=`(sample = s, outcome = outcome_name, fe = "bg", level = "bldg_year")]
+      bldg_year_targeting_coef_list[[paste0(key, "_tract")]] <- ct_tract
+      bldg_year_targeting_coef_list[[paste0(key, "_bg")]] <- ct_bg
+
+      bldg_year_targeting_etable_lines[[key]] <- capture.output(
+        etable(m_tract, m_bg, se.below = TRUE, digits = 4,
+               headers = c("Tract FE", "BG FE"))
+      )
+      bldg_year_targeting_etable_tex_lines[[key]] <- capture.output(
+        etable(m_tract, m_bg, se.below = TRUE, digits = 4, tex = TRUE,
+               headers = c("Tract FE", "BG FE"))
+      )
+      logf("Fitted bldg-year targeting model: ", key, " | N_tract=", nobs(m_tract),
+           ", N_bg=", nobs(m_bg), log_file = log_file)
+      rm(m_tract, m_bg, dat); gc()
+    }
+  }
+
+  rm(ev_dt, pid_year_ev); gc()
+} else {
+  logf("Skipping targeting models: GEOID/census_tract not available.", log_file = log_file)
+}
+coef_targeting <- rbindlist(targeting_coef_list, use.names = TRUE, fill = TRUE)
+coef_bldg_year_targeting <- rbindlist(bldg_year_targeting_coef_list, use.names = TRUE, fill = TRUE)
+etable_targeting_txt <- unlist(targeting_etable_lines)
+etable_targeting_tex <- unlist(targeting_etable_tex_lines)
+etable_bldg_year_targeting_txt <- unlist(bldg_year_targeting_etable_lines)
+etable_bldg_year_targeting_tex <- unlist(bldg_year_targeting_etable_tex_lines)
+
+# ======================================================================
+# Complaint Suppression: controlling for maintenance (permits) and
+# building observables, do buildings with more Black / female tenants
+# file fewer complaints?
+# Sample: all building-periods
+# Outcome: filed_complaint (also filed_severe, filed_non_severe)
+# FE: period + tract; period + BG
+# ======================================================================
+suppression_coef_list <- list()
+suppression_etable_lines <- list()
+suppression_etable_tex_lines <- list()
+
+if (has_geoid && has_tract) {
+  # Ensure permit/violation and building observable columns are numeric
+  for (cc in c("total_permits", "total_violations")) {
+    if (cc %in% names(dt)) {
+      dt[, (cc) := suppressWarnings(as.numeric(get(cc)))]
+      dt[is.na(get(cc)), (cc) := 0]
+    } else {
+      dt[, (cc) := 0]
+    }
+  }
+  for (cc in c("total_area", "total_units", "market_value")) {
+    if (cc %in% names(dt)) dt[, (cc) := suppressWarnings(as.numeric(get(cc)))]
+  }
+  if (!"log_total_area" %in% names(dt) && "total_area" %in% names(dt)) {
+    dt[, log_total_area := suppressWarnings(log(total_area))]
+    dt[!is.finite(log_total_area), log_total_area := NA_real_]
+  }
+  if (!"log_market_value" %in% names(dt) && "market_value" %in% names(dt)) {
+    dt[, log_market_value := suppressWarnings(log(market_value))]
+    dt[!is.finite(log_market_value), log_market_value := NA_real_]
+  }
+
+  # Building observable controls + FE (matching price-regs-eb.R pattern)
+  sup_obs_rhs <- " + total_permits + total_violations + log_total_area + log_market_value"
+  sup_obs_fe <- " + num_units_bin + building_type + year_blt_decade + num_stories_bin"
+
+  suppression_outcomes <- c("complaint", "severe", "non_severe")
+  for (stem in suppression_outcomes) {
+    y_col <- paste0("filed_", stem)
+    for (s in c("full", "pre")) {
+      dat <- if (s == "pre") dt[year <= pre_covid_end] else dt
+      key <- paste0(s, "_", stem)
+
+      # Tract FE + building observables
+      fml_tract <- as.formula(paste0(
+        y_col, " ~ tc_black_c + tc_female_c + tc_black_female_c + tc_cov_c",
+        " + tenant_comp_missing", sup_obs_rhs,
+        " | period_fe + census_tract", sup_obs_fe
+      ))
+      m_tract <- feols(fml_tract, data = dat, cluster = ~census_tract, lean = TRUE)
+
+      # BG FE + building observables
+      fml_bg <- as.formula(paste0(
+        y_col, " ~ tc_black_c + tc_female_c + tc_black_female_c + tc_cov_c",
+        " + tenant_comp_missing", sup_obs_rhs,
+        " | period_fe + GEOID", sup_obs_fe
+      ))
+      m_bg <- feols(fml_bg, data = dat, cluster = ~GEOID, lean = TRUE)
+
+      ct_tract <- as.data.table(summary(m_tract)$coeftable, keep.rownames = "term")
+      ct_bg <- as.data.table(summary(m_bg)$coeftable, keep.rownames = "term")
+      setnames(ct_tract, c("Estimate", "Std. Error", "t value", "Pr(>|t|)"),
+               c("estimate", "std_error", "t_value", "p_value"))
+      setnames(ct_bg, c("Estimate", "Std. Error", "t value", "Pr(>|t|)"),
+               c("estimate", "std_error", "t_value", "p_value"))
+      ct_tract[, `:=`(sample = s, stem = stem, fe = "tract")]
+      ct_bg[, `:=`(sample = s, stem = stem, fe = "bg")]
+      suppression_coef_list[[paste0(key, "_tract")]] <- ct_tract
+      suppression_coef_list[[paste0(key, "_bg")]] <- ct_bg
+
+      suppression_etable_lines[[key]] <- capture.output(
+        etable(m_tract, m_bg, se.below = TRUE, digits = 4,
+               headers = c("Tract FE", "BG FE"))
+      )
+      suppression_etable_tex_lines[[key]] <- capture.output(
+        etable(m_tract, m_bg, se.below = TRUE, digits = 4, tex = TRUE,
+               headers = c("Tract FE", "BG FE"))
+      )
+      logf("Fitted suppression model: ", key, " | N_tract=", nobs(m_tract),
+           ", N_bg=", nobs(m_bg), log_file = log_file)
+      rm(m_tract, m_bg, dat); gc()
+    }
+  }
+} else {
+  logf("Skipping suppression models: GEOID/census_tract not available.", log_file = log_file)
+}
+coef_suppression <- rbindlist(suppression_coef_list, use.names = TRUE, fill = TRUE)
+etable_suppression_txt <- unlist(suppression_etable_lines)
+etable_suppression_tex <- unlist(suppression_etable_tex_lines)
+
+bandwidth_tabs <- compute_bandwidth_tables(dt, max_bw = max_bw, time_unit = time_unit)
+band_summary <- bandwidth_tabs$summary
+band_status <- bandwidth_tabs$status
+
+# Concatenate per-model etable outputs (models were not stored to save memory)
+etable_dist_txt <- unlist(etable_dist_lines)
+lpdid_txt <- if (skip_lpdid) {
+  c(
+    "Local Projections DiD Summary",
+    "",
+    "Skipped (--skip_lpdid=TRUE)."
+  )
+} else {
+  out <- c(
+    "Local Projections DiD Summary",
+    "",
+    "Window Selection:",
+    capture.output(print(lpdid_windows)),
+    ""
+  )
+  for (nm in names(models_lpdid)) {
+    out <- c(
+      out,
+      paste0("Model: ", nm),
+      capture.output(print(models_lpdid[[nm]]$coeftable)),
+      ""
+    )
+  }
+  out
+}
+etable_same_period_txt <- unlist(etable_same_period_lines)
+etable_same_period_tex <- unlist(etable_same_period_tex_lines)
+
+path_dist_coef <- file.path(out_dir, paste0(out_prefix, "_distlag_coefficients.csv"))
+path_lpdid_coef <- file.path(out_dir, paste0(out_prefix, "_lpdid_coefficients.csv"))
+path_same_period_coef <- file.path(out_dir, paste0(out_prefix, "_same_period_tenant_coefficients.csv"))
+path_same_period_compare <- file.path(out_dir, paste0(out_prefix, "_same_period_tenant_main_compare.csv"))
+path_lpdid_windows <- file.path(out_dir, paste0(out_prefix, "_lpdid_windows.csv"))
+path_band_summary <- file.path(out_dir, paste0(out_prefix, "_bandwidth_summary.csv"))
+path_band_status <- file.path(out_dir, paste0(out_prefix, "_bandwidth_status_counts.csv"))
+path_dist_table <- file.path(out_dir, paste0(out_prefix, "_distlag_model_table.txt"))
+path_lpdid_table <- file.path(out_dir, paste0(out_prefix, "_lpdid_model_table.txt"))
+path_same_period_table <- file.path(out_dir, paste0(out_prefix, "_same_period_tenant_model_table.txt"))
+path_same_period_table_tex <- file.path(out_dir, paste0(out_prefix, "_same_period_tenant_model_table.tex"))
+path_dist_plot <- file.path(out_dir, paste0(out_prefix, "_distlag_coefficients.png"))
+path_lpdid_plot <- file.path(out_dir, paste0(out_prefix, "_lpdid_coefficients.png"))
+path_tract_coef <- file.path(out_dir, paste0(out_prefix, "_tract_fe_coefficients.csv"))
+path_tract_table <- file.path(out_dir, paste0(out_prefix, "_tract_fe_model_table.txt"))
+path_tract_table_tex <- file.path(out_dir, paste0(out_prefix, "_tract_fe_model_table.tex"))
+path_targeting_coef <- file.path(out_dir, paste0(out_prefix, "_targeting_coefficients.csv"))
+path_targeting_table <- file.path(out_dir, paste0(out_prefix, "_targeting_model_table.txt"))
+path_targeting_table_tex <- file.path(out_dir, paste0(out_prefix, "_targeting_model_table.tex"))
+path_bldg_year_targeting_coef <- file.path(out_dir, paste0(out_prefix, "_bldg_year_targeting_coefficients.csv"))
+path_bldg_year_targeting_table <- file.path(out_dir, paste0(out_prefix, "_bldg_year_targeting_model_table.txt"))
+path_bldg_year_targeting_table_tex <- file.path(out_dir, paste0(out_prefix, "_bldg_year_targeting_model_table.tex"))
+path_suppression_coef <- file.path(out_dir, paste0(out_prefix, "_suppression_coefficients.csv"))
+path_suppression_table <- file.path(out_dir, paste0(out_prefix, "_suppression_model_table.txt"))
+path_suppression_table_tex <- file.path(out_dir, paste0(out_prefix, "_suppression_model_table.tex"))
+path_qa <- file.path(out_dir, paste0(out_prefix, "_qa.txt"))
+
+fwrite(coef_dist, path_dist_coef)
+fwrite(coef_lpdid, path_lpdid_coef)
+fwrite(coef_same_period, path_same_period_coef)
+fwrite(coef_same_period_wide, path_same_period_compare)
+fwrite(lpdid_windows, path_lpdid_windows)
+fwrite(band_summary, path_band_summary)
+fwrite(band_status, path_band_status)
+if (nrow(coef_tract)) fwrite(coef_tract, path_tract_coef)
+writeLines(etable_dist_txt, con = path_dist_table)
+writeLines(lpdid_txt, con = path_lpdid_table)
+writeLines(etable_same_period_txt, con = path_same_period_table)
+writeLines(etable_same_period_tex, con = path_same_period_table_tex)
+if (length(etable_tract_txt)) writeLines(etable_tract_txt, con = path_tract_table)
+if (length(etable_tract_tex)) writeLines(etable_tract_tex, con = path_tract_table_tex)
+if (nrow(coef_targeting)) fwrite(coef_targeting, path_targeting_coef)
+if (length(etable_targeting_txt)) writeLines(etable_targeting_txt, con = path_targeting_table)
+if (length(etable_targeting_tex)) writeLines(etable_targeting_tex, con = path_targeting_table_tex)
+if (nrow(coef_bldg_year_targeting)) fwrite(coef_bldg_year_targeting, path_bldg_year_targeting_coef)
+if (length(etable_bldg_year_targeting_txt)) writeLines(etable_bldg_year_targeting_txt, con = path_bldg_year_targeting_table)
+if (length(etable_bldg_year_targeting_tex)) writeLines(etable_bldg_year_targeting_tex, con = path_bldg_year_targeting_table_tex)
+if (nrow(coef_suppression)) fwrite(coef_suppression, path_suppression_coef)
+if (length(etable_suppression_txt)) writeLines(etable_suppression_txt, con = path_suppression_table)
+if (length(etable_suppression_tex)) writeLines(etable_suppression_tex, con = path_suppression_table_tex)
+
+theme_use <- theme_minimal()
+
+p_dist <- ggplot(coef_dist, aes(x = timing, y = estimate)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray45") +
+  geom_point(size = 1.3) +
+  geom_errorbar(aes(ymin = conf_low, ymax = conf_high), width = 0.15) +
+  facet_grid(stem_label ~ sample_label) +
+  scale_x_continuous(breaks = seq(-h, h, by = 1)) +
+  labs(
+    title = paste0(period_label_title, " Distributed-Lag Estimates: Complaints and Eviction Filings"),
+    subtitle = paste0("LPM with PID and ", period_label, " fixed effects; clustered by PID"),
+    x = paste0(tools::toTitleCase(period_label_plural), " relative to complaint indicator"),
+    y = "Coefficient"
+  ) +
+  theme_use
+
+ggsave(
+  filename = path_dist_plot,
+  plot = p_dist,
+  width = 11,
+  height = 8,
+  dpi = 300,
+  bg = "white"
 )
 
-permit_means <- permits_agg[,list(
-  permit_rate = mean(total_permits / num_units_imp_alt, na.rm=TRUE),
-  mechanical_permit_rate = mean(total_mechanical_permit_count / num_units_imp_alt, na.rm=TRUE),
-  electrical_permit_rate = mean(total_electrical_permit_count / num_units_imp_alt, na.rm=TRUE)
-)]
+if (!skip_lpdid && nrow(coef_lpdid)) {
+  p_lpdid <- ggplot(coef_lpdid, aes(x = timing, y = estimate)) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "gray45") +
+    geom_point(size = 1.3) +
+    geom_errorbar(aes(ymin = conf_low, ymax = conf_high), width = 0.15) +
+    facet_grid(stem_label ~ sample_label) +
+    labs(
+      title = paste0(period_label_title, " Local Projections DiD: Complaints and Eviction Filings"),
+      subtitle = "Clustered by PID; window selected per sample/stem with fallback rule",
+      x = paste0(tools::toTitleCase(period_label_plural), " relative to treatment"),
+      y = "Coefficient"
+    ) +
+    theme_use
 
-row_means_permit_vec = list("per unit mean" =c(
-  # 'Mean',
-  permit_means$permit_rate,
-  permit_means$permit_rate,
-  permit_means$permit_rate,
-  permit_means$mechanical_permit_rate,
-  permit_means$electrical_permit_rate
-))
+  ggsave(
+    filename = path_lpdid_plot,
+    plot = p_lpdid,
+    width = 11,
+    height = 8,
+    dpi = 300,
+    bg = "white"
+  )
+}
 
-etable(list(maintence, maintence_prop_chars, maintence_prop_chars_rent,
-            mechanical_prop_chars_rent, electrical_prop_chars_rent),
-       extralines = row_means_permit_vec,
-       drop = "Constant",
-       tex = T,
-       fitstat = c("n","r2"),
-       se.below = TRUE, digits = 3) %>%
-  writeLines("tables/maintence_effects.tex")
+lpdid_plot_note <- if (skip_lpdid) {
+  paste0("LP-DiD skipped; no LP-DiD plot written.")
+} else if (!nrow(coef_lpdid)) {
+  paste0("LP-DiD ran but produced no coefficient rows; no LP-DiD plot written.")
+} else {
+  paste0("Wrote lpdid plot: ", path_lpdid_plot)
+}
 
+lpdid_window_lines <- if (skip_lpdid) {
+  "Skipped (--skip_lpdid=TRUE)"
+} else {
+  capture.output(print(lpdid_windows))
+}
 
-# repeat but have filed_eviction; complaint, severe_complaint as outcome
-compltains_prop_chars <- fepois(total_complaints ~ high_filing  + log(num_units_imp_alt) + log(total_area)  +  log_med_rent  |GEOID + building_code_description_new_fixed + quality_grade_fixed +year_built_decade,
-                                    data = permits_agg, cluster = ~PID)
+qa_lines <- c(
+  paste0("Retaliatory Evictions QA (", period_label_title, ", Rental-Only)"),
+  paste0("Timestamp: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")),
+  paste0(period_label_title, " panel input: ", panel_path),
+  paste0("Analytic PID input: ", analytic_path),
+  paste0("Rows analyzed (full): ", nrow(dt)),
+  paste0("Rows analyzed (pre-covid): ", n_pre),
+  paste0("Unique PIDs (full): ", uniqueN(dt$PID)),
+  paste0("Eviction filing rate (full): ", round(mean(dt$filed_eviction, na.rm = TRUE), 6)),
+  paste0("Any complaint rate (full): ", round(mean(dt$filed_complaint, na.rm = TRUE), 6)),
+  paste0("Time unit: ", time_unit),
+  paste0("skip_lpdid: ", skip_lpdid),
+  paste0("Bandwidths evaluated: 1 to ", max_bw, " ", period_label_plural),
+  paste0(
+    "LP window rule: prefer +/-", lp_window_periods,
+    " ", period_label_plural, ", fallback +/-", lp_fallback_window_periods,
+    " ", period_label_plural, " when treated retention < ", lp_min_treated_retention
+  ),
+  "",
+  "Bandwidth summary (head):",
+  capture.output(print(head(band_summary, 10L))),
+  "",
+  "LP window summary:",
+  lpdid_window_lines,
+  "",
+  paste0("Wrote dist-lag coefficients CSV: ", path_dist_coef),
+  paste0("Wrote lpdid coefficients CSV: ", path_lpdid_coef),
+  paste0("Wrote same-period tenant coefficients CSV: ", path_same_period_coef),
+  paste0("Wrote same-period baseline vs tenant compare CSV: ", path_same_period_compare),
+  paste0("Wrote lpdid windows CSV: ", path_lpdid_windows),
+  paste0("Wrote bandwidth summary CSV: ", path_band_summary),
+  paste0("Wrote bandwidth status CSV: ", path_band_status),
+  paste0("Wrote dist-lag model table: ", path_dist_table),
+  paste0("Wrote lpdid model table: ", path_lpdid_table),
+  paste0("Wrote same-period tenant model table: ", path_same_period_table),
+  paste0("Wrote same-period tenant model table (tex): ", path_same_period_table_tex),
+  if (has_geoid) paste0("Wrote tract FE coefficients CSV: ", path_tract_coef) else "Tract FE models skipped (no GEOID)",
+  if (has_geoid) paste0("Wrote tract FE model table: ", path_tract_table) else NULL,
+  if (has_geoid) paste0("Wrote tract FE model table (tex): ", path_tract_table_tex) else NULL,
+  if (nrow(coef_targeting)) paste0("Wrote targeting coefficients CSV: ", path_targeting_coef) else "Targeting models skipped",
+  if (length(etable_targeting_tex)) paste0("Wrote targeting model table (tex): ", path_targeting_table_tex) else NULL,
+  if (nrow(coef_suppression)) paste0("Wrote suppression coefficients CSV: ", path_suppression_coef) else "Suppression models skipped",
+  if (length(etable_suppression_tex)) paste0("Wrote suppression model table (tex): ", path_suppression_table_tex) else NULL,
+  paste0("Wrote dist-lag plot: ", path_dist_plot),
+  lpdid_plot_note
+)
+writeLines(qa_lines, con = path_qa)
 
-severe_compltains_prop_chars <- fepois(total_severe ~ high_filing  + log(num_units_imp_alt) + log(total_area)  +  log_med_rent  |GEOID + building_code_description_new_fixed + quality_grade_fixed +year_built_decade,
-                                 data = permits_agg, cluster = ~PID)
-
-etable(list(compltains_prop_chars,
-            severe_compltains_prop_chars),
-       drop = "Constant",
-       tex = T,
-       fitstat = c("n","r2"),
-       se.below = TRUE, digits = 3) %>%
-  writeLines("tables/complaint_effects.tex")
-
-
+logf("Wrote outputs to: ", out_dir, log_file = log_file)
+logf("=== Finished retaliatory-evictions.r ===", log_file = log_file)
