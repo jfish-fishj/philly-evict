@@ -25,7 +25,7 @@ inputs:
   # evictions_tenant_addresses: "evictions/phila-lt-data/tenant-addresses-cleaned.txt"  # unused; moved to graveyard data
   # evictions_attorney_names: "evictions/phila-lt-data/attorney-names.txt"          # unused; moved to graveyard data
   # eviction_pa_philadelphia: "evictions/eviction_PA_philadelphia.csv"              # unused; moved to graveyard data
-  # street_suffix_aliases: "aliases/street_suffix_aliases.csv"                      # unused; moved to graveyard data
+  street_suffix_aliases: "aliases/street_suffix_aliases.csv"
 
   # --- Parcels / Property Master ---
   opa_gdb: "parcels/opa_properties_public.gdb"
@@ -55,6 +55,9 @@ inputs:
   # --- InfoUSA ---
   infousa_raw: "infousa/philly-infousa.csv"
   infousa_cleaned: "infousa/infousa_address_cleaned.csv"
+  nickname_dict: "lookups/nicknames.csv"
+  nickname_dictionary: "lookups/nicknames.csv"
+  evict_infousa_validation_set: "lookups/evict_infousa_validation_set.csv"
 
   # --- Assessments ---
   assessments: "assessments/assessments.csv"
@@ -142,6 +145,15 @@ products:
   match_summary_evictions: "xwalks/match_summary_evictions.csv"
   match_summary_infousa: "xwalks/match_summary_infousa.csv"
   match_summary_altos: "xwalks/match_summary_altos.csv"
+  evict_infousa_hh_matches: "xwalks/evict_infousa_hh_matches.csv"
+  evict_infousa_hh_unmatched: "xwalks/evict_infousa_hh_unmatched.csv"
+  evict_infousa_name_matches: "xwalks/evict_infousa_name_matches.csv"
+  evict_infousa_name_unmatched: "xwalks/evict_infousa_name_unmatched.csv"
+  evict_infousa_candidate_stats: "xwalks/evict_infousa_candidate_stats.csv"
+  evict_infousa_sample_manifest: "xwalks/evict_infousa_sample_manifest.csv"
+  evict_infousa_sample_evict_people: "xwalks/evict_infousa_sample_evict_people.csv"
+  evict_infousa_sample_infousa_people: "xwalks/evict_infousa_sample_infousa_people.csv"
+  evict_infousa_sample_geo_manifest: "xwalks/evict_infousa_sample_geo_manifest.csv"
 
   # --- Altos-CoreLogic Crosswalks (from merge-altos-corelogic.R) ---
   altos_corelogic_xwalk: "xwalks/altos_corelogic_xwalk.csv"
@@ -164,6 +176,11 @@ products:
   market_shares: "analytic/adjusted_market_shares.csv"
   market_share_zips: "analytic/market_share_all_zips.csv"
   market_share_details: "analytic/market_share_details.csv"
+  infousa_race_imputed_person: "analytic/infousa_race_imputed_person.csv"
+  infousa_gender_imputed_person: "analytic/infousa_gender_imputed_person.csv"
+  infousa_link_people: "analytic/infousa_link_people.csv"
+  infousa_building_race_panel: "analytic/infousa_building_race_panel.csv"
+  infousa_building_demographics_panel: "analytic/infousa_building_demographics_panel.csv"
 
 # ============================================================
 # RUN SETTINGS
@@ -173,6 +190,32 @@ run:
   sample_mode: false
   sample_n: 200000
   seed: 123
+  # Name-linking defaults for eviction defendant <-> InfoUSA person linkage.
+  year_window: [0]
+  # If false, candidate blocking ignores year and InfoUSA is collapsed to familyid+person_num.
+  use_year_in_blocking: false
+  candidate_cap_k: 50
+  # Optional fastLink scheduling chunk size (eviction persons per chunk); null disables.
+  fastlink_chunk_evict_n: null
+  # Force merge of parsed address components from infousa_clean even when only a small share
+  # of InfoUSA rows are missing n_sn_ss_c.
+  force_infousa_clean_enrich: false
+  # Optional extra downsample in sample_mode: number of eviction cases to keep
+  # after loading geo sample files (NULL/empty disables).
+  sample_evict_cases_n: null
+  # In sample_mode, restrict InfoUSA rows to tracts present in sampled eviction cases.
+  restrict_inf_to_evict_tracts: true
+  common_surname_quantile: 0.995
+  # Geo-driven sampling for eviction<->InfoUSA linkage development.
+  # Provide one or more of these in config or via CLI to r/make-link-evictions-infousa-sample.R.
+  link_sample_zips: []
+  link_sample_tracts: []
+  link_sample_bg_geoids: []
+  # Time aggregation for retaliatory-evictions.r
+  # One of: month, quarter
+  retaliatory_time_unit: "month"
+  # Skip LP-DiD by default; enable explicitly when needed.
+  retaliatory_skip_lpdid: true
   # Aggregation level for building data: "year", "quarter", or "month"
   building_data_agg_level: "year"
 

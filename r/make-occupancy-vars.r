@@ -131,7 +131,12 @@ hh_to_structure_bin <- function(max_hh) {
 # -------------------------------
 logf("Loading input data...", log_file = log_file)
 
-philly_infousa_dt  <- fread(p_input(cfg, "infousa_cleaned"))
+infousa_path <- p_product(cfg, "infousa_clean")
+if (!file.exists(infousa_path)) {
+  infousa_path <- p_input(cfg, "infousa_cleaned")
+}
+logf("  InfoUSA source: ", infousa_path, log_file = log_file)
+philly_infousa_dt  <- fread(infousa_path)
 philly_bldgs       <- fread(p_product(cfg, "parcel_building_summary"))  # building rows: PID, max_hgt, square_ft
 philly_parcels     <- fread(p_product(cfg, "parcels_clean"))     # parcel rows
 info_usa_xwalk     <- fread(p_product(cfg, "infousa_address_xwalk"))
@@ -181,6 +186,48 @@ infousa_m[, first_year_at_parcel := min(year) == year, by = .(family_id, PID)]
 infousa_m[, last_year_at_parcel  := max(year) == year, by = .(family_id, PID)]
 infousa_m[, num_households_g1    := sum(num_years_in_sample > 1), by = .(PID, year)]
 infousa_m[, max_households       := max(num_households, na.rm = TRUE), by = PID]
+
+# Raw InfoUSA completion for one-year interior family gaps:
+# if a family is observed at PID in t and t+2, add t+1 as a high-confidence
+# coverage-gap row. This uses raw family-year continuity instead of occupancy-rate
+# imputation and is deterministic by construction.
+infousa_family_obs <- unique(
+  infousa_m[!is.na(PID) & !is.na(family_id) & !is.na(year),
+            .(PID, family_id, year)],
+  by = c("PID", "family_id", "year")
+)
+assert_unique(infousa_family_obs, c("PID", "family_id", "year"), "infousa_family_obs")
+setorder(infousa_family_obs, PID, family_id, year)
+
+infousa_family_gapfill_1y <- infousa_family_obs[
+  ,
+  {
+    next_year <- data.table::shift(year, type = "lead")
+    gap_idx <- which(!is.na(next_year) & (next_year - year) == 2L)
+    if (length(gap_idx) == 0L) NULL else .(year = year[gap_idx] + 1L)
+  },
+  by = .(PID, family_id)
+]
+if (nrow(infousa_family_gapfill_1y) == 0L) {
+  infousa_family_gapfill_1y <- infousa_family_obs[0, .(PID, family_id, year)]
+} else {
+  setorder(infousa_family_gapfill_1y, PID, family_id, year)
+}
+assert_unique(infousa_family_gapfill_1y, c("PID", "family_id", "year"), "infousa_family_gapfill_1y")
+
+infousa_gapfill_pid_year <- infousa_family_gapfill_1y[
+  ,
+  .(num_households_raw_gapfill_1y = .N),
+  by = .(PID, year)
+]
+logf(
+  "  [raw InfoUSA gap-fill] Added ",
+  nrow(infousa_family_gapfill_1y),
+  " family-year rows across ",
+  infousa_gapfill_pid_year[, .N],
+  " PID-years (1-year interior gaps only)",
+  log_file = log_file
+)
 
 hh_agg <- infousa_m[!is.na(PID),
                     .(
@@ -996,6 +1043,12 @@ yearly_infousa <- infousa_m[!is.na(PID),
                             ),
                             by = .(PID, year)
 ]
+yearly_infousa <- merge(
+  yearly_infousa,
+  infousa_gapfill_pid_year,
+  by = c("PID", "year"),
+  all = TRUE
+)
 
 # rental panel info
 ever_panel_year <- ever_rentals_panel[, .(
@@ -1059,6 +1112,35 @@ panel[
 # Defensive clamp: keep unit counts strictly positive in final panel.
 panel[is.na(total_units) | total_units <= 0, total_units := 1L]
 
+# Combine observed InfoUSA household counts with deterministic raw-gap fill counts.
+panel[, num_households_completed := fifelse(
+  is.na(num_households) & is.na(num_households_raw_gapfill_1y),
+  NA_integer_,
+  as.integer(fcoalesce(num_households, 0L) + fcoalesce(num_households_raw_gapfill_1y, 0L))
+)]
+
+# Observed-vs-completed flags for diagnostics.
+panel[, has_hh_observed := !is.na(num_households)]
+panel[, has_hh_completed := !is.na(num_households_completed)]
+panel[, pid_has_any_hh_observed := any(has_hh_observed), by = PID]
+panel[, pid_has_any_hh_completed := any(has_hh_completed), by = PID]
+n_raw_gap_rows_filled <- panel[
+  is.na(num_households) & !is.na(num_households_raw_gapfill_1y),
+  .N
+]
+n_raw_gap_units_filled <- panel[
+  is.na(num_households) & !is.na(num_households_raw_gapfill_1y),
+  sum(total_units, na.rm = TRUE)
+]
+logf(
+  "  [raw InfoUSA gap-fill] Filled ",
+  n_raw_gap_rows_filled,
+  " PID-year rows before imputation (units=",
+  round(n_raw_gap_units_filled),
+  ")",
+  log_file = log_file
+)
+
 # Renters in panel:
 # ASSUMPTION: For rental properties, all InfoUSA households are renters.
 # We do NOT subtract num_homeowners because the InfoUSA owner/renter status
@@ -1067,12 +1149,13 @@ panel[is.na(total_units) | total_units <= 0, total_units := 1L]
 #
 # renters_2010 was raked to match 2010 Census BG totals, so it only applies
 # to (a) observations in year <= 2010, AND (b) buildings that existed by 2010.
-# Post-2010 years or post-2010 construction use InfoUSA num_households.
-# When num_households is NA, renter_occ is left as NA (not imputed).
+# Post-2010 years or post-2010 construction use InfoUSA num_households,
+# including deterministic raw-family gap-fill rows (1-year interior gaps).
+# When num_households_completed is NA, renter_occ is left as NA (later imputed).
 panel[, renter_occ := fifelse(
   !is.na(renters_2010) & year <= 2010 & (is.na(year_built) | as.numeric(year_built) <= 2010),
   renters_2010,
-  pmin(as.integer(num_households), as.integer(total_units))
+  pmin(as.integer(num_households_completed), as.integer(total_units))
 )]
 panel[renter_occ < 0L, renter_occ := 0L]
 
@@ -1104,8 +1187,8 @@ missing_diag <- panel[
     n_missing = sum(has_hh_data == FALSE),
     pct_missing = round(100 * mean(has_hh_data == FALSE), 1),
     # Among missing: how many have ANY InfoUSA data in other years?
-    n_missing_pid_has_some = sum(has_hh_data == FALSE & pid_has_any_hh == TRUE),
-    n_missing_pid_has_none = sum(has_hh_data == FALSE & pid_has_any_hh == FALSE)
+    n_missing_pid_has_some = sum(has_hh_data == FALSE & pid_has_any_hh_completed == TRUE),
+    n_missing_pid_has_none = sum(has_hh_data == FALSE & pid_has_any_hh_completed == FALSE)
   ),
   by = .(diag_units_bin)
 ]
@@ -1128,7 +1211,7 @@ missing_btype <- panel[
     n_total = .N,
     n_missing = sum(has_hh_data == FALSE),
     pct_missing = round(100 * mean(has_hh_data == FALSE), 1),
-    n_missing_pid_has_none = sum(has_hh_data == FALSE & pid_has_any_hh == FALSE)
+    n_missing_pid_has_none = sum(has_hh_data == FALSE & pid_has_any_hh_completed == FALSE)
   ),
   by = building_type
 ]
@@ -1145,7 +1228,7 @@ for (r in seq_len(nrow(missing_btype))) {
 # Among PIDs with NO InfoUSA data ever: what rental evidence do they have?
 # These are the ones Step B (BG fallback) would fill — are they real rentals?
 never_hh_pids <- panel[
-  year >= 2011 & year <= 2019 & pid_has_any_hh == FALSE,
+  year >= 2011 & year <= 2019 & pid_has_any_hh_completed == FALSE,
   .(
     total_units = first(total_units),
     building_type = first(building_type),
@@ -1184,6 +1267,150 @@ logf(sprintf(
   never_hh_summary$has_evict, never_hh_summary$has_any_evidence,
   never_hh_summary$has_no_evidence
 ), log_file = log_file)
+
+# Coverage categories for investigation:
+# 1) partial coverage (lease-up window),
+# 2) never in InfoUSA,
+# 3) spotty year-to-year InfoUSA presence.
+leaseup_window_years <- 2L
+panel[, in_leaseup_window := !is.na(year_built) &
+       as.integer(year_built) >= 2010L &
+       year <= as.integer(year_built) + leaseup_window_years]
+panel[, coverage_category := fcase(
+  has_hh_completed == TRUE, "covered",
+  has_hh_completed == FALSE & in_leaseup_window == TRUE, "partial_coverage_leaseup",
+  has_hh_completed == FALSE & pid_has_any_hh_completed == FALSE, "never_in_infousa",
+  has_hh_completed == FALSE & pid_has_any_hh_completed == TRUE, "spotty_in_infousa",
+  default = "unclassified"
+)]
+panel[, rental_row := ever_rental_any_year %in% TRUE]
+
+coverage_unit_year <- panel[
+  year >= 2011 & year <= 2022 & rental_row == TRUE,
+  .(
+    n_pid_year = .N,
+    units = sum(total_units, na.rm = TRUE),
+    n_large_pid_year = sum(total_units >= 20, na.rm = TRUE),
+    large_units = sum(fifelse(total_units >= 20, total_units, 0), na.rm = TRUE)
+  ),
+  by = .(year, coverage_category)
+]
+setorder(coverage_unit_year, year, coverage_category)
+
+coverage_year_total <- panel[
+  year >= 2011 & year <= 2022 & rental_row == TRUE,
+  .(
+    n_pid_year_total = .N,
+    total_units_rental = sum(total_units, na.rm = TRUE)
+  ),
+  by = year
+]
+coverage_units_wide <- dcast(
+  coverage_unit_year[, .(year, coverage_category, units)],
+  year ~ coverage_category,
+  value.var = "units",
+  fun.aggregate = sum,
+  fill = 0
+)
+for (nm in c("covered", "partial_coverage_leaseup", "never_in_infousa", "spotty_in_infousa")) {
+  if (!nm %in% names(coverage_units_wide)) coverage_units_wide[, (nm) := 0]
+}
+setcolorder(coverage_units_wide, c("year", "covered", "partial_coverage_leaseup", "never_in_infousa", "spotty_in_infousa"))
+setnames(
+  coverage_units_wide,
+  old = c("covered", "partial_coverage_leaseup", "never_in_infousa", "spotty_in_infousa"),
+  new = c("units_covered", "units_partial_leaseup", "units_never_infousa", "units_spotty_infousa")
+)
+
+coverage_summary <- merge(coverage_year_total, coverage_units_wide, by = "year", all.x = TRUE)
+for (nm in c("units_covered", "units_partial_leaseup", "units_never_infousa", "units_spotty_infousa")) {
+  coverage_summary[is.na(get(nm)), (nm) := 0]
+}
+coverage_summary[, units_missing_total := units_partial_leaseup + units_never_infousa + units_spotty_infousa]
+coverage_summary[, pct_units_missing := fifelse(total_units_rental > 0, 100 * units_missing_total / total_units_rental, NA_real_)]
+coverage_summary[, gap_vs_330k := total_units_rental - 330000]
+setorder(coverage_summary, year)
+
+logf("  [coverage categories] Rental unit-years by year (2011-2022):", log_file = log_file)
+for (r in seq_len(nrow(coverage_summary))) {
+  logf(sprintf(
+    "    year=%d total_units=%.0f covered=%.0f partial=%.0f never=%.0f spotty=%.0f missing_pct=%.2f%% gap_vs_330k=%+.0f",
+    coverage_summary$year[r],
+    coverage_summary$total_units_rental[r],
+    coverage_summary$units_covered[r],
+    coverage_summary$units_partial_leaseup[r],
+    coverage_summary$units_never_infousa[r],
+    coverage_summary$units_spotty_infousa[r],
+    coverage_summary$pct_units_missing[r],
+    coverage_summary$gap_vs_330k[r]
+  ), log_file = log_file)
+}
+
+coverage_out <- p_out(cfg, "qa", "infousa_coverage_categories_unit_year.csv")
+coverage_summary_out <- p_out(cfg, "qa", "infousa_coverage_categories_year_summary.csv")
+fwrite(coverage_unit_year, coverage_out)
+fwrite(coverage_summary, coverage_summary_out)
+logf("  Wrote InfoUSA coverage category unit-years: ", nrow(coverage_unit_year), " rows to ", coverage_out, log_file = log_file)
+logf("  Wrote InfoUSA coverage category year summary: ", nrow(coverage_summary), " rows to ", coverage_summary_out, log_file = log_file)
+
+never_infousa_pid_review <- panel[
+  year >= 2011 & year <= 2022 & rental_row == TRUE & pid_has_any_hh_completed == FALSE,
+  .(
+    year_built = first(year_built),
+    total_units_max = max(total_units, na.rm = TRUE),
+    building_type = first(building_type),
+    structure_bin = first(structure_bin),
+    years_license = sum(rental_from_license %in% TRUE, na.rm = TRUE),
+    years_altos = sum(rental_from_altos %in% TRUE, na.rm = TRUE),
+    years_evict = sum(rental_from_evict %in% TRUE, na.rm = TRUE),
+    total_filings = sum(fifelse(is.na(num_filings), 0L, num_filings))
+  ),
+  by = PID
+]
+never_infousa_pid_review[, strong_counterevidence := (
+  (years_license >= 2L) + (years_altos >= 2L) + (years_evict >= 2L) >= 2L
+) | total_filings >= 10L]
+setorder(never_infousa_pid_review, -total_units_max, -years_license, -years_altos, -years_evict, -total_filings)
+never_review_out <- p_out(cfg, "qa", "infousa_never_in_infousa_pid_review.csv")
+fwrite(never_infousa_pid_review, never_review_out)
+logf(
+  "  Wrote never-in-InfoUSA PID review: ",
+  nrow(never_infousa_pid_review),
+  " rows to ",
+  never_review_out,
+  " (strong counterevidence=",
+  never_infousa_pid_review[strong_counterevidence == TRUE, .N],
+  ")",
+  log_file = log_file
+)
+
+setorder(panel, PID, year)
+panel[, hh_obs_prev := data.table::shift(has_hh_observed, type = "lag"), by = PID]
+panel[, hh_obs_next := data.table::shift(has_hh_observed, type = "lead"), by = PID]
+panel[, spotty_adjacent_observed := (!has_hh_observed) &
+       (hh_obs_prev %in% TRUE) &
+       (hh_obs_next %in% TRUE)]
+
+spotty_large_pid_year <- panel[
+  year >= 2011 & year <= 2022 &
+    coverage_category == "spotty_in_infousa" &
+    total_units >= 20 &
+    rental_row == TRUE,
+  .(
+    PID, year, total_units, year_built, building_type, structure_bin,
+    num_households_observed = num_households,
+    num_households_raw_gapfill_1y,
+    num_households_completed,
+    spotty_adjacent_observed,
+    rental_from_license, rental_from_altos, rental_from_evict,
+    num_filings
+  )
+]
+setorder(spotty_large_pid_year, -total_units, PID, year)
+spotty_large_out <- p_out(cfg, "qa", "infousa_spotty_large_pid_year.csv")
+fwrite(spotty_large_pid_year, spotty_large_out)
+logf("  Wrote spotty large-building review: ", nrow(spotty_large_pid_year), " rows to ", spotty_large_out,
+     log_file = log_file)
 
 # Step A: Within-PID carry-forward/backward for PIDs with SOME data.
 # Interpolate occupancy_rate (unit-normalized) rather than raw counts,
@@ -1252,7 +1479,12 @@ panel[!is.na(renter_occ) & renter_occ < 0L, renter_occ := 0L]
 
 # Clean up temp columns
 panel[, c("has_hh_data", "pid_has_any_hh", "pid_has_rental_evidence",
-           "occ_rate_observed", "occ_rate_filled", "bg_occ_rate") := NULL]
+           "occ_rate_observed", "occ_rate_filled", "bg_occ_rate",
+           "num_households_raw_gapfill_1y", "num_households_completed",
+           "has_hh_observed", "has_hh_completed",
+           "pid_has_any_hh_observed", "pid_has_any_hh_completed",
+           "in_leaseup_window", "coverage_category", "rental_row",
+           "hh_obs_prev", "hh_obs_next", "spotty_adjacent_observed") := NULL]
 
 # Compute occupancy_rate. After Fix 2, most renter_occ values are filled.
 # Any remaining NAs (no BG match) fall back to 0 conservatively.

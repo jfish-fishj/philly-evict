@@ -449,8 +449,21 @@ validate_address_table <- function(dt, required_cols = c("n_sn_ss_c", "pm.house"
 # =========================
 
 load_suffix_aliases <- function(cfg) {
-  alias_path <- p_input(cfg, "street_suffix_aliases")
-  dt <- data.table::fread(alias_path)
+  alias_path <- tryCatch(
+    p_input(cfg, "street_suffix_aliases"),
+    error = function(e) NA_character_
+  )
+  fallback_paths <- c(
+    alias_path,
+    p_in(cfg, "aliases/street_suffix_aliases.csv"),
+    p_in(cfg, "graveyard data/aliases/street_suffix_aliases.csv")
+  )
+  fallback_paths <- unique(fallback_paths[!is.na(fallback_paths)])
+  existing <- fallback_paths[file.exists(fallback_paths)]
+  if (length(existing) == 0) {
+    stop("No street suffix alias file found. Tried: ", paste(fallback_paths, collapse = ", "))
+  }
+  dt <- data.table::fread(existing[1])
   stopifnot(all(c("from", "to") %in% names(dt)))
   dt[, `:=`(from = tolower(from), to = tolower(to))]
   data.table::setkey(dt, from)
@@ -810,4 +823,3 @@ canonicalize_parsed_addresses <- function(dt, cfg, source = "unknown",
 
   dt
 }
-

@@ -35,7 +35,12 @@ logf("Config: ", cfg$meta$config_path, log_file = log_file)
 # ---- Load input data ----
 logf("Loading input data...", log_file = log_file)
 
-philly_infousa_dt <- fread(p_input(cfg, "infousa_cleaned"))
+infousa_path <- p_product(cfg, "infousa_clean")
+if (!file.exists(infousa_path)) {
+  infousa_path <- p_input(cfg, "infousa_cleaned")
+}
+logf("  InfoUSA source: ", infousa_path, log_file = log_file)
+philly_infousa_dt <- fread(infousa_path)
 philly_infousa_dt[, obs_id := .I]
 philly_parcels <- fread(p_product(cfg, "parcels_clean"))
 philly_parcels_sf <- read_sf(p_input(cfg, "philly_parcels_sf"))
@@ -86,10 +91,21 @@ philly_infousa_dt_address_agg = philly_infousa_dt[!is.na(pm.house) & !is.na(n_sn
 philly_infousa_dt_addys = unique(philly_infousa_dt_address_agg, by = "n_sn_ss_c")
 
 philly_parcels[,PID := str_pad(parcel_number,9, "left",pad = "0") ]
-philly_parcel_addys = unique(philly_parcels, by = "n_sn_ss_c")
+# Keep one row per (address, PID). Do NOT collapse to one PID per address.
+# Collapsing by n_sn_ss_c causes sibling PID loss for multi-parcel complexes.
+philly_parcel_addys = unique(
+  philly_parcels[, .(
+    PID, n_sn_ss_c, pm.house, pm.street, pm.zip, pm.streetSuf,
+    pm.sufDir, pm.preDir, pm.dir_concat,
+    market_value, total_livable_area, building_code_description_new,
+    building_code_description, unit
+  )],
+  by = c("n_sn_ss_c", "PID")
+)
 philly_parcel_addys[, pm.zip := str_remove(as.character(pm.zip), "^_") %>%
                       str_pad(5, "left", "0")]
-philly_parcel_addys[,pm.house := as.character(pm.house)]
+philly_parcel_addys[, pm.house := as.character(pm.house)]
+assert_unique(philly_parcel_addys, c("n_sn_ss_c", "PID"), "philly_parcel_addys")
 # philly_parcel_addys = unique(rbindlist(list(philly_rentals_long_addys %>%
 #                                                            select(pm.address:PID, geocode_x, geocode_y),
 #                                                 philly_parcel_addys %>%
@@ -355,24 +371,30 @@ if (nrow(unmatched_for_fuzzy) > 0) {
   fuzzy_merge[, house_diff := abs(pm.house_num - pm.house_num_parcel)]
   fuzzy_merge <- fuzzy_merge[house_diff > 0 & house_diff <= 10]
 
-  # Only keep unique matches (exactly one candidate parcel)
+  # Keep all candidates; later deterministic disambiguation will pick one PID.
   fuzzy_merge[, num_candidates := uniqueN(PID), by = n_sn_ss_c]
+  fuzzy_candidates <- unique(
+    fuzzy_merge[, .(PID, n_sn_ss_c, merge = "fuzzy_house_num")]
+  )
   fuzzy_unique <- fuzzy_merge[num_candidates == 1]
-  fuzzy_unique[, merge := "fuzzy_house_num"]
 
-  matched_fuzzy <- unique(fuzzy_unique$n_sn_ss_c)
+  matched_fuzzy <- unique(fuzzy_candidates$n_sn_ss_c)
 
   logf("  [Tier 5] Fuzzy house-number matches: ", length(matched_fuzzy),
-       " unique addresses matched (of ", nrow(unmatched_for_fuzzy), " candidates)",
+       " addresses with candidate parcel(s) (of ", nrow(unmatched_for_fuzzy), " candidates)",
        log_file = log_file)
   if (nrow(fuzzy_merge) > 0) {
-    logf("  [Tier 5] Multi-candidate (excluded): ",
+    logf("  [Tier 5] Multi-candidate (to resolve via scoring): ",
          fuzzy_merge[num_candidates > 1, uniqueN(n_sn_ss_c)],
          " addresses", log_file = log_file)
   }
 } else {
+  fuzzy_candidates <- data.table(PID = character(), n_sn_ss_c = character(),
+                                 merge = character())
   fuzzy_unique <- data.table(PID = character(), n_sn_ss_c = character(),
-                             merge = character())
+                             pm.house_num = numeric(), pm.street = character(),
+                             pm.zip = character(), pm.house_num_parcel = numeric(),
+                             house_diff = numeric(), num_candidates = integer())
   matched_fuzzy <- character(0)
 }
 
@@ -395,72 +417,198 @@ unique(num_st_sfx_dir_zip_merge, by = "n_sn_ss_c")[,.N, by = .(n_sn_ss_c %in% (m
 # take some random samples of not merged
 
 #### make philly_infousa_dt_address_agg-parcels xwalk ####
-# first start with parcels that merged uniquely
-# spatial_join_sf_join = spatial_join_sf_join %>%
-#   mutate(n_sn_ss_c = n_sn_ss_c_1,
-#          merge = "spatial"
-#          )
-xwalk_unique = bind_rows(list(
-  num_st_sfx_dir_zip_merge[num_pids == 1, .(PID,n_sn_ss_c, merge)] %>% distinct(),
-  num_st_merge[num_pids == 1, .(PID,n_sn_ss_c, merge)] %>% distinct(),
-  num_st_sfx_merge[num_pids == 1, .(PID,n_sn_ss_c, merge)] %>% distinct(),
-  spatial_join_sf_join[num_pids_st == 1, .(PID_2,n_sn_ss_c, merge)]  %>%
-    distinct()%>%
-    rename(PID = PID_2),
-  fuzzy_unique[, .(PID, n_sn_ss_c, merge)] %>% distinct()
+# Build candidate PID sets from all tiers; keep the best (lowest-rank tier)
+# candidate per (address, PID), then resolve multi-PID addresses deterministically.
+xwalk_candidates <- rbindlist(list(
+  num_st_sfx_dir_zip_merge[!is.na(PID), .(PID, n_sn_ss_c, merge)],
+  num_st_merge[!is.na(PID), .(PID, n_sn_ss_c, merge)],
+  num_st_sfx_merge[!is.na(PID), .(PID, n_sn_ss_c, merge)],
+  spatial_join_sf_join[!is.na(PID_2), .(PID = PID_2, n_sn_ss_c, merge)],
+  fuzzy_candidates[!is.na(PID), .(PID, n_sn_ss_c, merge)]
+), fill = TRUE, use.names = TRUE)
+
+xwalk_candidates <- unique(xwalk_candidates)
+xwalk_candidates[, merge_rank := fcase(
+  merge == "num_st_sfx_dir_zip", 1L,
+  merge == "num_st", 2L,
+  merge == "num_st_sfx", 3L,
+  merge == "spatial", 4L,
+  merge == "fuzzy_house_num", 5L,
+  default = 99L
+)]
+setorder(xwalk_candidates, n_sn_ss_c, PID, merge_rank)
+xwalk_candidates <- xwalk_candidates[, .SD[1], by = .(n_sn_ss_c, PID)]
+assert_unique(xwalk_candidates, c("n_sn_ss_c", "PID"), "xwalk_candidates")
+
+# Address-level household scale from InfoUSA, used for candidate plausibility.
+addr_hh_stats <- philly_infousa_dt_address_agg[
+  ,
+  .(
+    hh_max_year = max(num_obs, na.rm = TRUE),
+    hh_mean_year = mean(num_obs, na.rm = TRUE),
+    hh_total = sum(num_obs, na.rm = TRUE),
+    hh_years = .N
+  ),
+  by = n_sn_ss_c
+]
+
+# PID-level parcel features for disambiguation among sibling candidates.
+parcel_features <- unique(
+  philly_parcel_addys[
+    ,
+    .(
+      PID,
+      market_value = suppressWarnings(as.numeric(market_value)),
+      total_livable_area = suppressWarnings(as.numeric(total_livable_area)),
+      building_code_description_new,
+      building_code_description,
+      unit
+    )
+  ],
+  by = "PID"
 )
-) %>%
-  mutate(unique = T) %>%
-  as.data.table()
 
-# next append parcels that did not merge uniquely
-xwalk_non_unique = bind_rows(list(
-  num_st_sfx_dir_zip_merge[num_pids > 1, .(PID,n_sn_ss_c, merge)] %>% distinct(),
-  num_st_merge[num_pids > 1, .(PID,n_sn_ss_c, merge)] %>% distinct(),
-  num_st_sfx_merge[num_pids > 1, .(PID,n_sn_ss_c, merge)] %>% distinct(),
-  spatial_join_sf_join[num_pids_st > 1 & !is.na(PID_2), .(PID_2,n_sn_ss_c, merge)]  %>%
-    distinct()%>%
-    rename(PID = PID_2)
-  #fuzzy_match[num_matches > 1, .(PID_match, n_sn_ss_c, merge)] %>% rename(PID = PID_match) %>% distinct()
-)) %>%
-  mutate(unique = F) %>%
-  filter(!n_sn_ss_c %in% xwalk_unique$n_sn_ss_c) %>%
-  filter(!is.na(PID)) %>%
-  distinct(PID, n_sn_ss_c,.keep_all = T) %>%
-  as.data.table()
+cand_scored <- merge(
+  xwalk_candidates,
+  addr_hh_stats,
+  by = "n_sn_ss_c",
+  all.x = TRUE
+)
+cand_scored <- merge(
+  cand_scored,
+  parcel_features,
+  by = "PID",
+  all.x = TRUE
+)
 
+cand_scored[, bldg_desc := str_to_lower(str_squish(
+  fifelse(
+    !is.na(building_code_description_new) & building_code_description_new != "",
+    as.character(building_code_description_new),
+    as.character(building_code_description)
+  )
+))]
+cand_scored[is.na(bldg_desc), bldg_desc := ""]
+cand_scored[, has_unit_token := !is.na(unit) & str_squish(as.character(unit)) != ""]
 
-xwalk = bind_rows(list(
-  xwalk_unique,
-  xwalk_non_unique,
-  tibble(n_sn_ss_c = philly_infousa_dt_address_agg[(!n_sn_ss_c %in% xwalk_non_unique$n_sn_ss_c &
-                                                 !n_sn_ss_c %in% xwalk_unique$n_sn_ss_c), n_sn_ss_c],
-         merge = "not merged", PID = NA) %>% distinct()
-) )
+residential_re <- "(apart|apts|resident|dwelling|duplex|triplex|multi\\s*family|condo|townhouse|rowhome|flat)"
+nonres_re <- "(retail|office|industrial|warehouse|parking|garage|vacant|school|hospital|hotel|commercial|store)"
 
-xwalk[,num_merges := uniqueN(merge), by = .(n_sn_ss_c, unique)]
-unique(xwalk, by = "n_sn_ss_c")[,.N, by = .(merge)][,per := round(N / sum(N),2)][]
-xwalk[unique == T,.N, by = num_merges] # this should always be one
-xwalk[unique == F,.N, by = num_merges] # this should mostly be one
-xwalk[,num_parcels_matched := uniqueN(PID,na.rm = T), by = n_sn_ss_c]
-xwalk[,num_addys_matched := uniqueN(n_sn_ss_c,na.rm = T), by = PID]
-unique(xwalk[], by = "n_sn_ss_c")[,.N, by = num_parcels_matched][,per := round(N / sum(N),4)][order(num_parcels_matched)]
-unique(xwalk[], by = "n_sn_ss_c")[,.N, by = num_addys_matched][,per := round(N / sum(N),4)][order(num_addys_matched)]
-xwalk[,.N, by = num_addys_matched][,per := round(N / sum(N),4)][order(num_addys_matched)]
+cand_scored[, is_residential_like := str_detect(bldg_desc, residential_re)]
+cand_scored[, is_nonres_like := str_detect(bldg_desc, nonres_re)]
 
+cand_scored[is.na(total_livable_area), total_livable_area := 0]
+cand_scored[is.na(market_value), market_value := 0]
+cand_scored[is.na(hh_max_year), hh_max_year := 0]
 
-#xwalk = unique(xwalk, by = c("n_sn_ss_c", "PID"))
-philly_infousa_dt_address_agg[,sum(num_obs), by = .(!n_sn_ss_c %in% xwalk_non_unique$n_sn_ss_c &
-                                                      !n_sn_ss_c %in% xwalk_unique$n_sn_ss_c)][,per := V1 / sum(V1)][]
+cand_scored[, large_fit := hh_max_year >= 30 &
+              is_residential_like &
+              !is_nonres_like &
+              !has_unit_token &
+              total_livable_area >= pmax(10000, hh_max_year * 220)]
+
+cand_scored[, score :=
+              120 * as.numeric(is_residential_like) -
+              140 * as.numeric(is_nonres_like) -
+               80 * as.numeric(hh_max_year >= 30 & has_unit_token) +
+               40 * as.numeric(large_fit) +
+               25 * log1p(pmax(total_livable_area, 0)) +
+                8 * log1p(pmax(market_value, 0)) -
+               10 * as.numeric(merge_rank)]
+
+cand_scored[, n_candidates := .N, by = n_sn_ss_c]
+
+resolved <- cand_scored[
+  ,
+  {
+    ord_default <- order(-score, merge_rank, -market_value, -total_livable_area, PID)
+    top_scores <- sort(score, decreasing = TRUE)
+    score_margin <- if (length(top_scores) >= 2) top_scores[1] - top_scores[2] else NA_real_
+
+    idx_large <- which(large_fit)
+    chosen_idx <- NA_integer_
+    resolution_rule <- NA_character_
+
+    if (.N == 1L) {
+      chosen_idx <- 1L
+      resolution_rule <- "single_candidate"
+    } else if (length(idx_large) == 1L) {
+      chosen_idx <- idx_large[1]
+      resolution_rule <- "single_large_fit"
+    } else if (length(idx_large) > 1L) {
+      sub_dt <- .SD[idx_large]
+      sub_ord <- order(-sub_dt$market_value, -sub_dt$total_livable_area, sub_dt$merge_rank, sub_dt$PID)
+      chosen_idx <- idx_large[sub_ord[1]]
+      resolution_rule <- "multi_large_fit_weighted_mv"
+    } else {
+      chosen_idx <- ord_default[1]
+      resolution_rule <- "score_weighted_mv"
+    }
+
+    .(
+      PID = PID[chosen_idx],
+      merge = merge[chosen_idx],
+      resolution_rule = resolution_rule,
+      resolution_score_margin = score_margin
+    )
+  },
+  by = n_sn_ss_c
+]
+assert_unique(resolved, "n_sn_ss_c", "resolved_infousa_xwalk")
+
+# QA export: candidate scoring details for multi-PID addresses.
+qa_resolution <- merge(
+  cand_scored,
+  resolved[, .(n_sn_ss_c, PID_selected = PID, resolution_rule, resolution_score_margin)],
+  by = "n_sn_ss_c",
+  all.x = TRUE
+)
+qa_resolution[, selected := PID == PID_selected]
+
+qa_resolution_path <- p_out(cfg, "qa", "infousa_multi_pid_resolution.csv")
+dir.create(dirname(qa_resolution_path), recursive = TRUE, showWarnings = FALSE)
+fwrite(
+  qa_resolution[
+    ,
+    .(
+      n_sn_ss_c, PID, selected, merge, merge_rank, n_candidates,
+      resolution_rule, resolution_score_margin, hh_max_year, hh_mean_year,
+      total_livable_area, market_value, bldg_desc, has_unit_token,
+      is_residential_like, is_nonres_like, large_fit, score
+    )
+  ],
+  qa_resolution_path
+)
+logf("  Wrote multi-PID resolution QA: ", qa_resolution_path, log_file = log_file)
+logf("  Multi-PID addresses resolved via scoring: ",
+     qa_resolution[n_candidates > 1, uniqueN(n_sn_ss_c)],
+     log_file = log_file)
+
+all_addrs <- data.table(n_sn_ss_c = unique(philly_infousa_dt_address_agg$n_sn_ss_c))
+xwalk <- merge(
+  all_addrs,
+  resolved[, .(n_sn_ss_c, PID, merge, resolution_rule)],
+  by = "n_sn_ss_c",
+  all.x = TRUE
+)
+xwalk[is.na(PID), `:=`(merge = "not merged", resolution_rule = "unmatched")]
+xwalk[, unique := TRUE]
+xwalk[, num_merges := 1L]
+xwalk[, num_parcels_matched := as.integer(!is.na(PID))]
+xwalk[, num_addys_matched := uniqueN(n_sn_ss_c), by = PID]
+xwalk[is.na(PID), num_addys_matched := 0L]
+assert_unique(xwalk, "n_sn_ss_c", "xwalk final")
+
+unique(xwalk, by = "n_sn_ss_c")[, .N, by = .(merge)][, per := round(N / sum(N), 4)]
+unique(xwalk, by = "n_sn_ss_c")[, .N, by = .(num_parcels_matched)][
+  , per := round(N / sum(N), 4)][order(num_parcels_matched)]
 
 xwalk_listing = merge(
   xwalk,
-  philly_infousa_dt[,.(n_sn_ss_c,obs_id )] %>% distinct(),
-  by = "n_sn_ss_c", allow.cartesian = T
+  unique(philly_infousa_dt[, .(n_sn_ss_c, obs_id)]),
+  by = "n_sn_ss_c",
+  allow.cartesian = TRUE
 )
-
-xwalk_listing[,.N, by = num_addys_matched][,per := round(N / sum(N),4)][order(num_addys_matched)]
-xwalk_listing[,.N, by = num_parcels_matched][,per := round(N / sum(N),4)][order(num_parcels_matched)]
 
 #### Merge Statistics Summary ####
 logf("Merge statistics...", log_file = log_file)
