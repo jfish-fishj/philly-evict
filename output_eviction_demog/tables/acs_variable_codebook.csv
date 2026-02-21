@@ -1,0 +1,19 @@
+source,var,acs_code,label,concept
+acs5,pop_total,B01003_001,Estimate!!Total,TOTAL POPULATION
+acs5,hh_total,B25003_001,Estimate!!Total,TENURE
+acs5,med_hh_income,B25119_001,Estimate!!Median household income in the past 12 months (in 2018 inflation-adjusted dollars) --!!Total,MEDIAN HOUSEHOLD INCOME THE PAST 12 MONTHS (IN 2018 INFLATION-ADJUSTED DOLLARS) BY TENURE
+acs5,med_renter_hh_income,B25119_003,Estimate!!Median household income in the past 12 months (in 2018 inflation-adjusted dollars) --!!Renter occupied (dollars),MEDIAN HOUSEHOLD INCOME THE PAST 12 MONTHS (IN 2018 INFLATION-ADJUSTED DOLLARS) BY TENURE
+acs5,med_gross_rent,B25064_001,Estimate!!Median gross rent,MEDIAN GROSS RENT (DOLLARS)
+acs5,labor_force,C18120_002,Estimate!!Total!!In the labor force,EMPLOYMENT STATUS BY DISABILITY STATUS
+acs5,unemployed,C18120_006,Estimate!!Total!!In the labor force!!Unemployed,EMPLOYMENT STATUS BY DISABILITY STATUS
+acs5,renter_occ_hh,B25003_003,Estimate!!Total!!Renter occupied,TENURE
+acs5,median_age,B01002_001,Estimate!!Median age --!!Total,MEDIAN AGE BY SEX
+acs5,nonhisp_white,B03002_003,Estimate!!Total!!Not Hispanic or Latino!!White alone,HISPANIC OR LATINO ORIGIN BY RACE
+acs5,nonhisp_black,B03002_004,Estimate!!Total!!Not Hispanic or Latino!!Black or African American alone,HISPANIC OR LATINO ORIGIN BY RACE
+acs5,hispanic_any,B03001_003,Estimate!!Total!!Hispanic or Latino,HISPANIC OR LATINO ORIGIN BY SPECIFIC ORIGIN
+acs5,edu_total_25p,B06009PR_001,Estimate!!Total,PLACE OF BIRTH BY EDUCATIONAL ATTAINMENT IN PUERTO RICO
+acs5,edu_ba,B06009PR_005,Estimate!!Total!!Bachelor's degree,PLACE OF BIRTH BY EDUCATIONAL ATTAINMENT IN PUERTO RICO
+acs5,edu_ma,B15003_023,Estimate!!Total!!Master's degree,EDUCATIONAL ATTAINMENT FOR THE POPULATION 25 YEARS AND OVER
+acs5,edu_prof,B15003_024,Estimate!!Total!!Professional school degree,EDUCATIONAL ATTAINMENT FOR THE POPULATION 25 YEARS AND OVER
+acs5,edu_phd,B15003_025,Estimate!!Total!!Doctorate degree,EDUCATIONAL ATTAINMENT FOR THE POPULATION 25 YEARS AND OVER
+acs5/subject,pov_rate,S1701_C03_001,Estimate!!Percent below poverty level!!Population for whom poverty status is determined,POVERTY STATUS IN THE PAST 12 MONTHS

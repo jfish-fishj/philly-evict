@@ -1,0 +1,13 @@
+race_group_5,gender_group_obs,group_race_gender,n_cases,share_cases
+Asian,Female,Asian+Female,806,0.00315705774752155
+Asian,Male,Asian+Male,1272,0.00498235416234171
+Black,Female,Black+Female,85784,0.336011218130755
+Black,Male,Black+Male,31539,0.12353653138844
+Hispanic,Female,Hispanic+Female,6953,0.0272345192537436
+Hispanic,Male,Hispanic+Male,3554,0.0139208228718258
+Other/Mixed,Female,Other/Mixed+Female,7651,0.0299685469308777
+Other/Mixed,Male,Other/Mixed+Male,4460,0.0174695751289654
+Unknown,Female,Unknown+Female,34833,0.136438948535258
+Unknown,Male,Unknown+Male,17914,0.070168154452979
+White,Female,White+Female,34189,0.133916435893318
+White,Male,White+Male,26346,0.103195835503974

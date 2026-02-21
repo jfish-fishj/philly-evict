@@ -1,0 +1,53 @@
+\begingroup
+\centering
+\begin{tabular}{lccccccccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variables: & \multicolumn{6}{c}{case\_p\_black} & gap\_case\_black\_vs\_tenant & \multicolumn{2}{c}{black\_case}\\
+   Model:                                                        & (1)             & (2)       & (3)             & (4)             & (5)             & (6)             & (7)           & (8)       & (9)\\  
+                                                                 &  OLS            & OLS       & OLS             & OLS             & OLS             & OLS             & OLS           & Logit     & Logit\\  
+   \midrule
+   \emph{Variables}\\
+   Constant                                                      & 0.5948$^{***}$  &           & 0.5768$^{***}$  &                 &                 &                 &               &           &   \\   
+                                                                 & (0.0044)        &           & (0.0047)        &                 &                 &                 &               &           &   \\   
+   retaliatory\_statusplausibly\_retaliatory                     & -0.0445$^{***}$ &           &                 &                 &                 &                 &               &           &   \\   
+                                                                 & (0.0097)        &           &                 &                 &                 &                 &               &           &   \\   
+   retaliatory\_statusretaliatory                                & -0.0370         &           &                 &                 &                 &                 &               &           &   \\   
+                                                                 & (0.0286)        &           &                 &                 &                 &                 &               &           &   \\   
+   retaliatory\_severe\_statusplausibly\_retaliatory\_severe     &                 & 0.0033    &                 & 0.0015          & 0.0035          & 0.0024          &               &           &   \\   
+                                                                 &                 & (0.0026)  &                 & (0.0027)        & (0.0025)        & (0.0026)        &               &           &   \\   
+   retaliatory\_severe\_statusretaliatory\_severe                &                 & -0.0015   &                 & -0.0033         & -0.0011         & -0.0017         &               &           &   \\   
+                                                                 &                 & (0.0028)  &                 & (0.0029)        & (0.0026)        & (0.0028)        &               &           &   \\   
+   retaliatory\_status $=$ plausibly\_retaliatory                &                 &           & -0.0406$^{***}$ &                 &                 &                 & 0.0066$^{**}$ & -0.0206   & -0.0370\\   
+                                                                 &                 &           & (0.0110)        &                 &                 &                 & (0.0029)      & (0.0239)  & (0.0261)\\   
+   retaliatory\_status $=$ retaliatory                           &                 &           & -0.0182         &                 &                 &                 & -0.0007       & -0.0355   & -0.0675$^{**}$\\   
+                                                                 &                 &           & (0.0218)        &                 &                 &                 & (0.0035)      & (0.0274)  & (0.0296)\\   
+   n\_defendants\_total                                          &                 &           &                 & -0.0246$^{***}$ &                 & -0.0222$^{***}$ &               &           &   \\   
+                                                                 &                 &           &                 & (0.0018)        &                 & (0.0017)        &               &           &   \\   
+   infousa\_pct\_black\_c                                        &                 &           &                 &                 & 0.2697$^{***}$  & 0.2852$^{***}$  &               &           &   \\   
+                                                                 &                 &           &                 &                 & (0.0065)        & (0.0072)        &               &           &   \\   
+   infousa\_pct\_female\_c                                       &                 &           &                 &                 & -0.0297$^{***}$ & -0.0310$^{***}$ &               &           &   \\   
+                                                                 &                 &           &                 &                 & (0.0061)        & (0.0065)        &               &           &   \\   
+   infousa\_pct\_black\_female\_c                                &                 &           &                 &                 & 0.0485$^{***}$  & 0.0509$^{***}$  &               &           &   \\   
+                                                                 &                 &           &                 &                 & (0.0079)        & (0.0085)        &               &           &   \\   
+   infousa\_share\_persons\_demog\_ok\_c                         &                 &           &                 &                 & -0.0306$^{***}$ & -0.0336$^{***}$ &               &           &   \\   
+                                                                 &                 &           &                 &                 & (0.0060)        & (0.0064)        &               &           &   \\   
+   tenant\_comp\_missing                                         &                 &           &                 &                 & -0.0066$^{*}$   & -0.0053         &               &           &   \\   
+                                                                 &                 &           &                 &                 & (0.0036)        & (0.0038)        &               &           &   \\   
+   \midrule
+   \emph{Fixed-effects}\\
+   tract\_geoid                                                  &                 & Yes       &                 & Yes             & Yes             & Yes             &               & Yes       & Yes\\  
+   building\_type                                                &                 & Yes       &                 & Yes             & Yes             & Yes             &               & Yes       & Yes\\  
+   num\_units\_bin                                               &                 & Yes       &                 & Yes             & Yes             & Yes             &               & Yes       & Yes\\  
+   year\_quarter                                                 &                 & Yes       &                 & Yes             & Yes             & Yes             & Yes           & Yes       & Yes\\  
+   PID                                                           &                 &           &                 &                 &                 &                 & Yes           &           & \\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                                  & 133,802         & 275,753   & 229,806         & 229,805         & 275,753         & 229,805         & 125,860       & 219,125   & 180,934\\  
+   Squared Correlation                                           & 0.00213         & 0.53108   & 0.00124         & 0.53972         & 0.55449         & 0.56603         & 0.37691       & 0.52595   & 0.53070\\  
+   Pseudo R$^2$                                                  & 0.00192         & 0.68270   & 0.00112         & 0.69976         & 0.72886         & 0.75284         & 1.3082        & 0.46249   & 0.46696\\  
+   BIC                                                           & 148,411.3       & 102,886.8 & 254,568.9       & 82,023.3        & 88,828.1        & 68,561.0        & 250,306.0     & 164,605.9 & 135,489.2\\  
+   \midrule \midrule
+   \multicolumn{10}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{10}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

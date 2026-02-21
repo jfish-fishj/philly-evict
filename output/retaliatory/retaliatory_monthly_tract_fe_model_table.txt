@@ -1,0 +1,150 @@
+                                      m_base_tract m_tenant_tract
+Dependent Var.:                     filed_eviction filed_eviction
+                                                                 
+filed_complaint                           0.044***       0.043***
+                                         (0.002)        (0.002)  
+tenant_comp_missing                                     -0.0004  
+                                                        (0.0002) 
+filed_complaint x tc_black_c                             0.021***
+                                                        (0.003)  
+filed_complaint x tc_female_c                            0.009***
+                                                        (0.002)  
+filed_complaint x tc_black_female_c                     -0.002   
+                                                        (0.004)  
+filed_complaint x tc_cov_c                               0.011***
+                                                        (0.002)  
+Fixed-Effects:                      -------------- --------------
+period_fe                                      Yes            Yes
+GEOID                                          Yes            Yes
+___________________________________ ______________ ______________
+S.E.: Clustered                          by: GEOID      by: GEOID
+Observations                            24,526,152     24,526,152
+R2                                         0.01305        0.01311
+Within R2                                  0.00235        0.00241
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                   m_base_tract m_tenant_tract
+Dependent Var.:                  filed_eviction filed_eviction
+                                                              
+filed_severe                           0.075***       0.075***
+                                      (0.002)        (0.002)  
+tenant_comp_missing                                  -0.0003  
+                                                     (0.0002) 
+filed_severe x tc_black_c                             0.016** 
+                                                     (0.005)  
+filed_severe x tc_female_c                            0.013** 
+                                                     (0.004)  
+filed_severe x tc_black_female_c                     -0.012*  
+                                                     (0.006)  
+filed_severe x tc_cov_c                               0.022***
+                                                     (0.003)  
+Fixed-Effects:                   -------------- --------------
+period_fe                                   Yes            Yes
+GEOID                                       Yes            Yes
+________________________________ ______________ ______________
+S.E.: Clustered                       by: GEOID      by: GEOID
+Observations                         24,526,152     24,526,152
+R2                                      0.01458        0.01460
+Within R2                               0.00390        0.00392
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                       m_base_tract m_tenant_tract
+Dependent Var.:                      filed_eviction filed_eviction
+                                                                  
+filed_non_severe                           0.007***       0.007***
+                                          (0.0006)       (0.0006) 
+tenant_comp_missing                                      -0.0003  
+                                                         (0.0002) 
+filed_non_severe x tc_black_c                            -0.003   
+                                                         (0.002)  
+filed_non_severe x tc_female_c                            0.003   
+                                                         (0.002)  
+filed_non_severe x tc_black_female_c                      0.002   
+                                                         (0.003)  
+filed_non_severe x tc_cov_c                              -0.002   
+                                                         (0.002)  
+Fixed-Effects:                       -------------- --------------
+period_fe                                       Yes            Yes
+GEOID                                           Yes            Yes
+____________________________________ ______________ ______________
+S.E.: Clustered                           by: GEOID      by: GEOID
+Observations                             24,526,152     24,526,152
+R2                                          0.01075        0.01076
+Within R2                                   2.98e-5        3.21e-5
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                      m_base_tract m_tenant_tract
+Dependent Var.:                     filed_eviction filed_eviction
+                                                                 
+filed_complaint                           0.049***       0.049***
+                                         (0.002)        (0.002)  
+tenant_comp_missing                                     -0.0004  
+                                                        (0.0002) 
+filed_complaint x tc_black_c                             0.026***
+                                                        (0.004)  
+filed_complaint x tc_female_c                            0.012***
+                                                        (0.003)  
+filed_complaint x tc_black_female_c                     -0.005   
+                                                        (0.005)  
+filed_complaint x tc_cov_c                              -0.009*  
+                                                        (0.004)  
+Fixed-Effects:                      -------------- --------------
+period_fe                                      Yes            Yes
+GEOID                                          Yes            Yes
+___________________________________ ______________ ______________
+S.E.: Clustered                          by: GEOID      by: GEOID
+Observations                            17,713,332     17,713,332
+R2                                         0.01319        0.01326
+Within R2                                  0.00264        0.00271
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                   m_base_tract m_tenant_tract
+Dependent Var.:                  filed_eviction filed_eviction
+                                                              
+filed_severe                           0.088***       0.088***
+                                      (0.002)        (0.002)  
+tenant_comp_missing                                  -0.0003  
+                                                     (0.0002) 
+filed_severe x tc_black_c                             0.015*  
+                                                     (0.006)  
+filed_severe x tc_female_c                            0.016** 
+                                                     (0.005)  
+filed_severe x tc_black_female_c                     -0.015*  
+                                                     (0.007)  
+filed_severe x tc_cov_c                              -0.016** 
+                                                     (0.006)  
+Fixed-Effects:                   -------------- --------------
+period_fe                                   Yes            Yes
+GEOID                                       Yes            Yes
+________________________________ ______________ ______________
+S.E.: Clustered                       by: GEOID      by: GEOID
+Observations                         17,713,332     17,713,332
+R2                                      0.01503        0.01505
+Within R2                               0.00450        0.00452
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                       m_base_tract m_tenant_tract
+Dependent Var.:                      filed_eviction filed_eviction
+                                                                  
+filed_non_severe                           0.008***       0.008***
+                                          (0.0007)       (0.0007) 
+tenant_comp_missing                                      -0.0003  
+                                                         (0.0002) 
+filed_non_severe x tc_black_c                            -0.003   
+                                                         (0.003)  
+filed_non_severe x tc_female_c                            0.003   
+                                                         (0.002)  
+filed_non_severe x tc_black_female_c                      0.0009  
+                                                         (0.004)  
+filed_non_severe x tc_cov_c                              -0.003   
+                                                         (0.003)  
+Fixed-Effects:                       -------------- --------------
+period_fe                                       Yes            Yes
+GEOID                                           Yes            Yes
+____________________________________ ______________ ______________
+S.E.: Clustered                           by: GEOID      by: GEOID
+Observations                             17,713,332     17,713,332
+R2                                          0.01061        0.01061
+Within R2                                   3.42e-5        3.69e-5
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

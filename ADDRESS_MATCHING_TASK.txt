@@ -1,0 +1,249 @@
+ADDRESS → PARCEL CROSSWALK: IMPLEMENTATION TASK FOR CLAUDE
+==========================================================
+
+GOAL
+----
+Implement a reproducible, auditable address→parcel matching system that:
+
+1) Assigns EACH source address at most ONE parcel (one-to-one on the address side)
+2) Maximizes the match rate using a tiered strategy (exact → relaxed → fuzzy)
+3) Produces full logging and candidate-level audit tables so matching decisions
+   can be debugged, justified, and tuned later
+
+This should work initially for:
+- cleaned eviction addresses
+- cleaned InfoUSA addresses
+- cleaned Altos addresses
+(and be extensible to CoreLogic / licenses later)
+
+
+NON-NEGOTIABLE RULES
+-------------------
+- Do NOT change scientific definitions or filters in analysis scripts.
+- Do NOT hardcode paths.
+- All file IO must use cfg from R/config.R (read_config + helpers).
+- Address→parcel matching is a FIRST-CLASS DATA PRODUCT.
+- Every join must have explicit key checks and row-count sanity checks.
+
+
+1) CREATE A DEDICATED SCRIPT
+----------------------------
+Create: make-address-parcel-xwalk.R
+
+This script is responsible ONLY for matching addresses to parcels.
+Do NOT embed this logic inside analysis or cleaning scripts.
+
+
+2) INPUTS
+---------
+From processed/ (or equivalent):
+
+A) parcels_clean
+   Produced by clean-parcel-addresses.R
+   Must include:
+   - parcel_number (unique)
+   - pm.house
+   - pm.street
+   - pm.streetSuf
+   - pm.preDir
+   - pm.sufDir
+   - pm.zip
+   - pm.city
+   - pm.state
+   - n_sn_ss_c
+   - lat / lon (if available; used for tie-breaking)
+
+B) addresses_clean (per source)
+   For each source dataset (evictions, InfoUSA, Altos):
+   - a STABLE, UNIQUE source_address_id (do NOT rely on .GRP ordering)
+   - n_sn_ss_c
+   - parsed pm.* fields if available
+   - zip / city / state
+   - lat / lon if available
+
+If a cleaned dataset lacks a stable ID, generate one using a deterministic hash
+of canonical address components.
+
+
+3) OUTPUTS (ALL REQUIRED)
+-------------------------
+
+For each source X:
+
+1) Winner crosswalk
+   processed/xwalk_X_to_parcel.csv (or parquet)
+
+   Columns:
+   - source
+   - source_address_id
+   - parcel_number
+   - match_tier  {exact, relaxed, fuzzy, manual_override}
+   - match_score
+   - n_candidates
+   - score_gap   (best minus second best)
+   - tie_flag    (TRUE/FALSE)
+   - tie_rule    (string description)
+   - rule_version
+   - n_sn_ss_c
+   - zip, city, state
+
+2) Candidate-level audit table
+   processed/match_audit_X.parquet
+
+   One row per (source_address_id, parcel_candidate).
+   Must include:
+   - source_address_id
+   - parcel_number
+   - all relevant pm.* fields for source and parcel
+   - match_tier_attempted
+   - street similarity
+   - house number difference
+   - suffix match indicator
+   - direction match indicator
+   - zip match indicator
+   - geodistance (if available)
+   - match_score
+   - rank_within_source
+
+   This table MUST be sufficient to reproduce the winner selection.
+
+3) Summary table
+   processed/match_summary_X.csv
+
+   Include:
+   - total addresses
+   - parse success rate
+   - matched / unmatched counts
+   - matches by tier
+   - ambiguity counts (ties, low score gaps)
+   - score distribution buckets
+   - top 25 streets / zips with high unmatched rates
+
+
+4) MATCHING ALGORITHM (TIERED)
+------------------------------
+
+TIER 0: EXACT MATCH
+- Join on n_sn_ss_c (and zip if reliable).
+- If exactly 1 parcel candidate → accept.
+- If >1 candidate → mark ambiguous and defer to tie rules or later tiers.
+
+TIER 1: RELAXED EXACT MATCH
+Apply a SMALL, DETERMINISTIC set of relaxations:
+- drop pm.sufDir
+- normalize suffixes and directions to canonical parcel vocabulary
+- saint ↔ st, mount ↔ mt
+- ONLY documented special cases (log them)
+
+Log which relaxation rule was used.
+
+TIER 2: FUZZY MATCH (BLOCKED)
+Generate candidates using blocking rules, e.g.:
+- same zip AND same house number AND same first 2–3 letters of street
+- OR same zip AND |house difference| ≤ 2 AND same street prefix
+
+Score candidates using:
+- street string similarity (e.g. Jaro-Winkler)
+- house number match / distance
+- suffix agreement
+- direction agreement
+- zip agreement
+- geodistance penalty (if available)
+
+Combine into a single numeric match_score.
+Weights and thresholds MUST be explicit and versioned.
+
+Accept a fuzzy match ONLY if:
+- match_score ≥ threshold
+- AND (best_score − second_best_score) ≥ gap_threshold
+
+Otherwise, mark unmatched or ambiguous_unresolved.
+
+
+5) DETERMINISTIC TIE BREAKING
+-----------------------------
+If multiple candidates tie:
+
+Apply, in order:
+1) exact n_sn_ss_c match
+2) exact house number match
+3) exact suffix match
+4) smallest parcel_number
+
+Set:
+- tie_flag = TRUE
+- tie_rule = description of rule used
+
+ALL tied candidates must still appear in the audit table.
+
+
+6) MANUAL OVERRIDES (OPTIONAL BUT SUPPORTED)
+--------------------------------------------
+If a file exists:
+inputs/manual_overrides_xwalk.csv
+
+Columns:
+- source
+- source_address_id (or raw address)
+- parcel_number
+- reason
+
+Apply overrides as match_tier = manual_override,
+but still write candidate-level audit rows.
+
+
+7) REQUIRED INVARIANTS / CHECKS
+-------------------------------
+
+Before matching:
+- source_address_id must be unique
+- parcel_number must be unique in parcels_clean
+
+After matching:
+- winner crosswalk must be unique on source_address_id
+- many addresses → one parcel is allowed
+- one address → multiple parcels is NOT allowed
+
+Row-count sanity:
+- nrow(winner) ≤ nrow(source_addresses)
+- log candidate counts per source address
+
+
+8) LOGGING
+----------
+Write logs to:
+output/logs/match_X_<timestamp>.log
+
+Include:
+- config path used
+- thresholds and weights
+- counts at each tier
+- unmatched reasons
+- ambiguity counts
+- top problematic streets / zips
+
+Also write:
+output/logs/match_X_metrics.json
+
+
+9) TARGETS INTEGRATION
+----------------------
+Add targets so that for each source X we build:
+- xwalk_X_to_parcel
+- match_audit_X
+- match_summary_X
+
+Downstream analyses must depend on the crosswalk product,
+NOT re-run matching logic.
+
+
+10) SMALL CLEANUPS WHILE IMPLEMENTING
+------------------------------------
+- Fix inconsistent source("R/config.R") vs source("r/config.R").
+- Replace .GRP-based IDs with stable hash-based IDs where feasible.
+
+
+END STATE
+---------
+After this is implemented, address cleaning and address→parcel matching
+are CLEANLY SEPARATED, fully auditable, and defensible in a methods section.

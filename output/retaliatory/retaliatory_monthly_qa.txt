@@ -1,0 +1,63 @@
+Retaliatory Evictions QA (Monthly, Rental-Only)
+Timestamp: 2026-02-20 17:05:52 EST
+Monthly panel input: /Users/joefish/Documents/GitHub/philly-evictions/data/processed/panels/building_data_rental_month.parquet
+Analytic PID input: /Users/joefish/Documents/GitHub/philly-evictions/data/processed/analytic/analytic_sample.csv
+Rows analyzed (full): 24526152
+Rows analyzed (pre-covid): 17713332
+Unique PIDs (full): 113547
+Eviction filing rate (full): 0.008629
+Any complaint rate (full): 0.010629
+Time unit: month
+skip_lpdid: TRUE
+Bandwidths evaluated: 1 to 6 months
+LP window rule: prefer +/-24 months, fallback +/-12 months when treated retention < 0.6
+
+Bandwidth summary (head):
+   bandwidth_periods eviction_rows same_period_n within_bw_n plausible_only_n
+               <int>         <int>         <int>       <int>            <int>
+1:                 1        211624         14203       32227            18024
+2:                 2        211624         14203       43713            29510
+3:                 3        211624         14203       52156            37953
+4:                 4        211624         14203       58996            44793
+5:                 5        211624         14203       64627            50424
+6:                 6        211624         14203       69468            55265
+   non_retaliatory_n time_unit same_period_share within_bw_share
+               <int>    <char>             <num>           <num>
+1:            179397     month        0.06711432       0.1522842
+2:            167911     month        0.06711432       0.2065597
+3:            159468     month        0.06711432       0.2464560
+4:            152628     month        0.06711432       0.2787775
+5:            146997     month        0.06711432       0.3053860
+6:            142156     month        0.06711432       0.3282614
+   plausible_only_share non_retaliatory_share same_month_n same_month_share
+                  <num>                 <num>        <int>            <num>
+1:           0.08516992             0.8477158        14203       0.06711432
+2:           0.13944543             0.7934403        14203       0.06711432
+3:           0.17934166             0.7535440        14203       0.06711432
+4:           0.21166314             0.7212225        14203       0.06711432
+5:           0.23827165             0.6946140        14203       0.06711432
+6:           0.26114713             0.6717386        14203       0.06711432
+
+LP window summary:
+Skipped (--skip_lpdid=TRUE)
+
+Wrote dist-lag coefficients CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_monthly_distlag_coefficients.csv
+Wrote lpdid coefficients CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_monthly_lpdid_coefficients.csv
+Wrote same-period tenant coefficients CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_monthly_same_period_tenant_coefficients.csv
+Wrote same-period baseline vs tenant compare CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_monthly_same_period_tenant_main_compare.csv
+Wrote lpdid windows CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_monthly_lpdid_windows.csv
+Wrote bandwidth summary CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_monthly_bandwidth_summary.csv
+Wrote bandwidth status CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_monthly_bandwidth_status_counts.csv
+Wrote dist-lag model table: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_monthly_distlag_model_table.txt
+Wrote lpdid model table: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_monthly_lpdid_model_table.txt
+Wrote same-period tenant model table: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_monthly_same_period_tenant_model_table.txt
+Wrote same-period tenant model table (tex): /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_monthly_same_period_tenant_model_table.tex
+Wrote tract FE coefficients CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_monthly_tract_fe_coefficients.csv
+Wrote tract FE model table: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_monthly_tract_fe_model_table.txt
+Wrote tract FE model table (tex): /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_monthly_tract_fe_model_table.tex
+Wrote targeting coefficients CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_monthly_targeting_coefficients.csv
+Wrote targeting model table (tex): /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_monthly_targeting_model_table.tex
+Wrote suppression coefficients CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_monthly_suppression_coefficients.csv
+Wrote suppression model table (tex): /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_monthly_suppression_model_table.tex
+Wrote dist-lag plot: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_monthly_distlag_coefficients.png
+LP-DiD skipped; no LP-DiD plot written.

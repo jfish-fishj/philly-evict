@@ -17,6 +17,7 @@ Usage:
 """
 
 import sys
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Hashable, List, Optional, Tuple
@@ -45,18 +46,23 @@ class EstimationConfig:
     min_units: int = 5
     max_units: int = 500
     min_units_zip: int = 100
-    building_type_regex: str = "Apartment|Apt|Coop|Condo|Mixed"
+    building_type_regex: str = "LOWRISE_MULTI|MIDRISE_MULTI|HIGHRISE_MULTI|SMALL_MULTI_2_4|MULTI_BLDG_COMPLEX"
     max_abs_change_log_taxable_value: float = 1.25
     max_annualized_change_log_rent: float = 0.2
     require_log_market_value_positive: bool = True
     min_obs_per_pid: int = 1
 
-    # --- Market / product / firm column definitions ---
-    market_cols: Tuple[str, ...] = ("pm.zip", "year")
+    # --- Market / share definition ---
+    # Toggle this at the top of the script to switch demand share construction:
+    #   "zip_all_bins" -> use share_zip_all_bins with market = zip-year
+    #   "zip_bin"      -> use share_zip_bin with market = zip-year-bin
+    # We intentionally choose by mode, not by arbitrary column-name input.
+    share_mode: str = "zip_all_bins"
+    market_cols_zip_all_bins: Tuple[str, ...] = ("pm.zip", "year")
+    market_cols_zip_bin: Tuple[str, ...] = ("pm.zip", "year", "num_units_bin")
     market_sep: str = "-"
     firm_col: str = "owner_1"
     product_col: str = "PID"
-    shares_col: str = "share_zip"  # use share_zip (denom = total housing stock in zip-year)
 
     # --- Nest definition ---
     nest_threshold_col: str = "filing_rate_eb_pre_covid"
@@ -64,10 +70,12 @@ class EstimationConfig:
     nest_labels: Tuple[str, str] = ("high", "low")  # (above_threshold, below_threshold)
 
     # --- Formulation ---
-    x1_formula: str = "0 + prices + log_market_value + log_total_area + year_built"
+    x1_formula: str = "0 + prices + log_total_area + year_built"
     absorb_formula: str = (
-        "C(GEOID)*C(year) + C(building_code_description_new)"
-        " + C(quality_grade_fixed_coarse)"
+        "C(GEOID) + C(market_ids)"
+        " + C(building_type)"
+        " + C(year_blt_decade)"
+        " + C(num_stories_bin) + C(quality_grade_fixed_coarse)"
     )
 
     # --- Instruments ---
@@ -365,7 +373,9 @@ def percent_swap_when_bumping_nests(
     )
     inside0 = base_tab.sum(axis=1)
 
-    # Counterfactual
+    # Counterfactual: a pct_increase (e.g. 10%) price increase means
+    # p' = (1 + pct_increase) * p, so Δp = pct_increase * p.
+    # Delta shift = alpha * pct_increase * p (correct for price in levels).
     delta_cf = delta.copy()
     delta_cf[bump_mask] += alpha * (pct_increase * prices[bump_mask])
     shares1_df, s0_cf = nl_shares_from_delta_single_level(delta_cf, markets, nests, rho)
@@ -477,7 +487,53 @@ def load_and_prepare_data(cfg: dict, est_cfg: EstimationConfig) -> pd.DataFrame:
     """Load bldg_panel_blp from config, construct market/firm/product IDs, nesting."""
     path = p_product(cfg, "bldg_panel_blp")
     print(f"[load] Reading: {path}")
-    df = pd.read_csv(path, low_memory=False)
+
+    # Read only columns needed by filtering, formulas, instruments, and IDs.
+    # Loading the full bldg_panel_blp (hundreds of columns) is unnecessarily slow.
+    import re
+
+    wanted_cols = {
+        # Core IDs and market/share columns
+        "PID",
+        "year",
+        "pm.zip",
+        "num_units_bin",
+        "owner_1",
+        "med_rent",
+        "share_zip_all_bins",
+        "share_zip_bin",
+        # Unit and sample/filter columns
+        est_cfg.units_col,
+        est_cfg.units_col_legacy,
+        "num_units_zip",
+        "building_type",
+        "building_code_description_new_fixed",
+        "building_code_description_new",
+        "market_value",
+        "change_log_taxable_value",
+        "log_med_rent",
+        "total_area",
+        "quality_grade",
+        # Nesting threshold
+        est_cfg.nest_threshold_col,
+    }
+
+    # Add terms referenced in formulation strings.
+    formula_terms = [t.strip() for t in est_cfg.x1_formula.replace("0 +", "").replace("0+", "").split("+")]
+    wanted_cols.update(formula_terms)
+    wanted_cols.update(re.findall(r"C\((\w+)\)", est_cfg.absorb_formula))
+
+    # Add explicitly requested excluded IV columns.
+    wanted_cols.update(est_cfg.excluded_instruments)
+
+    # Add market columns for both supported share modes to keep toggling cheap.
+    wanted_cols.update(est_cfg.market_cols_zip_all_bins)
+    wanted_cols.update(est_cfg.market_cols_zip_bin)
+
+    t0 = time.perf_counter()
+    df = pd.read_csv(path, low_memory=False, usecols=lambda c: c in wanted_cols)
+    t_load = time.perf_counter() - t0
+    print(f"[load] Read {len(df):,} rows x {df.shape[1]} cols in {t_load:.2f}s")
     print(f"[load] Raw rows: {len(df):,}")
 
     # Column compatibility: rename legacy units column if present
@@ -488,29 +544,59 @@ def load_and_prepare_data(cfg: dict, est_cfg: EstimationConfig) -> pd.DataFrame:
     # Also handle num_units_imp as a working alias if total_units not present
     units_col = est_cfg.units_col if est_cfg.units_col in df.columns else est_cfg.units_col_legacy
 
-    # Market IDs
-    df["market_ids"] = df[list(est_cfg.market_cols)].astype(str).agg(est_cfg.market_sep.join, axis=1)
+    # Column compatibility for units
+    units_col = est_cfg.units_col if est_cfg.units_col in df.columns else est_cfg.units_col_legacy
+
+    # Ensure num_units_bin exists (needed for share_zip_bin and as absorb covariate)
+    if "num_units_bin" not in df.columns and units_col in df.columns:
+        df["num_units_bin"] = pd.cut(
+            df[units_col],
+            bins=[-np.inf, 1, 5, 20, 50, np.inf],
+            labels=["1", "2-5", "6-20", "21-50", "51+"],
+            include_lowest=True,
+        )
+        print(f"[load] Created num_units_bin from {units_col}")
+
+    # --- Shares and markets (mode-selected) ---
+    # We use an explicit share_mode toggle to keep market/share definitions aligned.
+    df["prices"] = df["med_rent"]
+    if est_cfg.share_mode == "zip_all_bins":
+        share_col = "share_zip_all_bins"
+        market_cols = list(est_cfg.market_cols_zip_all_bins)
+    elif est_cfg.share_mode == "zip_bin":
+        share_col = "share_zip_bin"
+        market_cols = list(est_cfg.market_cols_zip_bin)
+    else:
+        raise ValueError(
+            f"Unsupported share_mode='{est_cfg.share_mode}'. "
+            "Use one of: 'zip_all_bins', 'zip_bin'."
+        )
+
+    if share_col not in df.columns:
+        raise KeyError(
+            f"Expected '{share_col}' in bldg_panel_blp for share_mode='{est_cfg.share_mode}'."
+        )
+
+    df["shares"] = df[share_col]
+    print(
+        f"[load] share_mode={est_cfg.share_mode}: using shares='{share_col}' "
+        f"with market columns={market_cols}"
+    )
+
+    valid = df["shares"].notna() & np.isfinite(df["shares"])
+    print(f"[load] Shares: mean={df.loc[valid, 'shares'].mean():.6f}, "
+          f"median={df.loc[valid, 'shares'].median():.6f}, "
+          f"max={df.loc[valid, 'shares'].max():.4f}")
+    mkt_sums = df.loc[valid].groupby(market_cols)["shares"].sum()
+    print(f"[load] Market share sums: mean={mkt_sums.mean():.3f}, "
+          f"median={mkt_sums.median():.3f}, max={mkt_sums.max():.3f}, "
+          f"frac>1={(mkt_sums > 1.0).mean():.3f}")
+
+    # --- Market IDs ---
+
+    df["market_ids"] = df[market_cols].astype(str).agg(est_cfg.market_sep.join, axis=1)
     df["firm_ids"] = df[est_cfg.firm_col]
     df["product_ids"] = df[est_cfg.product_col]
-
-    # Prices and shares
-    df["prices"] = df["log_med_rent"]
-
-    # Use configured shares column; compute on-the-fly if missing from data
-    if est_cfg.shares_col in df.columns:
-        df["shares"] = df[est_cfg.shares_col]
-    elif est_cfg.shares_col == "share_zip" and "occupied_units" in df.columns:
-        # Compute share_zip = occupied_units / sum(total_units) by (zip, year)
-        print(f"[load] share_zip not in data — computing on-the-fly from occupied_units / total_units_market")
-        zip_col = est_cfg.market_cols[0] if len(est_cfg.market_cols) > 0 else "pm.zip"
-        grp = [zip_col, "year"]
-        df["total_units_market"] = df.groupby(grp)[units_col].transform("sum")
-        df["shares"] = df["occupied_units"] / df["total_units_market"]
-    elif "share_units_zip_unit" in df.columns:
-        print(f"[load] WARNING: {est_cfg.shares_col} not found, falling back to share_units_zip_unit")
-        df["shares"] = df["share_units_zip_unit"]
-    else:
-        raise KeyError(f"Neither {est_cfg.shares_col} nor share_units_zip_unit found in data")
 
     # Nesting
     if "filing_rate_raw" in df.columns:
@@ -557,6 +643,11 @@ def build_estimation_sample(df: pd.DataFrame, est_cfg: EstimationConfig) -> pd.D
     df = df.dropna(subset=["prices", "shares"])
     print(f"[sample] After dropping missing prices/shares: {len(df):,} (dropped {n - len(df):,})")
 
+    # Drop zero shares (pyblp requires strictly positive)
+    n = len(df)
+    df = df[df["shares"] > 0]
+    print(f"[sample] After dropping zero shares: {len(df):,} (dropped {n - len(df):,})")
+
     # Share sanity: drop rows with individual share >= 1
     n = len(df)
     df = df[df["shares"] < 1.0]
@@ -573,9 +664,9 @@ def build_estimation_sample(df: pd.DataFrame, est_cfg: EstimationConfig) -> pd.D
     print(f"[sample] Inside share sums: mean={remaining_sums.mean():.3f}, "
           f"median={remaining_sums.median():.3f}, max={remaining_sums.max():.3f}")
 
-    # Building type filter — prefer the descriptive column over coded column
+    # Building type filter — prefer standardized building_type (coded: MIDRISE_MULTI, etc.)
     bldg_col = None
-    for candidate in ["building_code_description_new_fixed", "building_code_description_new", "building_type"]:
+    for candidate in ["building_type", "building_code_description_new_fixed", "building_code_description_new"]:
         if candidate in df.columns:
             bldg_col = candidate
             break
@@ -844,6 +935,8 @@ def compute_post_estimation(
     post: Dict[str, Any] = {}
 
     # Elasticities
+    # With prices = med_rent (levels), pyblp's ε = (p/s)(∂s/∂p) is the
+    # standard price elasticity directly. No correction needed.
     elasticities = results.compute_elasticities()
     post["elasticities"] = elasticities
 
@@ -1059,6 +1152,58 @@ def export_tables(
             label="tab:diversion_top_outside",
         )
 
+    # --- 4) Sample summary statistics ---
+    units_col = est_cfg.units_col if est_cfg.units_col in df.columns else est_cfg.units_col_legacy
+    by_year = (
+        df.groupby("year")
+        .agg(
+            n_pids=("product_ids", "nunique"),
+            n_pid_years=("product_ids", "size"),
+            total_units=(units_col, "sum"),
+        )
+        .reset_index()
+    )
+    if "renter_occ" in df.columns:
+        renter_by_year = df.groupby("year")["renter_occ"].sum().reset_index(name="total_renters")
+        by_year = by_year.merge(renter_by_year, on="year", how="left")
+    by_year = by_year.rename(columns={"year": "Year", "n_pids": "PIDs",
+                                       "n_pid_years": "PID-Years",
+                                       "total_units": "Total Units",
+                                       "total_renters": "Total Renters"})
+    _write_latex_table(
+        by_year,
+        out_dir / "sample_summary_by_year.tex",
+        caption="Estimation Sample Summary by Year",
+        label="tab:sample_summary",
+    )
+
+    # Overall sample stats
+    overall = pd.DataFrame([{
+        "Metric": "Observations (PID-years)",
+        "Value": f"{n_obs:,}",
+    }, {
+        "Metric": "Unique PIDs",
+        "Value": f"{df['product_ids'].nunique():,}",
+    }, {
+        "Metric": "Markets (zip-years)",
+        "Value": f"{n_mkts:,}",
+    }, {
+        "Metric": "Unique firms",
+        "Value": f"{df['firm_ids'].nunique():,}" if "firm_ids" in df.columns else "—",
+    }, {
+        "Metric": "Mean years per PID",
+        "Value": f"{df.groupby('product_ids')['year'].nunique().mean():.1f}",
+    }, {
+        "Metric": "Mean total units per year",
+        "Value": f"{by_year['Total Units'].mean():,.0f}" if "Total Units" in by_year.columns else "—",
+    }])
+    _write_latex_table(
+        overall,
+        out_dir / "sample_overview.tex",
+        caption="Estimation Sample Overview",
+        label="tab:sample_overview",
+    )
+
     print(f"\n=== SUMMARY FILES WRITTEN to {out_dir} ===")
     for p in sorted(out_dir.glob("*.tex")):
         print(f"  - {p}")
@@ -1082,12 +1227,25 @@ def print_summary(results, df: pd.DataFrame, post: Dict[str, Any], est_cfg: Esti
     rho_val = float(np.asarray(getattr(results, "rho", float("nan"))).ravel()[0])
     converged = getattr(results, "converged", None)
 
+    units_col = est_cfg.units_col if est_cfg.units_col in df.columns else est_cfg.units_col_legacy
+    mean_yrs_per_pid = df.groupby("product_ids")["year"].nunique().mean()
+    total_units_per_yr = df.groupby("year")[units_col].sum().mean() if units_col in df.columns else 0
+    total_renters_per_yr = df.groupby("year")["renter_occ"].sum().mean() if "renter_occ" in df.columns else 0
+
+    # Inside share sums
+    share_sums = df.groupby("market_ids")["shares"].sum()
+
     print(f"\n{sep}")
     print("  NESTED LOGIT ESTIMATION SUMMARY")
     print(sep)
-    print(f"  Sample:  {n_obs:,} obs | {n_mkts:,} markets | {n_prods:,} products | {n_firms:,} firms")
+    print(f"  Sample:  {n_obs:,} PID-years | {n_prods:,} unique PIDs | {n_mkts:,} markets | {n_firms:,} firms")
     print(f"  Years:   {est_cfg.year_range[0]}–{est_cfg.year_range[1]}")
-    print(f"  Units:   {est_cfg.min_units} < units <= {est_cfg.max_units}")
+    print(f"  Mean years per PID: {mean_yrs_per_pid:.1f}")
+    print(f"  Mean total units per year: {total_units_per_yr:,.0f}")
+    if total_renters_per_yr > 0:
+        print(f"  Mean total renters per year: {total_renters_per_yr:,.0f}")
+    print(f"  Units restriction: {est_cfg.min_units} < units <= {est_cfg.max_units}")
+    print(f"  Inside share sums: mean={share_sums.mean():.3f}, median={share_sums.median():.3f}, max={share_sums.max():.3f}")
     print(f"  Nesting: '{est_cfg.nest_labels[0]}' if {est_cfg.nest_threshold_col} >= {est_cfg.nest_threshold}, else '{est_cfg.nest_labels[1]}'")
     if converged is not None:
         print(f"  Converged: {converged}")
@@ -1198,6 +1356,7 @@ def print_summary(results, df: pd.DataFrame, post: Dict[str, Any], est_cfg: Esti
 def main(
     config_path: Optional[str] = None,
     est_cfg: Optional[EstimationConfig] = None,
+    dry_run: bool = False,
 ) -> Dict[str, Any]:
     """
     Run the full estimation pipeline. Returns all objects for interactive use.
@@ -1211,36 +1370,66 @@ def main(
 
     print(f"[main] Config: {cfg['_config_path']}")
     print(f"[main] EstimationConfig: year_range={est_cfg.year_range}, "
-          f"min_units={est_cfg.min_units}, rho_init={est_cfg.rho_init}")
+          f"min_units={est_cfg.min_units}, rho_init={est_cfg.rho_init}, "
+          f"share_mode={est_cfg.share_mode}")
     if est_cfg.excluded_instruments:
         print(f"[main] IV mode: instruments={est_cfg.excluded_instruments}")
     else:
         print("[main] No IV (just-identified logit)")
 
     # 1) Load and prepare
+    t0 = time.perf_counter()
     raw_df = load_and_prepare_data(cfg, est_cfg)
+    print(f"[timing] load_and_prepare_data: {time.perf_counter() - t0:.2f}s")
 
     # 2) Build estimation sample
+    t0 = time.perf_counter()
     est_df = build_estimation_sample(raw_df, est_cfg)
+    print(f"[timing] build_estimation_sample: {time.perf_counter() - t0:.2f}s")
 
     # 3) Build instruments
+    t0 = time.perf_counter()
     est_df = build_instruments(est_df, est_cfg)
+    print(f"[timing] build_instruments: {time.perf_counter() - t0:.2f}s")
 
     # 4) First-stage diagnostics (if IV)
+    t0 = time.perf_counter()
     first_stage = run_first_stage_diagnostics(est_df, est_cfg)
+    print(f"[timing] first_stage_diagnostics: {time.perf_counter() - t0:.2f}s")
+
+    if dry_run:
+        print("[main] Dry run enabled: skipping PyBLP solve and table export.")
+        return {
+            "cfg": cfg,
+            "est_cfg": est_cfg,
+            "raw_df": raw_df,
+            "est_df": est_df,
+            "X1": None,
+            "problem": None,
+            "results": None,
+            "post_est": None,
+            "first_stage": first_stage,
+            "out_dir": None,
+        }
 
     # 5) Define formulation and estimate
+    t0 = time.perf_counter()
     X1 = define_formulation(est_cfg)
     problem, results = estimate_model(X1, est_df, est_cfg)
+    print(f"[timing] estimate_model: {time.perf_counter() - t0:.2f}s")
 
     # 6) Post-estimation
+    t0 = time.perf_counter()
     post_est = compute_post_estimation(results, problem, est_df, est_cfg)
+    print(f"[timing] compute_post_estimation: {time.perf_counter() - t0:.2f}s")
 
     # 7) Console summary
     print_summary(results, est_df, post_est, est_cfg)
 
     # 8) Export tables
+    t0 = time.perf_counter()
     out_dir = export_tables(results, problem, est_df, post_est, est_cfg, cfg)
+    print(f"[timing] export_tables: {time.perf_counter() - t0:.2f}s")
 
     return {
         "cfg": cfg,
@@ -1350,6 +1539,18 @@ if __name__ == "__main__":
         help="IV specification: 'pid_year' (default, feasible), 'pid' (strongest), 'full' (Calder-Wang, weak)",
     )
     parser.add_argument("--config", type=str, default=None, help="Path to config.yml")
+    parser.add_argument(
+        "--share-mode",
+        type=str,
+        default=None,
+        choices=["zip_all_bins", "zip_bin"],
+        help="Share/market definition toggle. Overrides EstimationConfig default.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run load/filter/instrument pipeline with timings, then exit before PyBLP solve.",
+    )
     args = parser.parse_args()
 
     if args.iv:
@@ -1357,4 +1558,7 @@ if __name__ == "__main__":
     else:
         est_cfg = EstimationConfig()
 
-    main(config_path=args.config, est_cfg=est_cfg)
+    if args.share_mode is not None:
+        est_cfg.share_mode = args.share_mode
+
+    main(config_path=args.config, est_cfg=est_cfg, dry_run=args.dry_run)

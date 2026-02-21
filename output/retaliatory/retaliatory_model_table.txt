@@ -1,0 +1,133 @@
+                            full_complaint    full_severe full_non_sev..
+Dependent Var.:             filed_eviction filed_eviction filed_eviction
+                                                                        
+lag_complaint_4                   0.002***                              
+                                 (0.0005)                               
+lag_complaint_3                   0.002***                              
+                                 (0.0005)                               
+lag_complaint_2                   0.006***                              
+                                 (0.0005)                               
+lag_complaint_1                   0.020***                              
+                                 (0.0005)                               
+filed_complaint                   0.052***                              
+                                 (0.0007)                               
+lead_complaint_1                  0.014***                              
+                                 (0.0005)                               
+lead_complaint_2                  0.003***                              
+                                 (0.0005)                               
+lead_complaint_3                  0.001**                               
+                                 (0.0005)                               
+lead_complaint_4                  0.002**                               
+                                 (0.0005)                               
+lag_severe_4                                     0.005***               
+                                                (0.0007)                
+lag_severe_3                                     0.006***               
+                                                (0.0007)                
+lag_severe_2                                     0.013***               
+                                                (0.0008)                
+lag_severe_1                                     0.037***               
+                                                (0.0009)                
+filed_severe                                     0.089***               
+                                                (0.001)                 
+lead_severe_1                                    0.020***               
+                                                (0.0008)                
+lead_severe_2                                    0.004***               
+                                                (0.0007)                
+lead_severe_3                                    0.003***               
+                                                (0.0007)                
+lead_severe_4                                    0.005***               
+                                                (0.0007)                
+lag_non_severe_4                                               -0.0007  
+                                                               (0.0006) 
+lag_non_severe_3                                               -0.0006  
+                                                               (0.0005) 
+lag_non_severe_2                                               -0.0004  
+                                                               (0.0005) 
+lag_non_severe_1                                                0.003***
+                                                               (0.0006) 
+filed_non_severe                                                0.010***
+                                                               (0.0006) 
+lead_non_severe_1                                               0.008***
+                                                               (0.0006) 
+lead_non_severe_2                                               0.003***
+                                                               (0.0006) 
+lead_non_severe_3                                               0.0009  
+                                                               (0.0006) 
+lead_non_severe_4                                              -0.0003  
+                                                               (0.0006) 
+Fixed-Effects:              -------------- -------------- --------------
+year_quarter                           Yes            Yes            Yes
+PID                                    Yes            Yes            Yes
+_________________           ______________ ______________ ______________
+S.E.: Clustered                    by: PID        by: PID        by: PID
+Observations                     6,891,768      6,891,768      6,891,768
+R2                                 0.13473        0.13757        0.13059
+Within R2                          0.00488        0.00815        0.00012
+
+                             pre_complaint     pre_severe pre_non_severe
+Dependent Var.:             filed_eviction filed_eviction filed_eviction
+                                                                        
+lag_complaint_4                   0.002**                               
+                                 (0.0006)                               
+lag_complaint_3                   0.003***                              
+                                 (0.0006)                               
+lag_complaint_2                   0.006***                              
+                                 (0.0006)                               
+lag_complaint_1                   0.022***                              
+                                 (0.0006)                               
+filed_complaint                   0.063***                              
+                                 (0.0008)                               
+lead_complaint_1                  0.016***                              
+                                 (0.0006)                               
+lead_complaint_2                  0.003***                              
+                                 (0.0005)                               
+lead_complaint_3                  0.002***                              
+                                 (0.0005)                               
+lead_complaint_4                  0.002***                              
+                                 (0.0005)                               
+lag_severe_4                                     0.005***               
+                                                (0.0009)                
+lag_severe_3                                     0.007***               
+                                                (0.0009)                
+lag_severe_2                                     0.014***               
+                                                (0.0009)                
+lag_severe_1                                     0.042***               
+                                                (0.001)                 
+filed_severe                                     0.110***               
+                                                (0.001)                 
+lead_severe_1                                    0.024***               
+                                                (0.0009)                
+lead_severe_2                                    0.005***               
+                                                (0.0008)                
+lead_severe_3                                    0.005***               
+                                                (0.0008)                
+lead_severe_4                                    0.006***               
+                                                (0.0008)                
+lag_non_severe_4                                               -0.0002  
+                                                               (0.0007) 
+lag_non_severe_3                                               -0.0002  
+                                                               (0.0007) 
+lag_non_severe_2                                               -0.0005  
+                                                               (0.0006) 
+lag_non_severe_1                                                0.004***
+                                                               (0.0007) 
+filed_non_severe                                                0.012***
+                                                               (0.0007) 
+lead_non_severe_1                                               0.009***
+                                                               (0.0007) 
+lead_non_severe_2                                               0.004***
+                                                               (0.0007) 
+lead_non_severe_3                                               0.001   
+                                                               (0.0006) 
+lead_non_severe_4                                              -2.95e-5 
+                                                               (0.0006) 
+Fixed-Effects:              -------------- -------------- --------------
+year_quarter                           Yes            Yes            Yes
+PID                                    Yes            Yes            Yes
+_________________           ______________ ______________ ______________
+S.E.: Clustered                    by: PID        by: PID        by: PID
+Observations                     4,977,388      4,977,388      4,977,388
+R2                                 0.15125        0.15475        0.14616
+Within R2                          0.00612        0.01022        0.00016
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

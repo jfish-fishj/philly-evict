@@ -1,0 +1,59 @@
+InfoUSA Data Products — To-Do List
+===================================
+
+1) Past Address Diagnostics
+---------------------------
+Goal: Use InfoUSA panel structure to track individuals across addresses over
+time and characterize the movers vs stayers.
+
+What this should do:
+- For each familyid, construct a complete address history (sequence of
+  n_sn_ss_c / PID by year).
+- Report tracking rates: how many families can we follow for 2+ years?
+  5+ years? What's the median spell length?
+- Among movers (address changes), characterize:
+    - Property observables at origin vs destination (unit count, building type,
+      rent level, filing rate, owner)
+    - Neighborhood observables (BG racial composition, tract income, etc.)
+    - Direction of moves: upgrading vs downgrading on rent/quality?
+    - Distance of moves (same zip? same tract? cross-city? out of city?)
+- Compare movers vs stayers on observables: are movers younger, in smaller
+  buildings, at higher-eviction properties?
+- Validate against address-history-analysis.R (which currently runs a subset
+  of this for eviction persistence regressions) — this would be the more
+  comprehensive descriptive version.
+
+Key questions:
+- What fraction of households can we reliably track across multiple addresses?
+- Is there systematic attrition (e.g., do we lose low-income renters faster)?
+- How does move frequency correlate with eviction exposure?
+
+
+2) Complete InfoUSA Data (Out-of-Philly Linkage)
+-------------------------------------------------
+Goal: The current InfoUSA extract is a repeated cross-section of Philly
+parcels only. If a household moves out of Philadelphia (or into Philly from
+elsewhere), we lose them. This task would link Philly familyids to the
+broader InfoUSA universe to recover those moves.
+
+What this should do:
+- Start with all unique familyids observed in the Philly extract.
+- Query the broader InfoUSA data (full PA file, or at minimum the
+  Philadelphia MSA / surrounding counties: Montgomery, Delaware, Bucks,
+  Chester, Camden, Burlington, Gloucester).
+- For each familyid, check whether they appear at non-Philly addresses in
+  years where they're missing from the Philly extract.
+- Report:
+    - How many familyids have out-of-Philly spells?
+    - What fraction of "disappearances" from the Philly panel are explained
+      by moves to nearby counties vs true attrition (death, data dropout)?
+    - Geographic distribution of out-of-Philly moves (which counties/zips?)
+    - Return rates: of those who leave, how many come back?
+- This is a data acquisition + linkage task — need to determine what broader
+  InfoUSA files are available and whether familyid is stable across extracts.
+
+Key questions:
+- Is familyid a household ID or a person ID? Does it persist across moves?
+- What broader InfoUSA geography do we have access to?
+- How many of our "censored" spells (family disappears from Philly panel)
+  are actually suburban moves vs genuine attrition?

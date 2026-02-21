@@ -1,0 +1,24 @@
+\begin{table}
+
+\caption{Retaliatory status coefficients for Black+Female indicator}
+\centering
+\begin{tabular}[t]{llrrrrr}
+\toprule
+model & term & estimate & std\_error & p\_value & conf\_low & conf\_high\\
+\midrule
+fe\_black\_female\_case\_logit & retaliatory\_status::plausibly\_retaliatory & -0.0066 & 0.0179 & 0.7121 & -0.0416 & 0.02840000000000000\\
+fe\_black\_female\_case\_logit & retaliatory\_status::retaliatory & -0.0152 & 0.0191 & 0.4253 & -0.0526 & 0.02220000000000000\\
+fe\_black\_female\_case\_logit\_tenant\_aug & retaliatory\_status::plausibly\_retaliatory & 0.0019 & 0.0175 & 0.9152 & -0.0324 & 0.03620000000000000\\
+fe\_black\_female\_case\_logit\_tenant\_aug & retaliatory\_status::retaliatory & -0.0005 & 0.0188 & 0.9776 & -0.0373 & 0.03630000000000000\\
+fe\_black\_female\_case\_logit\_tenant\_aug & infousa\_pct\_black\_c & 0.8366 & 0.0498 & 0.0000 & 0.7389 & 0.93430000000000002\\
+\addlinespace
+fe\_black\_female\_case\_logit\_tenant\_aug & infousa\_pct\_female\_c & -0.0810 & 0.0587 & 0.1674 & -0.1961 & 0.03400000000000000\\
+fe\_black\_female\_case\_logit\_tenant\_aug & infousa\_pct\_black\_female\_c & 1.3575 & 0.0750 & 0.0000 & 1.2104 & 1.50459999999999994\\
+fe\_black\_female\_case\_logit\_tenant\_aug & infousa\_share\_persons\_demog\_ok\_c & 0.0427 & 0.0479 & 0.3728 & -0.0511 & 0.13650000000000001\\
+fe\_black\_female\_case\_logit\_tenant\_aug & tenant\_comp\_missing & 0.0328 & 0.0239 & 0.1700 & -0.0141 & 0.07969999999999999\\
+within\_bldg\_gap\_black\_female\_case & retaliatory\_status::plausibly\_retaliatory & 0.0148 & 0.0058 & 0.0110 & 0.0034 & 0.02620000000000000\\
+\addlinespace
+within\_bldg\_gap\_black\_female\_case & retaliatory\_status::retaliatory & 0.0166 & 0.0060 & 0.0055 & 0.0049 & 0.02830000000000000\\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,16 @@
+\begin{table}
+
+\caption{Difference vs eviction-observed unconditional race x gender shares}
+\centering
+\begin{tabular}[t]{lrrrrrrrrrrrrrrrrrrl}
+\toprule
+source & n\_obs & female\_share\_used & male\_share\_used & race\_p\_white & race\_p\_black & race\_p\_hispanic & race\_p\_asian & race\_p\_other & share\_white\_female & share\_white\_male & share\_black\_female & share\_black\_male & share\_hispanic\_female & share\_hispanic\_male & share\_asian\_female & share\_asian\_male & share\_other\_female & share\_other\_male & notes\\
+\midrule
+eviction\_cases\_observed\_probabilities & 255301 & 0.0000 & 0.0000 & 0.0000 & 0.0000 & 0.0000 & 0.000000000000000000 & 0.0000 & 0.0000 & 0.0000 & 0.0000 & 0.0000 & 0.0000 & 0.0000 & 0.0000 & 0.0000 & 0.0000 & 0.0000 & Case-level WRU race probabilities and case-level gender probabilities.\\
+tract\_prior\_case\_weighted\_x\_evictions & 255152 & 0.0000 & 0.0000 & -0.0968 & -0.0108 & 0.0568 & 0.033599999999999998 & 0.0172 & -0.0605 & -0.0363 & -0.0067 & -0.0040 & 0.0355 & 0.0213 & 0.0210 & 0.0126 & 0.0107 & 0.0064 & Tract priors joined to eviction cases; female share uses eviction case mean (placeholder).\\
+bg\_prior\_city\_average\_placeholder & 1329 & 0.0000 & 0.0000 & -0.0043 & -0.1387 & 0.0738 & 0.049700000000000001 & 0.0195 & -0.0027 & -0.0016 & -0.0866 & -0.0521 & 0.0461 & 0.0277 & 0.0310 & 0.0186 & 0.0122 & 0.0073 & BG priors population-weighted city average; female share uses eviction case mean (placeholder).\\
+infousa\_persons\_all\_ok & 15557671 & -0.0619 & 0.0619 & 0.1865 & -0.1994 & 0.0025 & 0.009900000000000001 & 0.0005 & 0.0820 & 0.1045 & -0.1469 & -0.0525 & -0.0019 & 0.0044 & 0.0046 & 0.0053 & 0.0002 & 0.0003 & InfoUSA race-imputed person file; female share from known F/M only (coverage=0.1108).\\
+infousa\_persons\_in\_eviction\_data\_ok & 2628023 & -0.0334 & 0.0334 & 0.1024 & -0.1135 & 0.0046 & 0.005700000000000000 & 0.0008 & 0.0482 & 0.0542 & -0.0858 & -0.0277 & 0.0009 & 0.0036 & 0.0029 & 0.0028 & 0.0004 & 0.0004 & InfoUSA race-imputed person file; female share from known F/M only (coverage=0.1193).\\
+\bottomrule
+\end{tabular}
+\end{table}

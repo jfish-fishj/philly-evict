@@ -1,0 +1,32 @@
+                                                intersection intersection_te..                 within_bldg_gap
+Dependent Var.:                            black_female_case black_female_case gap_black_female_case_vs_tenant
+                                                                                                              
+retaliatory_status = plausibly_retaliatory          -0.0066          0.0019                           0.0148* 
+                                                    (0.0179)        (0.0175)                         (0.0058) 
+retaliatory_status = retaliatory                    -0.0152         -0.0005                           0.0166**
+                                                    (0.0191)        (0.0188)                         (0.0060) 
+infousa_pct_black_c                                                  0.8366***                                
+                                                                    (0.0498)                                  
+infousa_pct_female_c                                                -0.0810                                   
+                                                                    (0.0587)                                  
+infousa_pct_black_female_c                                           1.357***                                 
+                                                                    (0.0750)                                  
+infousa_share_persons_demog_ok_c                                     0.0427                                   
+                                                                    (0.0479)                                  
+tenant_comp_missing                                                  0.0328                                   
+                                                                    (0.0239)                                  
+Fixed-Effects:                             ----------------- -----------------  ------------------------------
+tract_geoid                                              Yes               Yes                              No
+building_type                                            Yes               Yes                              No
+num_units_bin                                            Yes               Yes                              No
+year_quarter                                             Yes               Yes                             Yes
+PID                                                       No                No                             Yes
+________________________________________   _________________ _________________  ______________________________
+Family                                                 Logit             Logit                             OLS
+S.E.: Clustered                                      by: PID           by: PID                         by: PID
+Observations                                         254,211           254,211                          74,223
+Squared Cor.                                         0.25542           0.28074                         0.41691
+Pseudo R2                                            0.21150           0.23332                         0.44856
+BIC                                                276,196.5         268,768.6                       211,341.8
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

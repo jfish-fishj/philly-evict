@@ -1,0 +1,19 @@
+                                                white_female      black_male      black_female
+Dependent Var.:                            white_female_case black_male_case black_female_case
+                                                                                              
+retaliatory_status = plausibly_retaliatory         0.0103***         0.0002           -0.0023 
+                                                  (0.0028)          (0.0030)          (0.0035)
+retaliatory_status = retaliatory                   0.0131***        -0.0016           -0.0020 
+                                                  (0.0027)          (0.0033)          (0.0038)
+Fixed-Effects:                             ----------------- --------------- -----------------
+tract_geoid                                              Yes             Yes               Yes
+building_type                                            Yes             Yes               Yes
+num_units_bin                                            Yes             Yes               Yes
+year_quarter                                             Yes             Yes               Yes
+________________________________________   _________________ _______________ _________________
+S.E.: Clustered                                      by: PID         by: PID           by: PID
+Observations                                         177,856         177,856           177,856
+R2                                                   0.28768         0.08477           0.32141
+Within R2                                            0.00023         2.67e-6           4.79e-6
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

@@ -7,6 +7,7 @@
 ##   - ever_rentals_panel (from make-rent-panel.R)
 ##   - parcel_occupancy_panel (from make-occupancy-vars.R; total_units, renter_occ)
 ##   - building_data (from make-building-data.R; violations, permits, complaints)
+##   - infousa_building_demographics_panel (from make-building-demographics.R)
 ##   - parcels_clean (owner_1, mailing_street, pm.zip for owner/zip fallback)
 ##   - assessments (raw)
 ##
@@ -45,6 +46,7 @@ logf("Loading input data...", log_file = log_file)
 path_ever_panel   <- p_product(cfg, "ever_rentals_panel")
 path_occ_panel    <- p_product(cfg, "parcel_occupancy_panel")
 path_events_panel <- p_product(cfg, "building_data")
+path_bldg_demog   <- p_product(cfg, "infousa_building_demographics_panel")
 path_assess_csv   <- p_input(cfg, "assessments")
 path_parcels_clean <- p_product(cfg, "parcels_clean")
 
@@ -56,6 +58,9 @@ logf("  parcel_occupancy_panel: ", nrow(occ_panel), " rows", log_file = log_file
 
 events_panel  <- fread(path_events_panel)
 logf("  building_data (events): ", nrow(events_panel), " rows", log_file = log_file)
+
+bldg_demog <- fread(path_bldg_demog)
+logf("  infousa_building_demographics_panel: ", nrow(bldg_demog), " rows", log_file = log_file)
 
 ass <- fread(path_assess_csv)
 logf("  assessments: ", nrow(ass), " rows", log_file = log_file)
@@ -99,6 +104,7 @@ logf("  parcels_clean (meta): ", nrow(parcels_meta), " rows", log_file = log_fil
 setDT(ever_panel)
 setDT(occ_panel)
 setDT(events_panel)
+setDT(bldg_demog)
 setDT(ass)
 
 ## Normalize PIDs
@@ -107,6 +113,9 @@ occ_panel[,    PID := normalize_pid(PID)]
 events_panel[, PID := normalize_pid(parcel_number)]
 events_panel[, parcel_number := NULL]
 if ("period" %in% names(events_panel)) events_panel[, period := NULL]
+bldg_demog[, PID := normalize_pid(PID)]
+bldg_demog[, year := as.integer(year)]
+assert_unique(bldg_demog, c("PID", "year"), "infousa_building_demographics_panel")
 
 ## ------------------------------------------------------------
 ## 2) BUILD BASE PANEL (PID × YEAR) FROM OCC + EVER + EVENTS
@@ -141,12 +150,17 @@ logf("  bldg_panel rows after merge: ", nrow(bldg_panel), log_file = log_file)
 assert_unique(bldg_panel, c("PID", "year"), "bldg_panel after ever_panel merge")
 logf("  Assertion passed: (PID, year) unique after ever_panel merge", log_file = log_file)
 
-## Coalesce pm.zip: prefer ever_panel's pm.zip, fall back to parcels_clean
-bldg_panel[, pm.zip := coalesce(
-  str_remove(as.character(pm.zip), "^_") %>% str_pad(5, "left", "0"),
-  str_remove(as.character(pm.zip_parcels), "^_") %>% str_pad(5, "left", "0")
-)]
-bldg_panel[pm.zip %in% c("   NA", "NA", "00000"), pm.zip := NA_character_]
+## Coalesce pm.zip: prefer ever_panel's, fall back to parcels_clean
+## Must convert empty strings to NA first — otherwise coalesce treats "" as non-missing
+clean_zip <- function(z) {
+  z <- as.character(z)
+  z[is.na(z) | z %in% c("", "NA", "00000", "000NA", "   NA")] <- NA_character_
+  z <- str_remove(z, "^_")
+  z <- str_pad(z, 5, "left", "0")
+  z[z %in% c("00000", "000NA")] <- NA_character_
+  z
+}
+bldg_panel[, pm.zip := coalesce(clean_zip(pm.zip), clean_zip(pm.zip_parcels))]
 bldg_panel[, pm.zip_parcels := NULL]
 
 ## Single merged events file: violations + permits + complaints (PID×year)
@@ -157,12 +171,31 @@ bldg_panel <- merge(
   bldg_panel,
   events_panel,
   by    = c("PID", "year"),
-  all.x = F
+  # Keep all occupancy panel rows. Dropping rows here changes market denominators
+  # and silently changes the implied outside good in demand shares.
+  all.x = TRUE
 )
 
 logf("  bldg_panel rows after merge: ", nrow(bldg_panel), log_file = log_file)
 assert_unique(bldg_panel, c("PID", "year"), "bldg_panel after events_panel merge")
 logf("  Assertion passed: (PID, year) unique after events_panel merge", log_file = log_file)
+
+## ------------------------------------------------------------
+## 2b) MERGE INFOUSA BUILDING DEMOGRAPHICS (PID × YEAR)
+## ------------------------------------------------------------
+logf("Merging infousa_building_demographics_panel...", log_file = log_file)
+logf("  bldg_panel rows before merge: ", nrow(bldg_panel), log_file = log_file)
+
+bldg_panel <- merge(
+  bldg_panel,
+  bldg_demog,
+  by = c("PID", "year"),
+  all.x = TRUE
+)
+
+logf("  bldg_panel rows after merge: ", nrow(bldg_panel), log_file = log_file)
+assert_unique(bldg_panel, c("PID", "year"), "bldg_panel after infousa demographics merge")
+logf("  Assertion passed: (PID, year) unique after infousa demographics merge", log_file = log_file)
 
 ## ------------------------------------------------------------
 ## 3) ASSESSMENTS: BUILD VARIABLES ON THE FLY (from ass <- fread(...))
@@ -284,14 +317,18 @@ bldg_panel[
 ## ------------------------------------------------------------
 
 ## Units & occupancy (from occupancy script)
-bldg_panel[
-  ,
-  occupied_units := fifelse(
-    !is.na(occupancy_rate),
-    total_units * occupancy_rate,
-    total_units
-  )
-]
+## occupied_units = renter-occupied units, capped at [0, total_units].
+## Uses renter_occ directly (time-varying from InfoUSA num_households post-2010).
+bldg_panel[, occupied_units := pmin(total_units, pmax(0, fifelse(is.na(renter_occ), 0, renter_occ)))]
+
+## occupied_units_scaled: uses rental_occupancy_rate_scaled (benchmarked to
+## 2010 Census mean=0.91) to produce a calibrated occupied-unit count.
+## Falls back to raw occupied_units when the scaled rate is missing.
+bldg_panel[, occupied_units_scaled := fifelse(
+  !is.na(rental_occupancy_rate_scaled),
+  rental_occupancy_rate_scaled * total_units,
+  occupied_units
+)]
 
 ## Rent variable (Altos)
 bldg_panel[,med_rent := coalesce(
@@ -327,9 +364,29 @@ bldg_panel[
   ,
   market_zip := str_pad(as.character(get(market_zip_col)), width = 5, side = "left", pad = "0")
 ]
+
+## Unit-size bins (created here so we can support both:
+##   - zip-year markets across all bins, and
+##   - zip-year-bin markets for bin-specific demand specs)
+bldg_panel[, num_units_bin := cut(
+  total_units,
+  breaks = c(-Inf, 1, 5, 20, 50, Inf),
+  labels = c("1", "2-5", "6-20", "21-50", "51+"),
+  include.lowest = TRUE
+)]
+
+## Two market IDs:
+## 1) zip-year (all bins together) for share_zip_all_bins
+## 2) zip-year-bin for share_zip_bin and bin-level estimation
 bldg_panel[
   ,
-  market_id := paste(market_zip, year, sep = "_")
+  market_id_zip_year := paste(market_zip, year, sep = "_")
+]
+
+## Keep market_id as zip × year × unit-size bin for backward compatibility
+bldg_panel[
+  ,
+  market_id := paste(market_zip, year, num_units_bin, sep = "_")
 ]
 
 ## Owner ID (from parcels_clean: owner_1)
@@ -597,44 +654,43 @@ bldg_panel[, filing_rate_eb_pre_covid_asinh := asinh(filing_rate_eb_pre_covid)]
 ## ------------------------------------------------------------
 
 ## -----------------------------------------------------------
-## 7a) Market-level totals (zip-year)
+## 7a) Shares in zip-year markets across all bins
 ##
-## For BLP-style demand estimation, shares must sum to < 1 within each
-## market to leave room for an outside good.  Using total_units (the
-## full housing stock, including vacant) as the denominator guarantees
-## sum(share_zip) <= 1 in each zip-year; after further sample
-## restrictions (apartments only, unit-count floors, etc.) the inside
-## shares will be well below 1.
+## Why this exists:
+## - This is the "all bins pooled" market share used by classic zip-year demand
+##   definitions. Shares are comparable across unit-size bins within the same
+##   zip-year because they use one common denominator.
 ## -----------------------------------------------------------
 
 bldg_panel[
   ,
   `:=`(
-    total_units_market    = sum(total_units, na.rm = TRUE),
-    total_occupied_units_market = sum(occupied_units, na.rm = TRUE)
+    total_units_zip_all_bins         = sum(total_units, na.rm = TRUE),
+    total_renters_zip_all_bins       = sum(renter_occ, na.rm = TRUE),
+    total_occupied_units_zip_all_bins = sum(occupied_units_scaled, na.rm = TRUE)
   ),
-  by = .(market_id)
+  by = .(market_id_zip_year)
 ]
 
-## share_zip: product share of total housing stock in zip-year
-## Denominator = total_units (all units, incl. vacant) → shares sum ≤ 1
+## share_zip_all_bins: occupied units over total units within zip-year.
+## This leaves room for an outside good (vacancy and non-selected products).
 bldg_panel[
   ,
-  share_zip := fifelse(
-    total_units_market > 0,
-    occupied_units / total_units_market,
+  share_zip_all_bins := fifelse(
+    total_units_zip_all_bins > 0,
+    occupied_units_scaled / total_units_zip_all_bins,
     NA_real_
   )
 ]
 
-## market_share_units: legacy name, same as share_zip but with occupied
-## denominator (sums to exactly 1 within zip-year). Kept for HHI / owner
-## concentration calculations that need within-market proportions.
+## market_share_units uses occupied-units denominator and sums to 1 within
+## zip-year. Keep for concentration summaries that require market shares that
+## sum to one.
 bldg_panel[
   ,
   market_share_units := fifelse(
-    total_occupied_units_market > 0,
-    occupied_units / total_occupied_units_market,
+    total_occupied_units_zip_all_bins > 0,
+    occupied_units_scaled / total_occupied_units_zip_all_bins,
     NA_real_
   )
 ]
@@ -643,7 +699,7 @@ bldg_panel[
 owner_market <- bldg_panel[
   ,
   .(
-    owner_units       = sum(occupied_units, na.rm = TRUE),
+    owner_units       = sum(occupied_units_scaled, na.rm = TRUE),
     owner_parcels     = .N,
     any_evict_owner   = any(fco(rental_from_evict, FALSE) | fco(num_filings, 0) > 0, na.rm = TRUE),
     any_altos_owner   = any(fco(rental_from_altos, FALSE), na.rm = TRUE),
@@ -691,35 +747,39 @@ bldg_panel <- merge(
 )
 
 ## -----------------------------------------------------------
-## 7b) Unit-bin level shares (zip-year-bin)
+## 7b) Shares in zip-year-bin markets
+##
+## Why this exists:
+## - Some specifications treat each unit-size bin as its own market. This share
+##   uses bin-specific denominators to match that definition.
 ## -----------------------------------------------------------
 
 bldg_panel[
   ,
-  num_units_bin := cut(
-    total_units,
-    breaks = c(-Inf, 1, 5, 20, 50, Inf),
-    labels = c("1", "2-5", "6-20", "21-50", "51+"),
-    include.lowest = TRUE
-  )
+  `:=`(
+    total_units_zip_bin          = sum(total_units, na.rm = TRUE),
+    total_renters_zip_bin        = sum(renter_occ, na.rm = TRUE),
+    total_occupied_units_zip_bin = sum(occupied_units_scaled, na.rm = TRUE)
+  ),
+  by = .(market_id)
 ]
 
+## Back-compat aliases used by older scripts.
 bldg_panel[
   ,
   `:=`(
-    total_units_bin          = sum(total_units, na.rm = TRUE),
-    total_occupied_units_bin = sum(occupied_units, na.rm = TRUE)
-  ),
-  by = .(market_id, num_units_bin)
+    total_units_market = total_units_zip_bin,
+    total_renters_market = total_renters_zip_bin,
+    total_occupied_units_market = total_occupied_units_zip_bin
+  )
 ]
 
-## share_zip_bin: product share of housing stock in zip-year-bin submarket
-## Denominator = total_units in the bin (incl. vacant)
+## share_zip_bin: occupied units over total units within zip-year-bin.
 bldg_panel[
   ,
   share_zip_bin := fifelse(
-    total_units_bin > 0,
-    occupied_units / total_units_bin,
+    total_units_zip_bin > 0,
+    occupied_units_scaled / total_units_zip_bin,
     NA_real_
   )
 ]
@@ -728,8 +788,8 @@ bldg_panel[
 bldg_panel[
   ,
   share_units_zip_unit := fifelse(
-    total_occupied_units_bin > 0,
-    occupied_units / total_occupied_units_bin,
+    total_occupied_units_zip_bin > 0,
+    occupied_units_scaled / total_occupied_units_zip_bin,
     NA_real_
   )
 ]
@@ -738,34 +798,48 @@ bldg_panel[
 ## 7c) Share sanity checks
 ## -----------------------------------------------------------
 
-## share_zip should sum to <= 1 within each zip-year
-share_zip_sums <- bldg_panel[, .(share_sum = sum(share_zip, na.rm = TRUE)), by = market_id]
-n_bad_zip <- share_zip_sums[share_sum > 1 + 1e-8, .N]
-if (n_bad_zip > 0) {
-  logf("WARNING: ", n_bad_zip, " markets have share_zip summing to > 1", log_file = log_file)
+## share_zip_all_bins should sum to <= 1 within each zip-year
+share_zip_all_bins_sums <- bldg_panel[, .(share_sum = sum(share_zip_all_bins, na.rm = TRUE)), by = market_id_zip_year]
+n_bad_zip_all <- share_zip_all_bins_sums[share_sum > 1 + 1e-8, .N]
+if (n_bad_zip_all > 0) {
+  logf("WARNING: ", n_bad_zip_all, " zip-year markets have share_zip_all_bins summing to > 1", log_file = log_file)
 }
-stopifnot("share_zip sums > 1 in some markets — check occupancy vs total_units" =
-            n_bad_zip == 0)
-logf("  share_zip: all ", nrow(share_zip_sums), " markets sum to <= 1 — PASSED", log_file = log_file)
+stopifnot("share_zip_all_bins sums > 1 in some zip-year markets - check occupancy vs total_units" =
+            n_bad_zip_all == 0)
+logf("  share_zip_all_bins: all ", nrow(share_zip_all_bins_sums), " zip-year markets sum to <= 1 - PASSED",
+     log_file = log_file)
 
 ## share_zip_bin should sum to <= 1 within each (zip-year, bin)
-share_bin_sums <- bldg_panel[, .(share_sum = sum(share_zip_bin, na.rm = TRUE)),
-                              by = .(market_id, num_units_bin)]
+share_bin_sums <- bldg_panel[, .(share_sum = sum(share_zip_bin, na.rm = TRUE)), by = market_id]
 n_bad_bin <- share_bin_sums[share_sum > 1 + 1e-8, .N]
 if (n_bad_bin > 0) {
   logf("WARNING: ", n_bad_bin, " (market, bin) cells have share_zip_bin > 1", log_file = log_file)
 }
 stopifnot("share_zip_bin sums > 1 in some (market, bin) cells" =
             n_bad_bin == 0)
-logf("  share_zip_bin: all ", nrow(share_bin_sums), " (market, bin) cells sum to <= 1 — PASSED",
+logf("  share_zip_bin: all ", nrow(share_bin_sums), " (market, bin) cells sum to <= 1 - PASSED",
      log_file = log_file)
 
 ## All shares should be in [0, 1]
-stopifnot("share_zip out of [0,1]" =
-            bldg_panel[!is.na(share_zip), all(share_zip >= 0 & share_zip <= 1)])
+stopifnot("share_zip_all_bins out of [0,1]" =
+            bldg_panel[!is.na(share_zip_all_bins), all(share_zip_all_bins >= 0 & share_zip_all_bins <= 1)])
 stopifnot("share_zip_bin out of [0,1]" =
             bldg_panel[!is.na(share_zip_bin), all(share_zip_bin >= 0 & share_zip_bin <= 1)])
-logf("  All shares in [0, 1] — PASSED", log_file = log_file)
+logf("  All shares in [0, 1] - PASSED", log_file = log_file)
+
+## Diagnostic: share distribution summary
+share_zip_all_vals <- bldg_panel[!is.na(share_zip_all_bins), share_zip_all_bins]
+share_zip_bin_vals <- bldg_panel[!is.na(share_zip_bin), share_zip_bin]
+logf(sprintf("  share_zip_all_bins dist: mean=%.6f, median=%.6f, p90=%.6f, max=%.6f",
+             mean(share_zip_all_vals), median(share_zip_all_vals),
+             quantile(share_zip_all_vals, 0.90), max(share_zip_all_vals)), log_file = log_file)
+logf(sprintf("  share_zip_bin dist: mean=%.6f, median=%.6f, p90=%.6f, max=%.6f",
+             mean(share_zip_bin_vals), median(share_zip_bin_vals),
+             quantile(share_zip_bin_vals, 0.90), max(share_zip_bin_vals)), log_file = log_file)
+logf(sprintf("  zip-year share sums (all bins): mean=%.4f, median=%.4f",
+             mean(share_zip_all_bins_sums$share_sum), median(share_zip_all_bins_sums$share_sum)), log_file = log_file)
+logf(sprintf("  zip-year-bin share sums: mean=%.4f, median=%.4f",
+             mean(share_bin_sums$share_sum), median(share_bin_sums$share_sum)), log_file = log_file)
 
 ## ------------------------------------------------------------
 ## 8) SIMPLE BLP-STYLE INSTRUMENTS
@@ -889,8 +963,8 @@ analytic <- analytic[year >= 2006]  ## tweak time window if needed
 logf("Running final assertions...", log_file = log_file)
 
 # Verify key columns exist
-required_cols <- c("PID", "year", "market_id", "owner_mailing_clean", "log_med_rent",
-                   "total_units", "market_share_units", "share_zip", "share_zip_bin")
+required_cols <- c("PID", "year", "market_id", "market_id_zip_year", "owner_mailing_clean", "log_med_rent",
+                   "total_units", "market_share_units", "share_zip_all_bins", "share_zip_bin")
 assert_has_cols(bldg_panel, required_cols, "bldg_panel")
 logf("  Required columns present in bldg_panel", log_file = log_file)
 
@@ -921,4 +995,3 @@ logf("  Wrote analytic_sample: ", nrow(analytic), " rows to ", out_analytic, log
 logf("  Unique markets: ", analytic[, uniqueN(market_id)], log_file = log_file)
 logf("  Unique owners: ", analytic[, uniqueN(owner_mailing_clean)], log_file = log_file)
 logf("=== Finished make-analytic-sample.R ===", log_file = log_file)
-

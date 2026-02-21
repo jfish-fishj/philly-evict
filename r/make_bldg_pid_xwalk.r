@@ -29,7 +29,14 @@ suppressPackageStartupMessages({
 })
 
 # ---- Load config and set up logging ----
+# ---- Load config and set up logging ----
 source("r/config.R")
+source("R/helper-functions.R")
+
+normalize_pid <- function(x) {
+  stringr::str_pad(as.character(x), width = 9, side = "left", pad = "0")
+}
+
 
 cfg <- read_config()
 log_file <- p_out(cfg, "logs", "make_bldg_pid_xwalk.log")
@@ -59,13 +66,16 @@ philly_bldgs_sf <- st_read(bldg_shp_path, quiet = TRUE)
 logf("  Building footprints: ", nrow(philly_bldgs_sf), " features", log_file = log_file)
 
 # Parcel-building CSV for PID-PIN mapping
-parcel_csv_path <- p_product(cfg, "parcel_building_2024")
+parcel_csv_path <- p_product(cfg, "parcels_clean")
 logf("  Reading parcel CSV for PID-PIN mapping: ", parcel_csv_path, log_file = log_file)
 philly_parcels <- fread(parcel_csv_path)
 logf("  Parcel CSV: ", nrow(philly_parcels), " rows", log_file = log_file)
 
+# make PID
+
 # Merge PIN to get PID on the shapefile
 n_before <- nrow(philly_sf)
+philly_parcels[,PID := normalize_pid(parcel_number)]
 philly_sf <- merge(philly_sf, philly_parcels[, .(PID, PIN = pin)], by = "PIN", all.x = FALSE)
 logf("  After PID merge: ", nrow(philly_sf), " parcels (dropped ", n_before - nrow(philly_sf), " without PID)", log_file = log_file)
 

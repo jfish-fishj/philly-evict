@@ -1,0 +1,53 @@
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{4}{c}{log\_med\_rent}\\
+   Model:                                                            & (1)             & (2)             & (3)             & (4)\\  
+   \midrule
+   \emph{Variables}\\
+   filing\_rate\_longrun\_pre2019\_cuts $=$ (0-5\%]5-10\%]")         & 0.0662$^{***}$  &                 & 0.0658$^{***}$  &   \\   
+                                                                     & (0.0118)        &                 & (0.0118)        &   \\   
+   filing\_rate\_longrun\_pre2019\_cuts $=$ (10-20\%]5-10\%]")       & -0.0148         &                 & -0.0137         &   \\   
+                                                                     & (0.0120)        &                 & (0.0120)        &   \\   
+   filing\_rate\_longrun\_pre2019\_cuts $=$ 20\%+5-10\%]")           & -0.0170         &                 & -0.0172         &   \\   
+                                                                     & (0.0117)        &                 & (0.0117)        &   \\   
+   any\_unsafe\_dangerous\_violationTRUE                             & -0.0081         &                 & -0.0078         &   \\   
+                                                                     & (0.0157)        &                 & (0.0156)        &   \\   
+   any\_heat\_fire\_drainage\_plumbing\_complaintTRUE                & -0.0401$^{***}$ &                 & -0.0405$^{***}$ &   \\   
+                                                                     & (0.0135)        &                 & (0.0135)        &   \\   
+   log(total\_area)                                                  & 0.0213$^{**}$   & 0.0211$^{*}$    & 0.0215$^{**}$   & 0.0212$^{*}$\\   
+                                                                     & (0.0105)        & (0.0109)        & (0.0105)        & (0.0109)\\   
+   log(market\_value)                                                & 0.0498$^{***}$  & 0.0473$^{***}$  & 0.0491$^{***}$  & 0.0466$^{***}$\\   
+                                                                     & (0.0109)        & (0.0109)        & (0.0109)        & (0.0109)\\   
+   filing\_rate\_eb\_pre\_covid                                      &                 & -0.2197$^{***}$ &                 & -0.2182$^{***}$\\   
+                                                                     &                 & (0.0271)        &                 & (0.0274)\\   
+   infousa\_pct\_black\_imp                                          &                 &                 & -0.0792$^{***}$ & -0.0799$^{***}$\\   
+                                                                     &                 &                 & (0.0162)        & (0.0162)\\   
+   infousa\_pct\_female\_imp                                         &                 &                 & -0.0438$^{***}$ & -0.0446$^{***}$\\   
+                                                                     &                 &                 & (0.0110)        & (0.0111)\\   
+   infousa\_pct\_black\_female\_imp                                  &                 &                 & 0.0537$^{***}$  & 0.0540$^{***}$\\   
+                                                                     &                 &                 & (0.0141)        & (0.0143)\\   
+   infousa\_share\_persons\_demog\_ok\_imp                           &                 &                 & 0.0191          & 0.0221\\   
+                                                                     &                 &                 & (0.0144)        & (0.0146)\\   
+   tenant\_comp\_missing                                             &                 &                 & 0.0192$^{**}$   & 0.0197$^{**}$\\   
+                                                                     &                 &                 & (0.0079)        & (0.0079)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   year                                                              & Yes             & Yes             & Yes             & Yes\\  
+   GEOID                                                             & Yes             & Yes             & Yes             & Yes\\  
+   year\_blt\_decade                                                 & Yes             & Yes             & Yes             & Yes\\  
+   source                                                            & Yes             & Yes             & Yes             & Yes\\  
+   num\_units\_bin                                                   & Yes             & Yes             & Yes             & Yes\\  
+   building\_type                                                    & Yes             & Yes             & Yes             & Yes\\  
+   quality\_grade\_standard                                          & Yes             & Yes             & Yes             & Yes\\  
+   num\_stories\_bin                                                 & Yes             & Yes             & Yes             & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                                      & 113,725         & 113,725         & 113,725         & 113,725\\  
+   R$^2$                                                             & 0.69308         & 0.69008         & 0.69382         & 0.69085\\  
+   \midrule \midrule
+   \multicolumn{5}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

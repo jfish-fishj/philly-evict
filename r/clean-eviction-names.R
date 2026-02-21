@@ -57,11 +57,60 @@ business_words <- c(
 "HOUS", "HOUSING", "APARTMENTS", "APTS?", "REAL",
 "ESTATE", "REALTY", "MANAGEMENT", "MGMT",
 "DEV", "DEVELOPMENT", "DEVELOPS", "DEVELOPERS",
+"PHILADELPHIA", "SCHOOL", "SCHOOLS", "ACADEMY",
+"TAVERN", "INN", "HOTEL", "MOTEL", "BAR", "GRILL", "DINER", "CAFE",
+"UNIVERSITY", "COLLEGE", "HOSPITAL", "CLINIC",
+"CHURCH", "TEMPLE", "MOSQUE", "MINISTRY", "MINISTRIES",
+"DEPARTMENT", "DEPT", "AGENCY", "BUREAU", "OFFICE", "OFFICES",
+"CITY", "COUNTY", "BOROUGH", "TOWNSHIP", "COMMONWEALTH", "STATE",
+"BANK", "CREDIT", "UNION", "INSURANCE",
+"LAW", "AUTO", "COLLISION", "COLLISSION", "MOTORS", "GARAGE",
+"BODY", "REPAIR", "TOWING", "MECHANIC", "SERVICE", "SERVICES",
 "THE"
 )
 
 # Create regex pattern (case insensitive)
 pattern <- str_c("\\b(", str_c(business_words, collapse = "|"), ")\\b", collapse = "|")
+occupant_token_pattern <- "(?:OCC(?!UPATIONAL\\b)[A-Z]{0,12})"
+spousal_marker_regex <- regex(
+  str_c(
+    "\\b[HW]\\s*(?:AND|&|/)\\s*[HW]\\b",
+    "|\\b[HW]\\s+[HW]\\b",
+    "|\\(?\\s*C\\s*/\\s*S\\s*\\)?",
+    "|\\bC\\s+S\\b",
+    "|\\bHUSBAND\\s+AND\\s+WIFE\\b",
+    "|\\bHUSBAND\\s*&\\s*WIFE\\b"
+  ),
+  ignore_case = TRUE
+)
+
+strip_spousal_phrases <- function(x) {
+  x %>%
+    str_replace_all(spousal_marker_regex, " ") %>%
+    str_squish()
+}
+
+strip_occupant_phrases <- function(x) {
+  x %>%
+    str_replace_all(regex("\\bOCCU\\s+ANTS?\\b", ignore_case = TRUE), " ") %>%
+    str_replace_all(
+      regex("\\b(?:AND\\s+)?ALL\\s+OTHER?\\s+ROCC\\b", ignore_case = TRUE),
+      " "
+    ) %>%
+    str_replace_all(
+      regex(
+        str_c(
+          "\\b(?:AND\\s+)?(?:ALL\\s+)?(?:OTHER\\s+)?(?:UNAUTHORIZED\\s+)?(?:UNKNOWN\\s+)?",
+          occupant_token_pattern,
+          "\\b"
+        ),
+        ignore_case = TRUE
+      ),
+      " "
+    ) %>%
+    str_replace_all(regex("\\bET\\s+AL\\b", ignore_case = TRUE), " ") %>%
+    str_squish()
+}
 
 # Function to fix common spelling errors and variations
 fix_spellings <- function(x) {
@@ -115,18 +164,21 @@ x %>%
 
 clean_name <- function(name) {
 name %>%
+  str_replace_all("[’']", "") %>%
+  strip_spousal_phrases() %>%
   # Replace & with AND
   str_replace_all("([^\\s])&([^\\s])", "\\1 AND \\2") %>%
   str_replace_all("([^\\s]),([^\\s])", "\\1 , \\2") %>%
-  str_replace_all("&", "AND") %>%
-  str_replace_all("|", " | ") %>%
+  str_replace_all("&", " AND ") %>%
+  str_replace_all("\\|", " | ") %>%
   # Strip punctuation
   str_replace_all("[[:punct:]]", " ") %>%
   str_squish() %>%
-  str_remove_all("((AND)?\\s?(ALL OTHER OCCUPANTS?|ALL OTHERS?|ALL OCCUPANTS?))") %>%
-  str_remove_all("((AND)?\\s?(ALL OCCSUPS?|ALL OCCUPS?))") %>%
-  str_remove_all("((AND)?\\s?(ALL OCCS?|ALL OTHER OCCS?))") %>%
+  strip_spousal_phrases() %>%
+  strip_occupant_phrases() %>%
   fix_spellings() %>%
+  strip_spousal_phrases() %>%
+  strip_occupant_phrases() %>%
   str_squish() %>%
   return()
 }

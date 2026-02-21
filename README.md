@@ -3,6 +3,8 @@
 This repository contains the data processing and analysis pipeline for Philadelphia eviction research.
 
 Additional documentation:
+- **Data products codebook**: [`docs/data-products.md`](docs/data-products.md) — column-level reference for all major data products
+- Eviction-InfoUSA linkage: [`docs/evict-infousa-linkage.md`](docs/evict-infousa-linkage.md)
 - Race imputation: [`docs/race-imputation.md`](docs/race-imputation.md)
 - Gender imputation: [`docs/gender-imputation.md`](docs/gender-imputation.md)
 - Occupancy and shares: [`docs/occupancy-and-shares.md`](docs/occupancy-and-shares.md)

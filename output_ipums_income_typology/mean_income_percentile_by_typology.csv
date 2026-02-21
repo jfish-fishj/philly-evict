@@ -1,0 +1,5 @@
+typology,mean_inc_pct,n_households
+"Renter, building >10 yrs old",0.413325371156051,343223
+"Owner, building >10 yrs old",0.60078181708407,390847
+"Renter, building <=10 yrs old",0.478583957659935,2776
+"Owner, building <=10 yrs old",0.699695570024473,2213

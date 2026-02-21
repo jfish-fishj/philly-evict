@@ -1,0 +1,61 @@
+                         full_complaint  pre_complaint
+Dependent Var.:          filed_eviction filed_eviction
+                                                      
+event_t_complaint = -12          -0.799          0.968
+                                (22.8)        (315.1) 
+event_t_complaint = -11          -0.730          0.877
+                                (20.8)        (286.5) 
+event_t_complaint = -10          -0.657          0.788
+                                (18.7)        (257.8) 
+event_t_complaint = -9           -0.586          0.698
+                                (16.6)        (229.2) 
+event_t_complaint = -8           -0.516          0.608
+                                (14.5)        (200.5) 
+event_t_complaint = -7           -0.445          0.519
+                                (12.5)        (171.9) 
+event_t_complaint = -6           -0.372          0.430
+                                (10.4)        (143.2) 
+event_t_complaint = -5           -0.301          0.341
+                                 (8.30)       (114.6) 
+event_t_complaint = -4           -0.229          0.252
+                                 (6.23)        (85.9) 
+event_t_complaint = -3           -0.156          0.164
+                                 (4.15)        (57.3) 
+event_t_complaint = -2           -0.083          0.077
+                                 (2.08)        (28.6) 
+event_t_complaint = 0             0.090         -0.068
+                                 (2.08)        (28.6) 
+event_t_complaint = 1             0.148         -0.173
+                                 (4.15)        (57.3) 
+event_t_complaint = 2             0.209         -0.274
+                                 (6.23)        (85.9) 
+event_t_complaint = 3             0.275         -0.370
+                                 (8.30)       (114.6) 
+event_t_complaint = 4             0.345         -0.460
+                                (10.4)        (143.2) 
+event_t_complaint = 5             0.413         -0.553
+                                (12.5)        (171.9) 
+event_t_complaint = 6             0.484         -0.643
+                                (14.5)        (200.5) 
+event_t_complaint = 7             0.555         -0.733
+                                (16.6)        (229.2) 
+event_t_complaint = 8             0.626         -0.823
+                                (18.7)        (257.8) 
+event_t_complaint = 9             0.696         -0.914
+                                (20.8)        (286.5) 
+event_t_complaint = 10            0.767         -1.00 
+                                (22.8)        (315.1) 
+event_t_complaint = 11            0.839         -1.09 
+                                (24.9)        (343.7) 
+event_t_complaint = 12            0.910         -1.18 
+                                (27.0)        (372.4) 
+Fixed-Effects:           -------------- --------------
+period_fe                           Yes            Yes
+PID                                 Yes            Yes
+_______________________  ______________ ______________
+S.E.: Clustered                 by: PID        by: PID
+Observations                  1,731,354      1,519,394
+R2                              0.12289        0.12583
+Within R2                       0.00471        0.00530
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

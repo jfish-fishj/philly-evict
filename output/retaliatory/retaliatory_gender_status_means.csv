@@ -1,0 +1,4 @@
+retaliatory_status,n_cases,mean_case_p_female,mean_case_p_male
+non_retaliatory,171749,0.634206549249039,0.365793450750951
+plausibly_retaliatory,36947,0.604248712983765,0.395751287016224
+retaliatory,47182,0.606240558107302,0.393759441892682

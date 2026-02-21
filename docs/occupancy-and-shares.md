@@ -45,18 +45,20 @@ For years <= 2010, renter counts are derived from Census block group totals, not
 
 Assignment logic:
 - **year <= 2010 AND year_built <= 2010**: `renters_2010` (Census BG-raked)
-- **All other cases** (post-2010 years OR post-2010 construction): `min(num_households, total_units)` from InfoUSA
+- **All other cases** (post-2010 years OR post-2010 construction): `min(num_households_completed, total_units)` from InfoUSA, where `num_households_completed = num_households + raw_gapfill_1y`
 - When `num_households` is NA, `renter_occ` is imputed (see below)
 - Floored at 0
 - **Hard clamp** (added 2026-02-17): After all imputation, `renter_occ` is clamped to `<= total_units`. See "BG renter re-normalization issue" below for why this is necessary.
 
 **Occupancy imputation** (added 2026-02-16, replaces the old forced-zero policy):
 
-When `renter_occ` is NA after the initial assignment (typically because InfoUSA has no data for that PID-year), two fallback mechanisms fill it in:
+When `renter_occ` is NA after the initial assignment, three mechanisms are applied in order:
 
-1. **Within-PID LOCF/NOCB** (Step A): If the PID has InfoUSA data in *any* year, the observed occupancy rate is carried forward/backward to fill gaps. This is the dominant mechanism (~2M rows filled). The interpolation works on occupancy rate (renter_occ/total_units), not raw counts, to handle unit changes correctly.
+1. **Raw-family one-year bridge** (Step 0, added 2026-02-20): If a `family_id` is observed at the same PID in years `t` and `t+2`, the missing interior year `t+1` is added as a raw coverage row. This is a deterministic, raw-data completion (not occupancy-rate interpolation).
 
-2. **BG-level fallback** (Step B): If the PID has *never* appeared in InfoUSA AND has rental evidence (license, Altos listing, or eviction filing), it receives the BG × structure_bin × year weighted-average occupancy rate from PIDs that do have data. PIDs with no InfoUSA data AND no rental evidence are left as NA (treated as 0) — these are likely not actually rentals.
+2. **Within-PID LOCF/NOCB** (Step A): If the PID has InfoUSA data in *any* year, the observed occupancy rate is carried forward/backward to fill gaps. The interpolation works on occupancy rate (renter_occ/total_units), not raw counts, to handle unit changes correctly.
+
+3. **BG-level fallback** (Step B): If the PID has *never* appeared in InfoUSA AND has rental evidence (license, Altos listing, or eviction filing), it receives the BG × structure_bin × year weighted-average occupancy rate from PIDs that do have data. PIDs with no InfoUSA data AND no rental evidence are left as NA (treated as 0) — these are likely not actually rentals.
 
 This reduced missing `renter_occ` from ~2M rows to ~11K (99.5% filled).
 
@@ -144,7 +146,7 @@ This is a conceptual shift from Census-matched totals: `sum(total_units)` is the
 
 Expected inside share sums per market: 0.5–0.8 (healthy)
 
-## 4. QA and Remaining Limitations (as of 2026-02-17)
+## 4. QA and Remaining Limitations (as of 2026-02-20)
 
 ### QA outputs from `make-occupancy-vars.r`
 - `output/qa/units_vs_max_households_worst_offenders.csv`
@@ -156,6 +158,10 @@ Expected inside share sums per market: 0.5–0.8 (healthy)
 - `output/qa/renter_overalloc_bg_diagnostic.csv` — BG-level summary of 686 BGs with renter overallocation (added 2026-02-17)
 - `output/qa/renter_overalloc_bldg_diagnostic.csv` — building-level detail for overallocated buildings (added 2026-02-17)
 - `output/qa/step5_clamped_rows_diagnostic.csv` — top 5,000 clamped panel rows by excess (added 2026-02-17)
+- `output/qa/infousa_coverage_categories_unit_year.csv` — year × category unit-year accounting (`covered`, `partial_coverage_leaseup`, `never_in_infousa`, `spotty_in_infousa`)
+- `output/qa/infousa_coverage_categories_year_summary.csv` — per-year rental-unit totals and gap vs 330k target
+- `output/qa/infousa_never_in_infousa_pid_review.csv` — never-seen PIDs with multi-year rental evidence counters
+- `output/qa/infousa_spotty_large_pid_year.csv` — large (20+ unit) spotty PID-years with adjacent-year and raw-gap flags
 - Log metrics include:
   - `corr(total_units, max_households)`
   - counts for `total_units <= 2 & max_households > 10`

@@ -216,12 +216,92 @@ business_words <- c(
   "ESTATE","REALTY","MANAGEMENT","MGMT",
   "RESTAURANT","RESTARAUNT","ACADEMY",
   "DEV","DEVELOPMENT","DEVELOPS","DEVELOPERS",
-  "THE"
+  "THE",
+  # Additional near-certain non-person institution/commercial terms.
+  "PHILADELPHIA", "SCHOOL", "SCHOOLS", "ACADEMY",
+  "TAVERN", "INN", "HOTEL", "MOTEL", "BAR", "GRILL", "DINER", "CAFE",
+  "UNIVERSITY", "COLLEGE", "HOSPITAL", "CLINIC",
+  "CHURCH", "TEMPLE", "MOSQUE", "MINISTRY", "MINISTRIES",
+  "DEPARTMENT", "DEPT", "AGENCY", "BUREAU", "OFFICE", "OFFICES",
+  "CITY", "COUNTY", "BOROUGH", "TOWNSHIP", "COMMONWEALTH", "STATE",
+  "BANK", "CREDIT", "UNION", "INSURANCE",
+  # Additional business terms requested for non-person screening.
+  "LAW", "AUTO", "COLLISION", "COLLISSION", "MOTORS", "GARAGE",
+  "BODY", "REPAIR", "TOWING", "MECHANIC", "SERVICE", "SERVICES"
+)
+
+# Non-person/placeholder words. These are not all businesses, but are rarely
+# person defendants and should trigger non-person handling in name pipelines.
+non_person_words <- c(
+  "UNKNOWN", "UNAUTHORIZED", "TENANT", "TENANTS", "RESIDENT", "RESIDENTS",
+  "ESTATE", "ESTATES", "HEIR", "HEIRS", "ET AL", "AKA",
+  "OCC", "OCCS", "OCCU", "OCCUP", "OCCUPS", "OCCSUPS",
+  "OCCUPANT", "OCCUPANTS", "OCCUPANS", "OCCUPNTS", "OCCUPANTRS", "OCCUPANRTS", "OCCUPANRS",
+  "ALL OTHER OCCUPANTS", "ALL OCCUPANTS", "ALL OTHERS", "ALL OTHER OCCS"
 )
 
 # Standardization function
 # Create regex pattern (case insensitive)
 business_regex <- regex(str_c("\\b(", str_c(business_words, collapse = "|"), ")\\b", collapse = "|"), ignore_case = T)
+non_person_regex <- regex(str_c("\\b(", str_c(non_person_words, collapse = "|"), ")\\b", collapse = "|"), ignore_case = TRUE)
+business_or_nonperson_regex <- regex(
+  str_c("\\b(", str_c(unique(c(business_words, non_person_words)), collapse = "|"), ")\\b", collapse = "|"),
+  ignore_case = TRUE
+)
+
+# Business-style initials pattern (e.g., "A & B"), with spouse abbreviations
+# explicitly carved out via spousal_marker_regex.
+initial_amp_initial_regex <- regex("\\b[A-Z]\\s*&\\s*[A-Z]\\b", ignore_case = TRUE)
+
+# Spousal shorthand markers frequently included in defendant strings.
+spousal_marker_regex <- regex(
+  str_c(
+    "\\b[HW]\\s*(?:AND|&|/)\\s*[HW]\\b",
+    "|\\b[HW]\\s+[HW]\\b",
+    "|\\(?\\s*C\\s*/\\s*S\\s*\\)?",
+    "|\\bC\\s+S\\b",
+    "|\\bHUSBAND\\s+AND\\s+WIFE\\b",
+    "|\\bHUSBAND\\s*&\\s*WIFE\\b"
+  ),
+  ignore_case = TRUE
+)
+
+# Broad occupant-token matcher. This intentionally captures OCR/typing variants
+# (e.g., OCCUAPNTS, OCCUPNATS) while excluding OCCUPATIONAL.
+occupant_token_pattern <- "(?:OCC(?!UPATIONAL\\b)[A-Z]{0,12})"
+occupant_token_regex <- regex(str_c("\\b", occupant_token_pattern, "\\b"), ignore_case = TRUE)
+
+strip_occupant_phrases <- function(x) {
+  x %>%
+    # Handle split truncation patterns like "OCCU ANTS".
+    str_replace_all(regex("\\bOCCU\\s+ANTS?\\b", ignore_case = TRUE), " ") %>%
+    # Handle OCR truncation like "ALL OTHE ROCC" (for "ALL OTHER OCC...").
+    str_replace_all(
+      regex("\\b(?:AND\\s+)?ALL\\s+OTHER?\\s+ROCC\\b", ignore_case = TRUE),
+      " "
+    ) %>%
+    # Remove broad occupant clauses and typo variants.
+    str_replace_all(
+      regex(
+        str_c(
+          "\\b(?:AND\\s+)?(?:ALL\\s+)?(?:OTHER\\s+)?(?:UNAUTHORIZED\\s+)?(?:UNKNOWN\\s+)?",
+          occupant_token_pattern,
+          "\\b"
+        ),
+        ignore_case = TRUE
+      ),
+      " "
+    ) %>%
+    # Remove "ET AL" style placeholders frequently attached to names.
+    str_replace_all(regex("\\bET\\s+AL\\b", ignore_case = TRUE), " ") %>%
+    str_squish()
+}
+
+strip_spousal_phrases <- function(x) {
+  x %>%
+    str_replace_all(spousal_marker_regex, " ") %>%
+    str_squish()
+}
 
 
 # Function to fix common spelling errors and variations
@@ -276,18 +356,21 @@ fix_spellings <- function(x) {
 
 clean_name <- function(name){
   name %>%
+    str_replace_all("[’']", "") %>%
+    strip_spousal_phrases() %>%
     # replace & with AND
     str_replace_all("([^\\s])&([^\\s])", "\\1 AND \\2") %>%
     str_replace_all("([^\\s]),([^\\s])", "\\1 , \\2") %>%
-    str_replace_all("&", "AND") %>%
-    str_replace_all("|", " | ") %>%
+    str_replace_all("&", " AND ") %>%
+    str_replace_all("\\|", " | ") %>%
     # strip punctuation
     str_replace_all("[[:punct:]]"," ") %>%
     str_squish() %>%
-    str_remove_all("((AND)?\\s?(ALL OTHER OCCUPANTS?|ALL OTHERS?|ALL OCCUPANTS?))") %>%
-    str_remove_all("((AND)?\\s?(ALL OCCSUPS?|ALL OCCUPS?))") %>%
-    str_remove_all("((AND)?\\s?(ALL OCCS?|ALL OTHER OCCS?))") %>%
+    strip_spousal_phrases() %>%
+    strip_occupant_phrases() %>%
     fix_spellings() %>%
+    strip_spousal_phrases() %>%
+    strip_occupant_phrases() %>%
     str_squish() %>%
     return()
 }

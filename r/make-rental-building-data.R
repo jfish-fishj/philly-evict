@@ -278,6 +278,8 @@ clean_complaint_type <- function(x, lookup = complaint_lookup) {
   return(res)
 }
 
+severe_complaint_types <- c("Heat", "Fire", "Drainage", "Property Maintenance")
+
 # ---------- Pre-process: add parcel_number and filter to rentals ----------
 permits[, parcel_number := opa_account_num]
 complaints[, parcel_number := opa_account_num]
@@ -344,7 +346,13 @@ for (agg_level in c("year", "quarter", "month")) {
     .(num_complaints = .N),
     by = .(parcel_number, period, complaint_type_standardized)
   ]
-  complaints_agg_long[, total_complaints := sum(num_complaints), by = .(parcel_number, period)]
+  # Totals are period-specific counts by (parcel_number, period), not cumulative across time.
+  complaints_agg_long[, severe_flag := complaint_type_standardized %chin% severe_complaint_types]
+  complaints_agg_long[, `:=`(
+    total_complaints = sum(num_complaints),
+    total_severe_complaints = sum(num_complaints[severe_flag], na.rm = TRUE)
+  ), by = .(parcel_number, period)]
+  complaints_agg_long[, severe_flag := NULL]
 
   complaints_agg <- pivot_wider(
     complaints_agg_long,
@@ -392,7 +400,7 @@ for (agg_level in c("year", "quarter", "month")) {
     rename_with(~paste0(.x, "_permit_count"), -c(parcel_number, period, total_permits))
 
   complaints_agg <- complaints_agg |>
-    rename_with(~paste0(.x, "_complaint_count"), -c(parcel_number, period, total_complaints))
+    rename_with(~paste0(.x, "_complaint_count"), -c(parcel_number, period, total_complaints, total_severe_complaints))
 
   violations_agg <- violations_agg |>
     rename_with(~paste0(.x, "_violation_count"), -c(parcel_number, period, total_violations))
@@ -414,6 +422,10 @@ for (agg_level in c("year", "quarter", "month")) {
 
   # Derive year
   building_data[, year := as.integer(substr(period, 1, 4))]
+
+  if (building_data[, any(total_severe_complaints > total_complaints, na.rm = TRUE)]) {
+    stop("Assertion failed: total_severe_complaints cannot exceed total_complaints within a period.")
+  }
 
   # --- Assertions ---
   n_total <- nrow(building_data)

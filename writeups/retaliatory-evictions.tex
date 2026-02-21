@@ -1,0 +1,1805 @@
+% Options for packages loaded elsewhere
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\PassOptionsToPackage{dvipsnames,svgnames,x11names}{xcolor}
+%
+\documentclass[
+  11pt,
+]{article}
+\usepackage{xcolor}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\setcounter{secnumdepth}{5}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+% Make \paragraph and \subparagraph free-standing
+\makeatletter
+\ifx\paragraph\undefined\else
+  \let\oldparagraph\paragraph
+  \renewcommand{\paragraph}{
+    \@ifstar
+      \xxxParagraphStar
+      \xxxParagraphNoStar
+  }
+  \newcommand{\xxxParagraphStar}[1]{\oldparagraph*{#1}\mbox{}}
+  \newcommand{\xxxParagraphNoStar}[1]{\oldparagraph{#1}\mbox{}}
+\fi
+\ifx\subparagraph\undefined\else
+  \let\oldsubparagraph\subparagraph
+  \renewcommand{\subparagraph}{
+    \@ifstar
+      \xxxSubParagraphStar
+      \xxxSubParagraphNoStar
+  }
+  \newcommand{\xxxSubParagraphStar}[1]{\oldsubparagraph*{#1}\mbox{}}
+  \newcommand{\xxxSubParagraphNoStar}[1]{\oldsubparagraph{#1}\mbox{}}
+\fi
+\makeatother
+
+
+\usepackage{longtable,booktabs,array}
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
+\usepackage{graphicx}
+\makeatletter
+\newsavebox\pandoc@box
+\newcommand*\pandocbounded[1]{% scales image to fit in text height/width
+  \sbox\pandoc@box{#1}%
+  \Gscale@div\@tempa{\textheight}{\dimexpr\ht\pandoc@box+\dp\pandoc@box\relax}%
+  \Gscale@div\@tempb{\linewidth}{\wd\pandoc@box}%
+  \ifdim\@tempb\p@<\@tempa\p@\let\@tempa\@tempb\fi% select the smaller of both
+  \ifdim\@tempa\p@<\p@\scalebox{\@tempa}{\usebox\pandoc@box}%
+  \else\usebox{\pandoc@box}%
+  \fi%
+}
+% Set default figure placement to htbp
+\def\fps@figure{htbp}
+\makeatother
+
+
+
+
+
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+
+
+ 
+
+
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{wrapfig}
+\usepackage{float}
+\usepackage{colortbl}
+\usepackage{pdflscape}
+\usepackage{tabu}
+\usepackage{threeparttable}
+\usepackage{threeparttablex}
+\usepackage[normalem]{ulem}
+\usepackage{makecell}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{dcolumn}
+\usepackage{longtable}
+\usepackage{adjustbox}
+\makeatletter
+\@ifpackageloaded{caption}{}{\usepackage{caption}}
+\AtBeginDocument{%
+\ifdefined\contentsname
+  \renewcommand*\contentsname{Table of contents}
+\else
+  \newcommand\contentsname{Table of contents}
+\fi
+\ifdefined\listfigurename
+  \renewcommand*\listfigurename{List of Figures}
+\else
+  \newcommand\listfigurename{List of Figures}
+\fi
+\ifdefined\listtablename
+  \renewcommand*\listtablename{List of Tables}
+\else
+  \newcommand\listtablename{List of Tables}
+\fi
+\ifdefined\figurename
+  \renewcommand*\figurename{Figure}
+\else
+  \newcommand\figurename{Figure}
+\fi
+\ifdefined\tablename
+  \renewcommand*\tablename{Table}
+\else
+  \newcommand\tablename{Table}
+\fi
+}
+\@ifpackageloaded{float}{}{\usepackage{float}}
+\floatstyle{ruled}
+\@ifundefined{c@chapter}{\newfloat{codelisting}{h}{lop}}{\newfloat{codelisting}{h}{lop}[chapter]}
+\floatname{codelisting}{Listing}
+\newcommand*\listoflistings{\listof{codelisting}{List of Listings}}
+\makeatother
+\makeatletter
+\makeatother
+\makeatletter
+\@ifpackageloaded{caption}{}{\usepackage{caption}}
+\@ifpackageloaded{subcaption}{}{\usepackage{subcaption}}
+\makeatother
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  pdftitle={Retaliatory Evictions: Complaints and Filing Dynamics},
+  pdfauthor={Philly Evictions Project},
+  colorlinks=true,
+  linkcolor={blue},
+  filecolor={Maroon},
+  citecolor={Blue},
+  urlcolor={Blue},
+  pdfcreator={LaTeX via pandoc}}
+
+
+\title{Retaliatory Evictions: Complaints and Filing Dynamics}
+\author{Philly Evictions Project}
+\date{2026-02-20}
+\begin{document}
+\maketitle
+
+\renewcommand*\contentsname{Table of contents}
+{
+\hypersetup{linkcolor=}
+\setcounter{tocdepth}{3}
+\tableofcontents
+}
+
+\section{Overview}\label{overview}
+
+This document summarizes the retaliatory eviction analysis from
+\texttt{r/retaliatory-evictions.r}. The script investigates whether
+tenant complaints (code enforcement, maintenance, etc.) are associated
+with subsequent eviction filings --- a pattern consistent with
+retaliatory eviction.
+
+\textbf{Unit of analysis:} Building (PID) \(\times\) period (month or
+quarter) panel.
+
+\textbf{Sample:} Rental buildings from the analytic sample, 2007--2024,
+with a pre-COVID subsample (\(\leq\) 2019).
+
+\textbf{Key data inputs:}
+
+\begin{itemize}
+\tightlist
+\item
+  \texttt{building\_data\_rental\_month.parquet} --- monthly complaint
+  and violation counts by building
+\item
+  \texttt{analytic\_sample.csv} --- PID universe filter
+\item
+  \texttt{evictions\_clean} + \texttt{evict\_address\_xwalk} ---
+  filing-level eviction data aggregated to PID \(\times\) period
+\item
+  \texttt{bldg\_panel\_blp} --- tenant composition (race/gender from
+  InfoUSA)
+\end{itemize}
+
+\section{Empirical Strategy}\label{empirical-strategy}
+
+\subsection{Complaint Definitions}\label{complaint-definitions}
+
+Complaints are categorized into three types:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Any complaint:} \texttt{total\_complaints\ \textgreater{}\ 0}
+\item
+  \textbf{Severe complaints:} Heat, fire, drainage, property maintenance
+  (categories most likely to indicate habitability concerns)
+\item
+  \textbf{Non-severe complaints:} Building, emergency service, zoning,
+  trash/weeds, license/business, program initiative, vacant property
+\end{itemize}
+
+\subsection{Model 1: Distributed Lag}\label{model-1-distributed-lag}
+
+For each complaint type
+\(c \in \{\text{any}, \text{severe}, \text{non-severe}\}\):
+
+\[
+\text{filed\_eviction}_{it} = \sum_{k=-h}^{h} \beta_k \cdot \mathbb{1}[\text{complaint}_{i,t+k}] + \alpha_i + \gamma_t + \varepsilon_{it}
+\]
+
+where \(h\) is the horizon (default 12 months or 4 quarters),
+\(\alpha_i\) are building FE, and \(\gamma_t\) are period FE. Standard
+errors clustered by PID.
+
+\subsection{Model 2: Local Projections DiD
+(LP-DiD)}\label{model-2-local-projections-did-lp-did}
+
+Uses the \texttt{lpdid} package (Girardi) to estimate dynamic treatment
+effects of complaint filing on eviction filings, with:
+
+\begin{itemize}
+\tightlist
+\item
+  Window selection: prefers \$\pm\$24 periods, falls back to \$\pm\$12
+  if treated-unit retention drops below 60\%
+\item
+  Non-absorbing treatment (complaints can recur)
+\item
+  Clustered by PID
+\end{itemize}
+
+\subsection{Model 3: Same-Period
+Retaliation}\label{model-3-same-period-retaliation}
+
+Baseline: \[
+\text{filed\_eviction}_{it} = \beta \cdot \text{filed\_complaint}_{it} + \alpha_i + \gamma_t + \varepsilon_{it}
+\]
+
+Tenant-composition augmented (tests whether retaliation varies with
+building demographics): \[
+\text{filed\_eviction}_{it} = \beta_0 \cdot C_{it} + \beta_1 \cdot C_{it} \times \widetilde{\text{Black}}_i + \beta_2 \cdot C_{it} \times \widetilde{\text{Female}}_i + \beta_3 \cdot C_{it} \times \widetilde{\text{Black}\times\text{Female}}_i + \beta_4 \cdot C_{it} \times \widetilde{\text{Coverage}}_i + \delta \cdot M_i + \alpha_i + \gamma_t + \varepsilon_{it}
+\]
+
+where \(\widetilde{\cdot}\) denotes demeaned tenant composition and
+\(M_i\) flags missing composition.
+
+\subsection{Model 4: Retaliatory
+Targeting}\label{model-4-retaliatory-targeting}
+
+Among building-periods with an eviction filing, is the eviction more
+likely to be retaliatory (complaint nearby) in buildings with more
+Black/female tenants?
+
+\[
+\text{retaliatory}_{it} = \beta_1 \cdot \widetilde{\text{Black}}_i + \beta_2 \cdot \widetilde{\text{Female}}_i + \beta_3 \cdot \widetilde{\text{Black} \times \text{Female}}_i + \delta M_i + \alpha_{\text{geo}} + \gamma_t + \varepsilon_{it}
+\]
+
+Sample restricted to eviction-filing periods. Estimated with both tract
+and block group FE, clustered accordingly.
+
+\subsection{Model 5: Complaint
+Suppression}\label{model-5-complaint-suppression}
+
+Conditional on maintenance activity (permits) and building conditions
+(violations), do buildings with more Black/female tenants file fewer
+complaints?
+
+\[
+\text{filed\_complaint}_{it} = \beta_1 \cdot \widetilde{\text{Black}}_i + \gamma_1 \cdot \text{Permits}_{it} + \gamma_2 \cdot \text{Violations}_{it} + \delta M_i + \alpha_{\text{geo}} + \gamma_t + \varepsilon_{it}
+\]
+
+Estimated with tract and block group FE on the full panel.
+
+\subsection{Bandwidth Analysis}\label{bandwidth-analysis}
+
+Computes the share of eviction filings that occur within
+\(b = 1, \ldots, B\) periods of a complaint, decomposed into:
+
+\begin{itemize}
+\tightlist
+\item
+  Same-period filings
+\item
+  Within-bandwidth (but not same-period)
+\item
+  Non-retaliatory (no nearby complaint)
+\end{itemize}
+
+\section{Results}\label{results}
+
+\subsection{Bandwidth Summary}\label{bandwidth-summary}
+
+What share of eviction filings occur near a complaint?
+
+\begin{longtable}[t]{rlllll}
+\caption{\label{tab:bandwidth-table}Share of eviction filings near a complaint, by bandwidth}\\
+\toprule
+Bandwidth (months) & Eviction rows & Same period & Within BW & Plausible only & Non-retaliatory\\
+\midrule
+1 & 211,624 & 6.7\% & 15.2\% & 8.5\% & 84.8\%\\
+2 & 211,624 & 6.7\% & 20.7\% & 13.9\% & 79.3\%\\
+3 & 211,624 & 6.7\% & 24.6\% & 17.9\% & 75.4\%\\
+4 & 211,624 & 6.7\% & 27.9\% & 21.2\% & 72.1\%\\
+5 & 211,624 & 6.7\% & 30.5\% & 23.8\% & 69.5\%\\
+\addlinespace
+6 & 211,624 & 6.7\% & 32.8\% & 26.1\% & 67.2\%\\
+\bottomrule
+\end{longtable}
+
+\newpage
+
+\subsection{Distributed Lag Estimates}\label{distributed-lag-estimates}
+
+\begin{verbatim}
+Distributed lag plot not found.
+\end{verbatim}
+
+\begin{longtable}[t]{llrrrrrr}
+\caption{\label{tab:distlag-table}Distributed lag coefficients at $t-2$ through $t+3$}\\
+\toprule
+sample & stem & \$t-2\$ & \$t-1\$ & \$t\$ & \$t+1\$ & \$t+2\$ & \$t+3\$\\
+\midrule
+full & complaint & 0.0084 & 0.0147 & 0.0243 & 0.0124 & 0.0043 & 0.0023\\
+full & non\_severe & 0.0015 & 0.0027 & 0.0039 & 0.0024 & 0.0027 & 0.0021\\
+full & severe & 0.0160 & 0.0268 & 0.0434 & 0.0222 & 0.0068 & 0.0030\\
+pre & complaint & 0.0097 & 0.0184 & 0.0308 & 0.0154 & 0.0055 & 0.0033\\
+pre & non\_severe & 0.0015 & 0.0032 & 0.0045 & 0.0028 & 0.0031 & 0.0026\\
+\addlinespace
+pre & severe & 0.0193 & 0.0345 & 0.0568 & 0.0286 & 0.0093 & 0.0046\\
+\bottomrule
+\end{longtable}
+
+\newpage
+
+\subsection{Same-Period Retaliation with Tenant
+Composition}\label{same-period-retaliation-with-tenant-composition}
+
+\begin{adjustbox}{max width=\textwidth}
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_eviction}\\
+   Model:                                              & (1)           & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   filed\_complaint                                    & 0.026$^{***}$ & 0.026$^{***}$\\   
+                                                       & (0.0004)      & (0.0004)\\   
+   tenant\_comp\_missing                               &               & -0.0009$^{***}$\\   
+                                                       &               & ($6.94\times 10^{-5}$)\\    
+   filed\_complaint $\times$ tc\_black\_c              &               & 0.018$^{***}$\\   
+                                                       &               & (0.002)\\   
+   filed\_complaint $\times$ tc\_female\_c             &               & 0.002\\   
+                                                       &               & (0.002)\\   
+   filed\_complaint $\times$ tc\_black\_female\_c      &               & -0.0003\\   
+                                                       &               & (0.003)\\   
+   filed\_complaint $\times$ tc\_cov\_c                &               & 0.017$^{***}$\\   
+                                                       &               & (0.002)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe                                          & Yes           & Yes\\  
+   PID                                                 & Yes           & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                        & 24,526,152    & 24,526,152\\  
+   R$^2$                                               & 0.09306       & 0.09312\\  
+   Within R$^2$                                        & 0.00091       & 0.00097\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_eviction}\\
+   Model:                                           & (1)           & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   filed\_severe                                    & 0.046$^{***}$ & 0.045$^{***}$\\   
+                                                    & (0.0008)      & (0.0008)\\   
+   tenant\_comp\_missing                            &               & -0.0008$^{***}$\\   
+                                                    &               & ($6.92\times 10^{-5}$)\\    
+   filed\_severe $\times$ tc\_black\_c              &               & 0.020$^{***}$\\   
+                                                    &               & (0.004)\\   
+   filed\_severe $\times$ tc\_female\_c             &               & 0.003\\   
+                                                    &               & (0.004)\\   
+   filed\_severe $\times$ tc\_black\_female\_c      &               & -0.008\\   
+                                                    &               & (0.006)\\   
+   filed\_severe $\times$ tc\_cov\_c                &               & 0.030$^{***}$\\   
+                                                    &               & (0.003)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe                                       & Yes           & Yes\\  
+   PID                                              & Yes           & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                     & 24,526,152    & 24,526,152\\  
+   R$^2$                                            & 0.09363       & 0.09368\\  
+   Within R$^2$                                     & 0.00153       & 0.00159\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_eviction}\\
+   Model:                                                 & (1)                   & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   filed\_non\_severe                                     & 0.004$^{***}$         & 0.004$^{***}$\\   
+                                                          & (0.0004)              & (0.0004)\\   
+   tenant\_comp\_missing                                  &                       & -0.0009$^{***}$\\   
+                                                          &                       & ($6.96\times 10^{-5}$)\\    
+   filed\_non\_severe $\times$ tc\_black\_c               &                       & -0.004$^{*}$\\   
+                                                          &                       & (0.002)\\   
+   filed\_non\_severe $\times$ tc\_female\_c              &                       & 0.0001\\   
+                                                          &                       & (0.002)\\   
+   filed\_non\_severe $\times$ tc\_black\_female\_c       &                       & 0.003\\   
+                                                          &                       & (0.003)\\   
+   filed\_non\_severe $\times$ tc\_cov\_c                 &                       & -0.0004\\   
+                                                          &                       & (0.002)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe                                             & Yes                   & Yes\\  
+   PID                                                    & Yes                   & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                           & 24,526,152            & 24,526,152\\  
+   R$^2$                                                  & 0.09225               & 0.09226\\  
+   Within R$^2$                                           & $1.09\times 10^{-5}$  & $2.16\times 10^{-5}$\\   
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_eviction}\\
+   Model:                                              & (1)           & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   filed\_complaint                                    & 0.033$^{***}$ & 0.032$^{***}$\\   
+                                                       & (0.0005)      & (0.0005)\\   
+   tenant\_comp\_missing                               &               & -0.001$^{***}$\\   
+                                                       &               & ($8.31\times 10^{-5}$)\\    
+   filed\_complaint $\times$ tc\_black\_c              &               & 0.023$^{***}$\\   
+                                                       &               & (0.003)\\   
+   filed\_complaint $\times$ tc\_female\_c             &               & 0.005$^{*}$\\   
+                                                       &               & (0.002)\\   
+   filed\_complaint $\times$ tc\_black\_female\_c      &               & -0.004\\   
+                                                       &               & (0.004)\\   
+   filed\_complaint $\times$ tc\_cov\_c                &               & -0.006$^{**}$\\   
+                                                       &               & (0.003)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe                                          & Yes           & Yes\\  
+   PID                                                 & Yes           & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                        & 17,713,332    & 17,713,332\\  
+   R$^2$                                               & 0.10546       & 0.10551\\  
+   Within R$^2$                                        & 0.00125       & 0.00131\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_eviction}\\
+   Model:                                           & (1)           & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   filed\_severe                                    & 0.059$^{***}$ & 0.058$^{***}$\\   
+                                                    & (0.0009)      & (0.0010)\\   
+   tenant\_comp\_missing                            &               & -0.0010$^{***}$\\   
+                                                    &               & ($8.28\times 10^{-5}$)\\    
+   filed\_severe $\times$ tc\_black\_c              &               & 0.021$^{***}$\\   
+                                                    &               & (0.005)\\   
+   filed\_severe $\times$ tc\_female\_c             &               & 0.007\\   
+                                                    &               & (0.005)\\   
+   filed\_severe $\times$ tc\_black\_female\_c      &               & -0.012$^{*}$\\   
+                                                    &               & (0.007)\\   
+   filed\_severe $\times$ tc\_cov\_c                &               & -0.010$^{**}$\\   
+                                                    &               & (0.005)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe                                       & Yes           & Yes\\  
+   PID                                              & Yes           & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                     & 17,713,332    & 17,713,332\\  
+   R$^2$                                            & 0.10627       & 0.10630\\  
+   Within R$^2$                                     & 0.00216       & 0.00219\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_eviction}\\
+   Model:                                                 & (1)                   & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   filed\_non\_severe                                     & 0.005$^{***}$         & 0.005$^{***}$\\   
+                                                          & (0.0004)              & (0.0004)\\   
+   tenant\_comp\_missing                                  &                       & -0.001$^{***}$\\   
+                                                          &                       & ($8.36\times 10^{-5}$)\\    
+   filed\_non\_severe $\times$ tc\_black\_c               &                       & -0.003\\   
+                                                          &                       & (0.002)\\   
+   filed\_non\_severe $\times$ tc\_female\_c              &                       & -0.0006\\   
+                                                          &                       & (0.002)\\   
+   filed\_non\_severe $\times$ tc\_black\_female\_c       &                       & 0.002\\   
+                                                          &                       & (0.004)\\   
+   filed\_non\_severe $\times$ tc\_cov\_c                 &                       & -0.003\\   
+                                                          &                       & (0.003)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe                                             & Yes                   & Yes\\  
+   PID                                                    & Yes                   & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                           & 17,713,332            & 17,713,332\\  
+   R$^2$                                                  & 0.10435               & 0.10436\\  
+   Within R$^2$                                           & $1.39\times 10^{-5}$  & $2.55\times 10^{-5}$\\   
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+\end{adjustbox}
+
+\subsection{Tenant Composition
+Interactions}\label{tenant-composition-interactions}
+
+Do buildings with higher shares of Black tenants or female-headed
+households face more retaliatory eviction filings after a complaint? The
+interaction terms below test this: a positive coefficient on
+\texttt{Complaint\ ×\ \%\ Black} means that a complaint in a building
+with a higher Black tenant share is associated with a larger increase in
+eviction filings.
+
+\begingroup\fontsize{9}{11}\selectfont
+
+\begin{longtable}[t]{lllrrr}
+\caption{\label{tab:tenant-coefs}Same-period retaliation: complaint main effects and tenant composition interactions}\\
+\toprule
+Sample & Complaint type & Term & Estimate & SE & \$p\$\\
+\midrule
+Full & Any & Complaint (main effect) & 0.0260 & 0.0004 & 0.000\\
+Full & Any & Complaint x \% Black & 0.0180 & 0.0024 & 0.000\\
+Full & Any & Complaint x \% Female & 0.0023 & 0.0020 & 0.270\\
+Full & Any & Complaint x \% Black Female & -0.0003 & 0.0035 & 0.928\\
+Full & Any & Complaint x Demog Coverage & 0.0165 & 0.0019 & 0.000\\
+\addlinespace
+Full & Severe & Complaint (main effect) & 0.0453 & 0.0008 & 0.000\\
+Full & Severe & Complaint x \% Black & 0.0199 & 0.0038 & 0.000\\
+Full & Severe & Complaint x \% Female & 0.0031 & 0.0039 & 0.425\\
+Full & Severe & Complaint x \% Black Female & -0.0084 & 0.0056 & 0.132\\
+Full & Severe & Complaint x Demog Coverage & 0.0303 & 0.0030 & 0.000\\
+\addlinespace
+Full & Non-severe & Complaint (main effect) & 0.0043 & 0.0004 & 0.000\\
+Full & Non-severe & Complaint x \% Black & -0.0037 & 0.0021 & 0.075\\
+Full & Non-severe & Complaint x \% Female & 0.0001 & 0.0018 & 0.934\\
+Full & Non-severe & Complaint x \% Black Female & 0.0027 & 0.0031 & 0.380\\
+Full & Non-severe & Complaint x Demog Coverage & -0.0004 & 0.0018 & 0.808\\
+\addlinespace
+Pre-COVID & Any & Complaint (main effect) & 0.0323 & 0.0005 & 0.000\\
+Pre-COVID & Any & Complaint x \% Black & 0.0234 & 0.0030 & 0.000\\
+Pre-COVID & Any & Complaint x \% Female & 0.0046 & 0.0024 & 0.054\\
+Pre-COVID & Any & Complaint x \% Black Female & -0.0044 & 0.0042 & 0.295\\
+Pre-COVID & Any & Complaint x Demog Coverage & -0.0061 & 0.0031 & 0.046\\
+\addlinespace
+Pre-COVID & Severe & Complaint (main effect) & 0.0579 & 0.0010 & 0.000\\
+Pre-COVID & Severe & Complaint x \% Black & 0.0215 & 0.0049 & 0.000\\
+Pre-COVID & Severe & Complaint x \% Female & 0.0066 & 0.0046 & 0.155\\
+Pre-COVID & Severe & Complaint x \% Black Female & -0.0124 & 0.0069 & 0.072\\
+Pre-COVID & Severe & Complaint x Demog Coverage & -0.0104 & 0.0051 & 0.040\\
+\addlinespace
+Pre-COVID & Non-severe & Complaint (main effect) & 0.0049 & 0.0004 & 0.000\\
+Pre-COVID & Non-severe & Complaint x \% Black & -0.0029 & 0.0025 & 0.247\\
+Pre-COVID & Non-severe & Complaint x \% Female & -0.0006 & 0.0019 & 0.747\\
+Pre-COVID & Non-severe & Complaint x \% Black Female & 0.0017 & 0.0036 & 0.629\\
+Pre-COVID & Non-severe & Complaint x Demog Coverage & -0.0027 & 0.0026 & 0.308\\
+\bottomrule
+\end{longtable}
+\endgroup{}
+
+\newpage
+
+\subsection{Tract FE Specification (Cross-Building
+Variation)}\label{tract-fe-specification-cross-building-variation}
+
+The main models above use building (PID) fixed effects, identifying off
+\emph{within-building} time variation in complaints and evictions. The
+tract FE models below replace PID FE with census tract FE, also
+exploiting \emph{cross-building} variation within neighborhoods.
+Comparison of the two identifies whether the complaint--eviction
+relationship is driven by within-building dynamics or cross-sectional
+sorting.
+
+\begin{adjustbox}{max width=\textwidth}
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_eviction}\\
+   Model:                                              & (1)           & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   filed\_complaint                                    & 0.044$^{***}$ & 0.043$^{***}$\\   
+                                                       & (0.002)       & (0.002)\\   
+   tenant\_comp\_missing                               &               & -0.0004$^{*}$\\   
+                                                       &               & (0.0002)\\   
+   filed\_complaint $\times$ tc\_black\_c              &               & 0.021$^{***}$\\   
+                                                       &               & (0.003)\\   
+   filed\_complaint $\times$ tc\_female\_c             &               & 0.009$^{***}$\\   
+                                                       &               & (0.002)\\   
+   filed\_complaint $\times$ tc\_black\_female\_c      &               & -0.002\\   
+                                                       &               & (0.004)\\   
+   filed\_complaint $\times$ tc\_cov\_c                &               & 0.011$^{***}$\\   
+                                                       &               & (0.002)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe                                          & Yes           & Yes\\  
+   GEOID                                               & Yes           & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                        & 24,526,152    & 24,526,152\\  
+   R$^2$                                               & 0.01305       & 0.01311\\  
+   Within R$^2$                                        & 0.00235       & 0.00241\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Clustered (GEOID) standard-errors in parentheses}}\\
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_eviction}\\
+   Model:                                           & (1)           & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   filed\_severe                                    & 0.075$^{***}$ & 0.075$^{***}$\\   
+                                                    & (0.002)       & (0.002)\\   
+   tenant\_comp\_missing                            &               & -0.0003\\   
+                                                    &               & (0.0002)\\   
+   filed\_severe $\times$ tc\_black\_c              &               & 0.016$^{***}$\\   
+                                                    &               & (0.005)\\   
+   filed\_severe $\times$ tc\_female\_c             &               & 0.013$^{***}$\\   
+                                                    &               & (0.004)\\   
+   filed\_severe $\times$ tc\_black\_female\_c      &               & -0.012$^{**}$\\   
+                                                    &               & (0.006)\\   
+   filed\_severe $\times$ tc\_cov\_c                &               & 0.022$^{***}$\\   
+                                                    &               & (0.003)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe                                       & Yes           & Yes\\  
+   GEOID                                            & Yes           & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                     & 24,526,152    & 24,526,152\\  
+   R$^2$                                            & 0.01458       & 0.01460\\  
+   Within R$^2$                                     & 0.00390       & 0.00392\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Clustered (GEOID) standard-errors in parentheses}}\\
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_eviction}\\
+   Model:                                                 & (1)                   & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   filed\_non\_severe                                     & 0.007$^{***}$         & 0.007$^{***}$\\   
+                                                          & (0.0006)              & (0.0006)\\   
+   tenant\_comp\_missing                                  &                       & -0.0003\\   
+                                                          &                       & (0.0002)\\   
+   filed\_non\_severe $\times$ tc\_black\_c               &                       & -0.003\\   
+                                                          &                       & (0.002)\\   
+   filed\_non\_severe $\times$ tc\_female\_c              &                       & 0.003\\   
+                                                          &                       & (0.002)\\   
+   filed\_non\_severe $\times$ tc\_black\_female\_c       &                       & 0.002\\   
+                                                          &                       & (0.003)\\   
+   filed\_non\_severe $\times$ tc\_cov\_c                 &                       & -0.002\\   
+                                                          &                       & (0.002)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe                                             & Yes                   & Yes\\  
+   GEOID                                                  & Yes                   & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                           & 24,526,152            & 24,526,152\\  
+   R$^2$                                                  & 0.01075               & 0.01076\\  
+   Within R$^2$                                           & $2.98\times 10^{-5}$  & $3.21\times 10^{-5}$\\   
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Clustered (GEOID) standard-errors in parentheses}}\\
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_eviction}\\
+   Model:                                              & (1)           & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   filed\_complaint                                    & 0.049$^{***}$ & 0.049$^{***}$\\   
+                                                       & (0.002)       & (0.002)\\   
+   tenant\_comp\_missing                               &               & -0.0004$^{*}$\\   
+                                                       &               & (0.0002)\\   
+   filed\_complaint $\times$ tc\_black\_c              &               & 0.026$^{***}$\\   
+                                                       &               & (0.004)\\   
+   filed\_complaint $\times$ tc\_female\_c             &               & 0.012$^{***}$\\   
+                                                       &               & (0.003)\\   
+   filed\_complaint $\times$ tc\_black\_female\_c      &               & -0.005\\   
+                                                       &               & (0.005)\\   
+   filed\_complaint $\times$ tc\_cov\_c                &               & -0.009$^{**}$\\   
+                                                       &               & (0.004)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe                                          & Yes           & Yes\\  
+   GEOID                                               & Yes           & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                        & 17,713,332    & 17,713,332\\  
+   R$^2$                                               & 0.01319       & 0.01326\\  
+   Within R$^2$                                        & 0.00264       & 0.00271\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Clustered (GEOID) standard-errors in parentheses}}\\
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_eviction}\\
+   Model:                                           & (1)           & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   filed\_severe                                    & 0.088$^{***}$ & 0.088$^{***}$\\   
+                                                    & (0.002)       & (0.002)\\   
+   tenant\_comp\_missing                            &               & -0.0003\\   
+                                                    &               & (0.0002)\\   
+   filed\_severe $\times$ tc\_black\_c              &               & 0.015$^{**}$\\   
+                                                    &               & (0.006)\\   
+   filed\_severe $\times$ tc\_female\_c             &               & 0.016$^{***}$\\   
+                                                    &               & (0.005)\\   
+   filed\_severe $\times$ tc\_black\_female\_c      &               & -0.015$^{**}$\\   
+                                                    &               & (0.007)\\   
+   filed\_severe $\times$ tc\_cov\_c                &               & -0.016$^{***}$\\   
+                                                    &               & (0.006)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe                                       & Yes           & Yes\\  
+   GEOID                                            & Yes           & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                     & 17,713,332    & 17,713,332\\  
+   R$^2$                                            & 0.01503       & 0.01505\\  
+   Within R$^2$                                     & 0.00450       & 0.00452\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Clustered (GEOID) standard-errors in parentheses}}\\
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_eviction}\\
+   Model:                                                 & (1)                   & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   filed\_non\_severe                                     & 0.008$^{***}$         & 0.008$^{***}$\\   
+                                                          & (0.0007)              & (0.0007)\\   
+   tenant\_comp\_missing                                  &                       & -0.0003\\   
+                                                          &                       & (0.0002)\\   
+   filed\_non\_severe $\times$ tc\_black\_c               &                       & -0.003\\   
+                                                          &                       & (0.003)\\   
+   filed\_non\_severe $\times$ tc\_female\_c              &                       & 0.003\\   
+                                                          &                       & (0.002)\\   
+   filed\_non\_severe $\times$ tc\_black\_female\_c       &                       & 0.0009\\   
+                                                          &                       & (0.004)\\   
+   filed\_non\_severe $\times$ tc\_cov\_c                 &                       & -0.003\\   
+                                                          &                       & (0.003)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe                                             & Yes                   & Yes\\  
+   GEOID                                                  & Yes                   & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                           & 17,713,332            & 17,713,332\\  
+   R$^2$                                                  & 0.01061               & 0.01061\\  
+   Within R$^2$                                           & $3.42\times 10^{-5}$  & $3.69\times 10^{-5}$\\   
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Clustered (GEOID) standard-errors in parentheses}}\\
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+\end{adjustbox}
+
+\begingroup\fontsize{9}{11}\selectfont
+
+\begin{longtable}[t]{lllrrr}
+\caption{\label{tab:tract-fe-coefs}Tract FE: same-period retaliation with tenant composition interactions}\\
+\toprule
+Sample & Complaint type & Term & Estimate & SE & \$p\$\\
+\midrule
+Full & Any & Complaint (main effect) & 0.0432 & 0.0016 & 0.000\\
+Full & Any & Complaint x \% Black & 0.0212 & 0.0031 & 0.000\\
+Full & Any & Complaint x \% Female & 0.0094 & 0.0024 & 0.000\\
+Full & Any & Complaint x \% Black Female & -0.0016 & 0.0037 & 0.669\\
+Full & Any & Complaint x Demog Coverage & 0.0107 & 0.0021 & 0.000\\
+\addlinespace
+Full & Severe & Complaint (main effect) & 0.0750 & 0.0022 & 0.000\\
+Full & Severe & Complaint x \% Black & 0.0159 & 0.0051 & 0.002\\
+Full & Severe & Complaint x \% Female & 0.0135 & 0.0044 & 0.002\\
+Full & Severe & Complaint x \% Black Female & -0.0122 & 0.0060 & 0.043\\
+Full & Severe & Complaint x Demog Coverage & 0.0221 & 0.0033 & 0.000\\
+\addlinespace
+Full & Non-severe & Complaint (main effect) & 0.0073 & 0.0006 & 0.000\\
+Full & Non-severe & Complaint x \% Black & -0.0029 & 0.0022 & 0.178\\
+Full & Non-severe & Complaint x \% Female & 0.0025 & 0.0017 & 0.139\\
+Full & Non-severe & Complaint x \% Black Female & 0.0018 & 0.0031 & 0.564\\
+Full & Non-severe & Complaint x Demog Coverage & -0.0015 & 0.0019 & 0.438\\
+\addlinespace
+Pre-COVID & Any & Complaint (main effect) & 0.0489 & 0.0018 & 0.000\\
+Pre-COVID & Any & Complaint x \% Black & 0.0259 & 0.0038 & 0.000\\
+Pre-COVID & Any & Complaint x \% Female & 0.0117 & 0.0027 & 0.000\\
+Pre-COVID & Any & Complaint x \% Black Female & -0.0048 & 0.0045 & 0.283\\
+Pre-COVID & Any & Complaint x Demog Coverage & -0.0085 & 0.0037 & 0.021\\
+\addlinespace
+Pre-COVID & Severe & Complaint (main effect) & 0.0878 & 0.0023 & 0.000\\
+Pre-COVID & Severe & Complaint x \% Black & 0.0153 & 0.0063 & 0.016\\
+Pre-COVID & Severe & Complaint x \% Female & 0.0163 & 0.0052 & 0.002\\
+Pre-COVID & Severe & Complaint x \% Black Female & -0.0147 & 0.0074 & 0.046\\
+Pre-COVID & Severe & Complaint x Demog Coverage & -0.0158 & 0.0058 & 0.006\\
+\addlinespace
+Pre-COVID & Non-severe & Complaint (main effect) & 0.0080 & 0.0007 & 0.000\\
+Pre-COVID & Non-severe & Complaint x \% Black & -0.0026 & 0.0026 & 0.322\\
+Pre-COVID & Non-severe & Complaint x \% Female & 0.0025 & 0.0019 & 0.182\\
+Pre-COVID & Non-severe & Complaint x \% Black Female & 0.0009 & 0.0037 & 0.799\\
+Pre-COVID & Non-severe & Complaint x Demog Coverage & -0.0026 & 0.0028 & 0.355\\
+\bottomrule
+\end{longtable}
+\endgroup{}
+
+\newpage
+
+\subsection{Retaliatory Targeting by Tenant
+Demographics}\label{retaliatory-targeting-by-tenant-demographics}
+
+Among all eviction filings, are the \emph{retaliatory} ones
+disproportionately concentrated in buildings with more Black or female
+tenants? This model conditions on \textbf{having an eviction filing} and
+asks whether the probability that it is retaliatory (complaint filed
+nearby) is higher in buildings with certain demographic compositions.
+
+\[
+\text{retaliatory}_{it} = \beta_1 \cdot \widetilde{\text{Black}}_i + \beta_2 \cdot \widetilde{\text{Female}}_i + \beta_3 \cdot \widetilde{\text{Black} \times \text{Female}}_i + \beta_4 \cdot \widetilde{\text{Coverage}}_i + \delta M_i + \alpha_{\text{geo}} + \gamma_t + \varepsilon_{it}
+\]
+
+\textbf{Sample:} Building-periods with at least one eviction filing.
+\textbf{Outcome:} Whether a complaint was filed in the same period
+(``same'') or within \(\pm B\) periods (``bw''). \textbf{FE:} Tract or
+block group.
+
+A positive \(\beta_1\) means that, among buildings filing evictions,
+those with more Black tenants are more likely to be retaliating against
+a complaint --- i.e., retaliatory eviction is disproportionately
+targeted at Black-occupied buildings.
+
+\begin{adjustbox}{max width=\textwidth}
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{retaliatory\_same}\\
+                           & Tract FE       & BG FE \\   
+   Model:                  & (1)            & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c            & -0.0025        & -0.0032\\   
+                           & (0.0043)       & (0.0042)\\   
+   tc\_female\_c           & 0.0007         & $3.88\times 10^{-5}$\\    
+                           & (0.0033)       & (0.0033)\\   
+   tc\_black\_female\_c    & -0.0059        & -0.0046\\   
+                           & (0.0044)       & (0.0046)\\   
+   tc\_cov\_c              & -0.0070$^{**}$ & -0.0079$^{**}$\\   
+                           & (0.0034)       & (0.0033)\\   
+   tenant\_comp\_missing   & 0.0032         & 0.0018\\   
+                           & (0.0022)       & (0.0020)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe              & Yes            & Yes\\  
+   census\_tract           & Yes            & \\  
+   GEOID                   &                & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations            & 211,622        & 211,618\\  
+   R$^2$                   & 0.01847        & 0.03179\\  
+   Within R$^2$            & 0.00014        & 0.00010\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{retaliatory\_same}\\
+                           & Tract FE & BG FE \\   
+   Model:                  & (1)      & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c            & -0.0045  & -0.0061\\   
+                           & (0.0045) & (0.0046)\\   
+   tc\_female\_c           & 0.0008   & 0.0002\\   
+                           & (0.0037) & (0.0036)\\   
+   tc\_black\_female\_c    & -0.0076  & -0.0059\\   
+                           & (0.0049) & (0.0051)\\   
+   tc\_cov\_c              & -0.0042  & -0.0052\\   
+                           & (0.0038) & (0.0036)\\   
+   tenant\_comp\_missing   & 0.0037   & 0.0029\\   
+                           & (0.0023) & (0.0021)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe              & Yes      & Yes\\  
+   census\_tract           & Yes      & \\  
+   GEOID                   &          & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations            & 175,049  & 175,044\\  
+   R$^2$                   & 0.01521  & 0.02677\\  
+   Within R$^2$            & 0.00021  & 0.00017\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{retaliatory\_bw}\\
+                           & Tract FE       & BG FE \\   
+   Model:                  & (1)            & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c            & -0.0166        & -0.0193$^{*}$\\   
+                           & (0.0125)       & (0.0111)\\   
+   tc\_female\_c           & 0.0073         & 0.0039\\   
+                           & (0.0088)       & (0.0086)\\   
+   tc\_black\_female\_c    & -0.0046        & $5.33\times 10^{-5}$\\    
+                           & (0.0114)       & (0.0108)\\   
+   tc\_cov\_c              & -0.0243$^{**}$ & -0.0260$^{***}$\\   
+                           & (0.0096)       & (0.0085)\\   
+   tenant\_comp\_missing   & 0.0104         & 0.0060\\   
+                           & (0.0084)       & (0.0064)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe              & Yes            & Yes\\  
+   census\_tract           & Yes            & \\  
+   GEOID                   &                & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations            & 211,622        & 211,618\\  
+   R$^2$                   & 0.06936        & 0.10722\\  
+   Within R$^2$            & 0.00039        & 0.00028\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{retaliatory\_bw}\\
+                           & Tract FE       & BG FE \\   
+   Model:                  & (1)            & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c            & -0.0165        & -0.0238$^{**}$\\   
+                           & (0.0131)       & (0.0118)\\   
+   tc\_female\_c           & 0.0071         & 0.0033\\   
+                           & (0.0091)       & (0.0094)\\   
+   tc\_black\_female\_c    & -0.0090        & -0.0026\\   
+                           & (0.0116)       & (0.0116)\\   
+   tc\_cov\_c              & -0.0215$^{**}$ & -0.0258$^{***}$\\   
+                           & (0.0106)       & (0.0095)\\   
+   tenant\_comp\_missing   & 0.0131         & 0.0077\\   
+                           & (0.0089)       & (0.0069)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe              & Yes            & Yes\\  
+   census\_tract           & Yes            & \\  
+   GEOID                   &                & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations            & 175,049        & 175,044\\  
+   R$^2$                   & 0.06762        & 0.10556\\  
+   Within R$^2$            & 0.00052        & 0.00041\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+\end{adjustbox}
+
+\begingroup\fontsize{9}{11}\selectfont
+
+\begin{longtable}[t]{llllrrr}
+\caption{\label{tab:targeting-coefs}Period-level targeting: among eviction-periods, is retaliation more likely in Black/female buildings?}\\
+\toprule
+Sample & Outcome & FE & Term & Estimate & SE & \$p\$\\
+\midrule
+Full & Same period & Tract & \% Black & -0.0025 & 0.0043 & 0.558\\
+Full & Same period & Tract & \% Female & 0.0007 & 0.0033 & 0.835\\
+Full & Same period & Tract & \% Black Female & -0.0059 & 0.0044 & 0.178\\
+Full & Same period & Tract & Demog Coverage & -0.0070 & 0.0034 & 0.044\\
+Full & Same period & Block Group & \% Black & -0.0032 & 0.0042 & 0.449\\
+\addlinespace
+Full & Same period & Block Group & \% Female & 0.0000 & 0.0033 & 0.991\\
+Full & Same period & Block Group & \% Black Female & -0.0046 & 0.0046 & 0.317\\
+Full & Same period & Block Group & Demog Coverage & -0.0079 & 0.0033 & 0.018\\
+Pre-COVID & Same period & Tract & \% Black & -0.0045 & 0.0045 & 0.315\\
+Pre-COVID & Same period & Tract & \% Female & 0.0008 & 0.0037 & 0.838\\
+\addlinespace
+Pre-COVID & Same period & Tract & \% Black Female & -0.0076 & 0.0049 & 0.127\\
+Pre-COVID & Same period & Tract & Demog Coverage & -0.0042 & 0.0038 & 0.272\\
+Pre-COVID & Same period & Block Group & \% Black & -0.0061 & 0.0046 & 0.185\\
+Pre-COVID & Same period & Block Group & \% Female & 0.0002 & 0.0036 & 0.952\\
+Pre-COVID & Same period & Block Group & \% Black Female & -0.0059 & 0.0051 & 0.245\\
+\addlinespace
+Pre-COVID & Same period & Block Group & Demog Coverage & -0.0052 & 0.0036 & 0.148\\
+Full & Within BW & Tract & \% Black & -0.0166 & 0.0125 & 0.185\\
+Full & Within BW & Tract & \% Female & 0.0073 & 0.0088 & 0.406\\
+Full & Within BW & Tract & \% Black Female & -0.0046 & 0.0114 & 0.689\\
+Full & Within BW & Tract & Demog Coverage & -0.0243 & 0.0096 & 0.012\\
+\addlinespace
+Full & Within BW & Block Group & \% Black & -0.0193 & 0.0110 & 0.081\\
+Full & Within BW & Block Group & \% Female & 0.0039 & 0.0086 & 0.652\\
+Full & Within BW & Block Group & \% Black Female & 0.0001 & 0.0108 & 0.996\\
+Full & Within BW & Block Group & Demog Coverage & -0.0260 & 0.0085 & 0.002\\
+Pre-COVID & Within BW & Tract & \% Black & -0.0165 & 0.0131 & 0.208\\
+\addlinespace
+Pre-COVID & Within BW & Tract & \% Female & 0.0071 & 0.0091 & 0.436\\
+Pre-COVID & Within BW & Tract & \% Black Female & -0.0090 & 0.0116 & 0.440\\
+Pre-COVID & Within BW & Tract & Demog Coverage & -0.0215 & 0.0105 & 0.043\\
+Pre-COVID & Within BW & Block Group & \% Black & -0.0238 & 0.0118 & 0.044\\
+Pre-COVID & Within BW & Block Group & \% Female & 0.0033 & 0.0094 & 0.724\\
+\addlinespace
+Pre-COVID & Within BW & Block Group & \% Black Female & -0.0026 & 0.0116 & 0.822\\
+Pre-COVID & Within BW & Block Group & Demog Coverage & -0.0258 & 0.0095 & 0.006\\
+\bottomrule
+\end{longtable}
+\endgroup{}
+
+\newpage
+
+\subsection{Building-Year Retaliatory
+Share}\label{building-year-retaliatory-share}
+
+The period-level model above treats each month as a separate
+observation. An alternative aggregates to the \textbf{building
+\(\times\) year} level: for each PID-year with at least one eviction,
+what share of eviction-months are retaliatory? This is regressed on
+tenant demographics and building observables (log area, log market
+value) with FE for unit count bin, building type, construction decade,
+stories bin, year, and tract/BG.
+
+\[
+\text{share\_retaliatory}_{iy} = \beta_1 \cdot \widetilde{\text{Black}}_i + \beta_2 \cdot \widetilde{\text{Female}}_i + \delta' X_i + \alpha_{\text{geo}} + \gamma_y + \phi_b + \varepsilon_{iy}
+\]
+
+\textbf{Sample:} PID-years with \(\geq 1\) eviction filing. \textbf{FE:}
+Year + tract/BG + building type + unit bin + decade built + stories bin.
+\textbf{Controls:} log(total area), log(market value).
+
+\begin{adjustbox}{max width=\textwidth}
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{share\_retaliatory\_same}\\
+                           & Tract FE       & BG FE \\   
+   Model:                  & (1)            & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c            & 0.0045         & 0.0027\\   
+                           & (0.0057)       & (0.0059)\\   
+   tc\_female\_c           & 0.0048         & 0.0040\\   
+                           & (0.0058)       & (0.0057)\\   
+   tc\_black\_female\_c    & -0.0169$^{**}$ & -0.0162$^{**}$\\   
+                           & (0.0073)       & (0.0074)\\   
+   tc\_cov\_c              & -0.0076        & -0.0083\\   
+                           & (0.0054)       & (0.0056)\\   
+   tenant\_comp\_missing   & 0.0004         & -0.0007\\   
+                           & (0.0023)       & (0.0023)\\   
+   log\_total\_area        & 0.0055$^{***}$ & 0.0053$^{***}$\\   
+                           & (0.0014)       & (0.0015)\\   
+   log\_market\_value      & 0.0123$^{***}$ & 0.0117$^{***}$\\   
+                           & (0.0016)       & (0.0017)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   year                    & Yes            & Yes\\  
+   census\_tract           & Yes            & \\  
+   num\_units\_bin         & Yes            & Yes\\  
+   building\_type          & Yes            & Yes\\  
+   year\_blt\_decade       & Yes            & Yes\\  
+   num\_stories\_bin       & Yes            & Yes\\  
+   GEOID                   &                & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations            & 74,877         & 74,869\\  
+   R$^2$                   & 0.01911        & 0.03558\\  
+   Within R$^2$            & 0.00378        & 0.00301\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{share\_retaliatory\_same}\\
+                           & Tract FE       & BG FE \\   
+   Model:                  & (1)            & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c            & 0.0014         & -0.0030\\   
+                           & (0.0079)       & (0.0082)\\   
+   tc\_female\_c           & 0.0056         & 0.0040\\   
+                           & (0.0073)       & (0.0072)\\   
+   tc\_black\_female\_c    & -0.0224$^{**}$ & -0.0204$^{**}$\\   
+                           & (0.0097)       & (0.0098)\\   
+   tc\_cov\_c              & -0.0068        & -0.0092\\   
+                           & (0.0077)       & (0.0076)\\   
+   tenant\_comp\_missing   & 0.0005         & -0.0013\\   
+                           & (0.0028)       & (0.0029)\\   
+   log\_total\_area        & 0.0005         & -0.0003\\   
+                           & (0.0020)       & (0.0023)\\   
+   log\_market\_value      & 0.0096$^{***}$ & 0.0103$^{***}$\\   
+                           & (0.0020)       & (0.0023)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   year                    & Yes            & Yes\\  
+   census\_tract           & Yes            & \\  
+   num\_units\_bin         & Yes            & Yes\\  
+   building\_type          & Yes            & Yes\\  
+   year\_blt\_decade       & Yes            & Yes\\  
+   num\_stories\_bin       & Yes            & Yes\\  
+   GEOID                   &                & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations            & 47,453         & 47,434\\  
+   R$^2$                   & 0.01468        & 0.03673\\  
+   Within R$^2$            & 0.00139        & 0.00130\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{share\_retaliatory\_bw}\\
+                           & Tract FE       & BG FE \\   
+   Model:                  & (1)            & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c            & -0.0088        & -0.0111\\   
+                           & (0.0118)       & (0.0114)\\   
+   tc\_female\_c           & -0.0016        & -0.0058\\   
+                           & (0.0116)       & (0.0114)\\   
+   tc\_black\_female\_c    & 0.0071         & 0.0123\\   
+                           & (0.0152)       & (0.0148)\\   
+   tc\_cov\_c              & -0.0172        & -0.0163\\   
+                           & (0.0110)       & (0.0110)\\   
+   tenant\_comp\_missing   & 0.0020         & 0.0023\\   
+                           & (0.0049)       & (0.0049)\\   
+   log\_total\_area        & 0.0415$^{***}$ & 0.0421$^{***}$\\   
+                           & (0.0039)       & (0.0041)\\   
+   log\_market\_value      & 0.0526$^{***}$ & 0.0505$^{***}$\\   
+                           & (0.0043)       & (0.0041)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   year                    & Yes            & Yes\\  
+   census\_tract           & Yes            & \\  
+   num\_units\_bin         & Yes            & Yes\\  
+   building\_type          & Yes            & Yes\\  
+   year\_blt\_decade       & Yes            & Yes\\  
+   num\_stories\_bin       & Yes            & Yes\\  
+   GEOID                   &                & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations            & 74,877         & 74,869\\  
+   R$^2$                   & 0.06469        & 0.08378\\  
+   Within R$^2$            & 0.02464        & 0.02050\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{share\_retaliatory\_bw}\\
+                           & Tract FE       & BG FE \\   
+   Model:                  & (1)            & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c            & -0.0207        & -0.0289$^{**}$\\   
+                           & (0.0138)       & (0.0141)\\   
+   tc\_female\_c           & -0.0074        & -0.0159\\   
+                           & (0.0139)       & (0.0143)\\   
+   tc\_black\_female\_c    & 0.0130         & 0.0221\\   
+                           & (0.0186)       & (0.0187)\\   
+   tc\_cov\_c              & -0.0239$^{*}$  & -0.0254$^{*}$\\   
+                           & (0.0143)       & (0.0141)\\   
+   tenant\_comp\_missing   & -0.0004        & -0.0021\\   
+                           & (0.0055)       & (0.0058)\\   
+   log\_total\_area        & 0.0291$^{***}$ & 0.0286$^{***}$\\   
+                           & (0.0049)       & (0.0055)\\   
+   log\_market\_value      & 0.0522$^{***}$ & 0.0524$^{***}$\\   
+                           & (0.0055)       & (0.0054)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   year                    & Yes            & Yes\\  
+   census\_tract           & Yes            & \\  
+   num\_units\_bin         & Yes            & Yes\\  
+   building\_type          & Yes            & Yes\\  
+   year\_blt\_decade       & Yes            & Yes\\  
+   num\_stories\_bin       & Yes            & Yes\\  
+   GEOID                   &                & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations            & 47,453         & 47,434\\  
+   R$^2$                   & 0.05158        & 0.07793\\  
+   Within R$^2$            & 0.01612        & 0.01384\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+\end{adjustbox}
+
+\begingroup\fontsize{9}{11}\selectfont
+
+\begin{longtable}[t]{llllrrr}
+\caption{\label{tab:bldg-year-targeting-coefs}Building-year targeting: share of evictions that are retaliatory by building demographics}\\
+\toprule
+Sample & Outcome & FE & Term & Estimate & SE & \$p\$\\
+\midrule
+Full & Same period & Tract & \% Black & 0.0045 & 0.0057 & 0.429\\
+Full & Same period & Tract & \% Female & 0.0048 & 0.0058 & 0.414\\
+Full & Same period & Tract & \% Black Female & -0.0169 & 0.0073 & 0.021\\
+Full & Same period & Tract & Demog Coverage & -0.0076 & 0.0054 & 0.157\\
+Full & Same period & Tract & log(Area) & 0.0055 & 0.0014 & 0.000\\
+\addlinespace
+Full & Same period & Tract & log(Mkt Value) & 0.0123 & 0.0016 & 0.000\\
+Full & Same period & Block Group & \% Black & 0.0027 & 0.0059 & 0.646\\
+Full & Same period & Block Group & \% Female & 0.0040 & 0.0057 & 0.485\\
+Full & Same period & Block Group & \% Black Female & -0.0162 & 0.0074 & 0.029\\
+Full & Same period & Block Group & Demog Coverage & -0.0083 & 0.0056 & 0.139\\
+\addlinespace
+Full & Same period & Block Group & log(Area) & 0.0053 & 0.0015 & 0.000\\
+Full & Same period & Block Group & log(Mkt Value) & 0.0117 & 0.0017 & 0.000\\
+Pre-COVID & Same period & Tract & \% Black & 0.0014 & 0.0079 & 0.864\\
+Pre-COVID & Same period & Tract & \% Female & 0.0056 & 0.0073 & 0.446\\
+Pre-COVID & Same period & Tract & \% Black Female & -0.0224 & 0.0097 & 0.022\\
+\addlinespace
+Pre-COVID & Same period & Tract & Demog Coverage & -0.0068 & 0.0077 & 0.383\\
+Pre-COVID & Same period & Tract & log(Area) & 0.0005 & 0.0020 & 0.817\\
+Pre-COVID & Same period & Tract & log(Mkt Value) & 0.0096 & 0.0020 & 0.000\\
+Pre-COVID & Same period & Block Group & \% Black & -0.0030 & 0.0082 & 0.712\\
+Pre-COVID & Same period & Block Group & \% Female & 0.0040 & 0.0072 & 0.573\\
+\addlinespace
+Pre-COVID & Same period & Block Group & \% Black Female & -0.0204 & 0.0098 & 0.038\\
+Pre-COVID & Same period & Block Group & Demog Coverage & -0.0092 & 0.0076 & 0.226\\
+Pre-COVID & Same period & Block Group & log(Area) & -0.0003 & 0.0023 & 0.898\\
+Pre-COVID & Same period & Block Group & log(Mkt Value) & 0.0103 & 0.0023 & 0.000\\
+Full & Within BW & Tract & \% Black & -0.0088 & 0.0118 & 0.456\\
+\addlinespace
+Full & Within BW & Tract & \% Female & -0.0016 & 0.0116 & 0.890\\
+Full & Within BW & Tract & \% Black Female & 0.0071 & 0.0153 & 0.641\\
+Full & Within BW & Tract & Demog Coverage & -0.0172 & 0.0110 & 0.119\\
+Full & Within BW & Tract & log(Area) & 0.0415 & 0.0039 & 0.000\\
+Full & Within BW & Tract & log(Mkt Value) & 0.0526 & 0.0043 & 0.000\\
+\addlinespace
+Full & Within BW & Block Group & \% Black & -0.0111 & 0.0114 & 0.333\\
+Full & Within BW & Block Group & \% Female & -0.0058 & 0.0114 & 0.613\\
+Full & Within BW & Block Group & \% Black Female & 0.0123 & 0.0148 & 0.407\\
+Full & Within BW & Block Group & Demog Coverage & -0.0163 & 0.0110 & 0.139\\
+Full & Within BW & Block Group & log(Area) & 0.0421 & 0.0041 & 0.000\\
+\addlinespace
+Full & Within BW & Block Group & log(Mkt Value) & 0.0505 & 0.0041 & 0.000\\
+Pre-COVID & Within BW & Tract & \% Black & -0.0207 & 0.0138 & 0.135\\
+Pre-COVID & Within BW & Tract & \% Female & -0.0074 & 0.0139 & 0.595\\
+Pre-COVID & Within BW & Tract & \% Black Female & 0.0130 & 0.0186 & 0.486\\
+Pre-COVID & Within BW & Tract & Demog Coverage & -0.0239 & 0.0143 & 0.095\\
+\addlinespace
+Pre-COVID & Within BW & Tract & log(Area) & 0.0291 & 0.0049 & 0.000\\
+Pre-COVID & Within BW & Tract & log(Mkt Value) & 0.0522 & 0.0055 & 0.000\\
+Pre-COVID & Within BW & Block Group & \% Black & -0.0289 & 0.0141 & 0.040\\
+Pre-COVID & Within BW & Block Group & \% Female & -0.0159 & 0.0143 & 0.268\\
+Pre-COVID & Within BW & Block Group & \% Black Female & 0.0221 & 0.0188 & 0.240\\
+\addlinespace
+Pre-COVID & Within BW & Block Group & Demog Coverage & -0.0254 & 0.0141 & 0.072\\
+Pre-COVID & Within BW & Block Group & log(Area) & 0.0286 & 0.0055 & 0.000\\
+Pre-COVID & Within BW & Block Group & log(Mkt Value) & 0.0524 & 0.0054 & 0.000\\
+\bottomrule
+\end{longtable}
+\endgroup{}
+
+\newpage
+
+\subsection{Complaint Suppression}\label{complaint-suppression}
+
+Controlling for maintenance activity (permits as a proxy for landlord
+investment) and building conditions (violations), do buildings with more
+Black or female tenants file fewer complaints? A negative coefficient on
+\% Black would indicate complaint suppression --- Black tenants may be
+less likely to complain even when conditions warrant it, possibly due to
+fear of retaliation.
+
+\[
+\text{filed\_complaint}_{it} = \beta_1 \cdot \widetilde{\text{Black}}_i + \beta_2 \cdot \widetilde{\text{Female}}_i + \beta_3 \cdot \widetilde{\text{Black} \times \text{Female}}_i + \gamma_1 \cdot \text{Permits}_{it} + \gamma_2 \cdot \text{Violations}_{it} + \delta' X_i + M_i + \alpha_{\text{geo}} + \gamma_t + \phi_b + \varepsilon_{it}
+\]
+
+\textbf{Sample:} All building-periods. \textbf{Controls:} log(total
+area), log(market value), permits, violations. \textbf{FE:} Period +
+tract/BG + unit count bin + building type + decade built + stories bin.
+
+\begin{adjustbox}{max width=\textwidth}
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_complaint}\\
+                           & Tract FE       & BG FE \\   
+   Model:                  & (1)            & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c            & 0.0013$^{***}$ & 0.0011$^{***}$\\   
+                           & (0.0003)       & (0.0003)\\   
+   tc\_female\_c           & -0.0001        & -0.0001\\   
+                           & (0.0002)       & (0.0002)\\   
+   tc\_black\_female\_c    & 0.0009$^{***}$ & 0.0009$^{***}$\\   
+                           & (0.0003)       & (0.0003)\\   
+   tc\_cov\_c              & 0.0013$^{***}$ & 0.0013$^{***}$\\   
+                           & (0.0003)       & (0.0003)\\   
+   tenant\_comp\_missing   & 0.0026$^{***}$ & 0.0026$^{***}$\\   
+                           & (0.0002)       & (0.0002)\\   
+   total\_permits          & 0.0145$^{***}$ & 0.0147$^{***}$\\   
+                           & (0.0019)       & (0.0018)\\   
+   total\_violations       & 0.0632$^{***}$ & 0.0630$^{***}$\\   
+                           & (0.0016)       & (0.0014)\\   
+   log\_total\_area        & 0.0053$^{***}$ & 0.0052$^{***}$\\   
+                           & (0.0004)       & (0.0003)\\   
+   log\_market\_value      & 0.0037$^{***}$ & 0.0038$^{***}$\\   
+                           & (0.0004)       & (0.0003)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe              & Yes            & Yes\\  
+   census\_tract           & Yes            & \\  
+   num\_units\_bin         & Yes            & Yes\\  
+   building\_type          & Yes            & Yes\\  
+   year\_blt\_decade       & Yes            & Yes\\  
+   num\_stories\_bin       & Yes            & Yes\\  
+   GEOID                   &                & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations            & 13,099,080     & 13,099,080\\  
+   R$^2$                   & 0.04451        & 0.04524\\  
+   Within R$^2$            & 0.04096        & 0.04063\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_complaint}\\
+                           & Tract FE               & BG FE \\   
+   Model:                  & (1)                    & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c            & 0.0009$^{**}$          & 0.0006\\   
+                           & (0.0004)               & (0.0004)\\   
+   tc\_female\_c           & -0.0001                & -0.0001\\   
+                           & (0.0002)               & (0.0002)\\   
+   tc\_black\_female\_c    & 0.0006                 & 0.0007\\   
+                           & (0.0005)               & (0.0005)\\   
+   tc\_cov\_c              & $-6.03\times 10^{-5}$  & 0.0001\\   
+                           & (0.0004)               & (0.0004)\\   
+   tenant\_comp\_missing   & 0.0026$^{***}$         & 0.0027$^{***}$\\   
+                           & (0.0002)               & (0.0002)\\   
+   total\_permits          & 0.0177$^{***}$         & 0.0180$^{***}$\\   
+                           & (0.0022)               & (0.0019)\\   
+   total\_violations       & 0.0748$^{***}$         & 0.0747$^{***}$\\   
+                           & (0.0015)               & (0.0011)\\   
+   log\_total\_area        & 0.0050$^{***}$         & 0.0049$^{***}$\\   
+                           & (0.0004)               & (0.0003)\\   
+   log\_market\_value      & 0.0022$^{***}$         & 0.0025$^{***}$\\   
+                           & (0.0004)               & (0.0003)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe              & Yes                    & Yes\\  
+   census\_tract           & Yes                    & \\  
+   num\_units\_bin         & Yes                    & Yes\\  
+   building\_type          & Yes                    & Yes\\  
+   year\_blt\_decade       & Yes                    & Yes\\  
+   num\_stories\_bin       & Yes                    & Yes\\  
+   GEOID                   &                        & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations            & 6,475,704              & 6,475,704\\  
+   R$^2$                   & 0.05577                & 0.05650\\  
+   Within R$^2$            & 0.05261                & 0.05238\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_severe}\\
+                           & Tract FE              & BG FE \\   
+   Model:                  & (1)                   & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c            & 0.0015$^{***}$        & 0.0014$^{***}$\\   
+                           & (0.0002)              & (0.0002)\\   
+   tc\_female\_c           & $4.69\times 10^{-5}$  & $1.47\times 10^{-5}$\\    
+                           & (0.0001)              & (0.0001)\\   
+   tc\_black\_female\_c    & 0.0013$^{***}$        & 0.0013$^{***}$\\   
+                           & (0.0002)              & (0.0002)\\   
+   tc\_cov\_c              & -0.0003$^{*}$         & -0.0003\\   
+                           & (0.0002)              & (0.0002)\\   
+   tenant\_comp\_missing   & 0.0003$^{***}$        & 0.0003$^{***}$\\   
+                           & (0.0001)              & (0.0001)\\   
+   total\_permits          & -0.0001               & $-9.74\times 10^{-5}$\\    
+                           & (0.0003)              & (0.0003)\\   
+   total\_violations       & 0.0389$^{***}$        & 0.0387$^{***}$\\   
+                           & (0.0009)              & (0.0009)\\   
+   log\_total\_area        & 0.0035$^{***}$        & 0.0034$^{***}$\\   
+                           & (0.0003)              & (0.0003)\\   
+   log\_market\_value      & 0.0050$^{***}$        & 0.0051$^{***}$\\   
+                           & (0.0004)              & (0.0003)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe              & Yes                   & Yes\\  
+   census\_tract           & Yes                   & \\  
+   num\_units\_bin         & Yes                   & Yes\\  
+   building\_type          & Yes                   & Yes\\  
+   year\_blt\_decade       & Yes                   & Yes\\  
+   num\_stories\_bin       & Yes                   & Yes\\  
+   GEOID                   &                       & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations            & 13,099,080            & 13,099,080\\  
+   R$^2$                   & 0.03163               & 0.03252\\  
+   Within R$^2$            & 0.02823               & 0.02786\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_severe}\\
+                           & Tract FE              & BG FE \\   
+   Model:                  & (1)                   & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c            & 0.0011$^{***}$        & 0.0009$^{***}$\\   
+                           & (0.0003)              & (0.0003)\\   
+   tc\_female\_c           & 0.0003$^{*}$          & 0.0002\\   
+                           & (0.0002)              & (0.0002)\\   
+   tc\_black\_female\_c    & 0.0008$^{**}$         & 0.0009$^{***}$\\   
+                           & (0.0003)              & (0.0003)\\   
+   tc\_cov\_c              & -0.0008$^{***}$       & -0.0007$^{***}$\\   
+                           & (0.0003)              & (0.0003)\\   
+   tenant\_comp\_missing   & $9.55\times 10^{-5}$  & 0.0001\\   
+                           & (0.0001)              & (0.0001)\\   
+   total\_permits          & -0.0008$^{**}$        & -0.0008$^{**}$\\   
+                           & (0.0004)              & (0.0004)\\   
+   total\_violations       & 0.0428$^{***}$        & 0.0427$^{***}$\\   
+                           & (0.0010)              & (0.0008)\\   
+   log\_total\_area        & 0.0028$^{***}$        & 0.0027$^{***}$\\   
+                           & (0.0003)              & (0.0002)\\   
+   log\_market\_value      & 0.0041$^{***}$        & 0.0043$^{***}$\\   
+                           & (0.0003)              & (0.0003)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe              & Yes                   & Yes\\  
+   census\_tract           & Yes                   & \\  
+   num\_units\_bin         & Yes                   & Yes\\  
+   building\_type          & Yes                   & Yes\\  
+   year\_blt\_decade       & Yes                   & Yes\\  
+   num\_stories\_bin       & Yes                   & Yes\\  
+   GEOID                   &                       & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations            & 6,475,704             & 6,475,704\\  
+   R$^2$                   & 0.03457               & 0.03533\\  
+   Within R$^2$            & 0.03159               & 0.03138\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_non\_severe}\\
+                           & Tract FE        & BG FE \\   
+   Model:                  & (1)             & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c            & -0.0002         & -0.0003\\   
+                           & (0.0002)        & (0.0002)\\   
+   tc\_female\_c           & -0.0002         & -0.0001\\   
+                           & (0.0001)        & (0.0001)\\   
+   tc\_black\_female\_c    & -0.0004$^{**}$  & -0.0004$^{**}$\\   
+                           & (0.0002)        & (0.0002)\\   
+   tc\_cov\_c              & 0.0012$^{***}$  & 0.0012$^{***}$\\   
+                           & (0.0002)        & (0.0001)\\   
+   tenant\_comp\_missing   & 0.0021$^{***}$  & 0.0021$^{***}$\\   
+                           & (0.0001)        & ($9.29\times 10^{-5}$)\\    
+   total\_permits          & 0.0123$^{***}$  & 0.0124$^{***}$\\   
+                           & (0.0017)        & (0.0016)\\   
+   total\_violations       & 0.0261$^{***}$  & 0.0261$^{***}$\\   
+                           & (0.0012)        & (0.0008)\\   
+   log\_total\_area        & 0.0016$^{***}$  & 0.0017$^{***}$\\   
+                           & (0.0001)        & (0.0001)\\   
+   log\_market\_value      & -0.0011$^{***}$ & -0.0011$^{***}$\\   
+                           & (0.0001)        & ($10\times 10^{-5}$)\\    
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe              & Yes             & Yes\\  
+   census\_tract           & Yes             & \\  
+   num\_units\_bin         & Yes             & Yes\\  
+   building\_type          & Yes             & Yes\\  
+   year\_blt\_decade       & Yes             & Yes\\  
+   num\_stories\_bin       & Yes             & Yes\\  
+   GEOID                   &                 & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations            & 13,099,080      & 13,099,080\\  
+   R$^2$                   & 0.01902         & 0.01940\\  
+   Within R$^2$            & 0.01660         & 0.01657\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_non\_severe}\\
+                           & Tract FE        & BG FE \\   
+   Model:                  & (1)             & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c            & -0.0001         & -0.0002\\   
+                           & (0.0003)        & (0.0003)\\   
+   tc\_female\_c           & -0.0004$^{**}$  & -0.0004$^{**}$\\   
+                           & (0.0002)        & (0.0002)\\   
+   tc\_black\_female\_c    & -0.0002         & -0.0002\\   
+                           & (0.0003)        & (0.0003)\\   
+   tc\_cov\_c              & 0.0008$^{***}$  & 0.0009$^{***}$\\   
+                           & (0.0003)        & (0.0003)\\   
+   tenant\_comp\_missing   & 0.0026$^{***}$  & 0.0027$^{***}$\\   
+                           & (0.0001)        & (0.0001)\\   
+   total\_permits          & 0.0189$^{***}$  & 0.0192$^{***}$\\   
+                           & (0.0022)        & (0.0020)\\   
+   total\_violations       & 0.0375$^{***}$  & 0.0375$^{***}$\\   
+                           & (0.0015)        & (0.0009)\\   
+   log\_total\_area        & 0.0023$^{***}$  & 0.0024$^{***}$\\   
+                           & (0.0002)        & (0.0002)\\   
+   log\_market\_value      & -0.0017$^{***}$ & -0.0017$^{***}$\\   
+                           & (0.0002)        & (0.0002)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe              & Yes             & Yes\\  
+   census\_tract           & Yes             & \\  
+   num\_units\_bin         & Yes             & Yes\\  
+   building\_type          & Yes             & Yes\\  
+   year\_blt\_decade       & Yes             & Yes\\  
+   num\_stories\_bin       & Yes             & Yes\\  
+   GEOID                   &                 & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations            & 6,475,704       & 6,475,704\\  
+   R$^2$                   & 0.03019         & 0.03078\\  
+   Within R$^2$            & 0.02775         & 0.02769\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+\end{adjustbox}
+
+\begingroup\fontsize{9}{11}\selectfont
+
+\begin{longtable}[t]{llllrrr}
+\caption{\label{tab:suppression-coefs}Complaint suppression: fewer complaints in buildings with more Black/female tenants?}\\
+\toprule
+Sample & Complaint type & FE & Term & Estimate & SE & \$p\$\\
+\midrule
+Full & Any & Tract & \% Black & 0.0013 & 0.0003 & 0.000\\
+Full & Any & Tract & \% Female & -0.0001 & 0.0002 & 0.487\\
+Full & Any & Tract & \% Black Female & 0.0009 & 0.0003 & 0.008\\
+Full & Any & Tract & Demog Coverage & 0.0013 & 0.0003 & 0.000\\
+Full & Any & Tract & Permits & 0.0145 & 0.0019 & 0.000\\
+\addlinespace
+Full & Any & Tract & Violations & 0.0632 & 0.0016 & 0.000\\
+Full & Any & Block Group & \% Black & 0.0012 & 0.0003 & 0.000\\
+Full & Any & Block Group & \% Female & -0.0001 & 0.0002 & 0.489\\
+Full & Any & Block Group & \% Black Female & 0.0009 & 0.0003 & 0.004\\
+Full & Any & Block Group & Demog Coverage & 0.0013 & 0.0003 & 0.000\\
+\addlinespace
+Full & Any & Block Group & Permits & 0.0147 & 0.0018 & 0.000\\
+Full & Any & Block Group & Violations & 0.0630 & 0.0014 & 0.000\\
+Pre-COVID & Any & Tract & \% Black & 0.0009 & 0.0004 & 0.030\\
+Pre-COVID & Any & Tract & \% Female & -0.0001 & 0.0002 & 0.624\\
+Pre-COVID & Any & Tract & \% Black Female & 0.0006 & 0.0005 & 0.203\\
+\addlinespace
+Pre-COVID & Any & Tract & Demog Coverage & -0.0001 & 0.0004 & 0.868\\
+Pre-COVID & Any & Tract & Permits & 0.0177 & 0.0022 & 0.000\\
+Pre-COVID & Any & Tract & Violations & 0.0748 & 0.0015 & 0.000\\
+Pre-COVID & Any & Block Group & \% Black & 0.0006 & 0.0004 & 0.166\\
+Pre-COVID & Any & Block Group & \% Female & -0.0001 & 0.0002 & 0.612\\
+\addlinespace
+Pre-COVID & Any & Block Group & \% Black Female & 0.0007 & 0.0005 & 0.130\\
+Pre-COVID & Any & Block Group & Demog Coverage & 0.0001 & 0.0004 & 0.748\\
+Pre-COVID & Any & Block Group & Permits & 0.0180 & 0.0019 & 0.000\\
+Pre-COVID & Any & Block Group & Violations & 0.0747 & 0.0011 & 0.000\\
+Full & Severe & Tract & \% Black & 0.0015 & 0.0002 & 0.000\\
+\addlinespace
+Full & Severe & Tract & \% Female & 0.0000 & 0.0001 & 0.703\\
+Full & Severe & Tract & \% Black Female & 0.0013 & 0.0002 & 0.000\\
+Full & Severe & Tract & Demog Coverage & -0.0003 & 0.0002 & 0.095\\
+Full & Severe & Tract & Permits & -0.0001 & 0.0003 & 0.675\\
+Full & Severe & Tract & Violations & 0.0389 & 0.0009 & 0.000\\
+\addlinespace
+Full & Severe & Block Group & \% Black & 0.0014 & 0.0002 & 0.000\\
+Full & Severe & Block Group & \% Female & 0.0000 & 0.0001 & 0.909\\
+Full & Severe & Block Group & \% Black Female & 0.0013 & 0.0002 & 0.000\\
+Full & Severe & Block Group & Demog Coverage & -0.0003 & 0.0002 & 0.114\\
+Full & Severe & Block Group & Permits & -0.0001 & 0.0003 & 0.768\\
+\addlinespace
+Full & Severe & Block Group & Violations & 0.0387 & 0.0009 & 0.000\\
+Pre-COVID & Severe & Tract & \% Black & 0.0011 & 0.0003 & 0.000\\
+Pre-COVID & Severe & Tract & \% Female & 0.0003 & 0.0002 & 0.100\\
+Pre-COVID & Severe & Tract & \% Black Female & 0.0008 & 0.0003 & 0.013\\
+Pre-COVID & Severe & Tract & Demog Coverage & -0.0008 & 0.0003 & 0.001\\
+\addlinespace
+Pre-COVID & Severe & Tract & Permits & -0.0008 & 0.0004 & 0.032\\
+Pre-COVID & Severe & Tract & Violations & 0.0428 & 0.0010 & 0.000\\
+Pre-COVID & Severe & Block Group & \% Black & 0.0009 & 0.0003 & 0.003\\
+Pre-COVID & Severe & Block Group & \% Female & 0.0002 & 0.0002 & 0.141\\
+Pre-COVID & Severe & Block Group & \% Black Female & 0.0009 & 0.0003 & 0.007\\
+\addlinespace
+Pre-COVID & Severe & Block Group & Demog Coverage & -0.0007 & 0.0003 & 0.007\\
+Pre-COVID & Severe & Block Group & Permits & -0.0008 & 0.0004 & 0.038\\
+Pre-COVID & Severe & Block Group & Violations & 0.0427 & 0.0008 & 0.000\\
+Full & Non-severe & Tract & \% Black & -0.0002 & 0.0002 & 0.253\\
+Full & Non-severe & Tract & \% Female & -0.0002 & 0.0001 & 0.287\\
+\addlinespace
+Full & Non-severe & Tract & \% Black Female & -0.0004 & 0.0002 & 0.048\\
+Full & Non-severe & Tract & Demog Coverage & 0.0012 & 0.0002 & 0.000\\
+Full & Non-severe & Tract & Permits & 0.0123 & 0.0017 & 0.000\\
+Full & Non-severe & Tract & Violations & 0.0261 & 0.0012 & 0.000\\
+Full & Non-severe & Block Group & \% Black & -0.0003 & 0.0002 & 0.113\\
+\addlinespace
+Full & Non-severe & Block Group & \% Female & -0.0001 & 0.0001 & 0.385\\
+Full & Non-severe & Block Group & \% Black Female & -0.0004 & 0.0002 & 0.034\\
+Full & Non-severe & Block Group & Demog Coverage & 0.0012 & 0.0001 & 0.000\\
+Full & Non-severe & Block Group & Permits & 0.0124 & 0.0016 & 0.000\\
+Full & Non-severe & Block Group & Violations & 0.0261 & 0.0008 & 0.000\\
+\addlinespace
+Pre-COVID & Non-severe & Tract & \% Black & -0.0001 & 0.0003 & 0.665\\
+Pre-COVID & Non-severe & Tract & \% Female & -0.0004 & 0.0002 & 0.035\\
+Pre-COVID & Non-severe & Tract & \% Black Female & -0.0002 & 0.0003 & 0.588\\
+Pre-COVID & Non-severe & Tract & Demog Coverage & 0.0008 & 0.0003 & 0.003\\
+Pre-COVID & Non-severe & Tract & Permits & 0.0189 & 0.0022 & 0.000\\
+\addlinespace
+Pre-COVID & Non-severe & Tract & Violations & 0.0375 & 0.0015 & 0.000\\
+Pre-COVID & Non-severe & Block Group & \% Black & -0.0002 & 0.0003 & 0.399\\
+Pre-COVID & Non-severe & Block Group & \% Female & -0.0004 & 0.0002 & 0.047\\
+Pre-COVID & Non-severe & Block Group & \% Black Female & -0.0002 & 0.0003 & 0.576\\
+Pre-COVID & Non-severe & Block Group & Demog Coverage & 0.0009 & 0.0003 & 0.000\\
+\addlinespace
+Pre-COVID & Non-severe & Block Group & Permits & 0.0192 & 0.0020 & 0.000\\
+Pre-COVID & Non-severe & Block Group & Violations & 0.0375 & 0.0009 & 0.000\\
+\bottomrule
+\end{longtable}
+\endgroup{}
+
+\section{Interpretation}\label{interpretation}
+
+The distributed lag model tests whether eviction filings increase
+\emph{after} a complaint is filed --- a temporal pattern consistent with
+landlord retaliation. The key coefficients are the positive leads
+(\(k > 0\)), which indicate elevated eviction filings in the periods
+following a complaint.
+
+The same-period model estimates the contemporaneous correlation, while
+the tenant-composition augmented version tests whether retaliatory
+behavior differs by the racial or gender composition of the building's
+tenants.
+
+The tract FE models provide a less restrictive comparison: if the PID FE
+and tract FE estimates are similar, the complaint--eviction relationship
+is not merely a cross-sectional feature of buildings that both complain
+and evict at higher rates; it persists within the same building over
+time.
+
+The \textbf{retaliatory targeting} analysis flips the question: among
+evictions that do happen, are retaliatory ones disproportionately
+concentrated in buildings with more Black/female tenants? This directly
+tests whether retaliation is a mechanism of demographic targeting.
+
+The \textbf{complaint suppression} analysis tests the complementary
+channel: controlling for maintenance and building conditions, do
+Black/female-occupied buildings file fewer complaints? Combined with the
+targeting results, this maps the full complaint--retaliation cycle and
+identifies where demographic disparities enter.
+
+The bandwidth analysis provides a complementary non-parametric measure:
+what fraction of eviction filings are ``plausibly retaliatory''
+(occurring within \(b\) periods of a complaint)?
+
+
+
+
+\end{document}

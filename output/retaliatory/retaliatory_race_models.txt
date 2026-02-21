@@ -1,0 +1,44 @@
+                                                          raw_full      fe_full      raw_pre       fe_pre fe_full_te.. fe_pre_ten..          within_bldg_gap logit_fe.. logit_fe...1
+Dependent Var.:                                       case_p_black case_p_black case_p_black case_p_black case_p_black case_p_black gap_case_black_vs_tenant black_case   black_case
+                                                                                                                                                                                    
+Constant                                                 0.5948***                 0.5768***                                                                                        
+                                                        (0.0044)                  (0.0047)                                                                                          
+retaliatory_statusplausibly_retaliatory                 -0.0445***                                                                                                                  
+                                                        (0.0097)                                                                                                                    
+retaliatory_statusretaliatory                           -0.0370                                                                                                                     
+                                                        (0.0286)                                                                                                                    
+retaliatory_severe_statusplausibly_retaliatory_severe                   0.0033                  0.0015       0.0035       0.0024                                                    
+                                                                       (0.0026)                (0.0027)     (0.0025)     (0.0026)                                                   
+retaliatory_severe_statusretaliatory_severe                            -0.0015                 -0.0033      -0.0011      -0.0017                                                    
+                                                                       (0.0028)                (0.0029)     (0.0026)     (0.0028)                                                   
+retaliatory_status = plausibly_retaliatory                                        -0.0406***                                                         0.0066*   -0.0206      -0.0370 
+                                                                                  (0.0110)                                                          (0.0029)   (0.0239)     (0.0261)
+retaliatory_status = retaliatory                                                  -0.0182                                                           -0.0007    -0.0355      -0.0675*
+                                                                                  (0.0218)                                                          (0.0035)   (0.0274)     (0.0296)
+n_defendants_total                                                                             -0.0246***                -0.0222***                                                 
+                                                                                               (0.0018)                  (0.0017)                                                   
+infousa_pct_black_c                                                                                          0.2697***    0.2852***                                                 
+                                                                                                            (0.0065)     (0.0072)                                                   
+infousa_pct_female_c                                                                                        -0.0297***   -0.0310***                                                 
+                                                                                                            (0.0061)     (0.0065)                                                   
+infousa_pct_black_female_c                                                                                   0.0485***    0.0509***                                                 
+                                                                                                            (0.0079)     (0.0085)                                                   
+infousa_share_persons_demog_ok_c                                                                            -0.0306***   -0.0336***                                                 
+                                                                                                            (0.0060)     (0.0064)                                                   
+tenant_comp_missing                                                                                         -0.0066      -0.0053                                                    
+                                                                                                            (0.0036)     (0.0038)                                                   
+Fixed-Effects:                                        ------------ ------------ ------------ ------------ ------------ ------------ ------------------------ ----------   ----------
+tract_geoid                                                     No          Yes           No          Yes          Yes          Yes                       No        Yes          Yes
+building_type                                                   No          Yes           No          Yes          Yes          Yes                       No        Yes          Yes
+num_units_bin                                                   No          Yes           No          Yes          Yes          Yes                       No        Yes          Yes
+year_quarter                                                    No          Yes           No          Yes          Yes          Yes                      Yes        Yes          Yes
+PID                                                             No           No           No           No           No           No                      Yes         No           No
+________________________________________              ____________ ____________ ____________ ____________ ____________ ____________ ________________________ __________   __________
+Family                                                         OLS          OLS          OLS          OLS          OLS          OLS                      OLS      Logit        Logit
+S.E.: Clustered                                            by: PID      by: PID      by: PID      by: PID      by: PID      by: PID                  by: PID    by: PID      by: PID
+Observations                                               133,802      275,753      229,806      229,805      275,753      229,805                  125,860    219,125      180,934
+Squared Cor.                                               0.00213      0.53108      0.00124      0.53972      0.55449      0.56603                  0.37691    0.52595      0.53070
+Pseudo R2                                                  0.00192      0.68270      0.00112      0.69976      0.72886      0.75284                   1.3082    0.46249      0.46696
+BIC                                                      148,411.3    102,886.8    254,568.9     82,023.3     88,828.1     68,561.0                250,306.0  164,605.9    135,489.2
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

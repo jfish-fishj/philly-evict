@@ -1,0 +1,29 @@
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{log\_med\_rent}\\
+   Model:                           & (1)     & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   filing\_rate\_eb\_pre\_covid     &         & -0.2197$^{***}$\\   
+                                    &         & (0.0271)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   year                             & Yes     & Yes\\  
+   GEOID                            & Yes     & Yes\\  
+   year\_blt\_decade                & Yes     & Yes\\  
+   source                           & Yes     & Yes\\  
+   num\_units\_bin                  & Yes     & Yes\\  
+   building\_type                   & Yes     & Yes\\  
+   quality\_grade\_standard         & Yes     & Yes\\  
+   num\_stories\_bin                & Yes     & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                     & 113,725 & 113,725\\  
+   R$^2$                            & 0.69308 & 0.69008\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

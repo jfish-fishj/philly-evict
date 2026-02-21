@@ -1,0 +1,32 @@
+\begingroup
+\centering
+\begin{tabular}{lccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variables: & \multicolumn{2}{c}{delta\_loo\_tract} & dest\_loo\_tract\\
+                                             & Delta LOO Tract       & Delta + Orig FE       & Dest Level + Orig FE \\   
+   Model:                                    & (1)                   & (2)                   & (3)\\  
+   \midrule
+   \emph{Variables}\\
+   Constant                                  & 0.0001                &                       &   \\   
+                                             & (0.0004)              &                       &   \\   
+   mid\_evict\_bin $=$ Nofilings0-5\%]")     & $8.46\times 10^{-5}$  & $7.33\times 10^{-5}$  & 0.0003\\   
+                                             & (0.0003)              & (0.0003)              & (0.0003)\\   
+   mid\_evict\_bin $=$ (5-10\%]0-5\%]")      & 0.0003                & 0.0010$^{***}$        & 0.0011$^{***}$\\   
+                                             & (0.0003)              & (0.0003)              & (0.0003)\\   
+   mid\_evict\_bin $=$ (10-20\%]0-5\%]")     & 0.0002                & 0.0012$^{***}$        & 0.0013$^{***}$\\   
+                                             & (0.0004)              & (0.0003)              & (0.0003)\\   
+   mid\_evict\_bin $=$ 20\%+0-5\%]")         & $3.31\times 10^{-5}$  & 0.0020$^{***}$        & 0.0015$^{***}$\\   
+                                             & (0.0005)              & (0.0004)              & (0.0004)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   orig\_tract                               &                       & Yes                   & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                              & 146,636               & 146,634               & 146,634\\  
+   R$^2$                                     & $2.61\times 10^{-5}$  & 0.11608               & 0.73635\\  
+   Within R$^2$                              &                       & 0.00116               & 0.00074\\  
+   \midrule \midrule
+   \multicolumn{4}{l}{\emph{Clustered (orig\_GEOID) standard-errors in parentheses}}\\
+   \multicolumn{4}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

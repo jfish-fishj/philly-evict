@@ -1,0 +1,179 @@
+Retaliatory Demographics QA
+Timestamp: 2026-02-20 10:24:19 EST
+Race case input: /Users/joefish/Documents/GitHub/philly-evictions/output/qa/race_imputed_case_sample.csv
+Gender case input: /Users/joefish/Documents/GitHub/philly-evictions/output/qa/gender_imputed_case_sample.csv
+Evictions input: /Users/joefish/Documents/GitHub/philly-evictions/data/processed/clean/evictions_clean.csv
+Xwalk input: /Users/joefish/Documents/GitHub/philly-evictions/data/processed/xwalks/philly_evict_address_agg_xwalk.csv
+Quarter panel input: /Users/joefish/Documents/GitHub/philly-evictions/data/processed/panels/building_data_rental_quarter.parquet
+BLP panel input: /Users/joefish/Documents/GitHub/philly-evictions/data/processed/analytic/bldg_panel_blp.csv
+High filing threshold (long-run pre-2019): 0.1
+
+Race panel rows: 275755
+Gender panel rows: 255878
+Intersection panel rows: 255301
+
+Race descriptives by building type x high-filing bin:
+      building_type high_filing_longrun n_cases   retaliatory_share plausibly_retaliatory_share non_retaliatory_share  mean_case_p_black  mean_case_p_white
+             <fctr>              <fctr>   <int>               <num>                       <num>                 <num>              <num>              <num>
+ 1:      COMMERCIAL   low_or_mid_filing    1276 0.06974921630094044         0.16300940438871472    0.7672413793103449 0.4278580314820069 0.4487677292821314
+ 2:      COMMERCIAL         high_filing     566 0.06183745583038869         0.14664310954063603    0.7915194346289752 0.4070976048562901 0.5201154479048196
+ 3:      COMMERCIAL             missing      14 0.07142857142857142         0.00000000000000000    0.9285714285714286 0.5080194263851759 0.4176794395936745
+ 4:        DETACHED   low_or_mid_filing    1008 0.10615079365079365         0.11408730158730158    0.7797619047619048 0.4850302215869146 0.4414521885922889
+ 5:        DETACHED         high_filing    1091 0.10082493125572869         0.11824014665444546    0.7809349220898258 0.5407073971290680 0.3997356038866329
+ 6:        DETACHED             missing       2 0.00000000000000000         0.00000000000000000    1.0000000000000000 0.5151897563765162 0.3449561910507585
+ 7:  HIGHRISE_MULTI   low_or_mid_filing   11099 0.17488061987566447         0.20857734931074873    0.6165420308135868 0.5231334049746859 0.4064640573468655
+ 8:  HIGHRISE_MULTI         high_filing   14022 0.46876337184424477         0.28412494651262304    0.2471116816431322 0.5812537185648721 0.3500029396359405
+ 9:  HIGHRISE_MULTI             missing       8 0.00000000000000000         0.00000000000000000    1.0000000000000000 0.3294666789657425 0.1693839578786993
+10:   LOWRISE_MULTI   low_or_mid_filing   18026 0.17674470209697105         0.18739598357927439    0.6358593143237545 0.4645264635387224 0.4666266705363232
+11:   LOWRISE_MULTI         high_filing   52513 0.30401995696303774         0.24628187306000418    0.4496981699769581 0.4983312484439076 0.4445235342260925
+12:   LOWRISE_MULTI             missing     284 0.09507042253521127         0.11267605633802817    0.7922535211267606 0.6148336543890452 0.3474717751875987
+13:   MIDRISE_MULTI   low_or_mid_filing    3865 0.18421733505821475         0.21009055627425616    0.6056921086675291 0.3358548933974927 0.5798122387925906
+14:   MIDRISE_MULTI         high_filing    4091 0.32094842336836960         0.22537276949401125    0.4536788071376192 0.4611010556515712 0.4459830120222773
+15:   MIDRISE_MULTI             missing     160 0.05625000000000000         0.01875000000000000    0.9250000000000000 0.4224047711328022 0.4815874475165499
+16:           OTHER   low_or_mid_filing    3252 0.06303813038130382         0.07503075030750307    0.8619311193111932 0.3154970723584718 0.5872598660513958
+17:           OTHER         high_filing    1443 0.02217602217602218         0.04088704088704088    0.9369369369369369 0.6017331075513361 0.3227279539516746
+18:           OTHER             missing      73 0.08219178082191780         0.04109589041095890    0.8767123287671232 0.4460507112167136 0.3978802274645317
+19:             ROW   low_or_mid_filing   47181 0.09217693563086836         0.09482630719993218    0.8129967571691995 0.6260542594088129 0.2778951557180735
+20:             ROW         high_filing   61440 0.08961588541666667         0.09926757812500001    0.8111165364583334 0.6577579287194325 0.2567782713610064
+21:             ROW             missing     146 0.04109589041095890         0.06164383561643835    0.8972602739726028 0.7021639638389833 0.2466424578213637
+22: SMALL_MULTI_2_4   low_or_mid_filing   16977 0.10508334805913884         0.11150379925781941    0.7834128526830417 0.5284970042483964 0.4014163603558669
+23: SMALL_MULTI_2_4         high_filing   17583 0.10840015924472501         0.11607802991525906    0.7755218108400159 0.5984568452894385 0.3386897043008416
+24: SMALL_MULTI_2_4             missing       5 0.20000000000000001         0.20000000000000001    0.6000000000000000 0.7158934120214586 0.2840985814316763
+25:            TWIN   low_or_mid_filing    8880 0.10990990990990991         0.11734234234234234    0.7727477477477478 0.5847756202759030 0.3545685740087848
+26:            TWIN         high_filing   10749 0.10996371755512141         0.11796446181040096    0.7720718206344777 0.6249991111232918 0.3253507718974475
+27:            TWIN             missing       1 0.00000000000000000         0.00000000000000000    1.0000000000000000 0.9999835067674020 0.0000000000000000
+      building_type high_filing_longrun n_cases   retaliatory_share plausibly_retaliatory_share non_retaliatory_share  mean_case_p_black  mean_case_p_white
+
+Gender descriptives by building type x high-filing bin:
+      building_type high_filing_longrun n_cases   retaliatory_share plausibly_retaliatory_share non_retaliatory_share mean_case_p_female   mean_case_p_male
+             <fctr>              <fctr>   <int>               <num>                       <num>                 <num>              <num>              <num>
+ 1:      COMMERCIAL   low_or_mid_filing    1114 0.10592459605026930         0.15709156193895871    0.7369838420107719 0.4198169110313186 0.5801830889686814
+ 2:      COMMERCIAL         high_filing     516 0.11240310077519380         0.13565891472868216    0.7519379844961240 0.5673867506459949 0.4326132493540051
+ 3:      COMMERCIAL             missing      12 0.08333333333333333         0.00000000000000000    0.9166666666666666 0.7515833333333333 0.2484166666666667
+ 4:        DETACHED   low_or_mid_filing     946 0.13953488372093023         0.10147991543340380    0.7589852008456660 0.6238009478505990 0.3761990521494010
+ 5:        DETACHED         high_filing    1027 0.12463485881207401         0.11295034079844206    0.7624148003894839 0.6457665692956832 0.3542334307043168
+ 6:        DETACHED             missing       2 0.00000000000000000         0.00000000000000000    1.0000000000000000 0.9960000000000000 0.0040000000000000
+ 7:  HIGHRISE_MULTI   low_or_mid_filing   10173 0.19325665978570727         0.19787673252727808    0.6088666076870146 0.6620706466463504 0.3379293533536493
+ 8:  HIGHRISE_MULTI         high_filing   12868 0.48531240285980726         0.26826235623251476    0.2464252409076780 0.5716405754955076 0.4283594245044926
+ 9:  HIGHRISE_MULTI             missing       6 0.00000000000000000         0.00000000000000000    1.0000000000000000 0.2194833333333333 0.7805166666666666
+10:   LOWRISE_MULTI   low_or_mid_filing   16575 0.19040723981900454         0.17978883861236802    0.6298039215686274 0.5770048186823230 0.4229951813176769
+11:   LOWRISE_MULTI         high_filing   48607 0.32670191536198490         0.23241508424712490    0.4408830003908902 0.5710827621535995 0.4289172378464004
+12:   LOWRISE_MULTI             missing     255 0.09019607843137255         0.11764705882352941    0.7921568627450980 0.6390545751633987 0.3609454248366013
+13:   MIDRISE_MULTI   low_or_mid_filing    3631 0.21178738639493253         0.19774166896171855    0.5904709446433489 0.4448467812225413 0.5551532187774586
+14:   MIDRISE_MULTI         high_filing    3799 0.33877336141089759         0.21584627533561462    0.4453803632534878 0.5073053205626377 0.4926946794373623
+15:   MIDRISE_MULTI             missing     147 0.05442176870748299         0.02040816326530612    0.9251700680272109 0.5374205215419501 0.4625794784580499
+16:           OTHER   low_or_mid_filing    2994 0.07548430193720775         0.06847027388109553    0.8560454241816967 0.5017521197951459 0.4982478802048542
+17:           OTHER         high_filing    1313 0.03274942878903275         0.03960396039603960    0.9276466108149276 0.6566356181772023 0.3433643818227977
+18:           OTHER             missing      59 0.10169491525423729         0.05084745762711865    0.8474576271186440 0.5252313559322034 0.4747686440677966
+19:             ROW   low_or_mid_filing   43944 0.10977607864554888         0.08936373566357182    0.8008601856908794 0.6919733926759638 0.3080266073240373
+20:             ROW         high_filing   57194 0.10452145329929713         0.09485260691680945    0.8006259397838934 0.6790594146530525 0.3209405853469482
+21:             ROW             missing     132 0.04545454545454546         0.05303030303030303    0.9015151515151515 0.5650617424242425 0.4349382575757575
+22: SMALL_MULTI_2_4   low_or_mid_filing   15869 0.12243997731426051         0.10637091184069569    0.7711891108450438 0.5992344964075913 0.4007655035924087
+23: SMALL_MULTI_2_4         high_filing   16368 0.12481671554252199         0.11058162267839687    0.7646016617790812 0.6196512011750570 0.3803487988249430
+24: SMALL_MULTI_2_4             missing       4 0.25000000000000000         0.25000000000000000    0.5000000000000000 0.7496500000000000 0.2503500000000000
+25:            TWIN   low_or_mid_filing    8258 0.13344635504964883         0.10825865827076774    0.7582949866795834 0.6123969536610963 0.3876030463389037
+26:            TWIN         high_filing   10064 0.12311208267090620         0.11575914149443561    0.7611287758346582 0.6161511516295708 0.3838488483704293
+27:            TWIN             missing       1 0.00000000000000000         0.00000000000000000    1.0000000000000000 0.0157000000000000 0.9843000000000000
+      building_type high_filing_longrun n_cases   retaliatory_share plausibly_retaliatory_share non_retaliatory_share mean_case_p_female   mean_case_p_male
+
+Intersection descriptives (Black/White x Female/Male):
+       retaliatory_status intersection_group_bw n_cases       overall_share   mean_case_p_black   mean_case_p_white  mean_case_p_female within_status_share
+                   <char>                <fctr>   <int>               <num>               <num>               <num>               <num>               <num>
+ 1:       non_retaliatory            White+Male   17018 0.09568307301330274 0.03286655962035324 0.96172595103888880 0.06001404318841926  0.1410362659948286
+ 2:       non_retaliatory          White+Female   22004 0.12371667285137582 0.03797656499788708 0.95635886688419125 0.87545010648201704  0.1823576211628986
+ 3:       non_retaliatory            Black+Male   21118 0.11873517075419716 0.96573249614829015 0.02858359651940828 0.08502934333833916  0.1750149174567394
+ 4:       non_retaliatory          Black+Female   60524 0.34029394235851074 0.97041570338467920 0.02534127931708819 0.92111465022926775  0.5015911953855334
+ 5: plausibly_retaliatory            White+Male    4136 0.02325450640398520 0.03588623677770694 0.95936406699108123 0.05786303634751774  0.1635558367605188
+ 6: plausibly_retaliatory          White+Female    5317 0.02989463504593552 0.03850940513867880 0.95546515936408516 0.88007555231646928  0.2102578298006960
+ 7: plausibly_retaliatory            Black+Male    4608 0.02590830887561988 0.95951844262465957 0.03502016524947812 0.07266058666087961  0.1822208161974059
+ 8: plausibly_retaliatory          Black+Female   11227 0.06312339057000528 0.96434802937467556 0.03142015451401817 0.91996630073335117  0.4439655172413793
+ 9:           retaliatory            White+Male    5192 0.02919182718798142 0.03816363429402358 0.95702466333782565 0.06618622913456594  0.1627280135397731
+10:           retaliatory          White+Female    6868 0.03861507494742997 0.03777117593252838 0.95651931845202165 0.87900711269656384  0.2152573183727199
+11:           retaliatory            Black+Male    5813 0.03268337662629738 0.95688548892474301 0.03745962603321321 0.07283763260508053  0.1821914373472074
+12:           retaliatory          Black+Female   14033 0.07890002136535888 0.96158398083222008 0.03395683936714548 0.91753206833891554  0.4398232307402996
+
+Within-building race case-vs-tenant comparison:
+      retaliatory_status n_cases  mean_case_p_black mean_tenant_pct_black mean_gap_case_minus_tenant mean_abs_gap_case_minus_tenant
+                  <char>   <int>              <num>                 <num>                      <num>                          <num>
+1:       non_retaliatory  105729 0.5808347067515640    0.5360599675920652        0.04477473915949894             0.1650170549590781
+2: plausibly_retaliatory   21707 0.5286838719111510    0.4777856090068761        0.05089826290427538             0.1815574812217743
+3:           retaliatory   21629 0.5442024249701568    0.4966796983858573        0.04752272658429943             0.1887810422596007
+
+Within-building gender case-vs-tenant comparison:
+      retaliatory_status n_cases mean_case_p_female mean_tenant_pct_female mean_gap_case_minus_tenant mean_abs_gap_case_minus_tenant
+                  <char>   <int>              <num>                  <num>                      <num>                          <num>
+1:       non_retaliatory   92985 0.6539707192012307     0.6236855364220185       0.030285182779212716             0.3580149743735923
+2: plausibly_retaliatory   18584 0.6159230484684728     0.6205547819388524      -0.004631733470379739             0.3812865149720929
+3:           retaliatory   22088 0.6109111583967163     0.6119220507424404      -0.001010892345724293             0.3818979610091763
+
+Within-building intersection case-vs-tenant comparison:
+      retaliatory_status n_cases mean_black_female_case mean_tenant_black_female_share mean_gap_case_minus_tenant mean_abs_gap_case_minus_tenant
+                  <char>   <int>                  <num>                          <num>                      <num>                          <num>
+1:       non_retaliatory   65386     0.5117609274156547             0.3990035715191825        0.11275735589647196             0.3073066184573592
+2: plausibly_retaliatory   12557     0.4421438241618221             0.3483546904138838        0.09378913374793818             0.3160861685296646
+3:           retaliatory   14883     0.4300880198884633             0.3364526557617542        0.09363536412670913             0.3202782665388735
+
+General unconditional shares by race x gender (observed):
+    race_group_5 gender_group_obs  group_race_gender n_cases          share_cases
+          <char>           <char>             <char>   <int>                <num>
+ 1:        Asian           Female       Asian+Female     806 0.003157057747521553
+ 2:        Asian             Male         Asian+Male    1272 0.004982354162341707
+ 3:        Black           Female       Black+Female   85784 0.336011218130755462
+ 4:        Black             Male         Black+Male   31539 0.123536531388439522
+ 5:     Hispanic           Female    Hispanic+Female    6953 0.027234519253743619
+ 6:     Hispanic             Male      Hispanic+Male    3554 0.013920822871825805
+ 7:  Other/Mixed           Female Other/Mixed+Female    7651 0.029968546930877669
+ 8:  Other/Mixed             Male   Other/Mixed+Male    4460 0.017469575128965416
+ 9:      Unknown           Female     Unknown+Female   34833 0.136438948535258370
+10:      Unknown             Male       Unknown+Male   17914 0.070168154452979026
+11:        White           Female       White+Female   34189 0.133916435893318087
+12:        White             Male         White+Male   26346 0.103195835503973737
+
+General benchmark comparison (evictions vs priors vs InfoUSA):
+Index: <source>
+                                  source    n_obs  female_share_used    male_share_used       race_p_white       race_p_black     race_p_hispanic        race_p_asian
+                                  <char>    <int>              <num>              <num>              <num>              <num>               <num>               <num>
+1: eviction_cases_observed_probabilities   255301 0.6246083505216969 0.3753916494783031 0.3708811845639314 0.5596589146688048 0.05318616833508037 0.01498902448576394
+2: tract_prior_case_weighted_x_evictions   255152 0.6246083505216969 0.3753916494783031 0.2740899779269150 0.5488977922032392 0.10994359824503276 0.04860413793112153
+3:     bg_prior_city_average_placeholder     1329 0.6246083505216969 0.3753916494783031 0.3665640431827102 0.4209923051946782 0.12695189996883480 0.06465931480894690
+4:                infousa_persons_all_ok 15557671 0.5626786675576841 0.4373213324423159 0.5574038315824192 0.3602521226347448 0.05565229071575607 0.02488652697317595
+5:   infousa_persons_in_eviction_data_ok  2628023 0.5912330287872601 0.4087669712127399 0.4732910816948587 0.4462040919061553 0.05773842292799278 0.02068086282295052
+           race_p_other share_white_female   share_white_male share_black_female   share_black_male share_hispanic_female share_hispanic_male   share_asian_female
+                  <num>              <num>              <num>              <num>              <num>                 <num>               <num>                <num>
+1: 0.001284707946419367 0.2316554849300103 0.1392256996339212 0.3495676315460453 0.2100912831227595   0.03322052487434386 0.01996564346073651 0.009362269859982343
+2: 0.018464493693691419 0.1711988890074587 0.1028910889194563 0.3428461445930664 0.2060516476101728   0.06867168955025005 0.04127190869478271 0.030358550421686861
+3: 0.020832436844829903 0.2289589623729167 0.1376050808097935 0.2629553093299747 0.1580369958647034   0.07929521683512937 0.04765668313370543 0.040386747968679457
+4: 0.001805228093903836 0.3136392452463435 0.2437645863360758 0.2027061843489456 0.1575459382857992   0.03131435678647451 0.02433793392928157 0.014003117837405011
+5: 0.002085540648042628 0.2798253197284499 0.1934657619664088 0.2638105967149452 0.1823934951912101   0.03413686266511696 0.02360156026287583 0.012227209164746882
+       share_asian_male    share_other_female      share_other_male                                                                                           notes
+                  <num>                 <num>                 <num>                                                                                          <char>
+1: 0.005626754625781600 0.0008024393113151175 0.0004822686351042496                          Case-level WRU race probabilities and case-level gender probabilities.
+2: 0.018245587509434665 0.0115330769492348727 0.0069314167444565460      Tract priors joined to eviction cases; female share uses eviction case mean (placeholder).
+3: 0.024272566840267448 0.0130121140149966306 0.0078203228298332726 BG priors population-weighted city average; female share uses eviction case mean (placeholder).
+4: 0.010883409135770942 0.0010157633385155086 0.0007894647553883279           InfoUSA race-imputed person file; female share from known F/M only (coverage=0.1108).
+5: 0.008453653658203636 0.0012330405140011883 0.0008525001340414398           InfoUSA race-imputed person file; female share from known F/M only (coverage=0.1193).
+
+Race descriptives by long-run filing-rate cut:
+   filing_rate_longrun_pre2019_cuts n_cases   retaliatory_share plausibly_retaliatory_share non_retaliatory_share  mean_case_p_black  mean_case_p_white
+                             <fctr>   <int>               <num>                       <num>                 <num>              <num>              <num>
+1:                                0   33218 0.07796977542296345         0.09524956348967427    0.8267806610873623 0.6594052409076383 0.2683582602793375
+2:                           (0-5%]   30665 0.14550790803848035         0.15979129300505462    0.6947007989564650 0.4627656596362559 0.4630612401402857
+3:                          (5-10%]   48050 0.13161290322580646         0.13504682622268471    0.7333402705515089 0.5257785128632001 0.3804594254706618
+4:                         (10-20%]   54517 0.15318157638901628         0.15989507859933599    0.6869233450116478 0.5470424859202707 0.3748577499206712
+5:                             20%+  108612 0.22321658748572901         0.17243950944646999    0.6043439030678009 0.6040560795488927 0.3299373322014802
+6:                          missing     693 0.07215007215007214         0.06926406926406926    0.8585858585858586 0.5665699817428499 0.3609004622068642
+
+Gender descriptives by long-run filing-rate cut:
+   filing_rate_longrun_pre2019_cuts n_cases   retaliatory_share plausibly_retaliatory_share non_retaliatory_share mean_case_p_female   mean_case_p_male
+                             <fctr>   <int>               <num>                       <num>                 <num>              <num>              <num>
+1:                                0   30795 0.09027439519402500         0.09212534502354278    0.8176002597824322 0.7044467562123695 0.2955532437876323
+2:                           (0-5%]   28281 0.16343127895053217         0.15126763551501007    0.6853010855344578 0.5694269278352072 0.4305730721647928
+3:                          (5-10%]   44758 0.15389427588364091         0.12583225345189686    0.7202734706644622 0.6212610071661959 0.3787389928338041
+4:                         (10-20%]   50794 0.17320943418513998         0.15200614245777061    0.6747844233570894 0.6071075032734152 0.3928924967265853
+5:                             20%+  100632 0.23897964862071708         0.16331783130614516    0.5977025200731377 0.6265309406668890 0.3734690593331093
+6:                          missing     618 0.07281553398058252         0.07119741100323625    0.8559870550161812 0.5871824163969795 0.4128175836030205
+
+Intersection status summary:
+   n_cases  retaliatory_share plausibly_retaliatory_share non_retaliatory_share    mean_black_case   mean_female_case mean_black_female_case
+     <int>              <num>                       <num>                 <num>              <num>              <num>                  <num>
+1:  255301 0.1843549378968355          0.1444177656961782    0.6712272964069863 0.5587287162995836 0.6667267264914748     0.4031829095851563

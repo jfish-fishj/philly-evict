@@ -1,0 +1,21 @@
+Retaliatory Evictions QA (Quarter-Level)
+Timestamp: 2026-02-17 22:33:46 EST
+Quarter panel input: /Users/joefish/Documents/GitHub/philly-evictions/data/processed/panels/building_data_quarter.csv
+Analytic PID input: /Users/joefish/Documents/GitHub/philly-evictions/data/processed/analytic/analytic_sample.csv
+Rows analyzed (full): 6891768
+Rows analyzed (pre-covid): 4977388
+Unique PIDs (full): 95719
+Eviction filing rate (full): 0.025214
+Any complaint rate (full): 0.031875
+
+Retaliatory status summary (eviction rows only):
+      retaliatory_status      N     share
+                  <char>  <int>     <num>
+1:       non_retaliatory 128019 0.7367322
+2:           retaliatory  23982 0.1380132
+3: plausibly_retaliatory  21765 0.1252547
+
+Wrote coefficients CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_distlag_coefficients.csv
+Wrote status summary CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_status_summary.csv
+Wrote model table: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_model_table.txt
+Wrote coefficient plot: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_distlag_coefficients.png

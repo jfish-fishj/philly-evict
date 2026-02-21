@@ -1,0 +1,16 @@
+\begin{table}
+
+\caption{Unconditional race x gender shares: eviction observed vs tract/BG priors vs InfoUSA}
+\centering
+\begin{tabular}[t]{lrrrrrrrrrrrrrrrrrrl}
+\toprule
+source & n\_obs & female\_share\_used & male\_share\_used & race\_p\_white & race\_p\_black & race\_p\_hispanic & race\_p\_asian & race\_p\_other & share\_white\_female & share\_white\_male & share\_black\_female & share\_black\_male & share\_hispanic\_female & share\_hispanic\_male & share\_asian\_female & share\_asian\_male & share\_other\_female & share\_other\_male & notes\\
+\midrule
+eviction\_cases\_observed\_probabilities & 255301 & 0.6246000000000000 & 0.3754 & 0.3709 & 0.5597000000000000 & 0.0532 & 0.01500000000000000 & 0.0013 & 0.2317 & 0.1392 & 0.3496 & 0.2101 & 0.0332 & 0.0200 & 0.0094 & 0.005600000000000000 & 0.0008 & 0.0005 & Case-level WRU race probabilities and case-level gender probabilities.\\
+tract\_prior\_case\_weighted\_x\_evictions & 255152 & 0.6246000000000000 & 0.3754 & 0.2741 & 0.5489000000000001 & 0.1099 & 0.04860000000000000 & 0.0185 & 0.1712 & 0.1029 & 0.3428 & 0.2061 & 0.0687 & 0.0413 & 0.0304 & 0.018200000000000001 & 0.0115 & 0.0069 & Tract priors joined to eviction cases; female share uses eviction case mean (placeholder).\\
+bg\_prior\_city\_average\_placeholder & 1329 & 0.6246000000000000 & 0.3754 & 0.3666 & 0.4210000000000000 & 0.1270 & 0.06469999999999999 & 0.0208 & 0.2290 & 0.1376 & 0.2630 & 0.1580 & 0.0793 & 0.0477 & 0.0404 & 0.024299999999999999 & 0.0130 & 0.0078 & BG priors population-weighted city average; female share uses eviction case mean (placeholder).\\
+infousa\_persons\_all\_ok & 15557671 & 0.5627000000000000 & 0.4373 & 0.5574 & 0.3603000000000000 & 0.0557 & 0.02490000000000000 & 0.0018 & 0.3136 & 0.2438 & 0.2027 & 0.1575 & 0.0313 & 0.0243 & 0.0140 & 0.010900000000000000 & 0.0010 & 0.0008 & InfoUSA race-imputed person file; female share from known F/M only (coverage=0.1108).\\
+infousa\_persons\_in\_eviction\_data\_ok & 2628023 & 0.5911999999999999 & 0.4088 & 0.4733 & 0.4462000000000000 & 0.0577 & 0.02070000000000000 & 0.0021 & 0.2798 & 0.1935 & 0.2638 & 0.1824 & 0.0341 & 0.0236 & 0.0122 & 0.008500000000000001 & 0.0012 & 0.0009 & InfoUSA race-imputed person file; female share from known F/M only (coverage=0.1193).\\
+\bottomrule
+\end{tabular}
+\end{table}

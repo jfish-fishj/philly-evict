@@ -1,0 +1,354 @@
+% impute_race_evictions_codex_instructions_v2.tex
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{amsmath}
+
+\title{Instructions for Codex: Impute Race/Ethnicity from Names + Census Tract in Eviction Filings (R)\\(WRU / BISG with Sensitivity + Case Aggregates)}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Purpose and Guardrails}
+
+\subsection{Goal}
+Write an R script that:
+\begin{enumerate}[leftmargin=*]
+  \item Reads a person-level eviction names table (a \texttt{data.table} like the provided schema), where each row is a plaintiff/defendant name instance.
+  \item Filters to human defendants and excludes businesses/placeholders typical in eviction filings.
+  \item Constructs cleaned \texttt{first\_name}, \texttt{middle\_name} (optional), and \texttt{last\_name}.
+  \item Merges 2010 census tract via explicit crosswalk chain: case \texttt{id} $\rightarrow$ parcel \texttt{PID} $\rightarrow$ block-group \texttt{GEOID} $\rightarrow$ tract \texttt{tract\_geoid}.
+  \item Builds tract-level race/ethnicity priors from ACS 5-year tract tables (recommended: single ACS vintage).
+  \item Uses \texttt{wru} to generate race/ethnicity \emph{probabilities} per person-row using a BISG-style approach with name information.
+  \item Produces \textbf{(a) person-level outputs} and \textbf{(b) case-level aggregates}, including ``any-member'' probabilities.
+  \item Produces a QA log and a sensitivity report comparing name+tract vs surname-only.
+\end{enumerate}
+
+\subsection{Guardrails (must be printed in QA log)}
+These outputs are \emph{probabilistic estimates} designed for \textbf{aggregate disparity measurement and research} (e.g., group-level rates, decomposition, inference-aware methods).
+\textbf{Do not} use these outputs for individual-level decisions, targeting, re-contacting, or enforcement.
+
+\section{Inputs}
+
+\subsection{Required columns in main table \texttt{dt}}
+Assume input \texttt{dt} includes at least:
+\begin{itemize}[leftmargin=*]
+  \item Case id: \texttt{id} (e.g., \texttt{LT-17-...})
+  \item Role: \texttt{role} (e.g., ``Defendant \#1'', ``Plaintiff'')
+  \item Name: name
+  \item Alias fields: \texttt{alias\_one}, \texttt{alias\_two} (may be empty)
+\end{itemize}
+
+\subsection{Script parameters (CLI args or config; no hard-coded paths)}
+The script must accept parameters (via \texttt{optparse} / \texttt{argparse} / \texttt{docopt}):
+\begin{itemize}[leftmargin=*]
+  \item \texttt{--input} path (parquet/csv)
+  \item \texttt{--output\_person} path
+  \item \texttt{--output\_case} path
+  \item \texttt{--output\_qa} path (txt or csv)
+  \item \texttt{--cache\_dir} directory for ACS priors cache
+  \item \texttt{--state} (e.g., \texttt{PA}) and \texttt{--acs\_year} (recommended default: one stable recent ACS year)
+  \item \texttt{--use\_middle\_name} (TRUE/FALSE; default FALSE unless you explicitly implement it)
+  \item \texttt{--confidence\_threshold} (default 0.7) for optional flags
+\end{itemize}
+
+\section{Outputs}
+
+\subsection{Person-level output (Parquet preferred)}
+Write \texttt{person\_race\_probs.parquet} with all original columns plus:
+
+\paragraph{Derived identifiers and cleaned names}
+\begin{itemize}[leftmargin=*]
+  \item \texttt{is\_defendant} (logical)
+  \item \texttt{case\_year} (optional; parsed from \texttt{id} if you implement)
+  \item \texttt{first\_name}, \texttt{middle\_name} (optional), \texttt{last\_name}
+\end{itemize}
+
+\paragraph{Status and method}
+\begin{itemize}[leftmargin=*]
+  \item \texttt{impute\_status} in:
+  \begin{itemize}
+    \item \texttt{"ok"}
+    \item \texttt{"not\_defendant"}
+    \item \texttt{"not\_person"} (includes businesses/corporate tokens)
+    \item \texttt{"junk\_alias"}
+    \item \texttt{"no\_tract"}
+    \item \texttt{"invalid\_tract"}
+    \item \texttt{"tract\_not\_in\_acs"}
+    \item \texttt{"wru\_failed"}
+  \end{itemize}
+  \item \texttt{impute\_method} in:
+  \begin{itemize}
+    \item \texttt{"firstname+surname+tract"}
+    \item \texttt{"surname+tract"} (fallback)
+  \end{itemize}
+\end{itemize}
+
+\paragraph{Predicted probabilities (standardized 5-category)}
+\begin{itemize}[leftmargin=*]
+  \item \texttt{p\_white}, \texttt{p\_black}, \texttt{p\_hispanic}, \texttt{p\_asian}, \texttt{p\_other}
+\end{itemize}
+
+\paragraph{Uncertainty summaries (required)}
+\begin{itemize}[leftmargin=*]
+  \item \texttt{race\_hat} (optional hard label): argmax of \texttt{p\_*}
+  \item \texttt{race\_hat\_p}: max of \texttt{p\_*}
+  \item \texttt{race\_entropy}: entropy of probability vector (higher = more ambiguous)
+  \item \texttt{is\_confident}: \texttt{race\_hat\_p >= confidence\_threshold}
+\end{itemize}
+
+\subsection{Case-level output (Parquet preferred)}
+Write \texttt{case\_race\_probs.parquet} with one row per \texttt{id}. Include:
+
+\paragraph{Defendant coverage}
+\begin{itemize}[leftmargin=*]
+  \item \texttt{n\_defendants\_total}: count of rows in case with \texttt{is\_defendant==TRUE}
+  \item \texttt{n\_defendants\_imputed}: count of rows with \texttt{impute\_status=="ok"}
+  \item \texttt{share\_defendants\_imputed} = \texttt{n\_defendants\_imputed / n\_defendants\_total} (guard zero)
+\end{itemize}
+
+\paragraph{Optional deduplication within case}
+If \texttt{short\_name\_id} (or similar stable person id) exists, compute:
+\begin{itemize}[leftmargin=*]
+  \item \texttt{n\_defendants\_unique\_total} and \texttt{n\_defendants\_unique\_imputed}
+\end{itemize}
+Also provide aggregates both \texttt{(a) row-weighted} and \texttt{(b) unique-person-weighted} if feasible.
+
+\paragraph{Case mean and sum probabilities over imputed defendants}
+Let $D_i$ be imputed defendant rows in case $i$.
+For each group $g \in \{\texttt{white, black, hispanic, asian, other}\}$:
+\begin{itemize}[leftmargin=*]
+  \item \texttt{case\_p\_g} = mean of \texttt{p\_g} over $D_i$
+  \item \texttt{case\_p\_g\_sum} = sum of \texttt{p\_g} over $D_i$ (interpretable as expected count among listed defendants)
+\end{itemize}
+
+\paragraph{Case ``any-member'' probabilities (required)}
+Under an independence approximation across listed defendants,
+for each group $g$ define:
+\[
+\texttt{case\_any\_g} \;=\; 1 - \prod_{j \in D_i} (1 - p_{jg})
+\]
+Output \texttt{case\_any\_white}, \texttt{case\_any\_black}, \texttt{case\_any\_hispanic}, \texttt{case\_any\_asian}, \texttt{case\_any\_other}.
+If $|D_i|=0$, set these to NA.
+
+\paragraph{Case hard label summaries (optional)}
+\begin{itemize}[leftmargin=*]
+  \item \texttt{case\_race\_hat} = argmax(\texttt{case\_p\_g})
+  \item \texttt{case\_race\_hat\_p} = max(\texttt{case\_p\_g})
+  \item \texttt{case\_entropy} = entropy of \texttt{case\_p\_g} vector
+\end{itemize}
+
+\paragraph{Case-level status}
+\begin{itemize}[leftmargin=*]
+  \item \texttt{case\_impute\_status}:
+  \begin{itemize}
+    \item \texttt{"ok"} if \texttt{n\_defendants\_imputed>0}
+    \item \texttt{"no\_imputed\_defendants"} otherwise
+  \end{itemize}
+  \item \texttt{case\_reason\_top}: for cases with no imputed defendants, the most common \texttt{impute\_status} among defendant rows (e.g., \texttt{"no\_tract"}, \texttt{"junk\_alias"}, etc.)
+\end{itemize}
+
+\section{Method Details (Person-Level Pipeline)}
+
+\subsection{0. Setup and Reproducibility}
+Use \texttt{data.table} end-to-end. Print to QA log:
+\begin{itemize}[leftmargin=*]
+  \item R version: \texttt{R.version.string}
+  \item \texttt{packageVersion("wru")}, \texttt{packageVersion("tidycensus")}, \texttt{packageVersion("data.table")}
+  \item ACS settings: \texttt{acs\_year}, \texttt{state}, table used (\texttt{B03002})
+\end{itemize}
+
+\subsection{1. Defendant universe and eviction-specific filters}
+\begin{enumerate}[leftmargin=*]
+  \item Define \texttt{is\_defendant = grepl(\string^Defendant\string, role, ignore.case=TRUE)}.
+  \item Only attempt imputation if \texttt{is\_defendant==TRUE}.
+\end{enumerate}
+Do \textbf{not} silently drop rows; keep them in person output with explicit \texttt{impute\_status}.
+
+\subsection{1.5 Tract merge contract (required)}
+Use the following deterministic joins to construct \texttt{tract\_geoid}:
+\begin{enumerate}[leftmargin=*]
+  \item Read \texttt{evict\_address\_xwalk\_case} and keep only \texttt{num\_parcels\_matched == 1}.
+  \item Reduce to one row per \texttt{id} with \texttt{distinct(id, PID)}.
+  \item Read \texttt{parcel\_occupancy\_panel} and reduce to \texttt{distinct(PID, GEOID)}.
+  \item Join \texttt{id -> PID}, then \texttt{PID -> GEOID}.
+  \item Convert block-group \texttt{GEOID} to tract:
+  \begin{itemize}
+    \item cast \texttt{GEOID} to character (never numeric substring on raw numeric/integer64 values),
+    \item zero-pad to 12 digits,
+    \item \texttt{tract\_geoid = substr(GEOID\_12, 1, 11)}.
+  \end{itemize}
+\end{enumerate}
+
+Status handling from this stage:
+\begin{itemize}[leftmargin=*]
+  \item if no \texttt{PID} after \texttt{id} join: \texttt{impute\_status="no\_tract"}
+  \item if \texttt{GEOID} missing after \texttt{PID} join: \texttt{impute\_status="no\_tract"}
+  \item if \texttt{tract\_geoid} not 11 digits: \texttt{impute\_status="invalid\_tract"}
+\end{itemize}
+
+Join safeguards (must log in QA):
+\begin{itemize}[leftmargin=*]
+  \item row counts before/after each join
+  \item uniqueness checks for \texttt{id} in the case$\rightarrow$PID table
+  \item uniqueness checks for \texttt{PID} in the PID$\rightarrow$GEOID table
+\end{itemize}
+
+\subsection{2. Name cleaning and splitting}
+
+\paragraph{2.1 Base name selection}
+
+\paragraph{2.2 Standardization}
+\begin{itemize}[leftmargin=*]
+  \item Uppercase
+  \item Replace non-letters with spaces; collapse multiple spaces
+  \item Trim
+  \item look at clean-eviction-names.R for some guidance
+\end{itemize}
+
+This should generate a new column called \texttt{name\_clean} which will be used for name\_base 
+
+\paragraph{2.3 Token filtering}
+The issue will be that the names are not in standard format. eg. they'll appear as smith johnson, johnson smith. i think the easiest way to handle this is to use census surname data to flag names as last names. 
+
+- data/census/Names_2010Census.csv
+- data/inputs/name-files
+- wru might already have name information wru_data_preflight() / check the docs
+
+\paragraph{2.4 Corporate marker check (secondary)}
+If tokens contain \texttt{LLC, INC, LTD, LP, CORP, CO, COMPANY, AUTHORITY, HOUSING, TRUST}, treat as not-person:
+\texttt{impute\_status="not\_person"}.
+
+this should be somewhat redundant to what we've already done
+
+\paragraph{2.5 Extract names}
+
+once we've categorized each name token as a first name / last name / middle name, we can make new columns called first_name, last_name, and middle_name
+
+Else \texttt{impute\_status="not\_person"}.
+
+\subsection{3. Tract priors from ACS (B03002) with explicit mapping}
+Pull ACS 5-year tract counts and convert to priors.
+Use \texttt{B03002} and define 5 categories as:
+
+\begin{itemize}[leftmargin=*]
+  \item Hispanic (any race): \texttt{B03002\_012}
+  \item Non-Hispanic White: \texttt{B03002\_003}
+  \item Non-Hispanic Black: \texttt{B03002\_004}
+  \item Non-Hispanic Asian: \texttt{B03002\_006}
+  \item Other (non-Hispanic residual): \texttt{B03002\_002} $-$ (\texttt{B03002\_003}+\texttt{B03002\_004}+\texttt{B03002\_005}+\texttt{B03002\_006}+\texttt{B03002\_007}) \\
+  (where \texttt{B03002\_005} = NH AIAN, \texttt{B03002\_007} = NH NHPI; include them in ``Other'' via the residual)
+\end{itemize}
+
+Then convert counts to shares within tract:
+\[
+\pi_{g,t} = \frac{\text{count}_{g,t}}{\text{B03002\_001}_{t}}
+\]
+Cache priors to \texttt{cache\_dir} with a deterministic filename (e.g., \texttt{tract\_priors\_\{state\}\_\{acs\_year\}.parquet}).
+Join priors by \texttt{tract\_geoid==GEOID}. If missing, \texttt{impute\_status="tract\_not\_in\_acs"}.
+
+\subsection{4. WRU prediction (name + tract) and fallback}
+Run \texttt{wru} prediction on eligible rows; make sure to drop duplicates down to conserve API calls.
+\begin{itemize}[leftmargin=*]
+  \item Primary run: \texttt{"firstname+surname+tract"} using \texttt{first\_name} and \texttt{last\_name} with tract priors.
+  \item Fallback run: for rows lacking a valid \texttt{first\_name} but with valid surname+tract, run \texttt{"surname+tract"}.
+\end{itemize}
+Standardize output probability columns into \texttt{p\_white}, \texttt{p\_black}, \texttt{p\_hispanic}, \texttt{p\_asian}, \texttt{p\_other}.
+If \texttt{wru} returns NA or fails, set \texttt{impute\_status="wru\_failed"}.
+
+\subsection{5. Uncertainty calculations (required)}
+For rows with \texttt{impute\_status=="ok"}:
+\begin{itemize}[leftmargin=*]
+  \item \texttt{race\_hat} = argmax of \texttt{p\_*}
+  \item \texttt{race\_hat\_p} = max(\texttt{p\_*})
+  \item \texttt{race\_entropy} = $-\sum_g p_g \log(p_g)$ with small epsilon for stability
+  \item \texttt{is\_confident} = (\texttt{race\_hat\_p} $\ge$ \texttt{confidence\_threshold})
+\end{itemize}
+
+\section{Sensitivity Report (Required)}
+
+To assess robustness/transportability, compute a second probability set for the same eligible rows:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Name+tract run:} \texttt{p\_g\_full} from \texttt{"firstname+surname+tract"} where possible.
+  \item \textbf{Surname-only run:} \texttt{p\_g\_surname} from \texttt{"surname+tract"} on the same rows.
+\end{enumerate}
+
+QA must report:
+\begin{itemize}[leftmargin=*]
+  \item Join diagnostics for \texttt{id -> PID -> GEOID -> tract\_geoid}: row counts, unmatched shares, and key uniqueness checks.
+  \item Correlation and mean absolute difference between \texttt{p\_g\_full} and \texttt{p\_g\_surname} by group.
+  \item Share of rows where argmax class changes between the two methods.
+  \item These same summaries stratified by tract minority-share quintiles (constructed from priors), to detect geography-driven divergence.
+\end{itemize}
+
+Optionally write a \texttt{sensitivity\_comparison.parquet} with both probability sets for auditability.
+
+\section{QA Requirements (Must Write to Log)}
+
+Write a QA summary that includes:
+
+\subsection*{Person-level QA}
+\begin{enumerate}[leftmargin=*]
+  \item Join QA for \texttt{id -> PID -> GEOID -> tract\_geoid}:
+  \begin{itemize}
+    \item key uniqueness checks
+    \item row counts and match rates at each step
+    \item count/share with \texttt{no\_tract} and \texttt{invalid\_tract}
+  \end{itemize}
+  \item Counts by \texttt{impute\_status} and \texttt{impute\_method}.
+  \item Probability sanity checks on \texttt{"ok"} rows:
+  \begin{itemize}
+    \item min/median/max of each \texttt{p\_*}
+    \item summary of $\left| \sum_g p_g - 1 \right|$
+  \end{itemize}
+  \item Confidence diagnostics:
+  \begin{itemize}
+    \item distribution of \texttt{race\_hat\_p}
+    \item share with \texttt{race\_hat\_p} $\ge$ 0.6/0.7/0.8
+    \item distribution of \texttt{race\_entropy}
+  \end{itemize}
+\end{enumerate}
+
+\subsection*{Case-level QA}
+\begin{enumerate}[leftmargin=*]
+  \item Counts by \texttt{case\_impute\_status}.
+  \item Distribution of \texttt{share\_defendants\_imputed}.
+  \item Summaries of \texttt{case\_any\_*} and \texttt{case\_p\_*} for imputed cases.
+\end{enumerate}
+
+\subsection*{Reproducibility banner}
+Print:
+\begin{itemize}[leftmargin=*]
+  \item R and package versions
+  \item ACS year/state/table mapping
+  \item Confidence threshold
+  \item Cache file path used for priors
+\end{itemize}
+
+\section{Performance / Engineering Notes}
+
+\begin{itemize}[leftmargin=*]
+  \item Cache ACS priors to disk to avoid repeated API calls.
+  \item Chunk \texttt{wru} runs for large datasets (e.g., 50k--200k rows per chunk).
+  \item Use \texttt{data.table} joins and grouping for speed.
+  \item Do not hard-code absolute paths; everything is parameterized.
+\end{itemize}
+
+\section{Deliverables}
+
+Codex should produce:
+\begin{enumerate}[leftmargin=*]
+  \item \texttt{impute\_race\_evictions.R} implementing all steps above.
+  \item \texttt{person\_race\_probs.parquet} (person-level output).
+  \item \texttt{case\_race\_probs.parquet} (case-level aggregates with \texttt{case\_any\_*}).
+  \item \texttt{qa\_race\_imputation.txt} (QA + sensitivity summary).
+  \item (Optional) \texttt{sensitivity\_comparison.parquet} (audit file with \texttt{p\_g\_full} and \texttt{p\_g\_surname}).
+\end{enumerate}
+
+\end{document}

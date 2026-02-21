@@ -1,0 +1,174 @@
+BLP / PyBLP SHARE FIXES (OPTION A: VACANCY AS OUTSIDE GOOD)
+For: Claude implementation
+Date: 2026-02-12
+
+GOAL
+-----
+Make the BLP share construction internally consistent by defining:
+- Quantity q_{jt} = occupied rental units (leased units) for product j in market t
+- Market size M_t = total rental unit stock in market t
+- Share s_{jt} = q_{jt} / M_t
+- Outside share s_{0t} = 1 - sum_j s_{jt}  (interpretable as vacancy/other-outside)
+
+This avoids mixing “occupied_units ~= households” with “market size ~= renters_2010” and fixes the shares issues.
+
+SCOPE
+-----
+We will implement Option A (recommended):
+- Treat vacancies / not-leasing-in-sample as the outside good.
+- Market size is total unit stock in a market-year.
+- Quantity is occupied rental units for each product-year.
+
+Files to edit:
+1) make-analytic-sample.R   (PRIMARY: where shares and occupied_units are currently constructed)
+2) make-occupancy-vars.r    (UPSTREAM: ensure occupancy_rate is consistent and renter_occ logic is not frozen for all post-2010 years)
+
+----------------------------------------------------------------------
+1) make-analytic-sample.R: Replace occupied_units + market size + shares
+----------------------------------------------------------------------
+
+CURRENT LOGIC (problematic)
+- occupied_units := if occupancy_rate exists then total_units * occupancy_rate else total_units
+- market denominator: total_renters_market := sum(renter_occ) by market_id
+- share_zip := occupied_units / total_renters_market
+This mixes numerator (often ~= num_households) with denominator (sum renter_occ, often pinned at 2010).
+
+NEW LOGIC (Option A)
+- Define occupied_units using renter_occ (occupied rental units proxy) and cap to stock.
+- Define market_size as sum(total_units) in the market-year.
+- Compute share_zip = occupied_units / market_size.
+- Compute outside_share = 1 - sum(share_zip) by market_id.
+
+DROP-IN CODE PATCH
+Replace the entire block where occupied_units / total_renters_market / share_zip / outside_share are defined with:
+
+    # Quantity = occupied rental units (cap to stock)
+    dt[, occupied_units := pmin(total_units, pmax(0, renter_occ))]
+
+    # Market size = total rental unit stock in market-year
+    dt[, market_size := sum(total_units, na.rm = TRUE), by = market_id]
+
+    # Share = occupied / stock; outside share = vacancies/stock (plus any not-in-sample)
+    dt[, share_zip := occupied_units / market_size]
+    dt[, outside_share := 1 - sum(share_zip), by = market_id]
+
+NOTES
+- This assumes market_id already represents a market-year (e.g., zip x year or similar).
+- Keep any existing filters/drops that ensure total_units and renter_occ are non-missing where needed.
+
+SANITY CHECKS (ADD PRINTS OR ASSERTS)
+After constructing shares:
+
+    # Outside share should be in [0,1] (allow tiny numerical tolerance)
+    stopifnot(all(dt[!is.na(outside_share), outside_share >= -1e-6 & outside_share <= 1 + 1e-6]))
+
+    # Share sums should be <= 1 in each market_id
+    chk <- dt[, .(sum_share = sum(share_zip, na.rm=TRUE),
+                  outside = first(outside_share),
+                  M = first(market_size),
+                  Q = sum(occupied_units, na.rm=TRUE)), by = market_id]
+    print(summary(chk$sum_share))
+    print(summary(chk$outside))
+    print(summary(chk$M))
+    print(summary(chk$Q))
+
+Interpretation:
+- sum_share ≈ occupancy rate of stock in that market-year (if renter_occ is good).
+- outside_share ≈ vacancy + “outside” residual.
+
+---------------------------------------------------------------
+2) make-occupancy-vars.r: Fix occupancy_rate meaning + renter_occ
+---------------------------------------------------------------
+
+There are two upstream conceptual problems:
+
+(A) renter_occ is currently time-invariant for ALL parcels with year_built <= 2010
+Because code uses:
+    (!is.na(renters_2010) & year <= 2010) | year_built <= 2010
+which sets renter_occ = renters_2010 for every year if year_built <= 2010.
+
+(B) occupancy_rate is currently defined as:
+    num_households / total_units
+NOT renter_occ / total_units, and then downstream code multiplies by total_units,
+so occupied_units becomes ~= num_households, not occupied rental units.
+
+We need occupancy_rate to reflect OCCUPIED RENTAL UNITS / STOCK (for Option A),
+or we should stop using it as a quantity proxy. Under Option A, the cleanest is:
+- Use renter_occ as occupied_units directly in analytic sample (see section 1).
+- Still: make occupancy_rate consistent as renter_occ / total_units for QC and possible later use.
+
+2A) Fix renter_occ assignment rule (minimal correction)
+Replace the renter_occ fifelse with a year-conditional rule:
+
+CURRENT:
+    panel[, renter_occ := fifelse(
+      (!is.na(renters_2010) & year <= 2010)  | as.numeric(year_built) <= 2010,
+      renters_2010,
+      pmin(as.integer(num_households - num_homeowners %||% 0), as.integer(total_units %||% 0))
+    )]
+
+REPLACE WITH (minimal, allows post-2010 evolution):
+    panel[, renter_occ := fifelse(
+      year <= 2010 & !is.na(renters_2010) & (is.na(year_built) | as.numeric(year_built) <= 2010),
+      renters_2010,
+      pmin(
+        as.integer((num_households %||% 0) - (num_homeowners %||% 0)),
+        as.integer(total_units %||% 0)
+      )
+    )]
+
+Then enforce bounds:
+    panel[renter_occ < 0, renter_occ := 0]
+    panel[!is.na(total_units), renter_occ := pmin(renter_occ, total_units)]
+
+2B) Redefine occupancy_rate to match intended meaning
+CURRENT:
+    panel[renter_occ > 0 , occupancy_rate := fifelse(total_units > 0, num_households / total_units, NA_real_)]
+
+REPLACE WITH:
+    panel[, occupancy_rate := fifelse(total_units > 0, renter_occ / total_units, NA_real_)]
+    panel[, occupancy_rate := pmin(pmax(occupancy_rate, 0), 1)]
+
+If you still want the “scale to mean 0.91 in 2010” idea, apply scaling to occupancy_rate
+after redefining it (optional for now; Option A does not require scaling).
+
+WHY THIS UPSTREAM FIX MATTERS EVEN WITH OPTION A
+- Option A uses renter_occ directly as quantity; if renter_occ is frozen across years, shares
+  will still be mostly constant and demand response will be weak mechanically.
+- At minimum, renters_2010 should only pin the 2010-and-earlier years, not all post-2010 years.
+
+-----------------------------------
+3) Quick validation / diagnostics
+-----------------------------------
+
+After running make-occupancy-vars.r and make-analytic-sample.R, produce quick summaries:
+
+A) Time variation checks:
+- For pre-2010 stock, within-parcel sd(renter_occ) over post-2010 years should not be ~0 everywhere.
+    panel[year > 2010 & as.numeric(year_built) <= 2010,
+          .(sd_renter_occ = sd(renter_occ, na.rm=TRUE),
+            mean_renter_occ = mean(renter_occ, na.rm=TRUE)), by = parcel_id][
+          , summary(sd_renter_occ)]
+
+B) Market-year accounting:
+- For each market_id, confirm:
+    sum(occupied_units) <= market_size
+    sum(share_zip) <= 1
+    outside_share >= 0
+
+C) Interpretability:
+- Compare sum(occupied_units)/market_size to an external benchmark vacancy/occupancy if available.
+
+-----------------------------------
+4) Downstream PyBLP expectations
+-----------------------------------
+With Option A:
+- share_zip is now a unit-based share.
+- outside_share behaves like vacancy/other-outside.
+- You can continue to pass share_zip as the “shares” column in pyblp.
+
+If you later want an outside option that represents “units not in your dataset” (not vacancy),
+you’ll need a market_size from external totals (ACS/REIS style). But Option A is the cleanest
+internal-consistency fix given current data.
+
+END.

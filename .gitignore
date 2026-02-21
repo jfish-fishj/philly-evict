@@ -7,3 +7,10 @@
 coc_msa_xwalk_ca_primary.csv
 data/*
 cache_acs/*
+Output/qa/*
+Output/*.log
+*smoke
+Output/*/sample*
+Output/logs*
+claude-chats/*
+Codex-chats/*

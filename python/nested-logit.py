@@ -194,7 +194,7 @@ submarket_sample["shares"] = submarket_sample["share_units_zip_unit"]
 # Optional nest label (not estimating rho in this run)
 submarket_sample["filing_rate"] = submarket_sample["filing_rate"].fillna(0)
 submarket_sample["nesting_ids"] = np.where(
-    submarket_sample["filing_rate_preCOVID"].fillna(0) >=0.1, "high", "low"
+    submarket_sample["filing_rate_preCOVID"].fillna(0) >=0.15, "high", "low"
 )
 
 
@@ -755,7 +755,7 @@ by_bin = (
 
 own_by_product = (
     el_df.join(est_final[["num_units_cuts", "product_ids"]], how="left")["own_elasticity"]
-          .describe()[["count","mean","std","min","25\%","50\%","75\%","max"]]
+          .describe()[["count","mean","std","min","25\\%","50\\%","75\\%","max"]]
           .reset_index()
           .rename(columns={"product_ids":"Product", "own_elasticity":"Elasticity"})
 )
@@ -774,7 +774,7 @@ write_latex_table(
 # Choose a target nest (you computed examples for 'low' above)
 target_nest_for_table = "low"
 alpha_hat = float(results2.beta[0])  # first column in X1 is 'prices' per your formulation string
-
+est_final.nesting_ids.unique()
 div_out = diversion_ratios_for_target_nest(
     results2, est_final,
     price_col="prices",

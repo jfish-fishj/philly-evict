@@ -1,0 +1,68 @@
+Race imputation benchmark gap (Lodermeier contrast)
+
+Date opened: 2026-02-17
+
+Problem statement
+- Under paper-like case classification standards, current pipeline output remains below the expected Black share benchmark for classified cases.
+- We expected roughly 60-70% Black in filed-eviction case composition; current estimate is materially lower.
+
+Current evidence
+- Comparison outputs:
+  - output/qa/lodermeier_benchmark_compare_2006_2019.csv
+  - output/qa/lodermeier_benchmark_coverage_2006_2019.csv
+  - output/qa/lodermeier_renter_benchmark_compare_2010.csv
+  - output/qa/lodermeier_sensitivity_defendant1_vs_all_2006_2019.csv
+- Under the current contrast run:
+  - Black share among classified cases: ~57.53%
+  - White share among classified cases: ~29.32%
+  - Unclassified share: ~26.18%
+- Defendant #1-only sensitivity:
+  - Black share among classified rises to ~58.61%, still below benchmark.
+
+Why this matters
+- Race composition is a core descriptive and validation output.
+- If this gap is unresolved, downstream interpretation of discrimination and targeting patterns may be biased or not directly comparable to published work.
+
+Likely causes to investigate
+1) Sample-frame mismatch
+- Year range, case universe, and filing inclusion criteria may differ from benchmark source.
+
+2) Classification denominator mismatch
+- Classified-only vs all-cases denominator handling may differ.
+
+3) Residual role contamination
+- Defendant role handling may still differ from benchmark conventions, including Defendant #2 and counterclaim dynamics.
+
+4) Name-parser / cleaning edge cases
+- Remaining parser errors can reallocate probability mass across non-Black categories.
+
+5) Prior geography/vintage mismatch
+- BG vs tract priors, renter vs total-pop priors, and vintage alignment may affect posterior composition.
+
+6) Benchmark extraction uncertainty
+- Some benchmark percentages were carried from extraction notes and should be re-verified against the exact final paper table.
+
+Action plan
+1) Freeze a strict benchmark-replication spec in one script:
+- exact year window
+- denominator definition
+- case inclusion/exclusion logic
+- role filtering logic
+
+2) Re-verify benchmark source values directly from the paper and archive them in-repo as a reference table.
+
+3) Add one QA report that decomposes composition shifts stepwise:
+- all defendants
+- analysis defendants
+- Defendant #1 only
+- classified-only cases
+- by year bands
+
+4) Audit top discrepant race groups:
+- quantify why Hispanic/Asian/Other-Mixed are elevated relative to benchmark.
+
+5) Add a go/no-go check:
+- fail QA if Black-share gap exceeds threshold (for the agreed benchmark spec).
+
+Definition note
+- This issue is diagnostic and QA-focused; it should not silently change scientific definitions without explicit sign-off.

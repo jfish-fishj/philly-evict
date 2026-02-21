@@ -1,0 +1,4 @@
+retaliatory_severe_status,n_cases,mean_case_p_black,mean_case_p_white
+non_retaliatory_severe,193978,0.574165638407316,0.347845584618355
+plausibly_retaliatory_severe,35756,0.565370226682923,0.367070928971064
+retaliatory_severe,46021,0.556074332810511,0.376288467463531

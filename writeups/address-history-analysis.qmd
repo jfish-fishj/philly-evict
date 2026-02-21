@@ -1,0 +1,257 @@
+---
+title: "Address History Analysis: Eviction Persistence and Mover Trajectories"
+author: "Philly Evictions Project"
+date: today
+format:
+  pdf:
+    documentclass: article
+    geometry: margin=1in
+    fontsize: 11pt
+    keep-tex: true
+    number-sections: true
+    toc: true
+    include-in-header:
+      text: |
+        \usepackage{booktabs}
+        \usepackage{dcolumn}
+        \usepackage{longtable}
+        \usepackage{adjustbox}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = here::here())
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 10,
+  fig.height = 7,
+  dpi = 300
+)
+```
+
+# Overview
+
+This document summarizes the address history analysis from `r/address-history-analysis.R`. The script uses the InfoUSA household panel to track tenants across moves and test whether exposure to high-eviction buildings channels households into worse neighborhoods.
+
+**Key questions:**
+
+1. Do tenants from high-eviction buildings end up in other high-eviction buildings? (Eviction persistence)
+2. What are the demographic characteristics of movers vs. stayers?
+3. Do tenants who move *into* high-eviction buildings come from different neighborhoods? (Inflow)
+4. Where do tenants go *after* leaving high-eviction buildings? (Outflow)
+5. Across a 3-move trajectory (origin $\to$ middle $\to$ destination), does passing through a high-evicting building shift tenants toward higher-eviction neighborhoods? (Trajectory analysis)
+
+**Unit of analysis:** Household (familyid) $\times$ year panel, with building-level (PID) characteristics merged in.
+
+**Key data inputs:**
+
+- `infousa_cleaned` --- household-year panel with addresses
+- `infousa_address_xwalk` --- links InfoUSA addresses to parcel IDs
+- `bldg_panel_blp` --- building characteristics, filing rates, rents, occupancy
+- `infousa_race_imputed_person`, `infousa_gender_imputed_person` --- demographic imputations
+
+```{r load-data}
+suppressPackageStartupMessages({
+  library(data.table)
+  library(knitr)
+  library(kableExtra)
+})
+source("r/config.R")
+cfg <- read_config()
+tab_dir <- p_out(cfg, "tables")
+qa_dir <- p_out(cfg, "qa")
+proj_root <- here::here()
+include_tex_table <- function(path, max_width = "\\textwidth") {
+  if (!file.exists(path)) { cat("Table not found:", path); return(invisible(NULL)) }
+  lines <- readLines(path)
+  txt <- paste(lines, collapse = "\n")
+  has_float <- grepl("\\\\begin\\{table\\}", txt)
+  if (has_float) {
+    is_float <- grepl("^\\s*\\\\begin\\{table\\}|^\\s*\\\\end\\{table\\}", lines)
+    is_meta  <- grepl("^\\s*\\\\caption|^\\s*\\\\label|^\\s*\\\\centering", lines)
+    cap_lines <- trimws(lines[is_meta])
+    inner <- lines[!is_float & !is_meta]
+    cat("\\begin{table}[htbp]\n\\centering\n")
+    cat(cap_lines, sep = "\n")
+    cat("\n\\begin{adjustbox}{max width=", max_width, "}\n", sep = "")
+    cat(inner, sep = "\n")
+    cat("\n\\end{adjustbox}\n\\end{table}\n")
+  } else {
+    cat("\\begin{adjustbox}{max width=", max_width, "}\n", sep = "")
+    cat(lines, sep = "\n")
+    cat("\n\\end{adjustbox}\n")
+  }
+}
+```
+
+# Tracking Descriptives
+
+## Movers vs. Stayers
+
+The script identifies rental households and classifies them as *movers* (2+ addresses over the panel) or *stayers* (1 address). Summary statistics are computed for each group.
+
+```{r tracking-table, results='asis'}
+include_tex_table(file.path(tab_dir, "tracking_descriptives.tex"))
+```
+
+# Eviction Persistence Regressions
+
+## Setup
+
+The core persistence analysis asks: conditional on a household *moving*, does the eviction filing rate at their **previous** building predict the filing rate at their **current** building?
+
+**Sample:** Rental-to-rental movers (both origin and current address are rental buildings). Filing rates are capped at reasonable bounds to exclude outliers.
+
+## Regression Specifications
+
+| Model | LHS | RHS | Fixed Effects | Sample restriction |
+|-------|-----|-----|---------------|-------------------|
+| m1 | Filing rate | Prev. filing rate | None | Rate $\leq 1$ |
+| m2 | Filing rate | Prev. filing rate | Unit bins + BG (current \& prev) | Rate $\leq 1$ |
+| m3 | Filing rate | Prev. filing rate + imputed rent | Unit bins + BG | Rate $\leq 0.5$ |
+| m4 | Filing rate | Prev. filing rate + actual rent | Unit bins + BG | Rate $\leq 1$ |
+| m5\_no\_rent | High-filer ($>$10\%) | Prev. high-filer | Unit bins + BG | Rate $\leq 0.5$ |
+| m5 | High-filer | Prev. high-filer + rent | Unit bins + BG | Rate $\leq 0.5$, multi-unit |
+| m\_rent | Log rent | Prev. filing rate + prev. rent + filing rate | Unit bins + BG | Rate $\leq 0.5$ |
+
+All models cluster standard errors by PID.
+
+```{r persist-table, results='asis'}
+include_tex_table(file.path(tab_dir, "evict_persist.tex"))
+```
+
+# Inflow and Outflow Analysis
+
+## Leave-One-Out Tract Eviction Rate
+
+For each building, the LOO tract eviction rate is:
+
+$$
+\text{LOO}_{i} = \frac{\sum_{j \in \text{tract}(i), j \neq i} \text{filings}_{j}}{\sum_{j \in \text{tract}(i), j \neq i} \text{units}_{j}}
+$$
+
+This measures the eviction environment of the building's neighborhood, excluding the building's own contribution.
+
+## Eviction Intensity Bins
+
+Buildings are classified using the empirical Bayes eviction filing rate (pre-COVID), with true never-filers (zero pre-2019 filings) separated from the low-rate category:
+
+| Bin | Definition |
+|-----|-----------|
+| No filings | `total_filings_pre2019 == 0` |
+| (0--5\%] | EB rate $\leq 0.05$, at least 1 filing |
+| (5--10\%] | EB rate $\in (0.05, 0.10]$ |
+| (10--20\%] | EB rate $\in (0.10, 0.20]$ |
+| 20\%+ | EB rate $> 0.20$ |
+
+## Inflow: Where Do Tenants at High-Eviction Buildings Come From?
+
+```{r inflow-table}
+inflow_path <- file.path(tab_dir, "inflow_by_dest_eviction_bin.csv")
+if (file.exists(inflow_path)) {
+  inflow <- fread(inflow_path)
+  inflow_show <- inflow[, .(
+    `Destination bin` = dest_evict_bin,
+    `N moves` = format(n_moves, big.mark = ","),
+    `Origin % Black` = round(mean_orig_pct_black, 3),
+    `Dest % Black` = round(mean_dest_pct_black, 3),
+    `Origin LOO evict` = round(mean_orig_loo_tract, 4),
+    `Dest LOO evict` = round(mean_dest_loo_tract, 4),
+    `Mover % Black` = round(mover_pct_black, 3),
+    `Mover % Female` = round(mover_pct_female, 3)
+  )]
+  kable(inflow_show, booktabs = TRUE,
+        caption = "Origin characteristics of movers, by destination eviction intensity") |>
+    kable_styling(latex_options = c("hold_position", "scale_down"))
+} else {
+  cat("Inflow summary not found.")
+}
+```
+
+## Outflow: Where Do Tenants From High-Eviction Buildings Go?
+
+```{r outflow-table}
+outflow_path <- file.path(tab_dir, "outflow_by_orig_eviction_bin.csv")
+if (file.exists(outflow_path)) {
+  outflow <- fread(outflow_path)
+  outflow_show <- outflow[, .(
+    `Origin bin` = orig_evict_bin,
+    `N moves` = format(n_moves, big.mark = ","),
+    `Origin LOO evict` = round(mean_orig_loo_tract, 4),
+    `Dest LOO evict` = round(mean_dest_loo_tract, 4),
+    `$\\Delta$ LOO tract` = round(delta_loo_tract, 4),
+    `Mover % Black` = round(mover_pct_black, 3),
+    `Mover % Female` = round(mover_pct_female, 3)
+  )]
+  kable(outflow_show, booktabs = TRUE, escape = FALSE,
+        caption = "Destination characteristics of movers, by origin eviction intensity") |>
+    kable_styling(latex_options = c("hold_position", "scale_down"))
+} else {
+  cat("Outflow summary not found.")
+}
+```
+
+# Three-Move Trajectory Analysis
+
+## Design
+
+The trajectory analysis tracks households across three consecutive residential spells:
+
+$$
+\text{Origin} \xrightarrow{\text{move 1}} \text{Middle} \xrightarrow{\text{move 2}} \text{Destination}
+$$
+
+The key question: conditional on origin neighborhood, does the eviction intensity of the **middle** building predict worse neighborhood outcomes at the **destination**?
+
+The outcome is the change in LOO tract eviction rate from origin to destination:
+$$
+\Delta\text{LOO} = \text{LOO}_{\text{dest}} - \text{LOO}_{\text{origin}}
+$$
+
+## Descriptive Summary
+
+```{r trajectory-table}
+traj_path <- file.path(tab_dir, "trajectory_by_mid_eviction_bin.csv")
+if (file.exists(traj_path)) {
+  traj <- fread(traj_path)
+  traj_show <- traj[, .(
+    `Middle bin` = mid_evict_bin,
+    `N trajectories` = format(n_traj, big.mark = ","),
+    `Origin LOO` = round(mean_orig_loo_tract, 4),
+    `Dest LOO` = round(mean_dest_loo_tract, 4),
+    `$\\Delta$ LOO` = round(mean_delta_loo_tract, 4),
+    `Origin EB rate` = round(mean_orig_evict_eb, 4),
+    `Dest EB rate` = round(mean_dest_evict_eb, 4)
+  )]
+  kable(traj_show, booktabs = TRUE, escape = FALSE,
+        caption = "Three-move trajectories by middle building eviction intensity") |>
+    kable_styling(latex_options = c("hold_position", "scale_down"))
+} else {
+  cat("Trajectory summary not found.")
+}
+```
+
+## Trajectory Regressions
+
+Three specifications test whether the middle building's eviction intensity predicts the origin-to-destination change in neighborhood eviction environment:
+
+| Spec | LHS | RHS | Fixed Effects | Clustering |
+|------|-----|-----|---------------|------------|
+| (A) | $\Delta$ LOO tract | `i(mid_evict_bin)` | None | Origin BG |
+| (B) | $\Delta$ LOO tract | `i(mid_evict_bin)` | Origin tract | Origin BG |
+| (C) | Dest LOO tract (level) | `i(mid_evict_bin)` | Origin tract | Origin BG |
+
+Reference category: (0--5\%].
+
+```{r trajectory-regs, results='asis'}
+include_tex_table(file.path(tab_dir, "trajectory_regressions.tex"))
+```
+
+# Interpretation
+
+**Eviction persistence:** The positive coefficient on previous filing rate indicates that tenants who leave high-eviction buildings tend to end up in other high-eviction buildings, even after controlling for block group and building size. This is not simply a neighborhood effect --- it persists within block groups.
+
+**Inflow/Outflow:** High-eviction buildings draw tenants from neighborhoods that are already higher-eviction, and their departing tenants move to similar or worse neighborhoods. The LOO tract eviction rate captures the neighborhood environment excluding the focal building.
+
+**Trajectories:** The key finding from the trajectory regressions is specification (B): after conditioning on origin tract, passing through a high-eviction middle building predicts a larger increase in neighborhood eviction rate from origin to destination. This suggests that high-eviction buildings act as a *channeling mechanism*, directing tenants toward worse eviction environments relative to their starting point.

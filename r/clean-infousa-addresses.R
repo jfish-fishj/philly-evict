@@ -72,6 +72,23 @@ philly_infousa_dt[, pm.preDir := str_to_lower(street_pre_dir)]
 # Street post-direction (N, S, E, W after street name)
 philly_infousa_dt[, pm.sufDir := str_to_lower(street_post_dir)]
 
+# Normalize direction tokens so merge guardrails compare like-to-like.
+# This avoids false mismatches such as "north" vs "n".
+normalize_dir_token <- function(x) {
+  y <- str_to_lower(str_squish(as.character(x)))
+  y[y %in% c("", "na", "n/a", "null")] <- NA_character_
+  y <- case_when(
+    y %in% c("n", "north") ~ "n",
+    y %in% c("s", "south") ~ "s",
+    y %in% c("e", "east")  ~ "e",
+    y %in% c("w", "west")  ~ "w",
+    TRUE ~ y
+  )
+  y
+}
+philly_infousa_dt[, pm.preDir := normalize_dir_token(pm.preDir)]
+philly_infousa_dt[, pm.sufDir := normalize_dir_token(pm.sufDir)]
+
 # Concatenated direction (prefer pre, fallback to post)
 philly_infousa_dt[, pm.dir_concat := coalesce(pm.preDir, pm.sufDir)]
 

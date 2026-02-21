@@ -1,0 +1,49 @@
+\begin{table}
+
+\caption{Retaliatory status coefficient table (race outcomes)}
+\centering
+\begin{tabular}[t]{llrrrrr}
+\toprule
+model & term & estimate & std\_error & p\_value & conf\_low & conf\_high\\
+\midrule
+raw\_full\_case\_p\_black & (Intercept) & 0.5948 & 0.004400000000000000 & 0.0000000000000000 & 0.58620000000000005 & 0.603400000000000047\\
+raw\_full\_case\_p\_black & retaliatory\_statusplausibly\_retaliatory & -0.0445 & 0.009700000000000000 & 0.0000000000000000 & -0.06360000000000000 & -0.025499999999999998\\
+raw\_full\_case\_p\_black & retaliatory\_statusretaliatory & -0.0370 & 0.028600000000000000 & 0.1965000000000000 & -0.09320000000000001 & 0.019199999999999998\\
+fe\_full\_case\_p\_black & retaliatory\_severe\_statusplausibly\_retaliatory\_severe & 0.0033 & 0.002600000000000000 & 0.2033000000000000 & -0.00180000000000000 & 0.008300000000000000\\
+fe\_full\_case\_p\_black & retaliatory\_severe\_statusretaliatory\_severe & -0.0015 & 0.002800000000000000 & 0.5868000000000000 & -0.00690000000000000 & 0.003900000000000000\\
+\addlinespace
+raw\_pre\_case\_p\_black & (Intercept) & 0.5768 & 0.004700000000000000 & 0.0000000000000000 & 0.56759999999999999 & 0.585999999999999965\\
+raw\_pre\_case\_p\_black & retaliatory\_status::plausibly\_retaliatory & -0.0406 & 0.010999999999999999 & 0.0002000000000000 & -0.06210000000000000 & -0.019099999999999999\\
+raw\_pre\_case\_p\_black & retaliatory\_status::retaliatory & -0.0182 & 0.021800000000000000 & 0.4043000000000000 & -0.06090000000000000 & 0.024500000000000001\\
+fe\_pre\_case\_p\_black & retaliatory\_severe\_statusplausibly\_retaliatory\_severe & 0.0015 & 0.002700000000000000 & 0.5681000000000000 & -0.00380000000000000 & 0.006800000000000000\\
+fe\_pre\_case\_p\_black & retaliatory\_severe\_statusretaliatory\_severe & -0.0033 & 0.002900000000000000 & 0.2619000000000000 & -0.00890000000000000 & 0.002400000000000000\\
+\addlinespace
+fe\_pre\_case\_p\_black & n\_defendants\_total & -0.0246 & 0.001800000000000000 & 0.0000000000000000 & -0.02810000000000000 & -0.021100000000000001\\
+fe\_full\_case\_p\_black\_tenant\_aug & retaliatory\_severe\_statusplausibly\_retaliatory\_severe & 0.0035 & 0.002500000000000000 & 0.1608000000000000 & -0.00140000000000000 & 0.008399999999999999\\
+fe\_full\_case\_p\_black\_tenant\_aug & retaliatory\_severe\_statusretaliatory\_severe & -0.0011 & 0.002600000000000000 & 0.6647999999999999 & -0.00630000000000000 & 0.004000000000000000\\
+fe\_full\_case\_p\_black\_tenant\_aug & infousa\_pct\_black\_c & 0.2697 & 0.006400000000000000 & 0.0000000000000000 & 0.25710000000000000 & 0.282299999999999995\\
+fe\_full\_case\_p\_black\_tenant\_aug & infousa\_pct\_female\_c & -0.0297 & 0.006100000000000000 & 0.0000000000000000 & -0.04170000000000000 & -0.017700000000000000\\
+\addlinespace
+fe\_full\_case\_p\_black\_tenant\_aug & infousa\_pct\_black\_female\_c & 0.0485 & 0.007900000000000001 & 0.0000000000000000 & 0.03310000000000000 & 0.064000000000000001\\
+fe\_full\_case\_p\_black\_tenant\_aug & infousa\_share\_persons\_demog\_ok\_c & -0.0306 & 0.006000000000000000 & 0.0000000000000000 & -0.04230000000000000 & -0.018800000000000001\\
+fe\_full\_case\_p\_black\_tenant\_aug & tenant\_comp\_missing & -0.0066 & 0.003600000000000000 & 0.0699000000000000 & -0.01360000000000000 & 0.000500000000000000\\
+fe\_pre\_case\_p\_black\_tenant\_aug & retaliatory\_severe\_statusplausibly\_retaliatory\_severe & 0.0024 & 0.002600000000000000 & 0.3607000000000000 & -0.00280000000000000 & 0.007600000000000000\\
+fe\_pre\_case\_p\_black\_tenant\_aug & retaliatory\_severe\_statusretaliatory\_severe & -0.0017 & 0.002800000000000000 & 0.5527000000000000 & -0.00720000000000000 & 0.003800000000000000\\
+\addlinespace
+fe\_pre\_case\_p\_black\_tenant\_aug & n\_defendants\_total & -0.0222 & 0.001700000000000000 & 0.0000000000000000 & -0.02560000000000000 & -0.018800000000000001\\
+fe\_pre\_case\_p\_black\_tenant\_aug & infousa\_pct\_black\_c & 0.2852 & 0.007200000000000000 & 0.0000000000000000 & 0.27100000000000002 & 0.299300000000000010\\
+fe\_pre\_case\_p\_black\_tenant\_aug & infousa\_pct\_female\_c & -0.0310 & 0.006500000000000000 & 0.0000000000000000 & -0.04370000000000000 & -0.018300000000000000\\
+fe\_pre\_case\_p\_black\_tenant\_aug & infousa\_pct\_black\_female\_c & 0.0509 & 0.008500000000000001 & 0.0000000000000000 & 0.03420000000000000 & 0.067599999999999993\\
+fe\_pre\_case\_p\_black\_tenant\_aug & infousa\_share\_persons\_demog\_ok\_c & -0.0336 & 0.006400000000000000 & 0.0000000000000000 & -0.04620000000000000 & -0.021000000000000001\\
+\addlinespace
+fe\_pre\_case\_p\_black\_tenant\_aug & tenant\_comp\_missing & -0.0053 & 0.003800000000000000 & 0.1652000000000000 & -0.01280000000000000 & 0.002200000000000000\\
+within\_bldg\_gap\_case\_p\_black & retaliatory\_status::plausibly\_retaliatory & 0.0066 & 0.002900000000000000 & 0.0203000000000000 & 0.00100000000000000 & 0.012200000000000001\\
+within\_bldg\_gap\_case\_p\_black & retaliatory\_status::retaliatory & -0.0007 & 0.003500000000000000 & 0.8418000000000000 & -0.00760000000000000 & 0.006200000000000000\\
+fe\_full\_black\_case\_logit & retaliatory\_status::plausibly\_retaliatory & -0.0206 & 0.023900000000000001 & 0.3907000000000000 & -0.06750000000000000 & 0.026400000000000000\\
+fe\_full\_black\_case\_logit & retaliatory\_status::retaliatory & -0.0355 & 0.027400000000000001 & 0.1956000000000000 & -0.08920000000000000 & 0.018200000000000001\\
+\addlinespace
+fe\_pre\_black\_case\_logit & retaliatory\_status::plausibly\_retaliatory & -0.0370 & 0.026100000000000002 & 0.1554000000000000 & -0.08810000000000000 & 0.014100000000000000\\
+fe\_pre\_black\_case\_logit & retaliatory\_status::retaliatory & -0.0675 & 0.029600000000000001 & 0.0224000000000000 & -0.12550000000000000 & -0.009599999999999999\\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,511 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{setspace}
+\usepackage{hyperref}
+
+\onehalfspacing
+
+\title{A Simple Retaliation-and-Maintenance Model with Commitment}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+
+Rent is the largest expense for most low income tenants. Despite this importance, little is known about how low income rental markets function. Within the literature, much attention has been paid to prices; how much tenants are paying for rent, how this compares to incomes, etc. Comparatively little has been done about what happens after a tenant has signed their lease. The goal of this section of the model is to show that landlords can exploit tenant precarcity to extract within-lease surplus, speficially by enabling landlords to shirk on maintenence. As I will argue, within-lease conduct is important for understanding landlord profits and has implications for designing landlord-tenant policy.\\
+
+The model revoles around 4 institutinal details:
+
+\begin{enumerate}
+  \item landlord maintence is costly; tenant complaints about maintenece are more costly than performing the maintenece
+  \item tenant default is likely
+  \item landlord retaliation is more effective when tenants default because tenants are afforded less legal protection when they are in arrears
+  \item landlords can use the fact that 1) they can commit to retaliation and 2) their tenants are likely to default as a way to force some complaints off-equilibrium, and thus make performing no maintenece more profitable
+
+\end{enumerate}
+
+In equilibrium, predatory landlords extract surplus and distort ex-post quality.
+
+\section{Environment}
+
+There is a landlord $L$ and a tenant $T$. The interaction lasts one lease period. The landlord chooses whether to perform maintenance; maintenance is \emph{publicly observed}. The goal of the simple model is to show that tenant precarcity is a mechanism by which landlords can shirk on maintenece and that.
+
+\subsection{Timing}
+
+\begin{enumerate}
+  \item \textbf{Contracting:} The landlord posts a rent $X$
+  \item \textbf{Maintenance:} The landlord chooses maintenance $m \in \{0,1\}$ at cost $k>0$ if $m=1$.
+  \item \textbf{Issue:} A maintenance issue occurs deterministically if and only if $m=0$.
+    \begin{itemize}
+      \item This is an abstraction from issues arising probabilistically as a function of maintenence
+    \end{itemize}
+  \item \textbf{Complaint:} If an issue occurs, the tenant chooses $c \in \{0,1\}$, where $c=1$ means ``complain'' (to a city agency, court, platform, etc.).
+  \item \textbf{Arrears/default:} The tenant enters arrears (defaults) with probability $\delta \in (0,1)$. This probability is publically known
+  \item \textbf{Retaliation/legal protection:} If the tenant is in arrears, the tenant's legal protection is lower when the tenant previously complained. This reduced-form captures both immediate eviction risk and broader harassment/pressure that is feasible when the tenant is in arrears.
+\end{enumerate}
+
+\subsection{Payoffs}
+
+\paragraph{Tenant.}
+Normalize tenant utility to $0$ if an issue occurs, the tenant does \emph{not} complain, and the tenant does \emph{not} enter arrears.
+
+If an issue occurs (i.e., $m=0$), then:
+\begin{itemize}
+  \item If the tenant complains ($c=1$) and does \emph{not} enter arrears (probability $1-\delta$), the tenant receives a benefit $\rho \ge 0$ (e.g., repair is made, landlord compliance, service improvement).
+  \item If the tenant enters arrears (probability $\delta$), the tenant suffers a cost that depends on prior complaint history:
+  \[
+    \text{Arrears cost} =
+    \begin{cases}
+      \sigma_C & \text{if } c=1 \\
+      \sigma_N & \text{if } c=0
+    \end{cases}
+    \quad \text{with } \sigma_C > \sigma_N > 0.
+  \]
+\end{itemize}
+Thus, conditional on an issue:
+\begin{align}
+  U_T(c=1) &= (1-\delta)\rho - \delta \sigma_C, \label{eq:UTc1} \\
+  U_T(c=0) &= -\delta \sigma_N. \label{eq:UTc0}
+\end{align}
+
+\paragraph{Landlord.}
+Rent $X$ is paid. Maintenance costs $k$ if $m=1$.
+
+If an issue occurs and the tenant complains ($m=0$ and $c=1$), the landlord incurs a complaint/regulatory cost $R>0$ (repairs, inspection, fines, reputational costs). If there is no complaint, there is no such cost.
+
+If the tenant enters arrears (probability $\delta$), the landlord incurs an expected arrears-related loss that depends on complaint history:
+\[
+  \text{Arrears loss} =
+  \begin{cases}
+    D_C & \text{if } c=1 \\
+    D_N & \text{if } c=0
+  \end{cases}
+  \quad \text{with } D_C > D_N > 0.
+\]
+This inequality ($D_C>D_N$) is justified by the fact that it is typically optimal for landlords to wait ~2 months before evicting because a non-trivial number of tenants will default and later become current
+
+\section{Equilibrium}
+
+I solve for a subgame-perfect equilibrium by backward induction, taking commitment as given.
+
+\subsection{Tenant complaint decision}
+
+Conditional on an issue ($m=0$), the tenant complains if and only if $U_T(c=1) \ge U_T(c=0)$. Using \eqref{eq:UTc1}--\eqref{eq:UTc0}, this is
+\[
+  (1-\delta)\rho - \delta \sigma_C \;\ge\; -\delta \sigma_N
+  \quad \Longleftrightarrow \quad
+  (1-\delta)\rho \;\ge\; \delta(\sigma_C-\sigma_N).
+\]
+Define the ``retaliation wedge''
+\[
+  \Delta \sigma \equiv \sigma_C - \sigma_N > 0.
+\]
+Then the tenant complains if and only if $\delta \le \bar\delta$, where
+\begin{equation}
+  \bar\delta \equiv \frac{\rho}{\rho + \Delta\sigma}. \label{eq:deltabar}
+\end{equation}
+Thus higher default risk $\delta$ reduces complaint propensity.
+
+\subsection{Landlord maintenance decision}
+
+Anticipating the tenant complaint rule, the landlord compares $m=1$ vs.\ $m=0$.
+
+If $m=1$, there is no issue, hence no complaint, and arrears losses follow the no-complaint regime:
+\begin{equation}
+  \Pi_L(m=1) = X - k - \delta D_N. \label{eq:Pi_m1}
+\end{equation}
+
+If $m=0$, an issue occurs; the tenant complains if $\delta \le \bar\delta$. Hence:
+\begin{equation}
+  \Pi_L(m=0) =
+  \begin{cases}
+    X - R - \delta D_C, & \text{if } \delta \le \bar\delta,\\
+    X - \delta D_N, & \text{if } \delta > \bar\delta.
+  \end{cases}
+  \label{eq:Pi_m0}
+\end{equation}
+
+\paragraph{High-default region ($\delta > \bar\delta$).}
+Here the tenant does not complain under $m=0$, so
+\[
+  \Pi_L(m=0) - \Pi_L(m=1) = (X - \delta D_N) - (X - k - \delta D_N) = k > 0.
+\]
+Thus the landlord strictly prefers $m=0$.
+
+\paragraph{Low-default region ($\delta \le \bar\delta$).}
+Here the tenant complains under $m=0$, so the landlord prefers maintenance if and only if
+\[
+  X - k - \delta D_N \;\ge\; X - R - \delta D_C
+  \quad \Longleftrightarrow \quad
+  k \;\le\; R + \delta (D_C - D_N).
+\]
+Because $D_C>D_N$, the arrears-loss term \emph{raises} the private incentive to maintain in the low-default region: complaints trigger both a direct complaint cost $R$ and a more expensive arrears-loss regime.
+
+\subsection{Summary of equilibrium behavior}
+
+Let $\bar\delta$ be defined by \eqref{eq:deltabar}. In a subgame-perfect equilibrium:
+\begin{itemize}
+  \item If $\delta > \bar\delta$, the tenant does not complain when $m=0$, and the landlord chooses $m=0$.
+  \item If $\delta \le \bar\delta$, the tenant complains when $m=0$, and the landlord chooses $m=1$ if and only if $k \le R + \delta(D_C-D_N)$; otherwise the landlord chooses $m=0$ and the tenant complains.
+\end{itemize}
+
+\section{Comparative Statics}
+
+This section summarizes how equilibrium behavior responds to key parameters.
+
+\subsection{Tenant complaint threshold}
+
+From \eqref{eq:deltabar}, the tenant complains (conditional on an issue) if and only if $\delta \le \bar\delta$, where
+\[
+  \bar\delta(\rho,\Delta\sigma) \equiv \frac{\rho}{\rho + \Delta\sigma},
+  \qquad \Delta\sigma \equiv \sigma_C - \sigma_N > 0.
+\]
+The comparative statics are:
+\begin{align}
+  \frac{\partial \bar\delta}{\partial \rho}
+  &= \frac{\Delta\sigma}{(\rho+\Delta\sigma)^2} > 0, \\
+  \frac{\partial \bar\delta}{\partial \Delta\sigma}
+  &= -\frac{\rho}{(\rho+\Delta\sigma)^2} < 0.
+\end{align}
+Thus, increasing the non-arrears benefit of complaining ($\rho$) expands the region of types that complain, while increasing the retaliation wedge ($\Delta\sigma$) shrinks it.
+
+\subsection{Landlord maintenance incentive}
+
+When $\delta > \bar\delta$, the tenant does not complain under $m=0$, so the landlord strictly prefers $m=0$ (maintenance never pays).
+
+When $\delta \le \bar\delta$, the tenant complains under $m=0$, and the landlord chooses $m=1$ if and only if
+\begin{equation}
+  k \le k^*(\delta;R,D_C-D_N) \equiv R + \delta\,(D_C-D_N).
+  \label{eq:kstar}
+\end{equation}
+The threshold $k^*$ satisfies:
+\begin{align}
+  \frac{\partial k^*}{\partial R} &= 1 > 0, \\
+  \frac{\partial k^*}{\partial (D_C-D_N)} &= \delta > 0, \\
+  \frac{\partial k^*}{\partial \delta} &= (D_C-D_N) > 0 \qquad (\text{within the region } \delta \le \bar\delta).
+\end{align}
+Interpretation: holding fixed that the tenant would complain if an issue arises, a higher complaint/regulatory cost $R$ and a larger arrears-loss wedge $(D_C-D_N)$ strengthen the landlord's incentive to maintain. Within the complaint region, higher default risk $\delta$ also strengthens the maintenance incentive by raising the likelihood that the high-cost arrears regime is realized.
+
+\medskip
+\noindent\textbf{Non-monotonicity in $\delta$.} The overall effect of $\delta$ on maintenance is non-monotone: for $\delta \le \bar\delta$, higher $\delta$ increases $k^*$ (making maintenance more attractive), but once $\delta$ exceeds $\bar\delta$ the tenant ceases to complain and the landlord chooses $m=0$ regardless of $k$.
+
+\section{Remarks}
+
+\paragraph{Interpretation of the retaliation channel.}
+The reduced-form asymmetry $(\sigma_C>\sigma_N)$ captures that tenants in arrears have weaker legal protections or are more vulnerable to landlord pressure when they have complained. This can encompass immediate eviction risk, accelerated filing, refusal to accept partial payments, or other harassment. On the landlord side, $(D_C>D_N)$ encodes the revealed-preference-style assumption that accelerated enforcement is (on average) privately costly for landlords.
+
+% \paragraph{``Prefer risky tenants'' as a reduced-form condition.}
+
+% Under certain conditions, landlords will prefer to rent to marginally more precarious tenants who will tolerate no maintenence vs less precarious tenants who will complain.
+
+% With two types $\delta_H>\bar\delta$ and $\delta_L \le \bar\delta$, the high-default tenant triggers $m^*(\delta_H)=0$ while the low-default tenant may trigger $m^*(\delta_L)=1$. In the with-rent formulation:
+% \[
+%   \Pi_L(\delta_H) = X_H - \delta_H D_N
+%   \quad\text{and}\quad
+%   \Pi_L(\delta_L) = X_L - k - \delta_L D_N
+% \]
+% (when $m^*(\delta_L)=1$). Then the landlord prefers the high-default tenant if and only if
+% \[
+%   X_H - X_L \;>\; k + (\delta_H-\delta_L)D_N.
+% \]
+
+% when $X_H = X_L$, it follows that 
+% \[
+%   0 \;>\; k + (\delta_H-\delta_L)D_N. \\
+%   -k \;>\;(\delta_H-\delta_L)D_N
+% \]
+
+% so, landlords prefer more precarious tenants when the relative gap in precariousness is smaller, the cost of eviction is smaller, and the benefits of deffered maintenece is higher. 
+
+\section{Hidden Landlord Type and Equilibrium Exploitation}
+\label{sec:hidden-type}
+
+The goal of this section is to show that, if there is a pooling equilibrium, predatory landlords can exist, and will be more profitable than non-predatory ones. To do this, landlord type will be unknown at the time of contracting, although I will allow the fraction of predatory landlords to be common knowledge.
+
+\subsection{Landlord types and information}
+
+There is a continuum of landlords indexed by a privately known type
+\[
+\theta \in \{G,B\},
+\]
+where $G$ denotes a ``good'' landlord and $B$ denotes a ``predatory'' landlord. Let
+\[
+p \equiv \Pr(\theta=B)
+\]
+denote the share of predatory landlords in the segment of the market we study. Tenants do not observe $\theta$ at the time of contracting.\footnote{In later extensions, tenants may observe a noisy signal (reviews, reputation, building characteristics), and beliefs can be updated accordingly. For now, I shut this down}\\
+
+Tenants are indexed by a default probability $\delta \in (0,1)$. There's an implicit market segmentation assumption here: the tenant pool faces an outside option $\bar V(\delta)$ that may be poor for high-$\delta$ households; for now, I take no stance on why this happens (credit screening, liquidity constraints, etc)
+
+\subsection{No-exit assumption and within-lease game}
+
+After signing a lease, tenants cannot exit (no moving option) within the relevant horizon. Conditional on signing, the within-lease game proceeds exactly as in Sections 2--3 (maintenance is publicly observed; if $m=0$ an issue occurs; the tenant may complain; with probability $\delta$ the tenant enters arrears; and the landlord's committed retaliation/enforcement regime makes arrears more costly for tenants who previously complained). \\
+
+Type $\theta$ affects the within-lease environment by shifting either the cost of retaliating ($R$, "good" landlords face higher psyhcic costs of retaliation) or the effectiveness of retaliation ($\Delta\sigma(\theta)$) that govern complaints and maintenance. For now, I allow the \emph{retaliation wedge} to depend on type:
+\[
+\Delta\sigma(\theta) \equiv \sigma_C(\theta) - \sigma_N(\theta) > 0,
+\]
+with
+\[
+\Delta\sigma(B) > \Delta\sigma(G).
+\]
+That is, predatory landlords can (via weaker protections in arrears, harassment, accelerated enforcement, etc.) impose a larger expected penalty on tenants who complain and later enter arrears.\\
+
+On the landlord side, I maintain the reduced-form costs from the within-lease model: a complaint triggers an expected complaint/regulatory/physcic cost $R>0$, and arrears impose an expected loss that depends on complaint history, with $D_C>D_N>0$.
+
+\subsection{Tenant ex ante expected utility and competitive rents}
+
+Let $V_T(\theta,X,\delta)$ denote the tenant's expected utility from signing a lease at rent $X$ with a landlord of type $\theta$, computed under the within-lease equilibrium described above. Because landlord type is hidden at the time of contracting, the tenant's \emph{ex ante} expected utility from signing a lease at rent $X$ is
+\begin{equation}
+\mathbb{E}\left[V_T \mid X,\delta\right]
+= (1-p)\,V_T(G,X,\delta) + p\,V_T(B,X,\delta).
+\label{eq:exanteV}
+\end{equation}
+Tenants sign a lease if and only if $\mathbb{E}[V_T\mid X,\delta] \ge \bar V(\delta)$.
+
+I assume that (for each $\delta$-segment) tenants are just indifferent between signing and their outside option:
+\begin{equation}
+(1-p)\,V_T(G,X^*(\delta),\delta) + p\,V_T(B,X^*(\delta),\delta) = \bar V(\delta).
+\label{eq:competitive_rent}
+\end{equation}
+Equation \eqref{eq:competitive_rent} implies rents adjust to make tenants indifferent \emph{in expectation} given their beliefs about landlord type. Importantly, \eqref{eq:competitive_rent} does not preclude exploitation \emph{ex post} within a match, because tenants cannot condition on $\theta$ at the time of contracting. I assume tenants know (or have some belief about) the distribution of predatory landlords, even if they have no information about whether a specific landlord is predatory.\\
+
+I abstract here from entry and treat the distribution of landlord types as exogenous. Were I to fully close the model with free entry, I would like to say landlord types are exogeneous ex-ante or something along the lines of ability to retaliate being a function of the number of predatory landlords in the market.
+
+\subsection{Within-lease implications under hidden type}
+
+Because $\Delta\sigma(B)>\Delta\sigma(G)$, the complaint threshold differs by landlord type. From \eqref{eq:deltabar}, the within-lease complaint cutoff under type $\theta$ is
+\[
+\bar\delta(\theta) \equiv \frac{\rho}{\rho+\Delta\sigma(\theta)}.
+\]
+Hence
+\begin{equation}
+\bar\delta(B) < \bar\delta(G).
+\label{eq:deltabar_type}
+\end{equation}
+Equation \eqref{eq:deltabar_type} implies that, for a given tenant risk $\delta$, a tenant may complain under a good landlord but not under a predatory landlord. In turn, this changes the landlord's maintenance incentives: in the within-lease game, maintenance is relevant only when the tenant would complain absent maintenance (see Section 3). Thus predatory landlords are more likely to choose low maintenance because their higher retaliation wedge suppresses complaints for a larger set of tenants.
+
+\subsection{Equilibrium intuition: why exploitation can persist}
+
+The hidden-type environment breaks the frictionless-market logic that would otherwise eliminate exploitation through compensating differentials. Even if rents satisfy \eqref{eq:competitive_rent}, tenants face only \emph{ex ante} average quality risk and cannot avoid predatory landlords with certainty at contracting. Predatory landlords can therefore earn profits by mimicking the observable features (including rent) of good landlords, and then exploiting tenants within the lease through lower maintenance and stronger retaliation when tenants are in arrears. Because tenants cannot exit within the lease, the within-lease retaliation wedge disciplines complaints and allows exploitation to be privately profitable \emph{conditional on matching}.
+
+\subsection{Equilibrium (exogenous types, competitive rent-setting conditional on $p$)}
+\label{sec:eqm_math}
+
+\paragraph{Types and primitives.}
+A landlord has privately known type $\theta\in\{G,B\}$ drawn i.i.d.\ across landlords with
+\[
+\Pr(\theta=B)=p\in(0,1).
+\]
+A tenant has arrears risk $\delta\in(0,1)$ (interpreted as type or segment-specific). The tenant's outside option is $\bar V(\delta)$, taken as given (market segmentation is implicit).
+
+The within-lease primitives are as follows. The landlord chooses maintenance $m\in\{0,1\}$, observed by the tenant, at cost $k>0$ if $m=1$. A maintenance issue occurs deterministically if and only if $m=0$. If an issue occurs, the tenant chooses a complaint action $c\in\{0,1\}$. Then the tenant enters arrears with probability $\delta$. Conditional on arrears, the tenant's expected cost depends on complaint history and landlord type:
+\[
+\text{tenant arrears cost} =
+\begin{cases}
+\sigma_C(\theta) & \text{if } c=1,\\
+\sigma_N(\theta) & \text{if } c=0,
+\end{cases}
+\qquad \sigma_C(\theta)>\sigma_N(\theta)>0.
+\]
+Complaining yields a non-arrears benefit $\rho\ge 0$ (e.g., repair/compliance) realized only if no arrears occur. Define the retaliation wedge
+\[
+\Delta\sigma(\theta)\equiv \sigma_C(\theta)-\sigma_N(\theta)>0,
+\]
+and assume predatory types have a larger wedge:
+\[
+\Delta\sigma(B)>\Delta\sigma(G).
+\]
+
+On the landlord side, if the tenant complains (and an issue occurred), the landlord pays a complaint/regulatory cost $R>0$. If the tenant enters arrears, the landlord pays an expected arrears loss that depends on complaint history:
+\[
+\text{landlord arrears loss} =
+\begin{cases}
+D_C & \text{if } c=1,\\
+D_N & \text{if } c=0,
+\end{cases}
+\qquad D_C>D_N>0.
+\]
+Rent $X$ is paid ex ante; thus $X$ enters landlord payoff additively and tenant payoff subtractively.\footnote{This can be relaxed later by tying rent collection to arrears; for now it keeps the model algebraically simple.}
+
+\paragraph{Strategies and beliefs.}
+A (pure) strategy profile consists of:
+\begin{itemize}
+  \item a rent schedule $X(\delta)$ (posted before contracting),
+  \item a landlord maintenance strategy $m^*_\theta(\delta)\in\{0,1\}$ for each type $\theta$,
+  \item a tenant complaint strategy $c^*_\theta(\delta)\in\{0,1\}$ for each type $\theta$ conditional on an issue,
+  \item tenant beliefs $\mu(\theta\mid X,\delta)$ over landlord type at contracting (Bayes-consistent on the equilibrium path).
+\end{itemize}
+Because types are hidden and we will focus on equilibria in which both types post the same rent in a segment (pooling), we will have $\mu(B\mid X^*(\delta),\delta)=p$ on path.
+
+\paragraph{Within-lease payoffs conditional on an issue.}
+Conditional on an issue (i.e., $m=0$), tenant expected utility from $c\in\{0,1\}$ is
+\begin{align}
+U_T(c=1\mid \theta,\delta) &= (1-\delta)\rho - \delta\,\sigma_C(\theta), \label{eq:UT_issue_c1}\\
+U_T(c=0\mid \theta,\delta) &= -\delta\,\sigma_N(\theta). \label{eq:UT_issue_c0}
+\end{align}
+Thus, conditional on $m=0$, the tenant complains iff
+\[
+(1-\delta)\rho \ge \delta\big(\sigma_C(\theta)-\sigma_N(\theta)\big) = \delta\,\Delta\sigma(\theta).
+\]
+Define the type-dependent complaint cutoff
+\begin{equation}
+\bar\delta(\theta)\equiv \frac{\rho}{\rho+\Delta\sigma(\theta)}.
+\label{eq:deltabar_theta}
+\end{equation}
+Then the tenant complaint best response (conditional on an issue) is
+\begin{equation}
+c^*_\theta(\delta)=\mathbf{1}\{\delta\le \bar\delta(\theta)\}.
+\label{eq:cstar_theta}
+\end{equation}
+Because $\Delta\sigma(B)>\Delta\sigma(G)$, it follows that $\bar\delta(B)<\bar\delta(G)$: predatory types suppress complaints for a larger set of $\delta$.
+
+\paragraph{Landlord within-lease problem.}
+Given rent $X$ and anticipating \eqref{eq:cstar_theta}, landlord expected profit for type $\theta$ is:
+
+If $m=1$ (no issue, hence no complaint):
+\begin{equation}
+\Pi_\theta(m=1\mid X,\delta)= X - k - \delta D_N.
+\label{eq:Pi_m1_theta}
+\end{equation}
+
+If $m=0$ (issue occurs, tenant complains with probability $c^*_\theta(\delta)\in\{0,1\}$):
+\begin{equation}
+\Pi_\theta(m=0\mid X,\delta)= X
+- R\cdot c^*_\theta(\delta)
+- \delta\Big(c^*_\theta(\delta)\,D_C + (1-c^*_\theta(\delta))\,D_N\Big).
+\label{eq:Pi_m0_theta}
+\end{equation}
+
+Hence, for each $\theta$, the optimal maintenance decision is
+\begin{equation}
+m^*_\theta(\delta)=
+\begin{cases}
+0, & \text{if } \delta>\bar\delta(\theta),\\[4pt]
+\mathbf{1}\{k \le R + \delta(D_C-D_N)\}, & \text{if } \delta\le \bar\delta(\theta).
+\end{cases}
+\label{eq:mstar_theta}
+\end{equation}
+Intuition: if $\delta>\bar\delta(\theta)$, the tenant never complains when $m=0$, so maintenance strictly lowers profit by $k$. If $\delta\le\bar\delta(\theta)$, complaints occur when $m=0$ and maintenance trades off $k$ against avoiding the complaint cost $R$ and the higher arrears-loss regime $D_C$.
+
+\paragraph{Ex ante tenant value.}
+Let $V_T(\theta,X,\delta)$ denote the tenant's ex ante expected utility (before maintenance is chosen) from signing at rent $X$ with landlord type $\theta$, computed under the within-lease equilibrium strategies \eqref{eq:cstar_theta}--\eqref{eq:mstar_theta}. Because $m$ is publicly observed and issues occur iff $m=0$, $V_T(\theta,X,\delta)$ can be written compactly as
+\begin{equation}
+V_T(\theta,X,\delta)= -X + \mathbf{1}\{m^*_\theta(\delta)=0\}\cdot \max\{U_T(1\mid \theta,\delta),U_T(0\mid \theta,\delta)\},
+\label{eq:VT_def}
+\end{equation}
+where $U_T(\cdot\mid \theta,\delta)$ is given in \eqref{eq:UT_issue_c1}--\eqref{eq:UT_issue_c0}. (If $m^*_\theta(\delta)=1$, no issue arises and the normalized continuation utility is $0$.)
+
+\paragraph{Pooling beliefs at contracting.}
+Because landlord type is hidden and (in the baseline) posted rents do not reveal type, tenant beliefs satisfy
+\begin{equation}
+\mu(B\mid X^*(\delta),\delta)=p,\qquad \mu(G\mid X^*(\delta),\delta)=1-p.
+\label{eq:beliefs_pooling}
+\end{equation}
+
+\paragraph{Competitive rent-setting conditional on $p$.}
+We represent competition in rents within a $\delta$-segment by assuming that the equilibrium posted rent schedule $X^*(\delta)$ makes tenants indifferent between signing and their outside option \emph{in expectation} given beliefs \eqref{eq:beliefs_pooling}:
+\begin{equation}
+(1-p)\,V_T(G,X^*(\delta),\delta) + p\,V_T(B,X^*(\delta),\delta) = \bar V(\delta).
+\label{eq:rent_condition_competitive}
+\end{equation}
+Equation \eqref{eq:rent_condition_competitive} pins down $X^*(\delta)$ from the tenant side, taking the type composition $p$ as exogenous. It does not impose a zero-profit or free-entry condition for landlords.
+
+\paragraph{Definition (Equilibrium).}
+Fix $(p,\bar V(\cdot))$. An equilibrium is a collection
+\[
+\Big(X^*(\cdot),\, \{m^*_\theta(\cdot)\}_{\theta\in\{G,B\}},\, \{c^*_\theta(\cdot)\}_{\theta\in\{G,B\}},\, \mu(\cdot)\Big)
+\]
+such that for each $\delta$:
+\begin{enumerate}
+  \item (Tenant best response) $c^*_\theta(\delta)$ satisfies \eqref{eq:cstar_theta} for each $\theta$ given within-lease payoffs.
+  \item (Landlord best response) $m^*_\theta(\delta)$ satisfies \eqref{eq:mstar_theta} for each $\theta$ given $c^*_\theta(\delta)$.
+  \item (Beliefs) $\mu$ is Bayes-consistent on path as in \eqref{eq:beliefs_pooling}.
+  \item (Rent-setting) $X^*(\delta)$ satisfies \eqref{eq:rent_condition_competitive}.
+\end{enumerate}
+
+\paragraph{Implication (type-dependent exploitation).}
+Because $\bar\delta(B)<\bar\delta(G)$, there exist $\delta$ such that
+\[
+\delta \in (\bar\delta(B),\bar\delta(G)],
+\]
+for which $c^*_G(\delta)=1$ but $c^*_B(\delta)=0$. In this region, predatory landlords can (in equilibrium) sustain low maintenance with no complaints, while good landlords face complaints absent maintenance. Hidden type implies that tenants cannot condition contracting on this distinction, so ex post exploitation occurs with positive probability in equilibrium.
+
+
+\subsection{Expected profits by landlord type}
+\label{sec:profits_by_type}
+
+Fix a tenant segment $\delta$ and the corresponding equilibrium rent $X^*(\delta)$ pinned down by \eqref{eq:rent_condition_competitive}. Given the within-lease equilibrium strategies \eqref{eq:cstar_theta}--\eqref{eq:mstar_theta}, the expected profit of a landlord of type $\theta\in\{G,B\}$ from leasing to a tenant of type $\delta$ is
+\[
+\Pi_\theta(\delta)\equiv \max_{m\in\{0,1\}} \Pi_\theta(m\mid X^*(\delta),\delta),
+\]
+where $\Pi_\theta(m\mid X,\delta)$ is given by \eqref{eq:Pi_m1_theta}--\eqref{eq:Pi_m0_theta}.
+
+\paragraph{Profit expressions by region.}
+Using \eqref{eq:mstar_theta}, profits take a piecewise form.
+
+\medskip
+\noindent\textbf{Region A: $\delta > \bar\delta(\theta)$ (no complaint if $m=0$).}
+In this region $c^*_\theta(\delta)=0$ and $m^*_\theta(\delta)=0$, so
+\begin{equation}
+\Pi_\theta(\delta)= X^*(\delta) - \delta D_N.
+\label{eq:profit_regionA}
+\end{equation}
+
+\medskip
+\noindent\textbf{Region B: $\delta \le \bar\delta(\theta)$ (complaint if $m=0$).}
+Here $c^*_\theta(\delta)=1$ under $m=0$, and the landlord compares $m=1$ versus $m=0$.
+
+If $k \le R + \delta(D_C-D_N)$, then $m^*_\theta(\delta)=1$ and
+\begin{equation}
+\Pi_\theta(\delta)= X^*(\delta) - k - \delta D_N.
+\label{eq:profit_regionB_maintain}
+\end{equation}
+
+If $k > R + \delta(D_C-D_N)$, then $m^*_\theta(\delta)=0$ despite complaints and
+\begin{equation}
+\Pi_\theta(\delta)= X^*(\delta) - R - \delta D_C.
+\label{eq:profit_regionB_nomaint}
+\end{equation}
+
+\paragraph{Comparing predatory and good types.}
+The types differ only through their complaint thresholds $\bar\delta(\theta)$, since $\bar\delta(B)<\bar\delta(G)$ by \eqref{eq:deltabar_type}. Thus, there is an intermediate region
+\[
+\delta \in \big(\bar\delta(B),\,\bar\delta(G)\big]
+\]
+in which
+\[
+c^*_B(\delta)=0 \quad \text{and} \quad c^*_G(\delta)=1.
+\]
+In this region, the predatory type faces no complaints under $m=0$ and therefore chooses $m=0$, yielding
+\[
+\Pi_B(\delta)=X^*(\delta)-\delta D_N.
+\]
+The good type, by contrast, anticipates complaints under $m=0$ and thus earns
+\[
+\Pi_G(\delta)=
+\max\Big\{X^*(\delta)-k-\delta D_N,\; X^*(\delta)-R-\delta D_C\Big\}.
+\]
+Hence, in the intermediate region the predatory type earns weakly higher profits:
+\begin{equation}
+\Pi_B(\delta)-\Pi_G(\delta)
+=
+\min\Big\{k,\; R+\delta(D_C-D_N)\Big\}
+\;\ge\; 0,
+\qquad
+\delta \in \big(\bar\delta(B),\,\bar\delta(G)\big].
+\label{eq:profit_gap_intermediate}
+\end{equation}
+Moreover, the inequality is strict whenever either $k>0$ (if the good type maintains) or $R+\delta(D_C-D_N)>0$ (if the good type does not maintain), implying $\Pi_B(\delta)>\Pi_G(\delta)$ for all parameter values of interest.
+
+\paragraph{Outside the intermediate region.}
+If $\delta \le \bar\delta(B)$, then both types face complaints absent maintenance and (given identical $k,R,D_C,D_N$) behave identically, so $\Pi_B(\delta)=\Pi_G(\delta)$. If $\delta > \bar\delta(G)$, then neither type faces complaints and both choose $m=0$, again implying $\Pi_B(\delta)=\Pi_G(\delta)$.
+
+\paragraph{Interpretation.}
+Predatory landlords earn higher profits only for tenant segments in which hidden type changes complaint behavior and thereby changes the maintenance/retaliation incentives. In particular, for tenants with intermediate arrears risk, predatory landlords can deter complaints and avoid either paying maintenance costs $k$ or incurring complaint-related costs $R+\delta(D_C-D_N)$, generating the positive profit wedge in \eqref{eq:profit_gap_intermediate}.
+
+
+
+\end{document}

@@ -63,6 +63,37 @@ suffixes = c(
 suffix_regex = paste0("(^|,|\\|)?([0-9-]+[a-z]?\\s[a-z0-9\\.\\s-]+\\s(", suffixes, "))")
 stuck_regex = paste0("([a-z])(", suffixes, ")(\\.|\\|)")
 
+# Strip recurring non-address artifacts that leak into parsed street strings.
+strip_address_artifacts <- function(x) {
+  x <- str_to_lower(replace_na(as.character(x), ""))
+
+  # Normalize stuck "...staka..." variants so the alias clause can be removed.
+  x <- str_replace_all(
+    x,
+    "\\b(st|street|ave|avenue|av|rd|road|dr|drive|ln|lane|blvd|boulevard|ct|court|cir|circle|way|pike|sq|pl)(?=aka\\b)",
+    "\\1 "
+  )
+
+  # Keep primary address when aliases are appended.
+  x <- str_replace(x, "\\s+aka\\s+.*$", "")
+
+  # If a unit/suite token appears before a second full address, keep trailing full address.
+  x <- str_replace(
+    x,
+    "^.*\\b(suite|ste|apt|apartment|unit|rm|room|fl|floor)\\s*[0-9a-z-]+\\s+([0-9]+\\s+.+)$",
+    "\\2"
+  )
+
+  # Drop common trailing noise tokens seen in filings.
+  x <- str_replace(x, "\\s+(un|a\\s*pt|co\\s*[0-9a-z]+|garage)\\s*$", "")
+  x <- str_replace(x, "\\s+(suite|ste|apt|apartment|unit|rm|room|fl|floor)\\s*[0-9a-z-]*\\s*$", "")
+  x <- str_replace(x, "\\s*#\\s*[0-9a-z-]+\\s*$", "")
+
+  x <- str_squish(x)
+  x[x == ""] <- NA_character_
+  x
+}
+
 # ---- Step 1: Initial address cleaning ----
 logf("Step 1: Initial address cleaning", log_file = log_file)
 
@@ -77,6 +108,7 @@ philly_evict[, def_address_lower := str_replace_all(def_address_lower, stuck_reg
 philly_evict[, short_address_r1 := str_match(def_address_lower, suffix_regex)[,3]]
 philly_evict[, short_address_r2 := str_match(short_address_r1, "(.+)\\saka(.+)")[,2]]
 philly_evict[, short_address := coalesce(short_address_r2, short_address_r1)]
+philly_evict[, short_address := strip_address_artifacts(short_address)]
 
 # ---- Step 2: Postmastr parsing ----
 logf("Step 2: Postmastr address parsing", log_file = log_file)
@@ -263,6 +295,7 @@ if (nrow(ca_rows) > 0) {
   # --- 8a: Extract street portion (everything before first comma) ---
   ca_rows[, ca_street_part := str_to_lower(str_trim(str_extract(clean_address, "^[^,]+")))]
   ca_rows[, ca_street_part := str_remove_all(ca_street_part, "\\.")]
+  ca_rows[, ca_street_part := strip_address_artifacts(ca_street_part)]
 
   # --- 8b: Regex-extract house number and remainder ---
   # Pattern: leading digits (possibly with dash for ranges like "123-125"),
@@ -318,6 +351,7 @@ if (nrow(ca_rows) > 0) {
     str_replace_all("[Mm]t ", "mount ") %>%
     str_replace_all("[Mm]c ", "mc") %>%
     str_replace_all("[Ss]t ", "saint ")]
+  ca_rows[, ca_street := strip_address_artifacts(ca_street)]
 
   # --- 8i: Oracle canonicalization ---
   # Build a temporary dt with pm.* columns for canonicalize_parsed_addresses()

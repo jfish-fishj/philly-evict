@@ -1,0 +1,41 @@
+\begingroup
+\centering
+\begin{tabular}{lccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variables: & \multicolumn{2}{c}{black\_female\_case} & gap\_black\_female\_case\_vs\_tenant\\
+   Model:                                           & (1)       & (2)            & (3)\\  
+                                                    &  Logit    & Logit          & OLS\\  
+   \midrule
+   \emph{Variables}\\
+   retaliatory\_status $=$ plausibly\_retaliatory   & -0.0066   & 0.0019         & 0.0148$^{**}$\\   
+                                                    & (0.0179)  & (0.0175)       & (0.0058)\\   
+   retaliatory\_status $=$ retaliatory              & -0.0152   & -0.0005        & 0.0166$^{***}$\\   
+                                                    & (0.0191)  & (0.0188)       & (0.0060)\\   
+   infousa\_pct\_black\_c                           &           & 0.8366$^{***}$ &   \\   
+                                                    &           & (0.0498)       &   \\   
+   infousa\_pct\_female\_c                          &           & -0.0810        &   \\   
+                                                    &           & (0.0587)       &   \\   
+   infousa\_pct\_black\_female\_c                   &           & 1.357$^{***}$  &   \\   
+                                                    &           & (0.0750)       &   \\   
+   infousa\_share\_persons\_demog\_ok\_c            &           & 0.0427         &   \\   
+                                                    &           & (0.0479)       &   \\   
+   tenant\_comp\_missing                            &           & 0.0328         &   \\   
+                                                    &           & (0.0239)       &   \\   
+   \midrule
+   \emph{Fixed-effects}\\
+   tract\_geoid                                     & Yes       & Yes            & \\  
+   building\_type                                   & Yes       & Yes            & \\  
+   num\_units\_bin                                  & Yes       & Yes            & \\  
+   year\_quarter                                    & Yes       & Yes            & Yes\\  
+   PID                                              &           &                & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                     & 254,211   & 254,211        & 74,223\\  
+   Squared Correlation                              & 0.25542   & 0.28074        & 0.41691\\  
+   Pseudo R$^2$                                     & 0.21150   & 0.23332        & 0.44856\\  
+   BIC                                              & 276,196.5 & 268,768.6      & 211,341.8\\  
+   \midrule \midrule
+   \multicolumn{4}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{4}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

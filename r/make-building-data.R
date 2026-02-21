@@ -12,7 +12,8 @@
 ##   - cfg$products$parcels_clean (clean/parcels_clean.csv)
 ##
 ## Outputs:
-##   - cfg$products$building_data (panels/building_data_{agg_level}.csv)
+##   - processed/panels/building_data_{agg_level}.csv
+##   - processed/panels/building_data_{agg_level}.parquet
 ##
 ## Primary key: (parcel_number, period)
 ## ============================================================
@@ -300,6 +301,8 @@ clean_complaint_type <- function(x, lookup = complaint_lookup) {
   return(res)
 }
 
+severe_complaint_types <- c("Heat", "Fire", "Drainage", "Property Maintenance")
+
 complaints[, period := to_period(complaintdate, agg_level)]
 complaints[, complaint_type_standaridzed := clean_complaint_type(complaintcodename)]
 valid_complaints <- complaints[ , .N, by = complaint_type_standaridzed][order(-N)][N > 10000, complaint_type_standaridzed]
@@ -309,7 +312,13 @@ complaints_agg_long <- complaints[
   .(num_complaints = .N),
   by = .(parcel_number = opa_account_num, period, complaint_type_standaridzed)
 ]
-complaints_agg_long[ , total_complaints := sum(num_complaints), by = .(parcel_number, period)]
+# Totals are period-specific counts by (parcel_number, period), not cumulative across time.
+complaints_agg_long[, severe_flag := complaint_type_standaridzed %chin% severe_complaint_types]
+complaints_agg_long[ , `:=`(
+  total_complaints = sum(num_complaints),
+  total_severe_complaints = sum(num_complaints[severe_flag], na.rm = TRUE)
+), by = .(parcel_number, period)]
+complaints_agg_long[, severe_flag := NULL]
 
 complaints_agg <- pivot_wider(
   complaints_agg_long,
@@ -397,7 +406,7 @@ permits_agg <- permits_agg |>
 logf("  permits_agg: ", nrow(permits_agg), " rows, ", uniqueN(permits_agg$parcel_number), " unique parcels", log_file = log_file)
 
 complaints_agg <- complaints_agg |>
-  rename_with(~paste0(.x, "_complaint_count"), -c(parcel_number, period, total_complaints))
+  rename_with(~paste0(.x, "_complaint_count"), -c(parcel_number, period, total_complaints, total_severe_complaints))
 logf("  complaints_agg: ", nrow(complaints_agg), " rows, ", uniqueN(complaints_agg$parcel_number), " unique parcels", log_file = log_file)
 
 violations_agg <- violations_agg |>
@@ -426,6 +435,7 @@ building_data <- building_data |>
 building_data[ , .(
   total_permits        = sum(total_permits,        na.rm = TRUE),
   total_complaints     = sum(total_complaints,     na.rm = TRUE),
+  total_severe_complaints = sum(total_severe_complaints, na.rm = TRUE),
   total_violations     = sum(total_violations,     na.rm = TRUE),
   total_investigations = sum(total_investigations, na.rm = TRUE)
 ), by = period][order(period)] |> print()
@@ -449,18 +459,28 @@ if (n_total != n_unique_keys) {
 
 # Verify required columns
 required_cols <- c("parcel_number", "period", "year", "total_permits", "total_complaints",
-                   "total_violations", "total_investigations")
+                   "total_severe_complaints", "total_violations", "total_investigations")
 missing_cols <- setdiff(required_cols, names(building_data))
 if (length(missing_cols) > 0) {
   stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
 }
 logf("  Required columns present", log_file = log_file)
 
+if (building_data[, any(total_severe_complaints > total_complaints, na.rm = TRUE)]) {
+  stop("Assertion failed: total_severe_complaints cannot exceed total_complaints within a period.")
+}
+logf("  Assertion PASSED: total_severe_complaints <= total_complaints for all rows", log_file = log_file)
+
 # ---- Write output ----
-outfile <- p_proc(cfg, glue("panels/building_data_{agg_level}.csv"))
-logf("Writing output to: ", outfile, log_file = log_file)
+outfile_csv <- p_proc(cfg, glue("panels/building_data_{agg_level}.csv"))
+outfile_parquet <- p_proc(cfg, glue("panels/building_data_{agg_level}.parquet"))
+logf("Writing CSV output to: ", outfile_csv, log_file = log_file)
+fwrite(building_data, file = outfile_csv, row.names = FALSE, na = "NA")
+logf("Wrote ", nrow(building_data), " rows to ", outfile_csv, log_file = log_file)
 
-fwrite(building_data, file = outfile, row.names = FALSE, na = "NA")
-
-logf("Wrote ", nrow(building_data), " rows to ", outfile, log_file = log_file)
+if (!requireNamespace("arrow", quietly = TRUE)) {
+  stop("Package 'arrow' is required to write parquet output: ", outfile_parquet)
+}
+arrow::write_parquet(building_data, sink = outfile_parquet)
+logf("Wrote ", nrow(building_data), " rows to ", outfile_parquet, log_file = log_file)
 logf("=== Finished make-building-data.R ===", log_file = log_file)

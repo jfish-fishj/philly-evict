@@ -1,0 +1,28 @@
+\begingroup
+\centering
+\begin{tabular}{lccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variables:                             & white\_female\_case   & black\_male\_case     & black\_female\_case\\    
+   Model:                                           & (1)                   & (2)                   & (3)\\  
+   \midrule
+   \emph{Variables}\\
+   retaliatory\_status $=$ plausibly\_retaliatory   & 0.0103$^{***}$        & 0.0002                & -0.0023\\   
+                                                    & (0.0028)              & (0.0030)              & (0.0035)\\   
+   retaliatory\_status $=$ retaliatory              & 0.0131$^{***}$        & -0.0016               & -0.0020\\   
+                                                    & (0.0027)              & (0.0033)              & (0.0038)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   tract\_geoid                                     & Yes                   & Yes                   & Yes\\  
+   building\_type                                   & Yes                   & Yes                   & Yes\\  
+   num\_units\_bin                                  & Yes                   & Yes                   & Yes\\  
+   year\_quarter                                    & Yes                   & Yes                   & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                     & 177,856               & 177,856               & 177,856\\  
+   R$^2$                                            & 0.28768               & 0.08477               & 0.32141\\  
+   Within R$^2$                                     & 0.00023               & $2.67\times 10^{-6}$  & $4.79\times 10^{-6}$\\   
+   \midrule \midrule
+   \multicolumn{4}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{4}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

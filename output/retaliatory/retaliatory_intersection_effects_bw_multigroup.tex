@@ -1,0 +1,18 @@
+\begin{table}
+
+\caption{Retaliatory status coefficients for White+Female, Black+Male, and Black+Female indicators}
+\centering
+\begin{tabular}[t]{llrrrrr}
+\toprule
+model & term & estimate & std\_error & p\_value & conf\_low & conf\_high\\
+\midrule
+fe\_white\_female\_case\_lpm & retaliatory\_status::plausibly\_retaliatory & 0.0103 & 0.0028 & 0.0003 & 0.0047 & 0.0159\\
+fe\_white\_female\_case\_lpm & retaliatory\_status::retaliatory & 0.0131 & 0.0027 & 0.0000 & 0.0077 & 0.0185\\
+fe\_black\_male\_case\_lpm & retaliatory\_status::plausibly\_retaliatory & 0.0002 & 0.0030 & 0.9423 & -0.0057 & 0.0061\\
+fe\_black\_male\_case\_lpm & retaliatory\_status::retaliatory & -0.0016 & 0.0033 & 0.6241 & -0.0081 & 0.0048\\
+fe\_black\_female\_case\_lpm\_bw & retaliatory\_status::plausibly\_retaliatory & -0.0023 & 0.0035 & 0.5111 & -0.0091 & 0.0045\\
+\addlinespace
+fe\_black\_female\_case\_lpm\_bw & retaliatory\_status::retaliatory & -0.0020 & 0.0038 & 0.6012 & -0.0095 & 0.0055\\
+\bottomrule
+\end{tabular}
+\end{table}

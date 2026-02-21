@@ -1,0 +1,179 @@
+Retaliatory Race QA
+Timestamp: 2026-02-18 12:46:34 EST
+Race case input: /Users/joefish/Documents/GitHub/philly-evictions/output/qa/race_imputed_case_sample.csv
+Evictions input: /Users/joefish/Documents/GitHub/philly-evictions/data/processed/clean/evictions_clean.csv
+Xwalk input: /Users/joefish/Documents/GitHub/philly-evictions/data/processed/xwalks/philly_evict_address_agg_xwalk.csv
+Quarter panel input: /Users/joefish/Documents/GitHub/philly-evictions/data/processed/panels/building_data_rental_quarter.parquet
+Analytic controls input: /Users/joefish/Documents/GitHub/philly-evictions/data/processed/analytic/analytic_sample.csv
+BLP panel input: /Users/joefish/Documents/GitHub/philly-evictions/data/processed/analytic/bldg_panel_blp.csv
+
+Race-case rows (ok, non-missing p_black): 397351
+Case->PID rows before ambiguity drop: 315563
+Ambiguous case IDs dropped: 14843
+Case->PID rows after ambiguity drop: 285877
+Rows with full FE controls: 275755
+Rows in pre-covid panel: 229806
+Rows in classified-race binary panel: 219796
+
+Mean race probabilities by retaliatory status (full):
+      retaliatory_status n_cases mean_case_p_black mean_case_p_white
+                  <char>   <int>             <num>             <num>
+1:       non_retaliatory  187687         0.5801353         0.3425964
+2: plausibly_retaliatory   42047         0.5400393         0.3876254
+3:           retaliatory   46021         0.5560743         0.3762885
+
+Retaliatory shares by long-run filing-rate cut:
+   filing_rate_longrun_pre2019_cuts n_cases retaliatory_share
+                             <fctr>   <int>             <num>
+1:                                0   33218        0.07796978
+2:                           (0-5%]   31062        0.15913335
+3:                          (5-10%]   46173        0.12587443
+4:                         (10-20%]   50351        0.18196262
+5:                             20%+  114258        0.20535980
+6:                          missing     693        0.07215007
+   plausibly_retaliatory_share non_retaliatory_share mean_case_p_black
+                         <num>                 <num>             <num>
+1:                  0.09524956             0.8267807         0.6594052
+2:                  0.16814758             0.6727191         0.4785035
+3:                  0.13048751             0.7436381         0.5239501
+4:                  0.16275744             0.6552799         0.5458740
+5:                  0.16972116             0.6249190         0.5981576
+6:                  0.06926407             0.8585859         0.5665700
+   mean_case_p_white
+               <num>
+1:         0.2683583
+2:         0.4321661
+3:         0.3850608
+4:         0.3785388
+5:         0.3368601
+6:         0.3609005
+
+Retaliatory shares by unit-size bin:
+   num_units_bin n_cases retaliatory_share plausibly_retaliatory_share
+          <fctr>   <int>             <num>                       <num>
+1:             1  142505        0.09990527                   0.1057787
+2:           2-5   39705        0.11598036                   0.1245939
+3:         21-50   25718        0.24628665                   0.2422039
+4:           51+   51705        0.34536312                   0.2480611
+5:          6-20   16122        0.18533681                   0.1842823
+   non_retaliatory_share mean_case_p_black mean_case_p_white
+                   <num>             <num>             <num>
+1:             0.7943160         0.6036404         0.3176238
+2:             0.7594258         0.6306996         0.2845398
+3:             0.5115094         0.5224169         0.4138789
+4:             0.4065758         0.4585543         0.4751159
+5:             0.6303808         0.5565816         0.3812126
+
+Heterogeneity table (head):
+                                         term      estimate   std_error
+                                       <char>         <num>       <num>
+ 1: retaliatory_status::plausibly_retaliatory  0.0030150866 0.006366330
+ 2:           retaliatory_status::retaliatory  0.0008464756 0.006504954
+ 3: retaliatory_status::plausibly_retaliatory  0.0078157682 0.004292242
+ 4:           retaliatory_status::retaliatory  0.0009234753 0.005613237
+ 5: retaliatory_status::plausibly_retaliatory -0.0048209494 0.004513032
+ 6:           retaliatory_status::retaliatory  0.0015550789 0.004971987
+ 7: retaliatory_status::plausibly_retaliatory -0.0087016021 0.006009989
+ 8:           retaliatory_status::retaliatory -0.0219486905 0.006788519
+ 9: retaliatory_status::plausibly_retaliatory -0.0005101390 0.003490327
+10:           retaliatory_status::retaliatory -0.0041011250 0.003943777
+11: retaliatory_status::plausibly_retaliatory  0.0040990761 0.006615867
+12:           retaliatory_status::retaliatory  0.0047882922 0.006900581
+13: retaliatory_status::plausibly_retaliatory  0.0053056339 0.004559946
+14:           retaliatory_status::retaliatory -0.0040145373 0.006020389
+15: retaliatory_status::plausibly_retaliatory -0.0065148064 0.004778565
+16:           retaliatory_status::retaliatory -0.0048184227 0.004769425
+17: retaliatory_status::plausibly_retaliatory -0.0103268808 0.008436183
+18:           retaliatory_status::retaliatory -0.0215807987 0.008475276
+19: retaliatory_status::plausibly_retaliatory -0.0032175967 0.003505618
+20:           retaliatory_status::retaliatory -0.0048564220 0.004072399
+                                         term      estimate   std_error
+    stat_value     p_value                                            model
+         <num>       <num>                                           <char>
+ 1:  0.4735988 0.635802178   fe_full_filing_rate_longrun_pre2019_cuts__0_5_
+ 2:  0.1301278 0.896469373   fe_full_filing_rate_longrun_pre2019_cuts__0_5_
+ 3:  1.8209059 0.068647163 fe_full_filing_rate_longrun_pre2019_cuts__10_20_
+ 4:  0.1645174 0.869326708 fe_full_filing_rate_longrun_pre2019_cuts__10_20_
+ 5: -1.0682285 0.285427788  fe_full_filing_rate_longrun_pre2019_cuts__5_10_
+ 6:  0.3127681 0.754459465  fe_full_filing_rate_longrun_pre2019_cuts__5_10_
+ 7: -1.4478566 0.147677274       fe_full_filing_rate_longrun_pre2019_cuts_0
+ 8: -3.2332074 0.001226634       fe_full_filing_rate_longrun_pre2019_cuts_0
+ 9: -0.1461579 0.883799070     fe_full_filing_rate_longrun_pre2019_cuts_20_
+10: -1.0398979 0.298407514     fe_full_filing_rate_longrun_pre2019_cuts_20_
+11:  0.6195826 0.535554778    fe_pre_filing_rate_longrun_pre2019_cuts__0_5_
+12:  0.6938970 0.487772130    fe_pre_filing_rate_longrun_pre2019_cuts__0_5_
+13:  1.1635300 0.244638782  fe_pre_filing_rate_longrun_pre2019_cuts__10_20_
+14: -0.6668235 0.504898310  fe_pre_filing_rate_longrun_pre2019_cuts__10_20_
+15: -1.3633395 0.172787905   fe_pre_filing_rate_longrun_pre2019_cuts__5_10_
+16: -1.0102732 0.312374257   fe_pre_filing_rate_longrun_pre2019_cuts__5_10_
+17: -1.2241176 0.220945379        fe_pre_filing_rate_longrun_pre2019_cuts_0
+18: -2.5463241 0.010905748        fe_pre_filing_rate_longrun_pre2019_cuts_0
+19: -0.9178401 0.358720547      fe_pre_filing_rate_longrun_pre2019_cuts_20_
+20: -1.1925211 0.233079935      fe_pre_filing_rate_longrun_pre2019_cuts_20_
+    stat_value     p_value                                            model
+         conf_low    conf_high                heterogeneity_dim
+            <num>        <num>                           <char>
+ 1: -0.0094629210  0.015493094 filing_rate_longrun_pre2019_cuts
+ 2: -0.0119032335  0.013596185 filing_rate_longrun_pre2019_cuts
+ 3: -0.0005970254  0.016228562 filing_rate_longrun_pre2019_cuts
+ 4: -0.0100784683  0.011925419 filing_rate_longrun_pre2019_cuts
+ 5: -0.0136664923  0.004024593 filing_rate_longrun_pre2019_cuts
+ 6: -0.0081900155  0.011300173 filing_rate_longrun_pre2019_cuts
+ 7: -0.0204811801  0.003077976 filing_rate_longrun_pre2019_cuts
+ 8: -0.0352541882 -0.008643193 filing_rate_longrun_pre2019_cuts
+ 9: -0.0073511798  0.006330902 filing_rate_longrun_pre2019_cuts
+10: -0.0118309270  0.003628677 filing_rate_longrun_pre2019_cuts
+11: -0.0088680229  0.017066175 filing_rate_longrun_pre2019_cuts
+12: -0.0087368462  0.018313431 filing_rate_longrun_pre2019_cuts
+13: -0.0036318598  0.014243127 filing_rate_longrun_pre2019_cuts
+14: -0.0158145005  0.007785426 filing_rate_longrun_pre2019_cuts
+15: -0.0158807935  0.002851181 filing_rate_longrun_pre2019_cuts
+16: -0.0141664961  0.004529651 filing_rate_longrun_pre2019_cuts
+17: -0.0268618002  0.006208039 filing_rate_longrun_pre2019_cuts
+18: -0.0381923391 -0.004969258 filing_rate_longrun_pre2019_cuts
+19: -0.0100886079  0.003653414 filing_rate_longrun_pre2019_cuts
+20: -0.0128383242  0.003125480 filing_rate_longrun_pre2019_cuts
+         conf_low    conf_high                heterogeneity_dim
+    heterogeneity_cut sample  n_obs n_pid
+               <char> <char>  <int> <int>
+ 1:            (0-5%]   full  31062  6407
+ 2:            (0-5%]   full  31062  6407
+ 3:          (10-20%]   full  50351 11491
+ 4:          (10-20%]   full  50351 11491
+ 5:           (5-10%]   full  46173 24975
+ 6:           (5-10%]   full  46173 24975
+ 7:                 0   full  33218 15592
+ 8:                 0   full  33218 15592
+ 9:              20%+   full 114258 12461
+10:              20%+   full 114258 12461
+11:            (0-5%]    pre  25500  6380
+12:            (0-5%]    pre  25500  6380
+13:          (10-20%]    pre  44419 11444
+14:          (10-20%]    pre  44419 11444
+15:           (5-10%]    pre  40062 24798
+16:           (5-10%]    pre  40062 24798
+17:                 0    pre  19693  7713
+18:                 0    pre  19693  7713
+19:              20%+    pre 100132 12321
+20:              20%+    pre 100132 12321
+    heterogeneity_cut sample  n_obs n_pid
+
+Wrote panel: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_race_case_panel.csv
+Wrote status means: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_race_status_means.csv
+Wrote status means (severe): /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_race_status_means_severe.csv
+Wrote status means by building: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_race_status_means_by_building_type.csv
+Wrote status means LaTeX: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_race_status_means.tex
+Wrote descriptives overall: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_race_descriptives_overall.csv
+Wrote descriptives by building: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_race_descriptives_by_building_type.csv
+Wrote descriptives by units bin: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_race_descriptives_by_num_units_bin.csv
+Wrote descriptives by long-run cut: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_race_descriptives_by_longrun_rate_cut.csv
+Wrote descriptives by EB cut: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_race_descriptives_by_eb_rate_cut.csv
+Wrote descriptives by building x long-run cut: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_race_descriptives_by_building_longrun_cut.csv
+Wrote descriptives overall LaTeX: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_race_descriptives_overall.tex
+Wrote descriptives by long-run cut LaTeX: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_race_descriptives_by_longrun_rate_cut.tex
+Wrote effects: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_race_effects.csv
+Wrote heterogeneity effects: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_race_heterogeneity_rate_cuts.csv
+Wrote effects LaTeX: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_race_effects.tex
+Wrote heterogeneity LaTeX: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_race_heterogeneity_rate_cuts.tex
+Wrote model table: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_race_models.txt
+Wrote model table LaTeX: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory/retaliatory_race_models.tex

@@ -107,9 +107,9 @@ assert_unique <- function(dt, keys, name = deparse(substitute(dt))) {
   stopifnot(is.character(keys), length(keys) >= 1)
   n0 <- nrow(dt)
   ndups <- dt[, .N, by = keys][N > 1L, .N]
-  if (nrow(ndups) > 0) {
+  if (ndups > 0 ) {
     stop("Uniqueness assertion failed for ", name, " on keys {", paste(keys, collapse=", "), "}. ",
-         "Found ", sum(ndups$N), " duplicate rows (counting all dup rows).")
+         "Found ", ndups, " duplicate rows (counting all dup rows).")
   }
   invisible(TRUE)
 }
@@ -132,13 +132,18 @@ run_rscript <- function(script, cfg_path = Sys.getenv("PHILLY_EVICTIONS_CONFIG",
   cfg <- read_config(cfg_path, create_dirs = TRUE)
   log_file <- if (!is.null(log_name)) p_out(cfg, "logs", paste0(log_name, ".log")) else NULL
 
-  env <- c(Sys.getenv())
-  env["PHILLY_EVICTIONS_CONFIG"] <- cfg$meta$config_path
+  # Set config path env var for child process (inherit rest of environment)
+  old_cfg_env <- Sys.getenv("PHILLY_EVICTIONS_CONFIG", unset = NA)
+  Sys.setenv(PHILLY_EVICTIONS_CONFIG = cfg$meta$config_path)
+  on.exit({
+    if (is.na(old_cfg_env)) Sys.unsetenv("PHILLY_EVICTIONS_CONFIG")
+    else Sys.setenv(PHILLY_EVICTIONS_CONFIG = old_cfg_env)
+  })
 
   cmd <- c("--vanilla", script, args)
   logf("Running: Rscript ", paste(cmd, collapse = " "), log_file = log_file)
 
-  res <- system2("Rscript", args = cmd, env = env, stdout = TRUE, stderr = TRUE)
+  res <- system2("Rscript", args = cmd, stdout = TRUE, stderr = TRUE)
   if (!is.null(log_file)) cat(res, sep="\n", file = log_file, append = TRUE)
 
   # Basic failure detection

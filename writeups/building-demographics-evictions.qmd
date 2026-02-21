@@ -1,0 +1,203 @@
+---
+title: "Building Demographics and Eviction Intensity"
+author: "Philly Evictions Project"
+date: today
+format:
+  pdf:
+    documentclass: article
+    geometry: margin=1in
+    fontsize: 11pt
+    keep-tex: true
+    number-sections: true
+    toc: true
+    include-in-header:
+      text: |
+        \usepackage{booktabs}
+        \usepackage{dcolumn}
+        \usepackage{longtable}
+        \usepackage{adjustbox}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = here::here())
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 10,
+  fig.height = 6,
+  dpi = 300
+)
+```
+
+# Overview
+
+This document summarizes the building demographics analysis from `r/building-demographics-evictions.R`. The script asks: **are high-evicting buildings disproportionately occupied by Black tenants, female-headed households, or Black female-headed households?**
+
+**Unit of analysis:** Building (PID), collapsed to a single cross-section by taking unit-weighted means of demographic shares across all available years.
+
+**Key data inputs:**
+
+- `bldg_panel_blp` --- building $\times$ year panel with tenant demographics (from InfoUSA imputations), eviction filing rates, and building characteristics
+
+**Demographic outcomes:**
+
+- `infousa_pct_black` --- share of tenants imputed as Black
+- `infousa_pct_female` --- share of head-of-household imputed as female
+- `infousa_pct_black_female` --- share of tenants who are both Black and female HoH
+
+**Sample restrictions:**
+
+- Demographic coverage $\geq 0.5$ (`infousa_share_persons_demog_ok`)
+- Non-missing GEOID, total area $> 0$, market value $> 0$
+- EB filing rate $\leq 0.75$ (excludes extreme outliers)
+
+```{r load-data}
+suppressPackageStartupMessages({
+  library(data.table)
+  library(knitr)
+  library(kableExtra)
+})
+source("r/config.R")
+cfg <- read_config()
+tab_dir <- p_out(cfg, "tables")
+fig_dir <- p_out(cfg, "figs")
+# Helper: absolute path for include_graphics (which ignores root.dir)
+proj_root <- here::here()
+# Helper: read a .tex table and wrap in adjustbox so it fits page width
+include_tex_table <- function(path, max_width = "\\textwidth") {
+  if (!file.exists(path)) { cat("Table not found:", path); return(invisible(NULL)) }
+  lines <- readLines(path)
+  txt <- paste(lines, collapse = "\n")
+  has_float <- grepl("\\\\begin\\{table\\}", txt)
+  if (has_float) {
+    is_float <- grepl("^\\s*\\\\begin\\{table\\}|^\\s*\\\\end\\{table\\}", lines)
+    is_meta  <- grepl("^\\s*\\\\caption|^\\s*\\\\label|^\\s*\\\\centering", lines)
+    cap_lines <- trimws(lines[is_meta])
+    inner <- lines[!is_float & !is_meta]
+    cat("\\begin{table}[htbp]\n\\centering\n")
+    cat(cap_lines, sep = "\n")
+    cat("\n\\begin{adjustbox}{max width=", max_width, "}\n", sep = "")
+    cat(inner, sep = "\n")
+    cat("\n\\end{adjustbox}\n\\end{table}\n")
+  } else {
+    cat("\\begin{adjustbox}{max width=", max_width, "}\n", sep = "")
+    cat(lines, sep = "\n")
+    cat("\n\\end{adjustbox}\n")
+  }
+}
+```
+
+# Eviction Intensity Classification
+
+Buildings are classified using the empirical Bayes eviction filing rate (pre-COVID), with true never-filers separated:
+
+| Bin | Definition |
+|-----|-----------|
+| No filings | `total_filings_pre2019 == 0` (true zero --- distinct from low EB rate) |
+| (0--5\%] | EB rate $\leq 0.05$, at least 1 filing pre-2019 |
+| (5--10\%] | EB rate $\in (0.05, 0.10]$ (reference category) |
+| (10--20\%] | EB rate $\in (0.10, 0.20]$ |
+| 20\%+ | EB rate $> 0.20$ |
+
+**Note:** The EB filing rate is a posterior mean from an empirical Bayes procedure, so it is always $> 0$ even for buildings with zero observed filings. We use the raw filing count (`total_filings_pre2019`) to identify true never-filers.
+
+# Descriptive Means
+
+```{r desc-table}
+desc_path <- file.path(tab_dir, "building_demog_means_by_eviction_bin.csv")
+if (file.exists(desc_path)) {
+  desc <- fread(desc_path)
+  desc_show <- desc[, .(
+    `Eviction bin` = filing_rate_bins,
+    `N buildings` = format(n_buildings, big.mark = ","),
+    `Mean units` = mean_units,
+    `% Black` = round(100 * pct_black, 1),
+    `% Female` = round(100 * pct_female, 1),
+    `% Black Female` = round(100 * pct_black_female, 1),
+    `Demog coverage` = mean_demog_coverage
+  )]
+  kable(desc_show, booktabs = TRUE,
+        caption = "Unit-weighted mean tenant demographics by eviction intensity bin") |>
+    kable_styling(latex_options = c("hold_position", "scale_down"))
+} else {
+  cat("Descriptive table not found. Run building-demographics-evictions.R first.")
+}
+```
+
+# Regression Specifications
+
+For each demographic outcome $Y_i$, four specifications are estimated:
+
+## (A) Unconditional
+
+$$
+Y_i = \sum_{b} \beta_b \cdot \mathbb{1}[\text{bin}_i = b] + \varepsilon_i
+$$
+
+Unit-weighted, clustered by census tract.
+
+## (B) Tract FE + Controls
+
+$$
+Y_i = \sum_{b} \beta_b \cdot \mathbb{1}[\text{bin}_i = b] + \gamma \log(\text{area}_i) + \delta \log(\text{value}_i) + \alpha_{\text{tract}} + \phi_X + \varepsilon_i
+$$
+
+where $\phi_X$ absorbs FE for unit-count bin, building type, construction decade, quality grade, and number-of-stories bin. Clustered by tract.
+
+## (C) Block Group FE + Controls
+
+Same as (B) but with block group FE instead of tract FE. Clustered by GEOID.
+
+## (D) Hurdle Spline
+
+Replaces the eviction bins with a flexible functional form:
+$$
+Y_i = \beta_0 \cdot \text{NeverFiled}_i + \sum_{s=1}^{6} \beta_s \cdot B_s(\text{EB rate}_i) + \text{controls} + \alpha_{\text{BG}} + \phi_X + \varepsilon_i
+$$
+
+where $B_s(\cdot)$ are natural spline basis functions (df = 6) of the EB filing rate for ever-filers, and the spline basis is set to zero for never-filers (the "hurdle"). This allows the relationship between eviction intensity and demographics to be nonlinear without imposing bin boundaries.
+
+# Results
+
+## Main Table: All Outcomes, Tract and BG FE
+
+```{r main-table, results='asis'}
+include_tex_table(file.path(tab_dir, "building_demog_by_eviction_intensity.tex"))
+```
+
+## Full Specifications: Share Black
+
+```{r black-full-table, results='asis'}
+include_tex_table(file.path(tab_dir, "building_demog_black_full_specs.tex"))
+```
+
+## Coefficient Plots
+
+```{r coefplot-black, fig.cap="Share Black tenants by eviction intensity bin across specifications. Reference: (5-10\\%)."}
+plot_path <- file.path(proj_root, fig_dir, "coefplot_demog_black_by_eviction.png")
+if (file.exists(plot_path)) {
+  knitr::include_graphics(plot_path)
+} else {
+  cat("Coefficient plot not found.")
+}
+```
+
+```{r coefplot-all, fig.cap="All demographic outcomes by eviction intensity bin (Block Group FE specification). Reference: (5-10\\%)."}
+plot_path <- file.path(proj_root, fig_dir, "coefplot_demog_all_by_eviction.png")
+if (file.exists(plot_path)) {
+  knitr::include_graphics(plot_path)
+} else {
+  cat("All-outcomes coefficient plot not found.")
+}
+```
+
+# Interpretation
+
+The analysis tests whether high-evicting buildings have a systematically different tenant composition than comparable buildings in the same neighborhood. By conditioning on block group (or tract) and building observables, the regressions isolate *within-neighborhood* variation in eviction intensity.
+
+Key patterns to look for:
+
+- **Monotonic gradient:** Do the coefficients increase monotonically with eviction intensity? This would indicate that higher-evicting buildings systematically house more Black/female tenants even within the same neighborhood.
+- **Never-filer anomaly:** The "No filings" bin captures buildings with zero pre-2019 filings. If these buildings look different from the low-rate (0--5\%] bin, it may reflect a structural difference (e.g., owner-occupied buildings misclassified as rentals, or buildings too small to generate filings).
+- **Spline nonlinearity:** The hurdle spline (spec D) allows the relationship to curve. If the effect is concentrated at the top of the distribution, the spline coefficients will be large only for high basis values.
