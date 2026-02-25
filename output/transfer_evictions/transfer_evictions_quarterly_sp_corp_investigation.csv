@@ -1,0 +1,9 @@
+metric,value
+Sample size,1000
+PID in bldg_panel,553
+PID NOT in bldg_panel,447
+Grantee has >1 PID in RTT,513
+Grantee has 1 PID in RTT,487
+Owner group has >1 PID in transfers,523
+Mean deeds in RTT for grantee,100
+Median deeds in RTT for grantee,2

@@ -1,0 +1,9 @@
+acq_filer_bin,is_corp,n_transfers,n_owners,mean_units,total_units,mean_portfolio,mean_acq_rate,mean_n_other,pct_of_bin
+High-filer portfolio,TRUE,22800,4350,1.6,26597,234.8,0.1025,147,60.2
+High-filer portfolio,FALSE,15092,6582,1.2,12527,100.7,0.12628,70.4,39.8
+Low-filer portfolio,TRUE,27651,3132,1.4,24666,117.8,0.02612,68,73
+Low-filer portfolio,FALSE,10252,3115,1.3,8581,21.4,0.0272,10.3,27
+Non-filer (has portfolio),TRUE,30976,10097,1.5,25039,16.4,0,4.3,43.9
+Non-filer (has portfolio),FALSE,39630,21101,1.3,30929,5,0,2.3,56.1
+Single-purchase,TRUE,81152,46206,3,69845,85,,0,15.8
+Single-purchase,FALSE,433818,382672,1.3,142619,4.8,,0,84.2

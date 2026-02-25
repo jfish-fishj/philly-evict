@@ -1,0 +1,279 @@
+=== Quarterly Transfer-Eviction Event Study QA ===
+Run date: 2026-02-25 09:29:16.917127
+
+--- Sample ---
+Eviction filings linked to PID: 468233
+PID × quarter eviction cells: 288642
+Transfers (PID-quarter): 661376
+Event panel rows: 21825408
+PIDs with overlapping windows: 181089
+Clustering: PID-level (unit of treatment)
+
+--- Size bin distribution at q=0 ---
+    size_bin n_transfers mean_units mean_rate pct_known_rental
+      <char>       <int>      <num>     <num>            <num>
+1:    1 unit      181609        1.0   0.00583             60.1
+2: 2-4 units       39494        2.2   0.00640             67.8
+3: 5-9 units        2154        6.1   0.00462             69.1
+4: 10+ units        1622       35.3   0.01088             71.1
+
+--- Acquirer filing rate classification ---
+  Method: PRE-ACQUISITION temporal filing rate on acquirer's OTHER properties
+  For each transfer of PID_i by owner_j (transfer year Y):
+    rate = mean(num_filings / total_units) for other PIDs in years < Y
+  Median (among acquirers with rate > 0): 0.04792
+  High-filer portfolio: rate > median, has other properties
+  Low-filer portfolio: 0 < rate <= median, has other properties
+  Non-filer (has portfolio): rate == 0 but n_other > 0
+  Single-purchase: n_other == 0 (no other matched properties)
+
+--- Acquirer bin stats (2+ units, at q=0) ---
+               acq_filer_bin n_transfers n_pids n_owners mean_units
+                      <char>       <int>  <int>    <int>      <num>
+1:           Single-purchase       26145  19531    25793        4.1
+2:      High-filer portfolio        4365   3924     2474        3.8
+3: Non-filer (has portfolio)        8316   7399     6136        2.7
+4:       Low-filer portfolio        4442   4139     1974        3.0
+   total_units_sum mean_acq_rate mean_n_other pct_of_transfers pct_of_units
+             <int>         <num>        <num>            <num>        <num>
+1:          106264           NaN          0.0             60.4         66.8
+2:           16697       0.12156         80.1             10.1         10.5
+3:           22798       0.00000          2.8             19.2         14.3
+4:           13435       0.02578         37.5             10.3          8.4
+   sample
+   <char>
+1:  2plus
+2:  2plus
+3:  2plus
+4:  2plus
+
+--- Acquirer bin stats (5+ units, at q=0) ---
+               acq_filer_bin n_transfers n_pids n_owners mean_units
+                      <char>       <int>  <int>    <int>      <num>
+1:           Single-purchase        2586   2037     2569       20.7
+2: Non-filer (has portfolio)         508    452      405       10.0
+3:       Low-filer portfolio         320    300      210       12.6
+4:      High-filer portfolio         362    305      244       21.2
+   total_units_sum mean_acq_rate mean_n_other pct_of_transfers pct_of_units
+             <int>         <num>        <num>            <num>        <num>
+1:           53644           NaN          0.0             68.5         76.2
+2:            5081       0.00000          3.1             13.5          7.2
+3:            4035       0.02085         16.9              8.5          5.7
+4:            7676       0.19289         22.8              9.6         10.9
+   sample
+   <char>
+1:  5plus
+2:  5plus
+3:  5plus
+4:  5plus
+
+--- Corporate / non-corporate within each filing bin ---
+               acq_filer_bin is_corp n_transfers n_owners mean_units
+                      <char>  <lgcl>       <int>    <int>      <num>
+1:      High-filer portfolio    TRUE       22800     4350        1.6
+2:      High-filer portfolio   FALSE       15092     6582        1.2
+3:       Low-filer portfolio    TRUE       27651     3132        1.4
+4:       Low-filer portfolio   FALSE       10252     3115        1.3
+5: Non-filer (has portfolio)    TRUE       30976    10097        1.5
+6: Non-filer (has portfolio)   FALSE       39630    21101        1.3
+7:           Single-purchase    TRUE       81152    46206        3.0
+8:           Single-purchase   FALSE      433818   382672        1.3
+   total_units mean_portfolio mean_acq_rate mean_n_other pct_of_bin
+         <int>          <num>         <num>        <num>      <num>
+1:       26597          234.8       0.10250        147.0       60.2
+2:       12527          100.7       0.12628         70.4       39.8
+3:       24666          117.8       0.02612         68.0       73.0
+4:        8581           21.4       0.02720         10.3       27.0
+5:       25039           16.4       0.00000          4.3       43.9
+6:       30929            5.0       0.00000          2.3       56.1
+7:       69845           85.0           NaN          0.0       15.8
+8:      142619            4.8           NaN          0.0       84.2
+
+--- Single-purchase corporate investigation ---
+                                metric value
+                                <char> <num>
+1:                         Sample size  1000
+2:                   PID in bldg_panel   553
+3:               PID NOT in bldg_panel   447
+4:           Grantee has >1 PID in RTT   513
+5:            Grantee has 1 PID in RTT   487
+6: Owner group has >1 PID in transfers   523
+7:       Mean deeds in RTT for grantee   100
+8:     Median deeds in RTT for grantee     2
+
+--- Portfolio bin stats (2+ units, at q=0) ---
+     portfolio_bin n_transfers n_owners mean_units total_units_sum pct_corp
+            <char>       <int>    <int>      <num>           <int>    <num>
+1: Single-purchase       22182    22021        4.1           90772     25.9
+2:             5-9        4343     2223        2.8           12232     56.7
+3:             2-4       11390     8407        3.5           40320     40.3
+4:             10+        4258     1286        2.7           11690     74.6
+5:    Sheriff-only        1095      850        3.8            4180     68.9
+   sample
+   <char>
+1:  2plus
+2:  2plus
+3:  2plus
+4:  2plus
+5:  2plus
+
+--- Portfolio bin stats (5+ units, at q=0) ---
+     portfolio_bin n_transfers n_owners mean_units total_units_sum pct_corp
+            <char>       <int>    <int>      <num>           <int>    <num>
+1: Single-purchase        2241     2229       20.6           46257     58.4
+2:             2-4         918      720       18.2           16719     70.9
+3:             5-9         298      194       10.3            3075     84.2
+4:             10+         232      147       10.7            2478     78.9
+5:    Sheriff-only          87       64       21.9            1907     90.8
+   sample
+   <char>
+1:  5plus
+2:  5plus
+3:  5plus
+4:  5plus
+5:  5plus
+
+--- Property eviction class definition ---
+  Based on filing_rate_eb_pre_covid from bldg_panel_blp
+  EB-smoothed annual filing rate (per unit), pre-COVID, time-invariant
+  Median (among properties with any filings): 0.0052
+
+--- Transfer rate by property eviction class ---
+   property_evict_class n_properties n_transferred pct_transferred mean_units
+                 <char>        <int>         <int>           <num>      <num>
+1:  Above-median filing        74180         59940            80.8        2.2
+2:  Below-median filing       113315         89979            79.4        1.8
+3:              No data         3000          1586            52.9        3.1
+   total_units
+         <num>
+1:      160310
+2:      204277
+3:        9323
+
+--- Who buys each property class? ---
+   property_evict_class n_transfers n_pids pct_corporate mean_portfolio
+                 <char>       <int>  <int>         <num>          <num>
+1:  Above-median filing       87556  49852          35.2           36.9
+2:  Below-median filing      134546  79104          32.2           31.3
+   median_price mean_units total_units pct_sheriff
+          <num>      <num>       <int>       <num>
+1:        90000        1.7      146452        10.3
+2:       106900        1.4      186940        10.1
+
+--- Acquirer descriptives ---
+               acq_filer_bin n_transfers n_owners n_pids mean_units total_units
+                      <char>       <int>    <int>  <int>      <num>       <int>
+1:           Single-purchase      514970   428657 311324        1.6      212464
+2: Non-filer (has portfolio)       70606    31061  63392        1.3       55968
+3:       Low-filer portfolio       37903     6172  35457        1.4       33247
+4:      High-filer portfolio       37892    10870  34247        1.5       39124
+   pct_corporate mean_portfolio median_price mean_acq_rate mean_n_other
+           <num>          <num>        <num>         <num>        <num>
+1:          15.8           17.5       115000           NaN          0.0
+2:          43.9           10.0        70000       0.00000          3.1
+3:          73.0           91.7        55000       0.02641         52.4
+4:          60.2          181.4        55000       0.11197        116.5
+   pct_of_transfers pct_of_units
+              <num>        <num>
+1:             77.9         62.3
+2:             10.7         16.4
+3:              5.7          9.8
+4:              5.7         11.5
+
+--- Cross-tab: property class × acquirer type ---
+   property_evict_class             acq_filer_bin n_transfers total_units
+                 <char>                    <char>       <int>       <int>
+1:  Above-median filing      High-filer portfolio       12887       21979
+2:  Above-median filing       Low-filer portfolio        9234       13592
+3:  Above-median filing Non-filer (has portfolio)       15353       20934
+4:  Above-median filing           Single-purchase       50081       89944
+5:  Below-median filing      High-filer portfolio       13776       16853
+6:  Below-median filing       Low-filer portfolio       14881       19414
+7:  Below-median filing Non-filer (has portfolio)       25659       34249
+8:  Below-median filing           Single-purchase       80229      116421
+   pct_of_class
+          <num>
+1:         14.7
+2:         10.5
+3:         17.5
+4:         57.2
+5:         10.2
+6:         11.1
+7:         19.1
+8:         59.6
+
+--- Coverage by q_relative ---
+    q_relative n_total n_with_rate pct_rate mean_filings mean_rate
+         <int>   <int>       <int>    <num>        <num>     <num>
+ 1:        -12  661376      177751     26.9        0.006   0.00928
+ 2:        -11  661376      180318     27.3        0.007   0.00914
+ 3:        -10  661376      183116     27.7        0.006   0.00909
+ 4:         -9  661376      186208     28.2        0.006   0.00925
+ 5:         -8  661376      189138     28.6        0.006   0.00877
+ 6:         -7  661376      192525     29.1        0.007   0.00876
+ 7:         -6  661376      196253     29.7        0.006   0.00895
+ 8:         -5  661376      200717     30.3        0.007   0.00927
+ 9:         -4  661376      204778     31.0        0.007   0.01006
+10:         -3  661376      209301     31.6        0.007   0.01047
+11:         -2  661376      214269     32.4        0.008   0.01122
+12:         -1  661376      219914     33.3        0.006   0.00820
+13:          0  661376      224879     34.0        0.005   0.00595
+14:          1  661376      230012     34.8        0.007   0.00723
+15:          2  661376      234996     35.5        0.007   0.00848
+16:          3  661376      238941     36.1        0.008   0.01034
+17:          4  661376      241795     36.6        0.008   0.01129
+18:          5  661376      244800     37.0        0.008   0.01146
+19:          6  661376      247442     37.4        0.008   0.01181
+20:          7  661376      249788     37.8        0.008   0.01180
+21:          8  661376      251659     38.1        0.009   0.01222
+22:          9  661376      253573     38.3        0.008   0.01185
+23:         10  661376      254821     38.5        0.008   0.01198
+24:         11  661376      254988     38.6        0.008   0.01234
+25:         12  661376      254790     38.5        0.008   0.01157
+26:         13  661376      254431     38.5        0.008   0.01175
+27:         14  661376      254263     38.4        0.008   0.01155
+28:         15  661376      253859     38.4        0.008   0.01132
+29:         16  661376      253614     38.3        0.008   0.01161
+30:         17  661376      253359     38.3        0.008   0.01179
+31:         18  661376      253076     38.3        0.007   0.01088
+32:         19  661376      254196     38.4        0.007   0.01138
+33:         20  661376      253752     38.4        0.007   0.01162
+    q_relative n_total n_with_rate pct_rate mean_filings mean_rate
+
+--- Raw means by q_relative ---
+    q_relative   mean_rate           se mean_filings      n
+         <int>       <num>        <num>        <num>  <int>
+ 1:        -12 0.010107438 0.0002463482   0.01791012 163148
+ 2:        -11 0.010089941 0.0002465243   0.01855628 163287
+ 3:        -10 0.010206561 0.0002509114   0.01741641 163122
+ 4:         -9 0.010616065 0.0002524733   0.01798189 162330
+ 5:         -8 0.010251896 0.0002530529   0.01758365 161798
+ 6:         -7 0.010461223 0.0002508930   0.01825872 161238
+ 7:         -6 0.010890781 0.0002553150   0.01767970 161315
+ 8:         -5 0.011495145 0.0002613992   0.01950122 161836
+ 9:         -4 0.012663203 0.0002769728   0.02049671 162709
+10:         -3 0.013371605 0.0002803734   0.02088800 163874
+11:         -2 0.014516406 0.0002918346   0.02237905 165646
+12:         -1 0.010651823 0.0002498154   0.01780165 169254
+13:          0 0.007828103 0.0002181277   0.01497260 170979
+14:          1 0.009645635 0.0002352304   0.01858486 172506
+15:          2 0.011420029 0.0002525882   0.01896539 174423
+16:          3 0.013990590 0.0002746155   0.02211455 176671
+17:          4 0.015334433 0.0002865729   0.02381808 178016
+18:          5 0.015630312 0.0003091170   0.02373115 179553
+19:          6 0.016179850 0.0003032531   0.02488832 180647
+20:          7 0.016268364 0.0003184237   0.02502125 181206
+21:          8 0.016922212 0.0003240306   0.02588731 181672
+22:          9 0.016505612 0.0003138099   0.02530568 182054
+23:         10 0.016757927 0.0003125677   0.02578211 182103
+24:         11 0.017291169 0.0003253810   0.02649949 181928
+25:         12 0.016238709 0.0003021925   0.02526596 181509
+26:         13 0.016488714 0.0003052262   0.02608590 181324
+27:         14 0.016223843 0.0003227778   0.02609359 180964
+28:         15 0.015925023 0.0003025406   0.02531309 180460
+29:         16 0.016368997 0.0003212424   0.02613191 179895
+30:         17 0.016650245 0.0003219509   0.02620450 179473
+31:         18 0.015370964 0.0003054928   0.02436806 179210
+32:         19 0.016138230 0.0003179497   0.02520371 179180
+33:         20 0.016461189 0.0003231789   0.02539998 179134
+    q_relative   mean_rate           se mean_filings      n

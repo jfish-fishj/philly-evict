@@ -1,0 +1,9 @@
+property_evict_class,acq_filer_bin,n_transfers,total_units,pct_of_class
+Above-median filing,High-filer portfolio,12887,21979,14.7
+Above-median filing,Low-filer portfolio,9234,13592,10.5
+Above-median filing,Non-filer (has portfolio),15353,20934,17.5
+Above-median filing,Single-purchase,50081,89944,57.2
+Below-median filing,High-filer portfolio,13776,16853,10.2
+Below-median filing,Low-filer portfolio,14881,19414,11.1
+Below-median filing,Non-filer (has portfolio),25659,34249,19.1
+Below-median filing,Single-purchase,80229,116421,59.6

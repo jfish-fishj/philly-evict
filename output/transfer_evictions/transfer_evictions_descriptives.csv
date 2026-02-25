@@ -1,0 +1,8 @@
+group_var,buyer_type,n_transfers,mean_units,median_units,mean_filing_rate,mean_violations,median_price,pct_sheriff,pct_corp
+buyer_type,Individual,489000,1.3,1,0.0242,0.33,120000,3.7,
+buyer_type,Corporate,142534,2,1,0.0383,0.64,60000,24.9,
+portfolio_bin,Single-purchase,376116,1.6,1,0.022,0.33,144000,,9.5
+portfolio_bin,2-4,125841,1.6,1,0.0324,0.48,80000,,27.2
+portfolio_bin,5-9,48591,1.3,1,0.038,0.51,55000,,44.9
+portfolio_bin,Sheriff-only,21305,1.4,1,0.0278,0.76,14700,,55.8
+portfolio_bin,10+,59681,1.3,1,0.0419,0.57,43000,,65.5
