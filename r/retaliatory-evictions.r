@@ -346,7 +346,7 @@ add_tenant_composition <- function(dt, bldg_panel_path, start_year, end_year, pi
     "infousa_share_persons_demog_ok"
   )
   bldg_obs_cols <- c(
-    "total_area", "total_units", "market_value",
+    "total_area", "total_units", "market_value", "year_built",
     "building_type", "num_units_bin", "year_blt_decade",
     "num_stories_bin", "quality_grade"
   )
@@ -378,6 +378,7 @@ add_tenant_composition <- function(dt, bldg_panel_path, start_year, end_year, pi
       is.na(infousa_pct_black_female) |
       is.na(infousa_share_persons_demog_ok)
   )]
+  dt[, tenant_black_missing := as.integer(is.na(infousa_pct_black))]
 
   center_or_zero <- function(x) {
     mu <- mean(x, na.rm = TRUE)
@@ -459,6 +460,156 @@ extract_tenant_comp_coefs <- function(model, stem, sample_name, spec_name) {
   ct[]
 }
 
+extract_bt_interaction_coefs <- function(model, sample_name, outcome_name, fe_name, block_name) {
+  ct <- tidy_coeftable(model)
+  if (!nrow(ct)) return(data.table())
+  keep_pat <- paste(
+    c("^tc_black_c$", "^tc_female_c$", "^tc_black_female_c$", "^tc_cov_c$", "^tenant_comp_missing$",
+      "tc_black_c", "tc_female_c"),
+    collapse = "|"
+  )
+  ct <- ct[grepl(keep_pat, term)]
+  if (!nrow(ct)) return(data.table())
+  ct[, `:=`(
+    sample = sample_name,
+    outcome = outcome_name,
+    fe = fe_name,
+    block = block_name,
+    conf_low = estimate - 1.96 * std_error,
+    conf_high = estimate + 1.96 * std_error
+  )]
+  ct[]
+}
+
+tidy_coeftable <- function(model) {
+  ct <- as.data.table(summary(model)$coeftable, keep.rownames = "term")
+  if (!nrow(ct)) return(ct)
+
+  est_col <- intersect(c("Estimate", "estimate"), names(ct))[1L]
+  se_col <- intersect(c("Std. Error", "Std.Error", "std_error"), names(ct))[1L]
+  stat_col <- intersect(c("t value", "z value", "stat", "statistic", "t_value", "z_value"), names(ct))[1L]
+  p_col <- intersect(c("Pr(>|t|)", "Pr(>|z|)", "p_value", "p"), names(ct))[1L]
+
+  if (!is.na(est_col) && est_col != "estimate") setnames(ct, est_col, "estimate")
+  if (!is.na(se_col) && se_col != "std_error") setnames(ct, se_col, "std_error")
+  if (!is.na(stat_col) && stat_col != "t_value") setnames(ct, stat_col, "t_value")
+  if (!is.na(p_col) && p_col != "p_value") setnames(ct, p_col, "p_value")
+
+  # Keep stable columns for downstream code.
+  if (!"estimate" %in% names(ct)) ct[, estimate := NA_real_]
+  if (!"std_error" %in% names(ct)) ct[, std_error := NA_real_]
+  if (!"t_value" %in% names(ct)) ct[, t_value := NA_real_]
+  if (!"p_value" %in% names(ct)) ct[, p_value := NA_real_]
+  ct[]
+}
+
+safe_model_eval <- function(expr, model_label, log_file = NULL) {
+  tryCatch(
+    eval.parent(substitute(expr)),
+    error = function(e) {
+      msg <- conditionMessage(e)
+      if (grepl("dependent variable .* constant", msg, ignore.case = TRUE)) {
+        logf("Skipping model (constant DV after cleaning): ", model_label, " | ", msg, log_file = log_file)
+        return(NULL)
+      }
+      stop(e)
+    }
+  )
+}
+
+find_bt_interaction_term <- function(coef_names, group_var, group_level, slope_var) {
+  target <- paste0(group_var, "::", group_level, ":", slope_var)
+  if (target %chin% coef_names) return(target)
+  alt <- paste0(slope_var, ":", group_var, "::", group_level)
+  if (alt %chin% coef_names) return(alt)
+  hits <- coef_names[
+    grepl(paste0(group_var, "::", group_level), coef_names, fixed = TRUE) &
+      grepl(paste0(":", slope_var, "$"), coef_names)
+  ]
+  if (!length(hits)) return(NA_character_)
+  hits[1L]
+}
+
+build_bt_slope_table <- function(model, sample_name, outcome_name, fe_name, block_name,
+                                 ref_building_type, building_types_seen,
+                                 group_var = "building_type",
+                                 group_col = "building_type",
+                                 ref_group_col = "ref_building_type") {
+  b <- coef(model)
+  if (!length(b)) return(data.table())
+  cn <- names(b)
+  v <- tryCatch(as.matrix(vcov(model)), error = function(e) NULL)
+  if (is.null(v) || !length(v)) return(data.table())
+
+  bt_levels <- sort(unique(c(as.character(building_types_seen), ref_building_type)))
+  bt_levels <- bt_levels[!is.na(bt_levels) & nzchar(bt_levels)]
+  if (!length(bt_levels)) return(data.table())
+
+  slope_vars <- c("tc_black_c", "tc_female_c")
+  slope_labels <- c(tc_black_c = "pct_black", tc_female_c = "pct_women")
+
+  out <- vector("list", length(bt_levels) * length(slope_vars))
+  ii <- 0L
+  for (sv in slope_vars) {
+    base_term <- if (sv %chin% cn) sv else NA_character_
+    for (bt in bt_levels) {
+      ii <- ii + 1L
+      int_term <- if (identical(bt, ref_building_type)) NA_character_ else find_bt_interaction_term(cn, group_var, bt, sv)
+      est <- se <- pval <- stat <- NA_real_
+      estimable <- !is.na(base_term)
+
+      if (estimable) {
+        if (is.na(int_term)) {
+          # Reference-category slope or omitted interaction.
+          if (identical(bt, ref_building_type)) {
+            est <- unname(b[base_term])
+            vv <- v[base_term, base_term]
+            se <- if (is.finite(vv) && vv >= 0) sqrt(vv) else NA_real_
+          } else {
+            estimable <- FALSE
+          }
+        } else if (int_term %chin% cn) {
+          est <- unname(b[base_term] + b[int_term])
+          vv <- v[base_term, base_term] + v[int_term, int_term] + 2 * v[base_term, int_term]
+          se <- if (is.finite(vv) && vv >= 0) sqrt(vv) else NA_real_
+        } else {
+          estimable <- FALSE
+        }
+      }
+
+      if (is.finite(est) && is.finite(se) && se > 0) {
+        stat <- est / se
+        pval <- 2 * pnorm(abs(stat), lower.tail = FALSE)
+      }
+
+      row_dt <- data.table(
+        block = block_name,
+        sample = sample_name,
+        outcome = outcome_name,
+        fe = fe_name,
+        group_var = group_var,
+        group_level = bt,
+        ref_group_level = ref_building_type,
+        slope_var = sv,
+        slope_label = unname(slope_labels[[sv]]),
+        base_term = base_term,
+        interaction_term = int_term,
+        estimable = as.logical(estimable),
+        estimate = est,
+        std_error = se,
+        stat_value = stat,
+        p_value = pval,
+        conf_low = if (is.finite(est) && is.finite(se)) est - 1.96 * se else NA_real_,
+        conf_high = if (is.finite(est) && is.finite(se)) est + 1.96 * se else NA_real_
+      )
+      row_dt[, (group_col) := bt]
+      row_dt[, (ref_group_col) := ref_building_type]
+      out[[ii]] <- row_dt
+    }
+  }
+  rbindlist(out, use.names = TRUE, fill = TRUE)
+}
+
 opts <- parse_cli_args(commandArgs(trailingOnly = TRUE))
 cfg <- read_config(opts$config %||% Sys.getenv("PHILLY_EVICTIONS_CONFIG", unset = "config.yml"))
 
@@ -467,7 +618,7 @@ if (is.null(time_unit_in) || !nzchar(as.character(time_unit_in))) {
   cfg_time <- cfg$run$retaliatory_time_unit %||% ""
   if (!nzchar(as.character(cfg_time))) {
     bdl <- tolower(as.character(cfg$run$building_data_agg_level %||% ""))
-    cfg_time <- if (bdl %chin% c("month", "quarter")) bdl else "month"
+    cfg_time <- if (bdl %chin% c("month", "quarter")) bdl else "quarter"
   }
   time_unit_in <- cfg_time
 }
@@ -529,6 +680,9 @@ sample_n <- to_int(opts$sample_n, cfg$run$sample_n %||% 200000L)
 seed <- to_int(opts$seed, cfg$run$seed %||% 123L)
 use_pid_filter <- to_bool(opts$use_pid_filter, TRUE)
 skip_lpdid <- to_bool(opts$skip_lpdid, cfg$run$retaliatory_skip_lpdid %||% TRUE)
+skip_distlag <- to_bool(opts$skip_distlag, cfg$run$retaliatory_skip_distlag %||% TRUE)
+only_complaint_suppression <- to_bool(opts$only_complaint_suppression, TRUE)
+if (skip_distlag) max_lead_lag <- max_bw
 
 logf("=== Starting retaliatory-evictions.r ===", log_file = log_file)
 logf("Config: ", cfg$meta$config_path, log_file = log_file)
@@ -547,7 +701,9 @@ logf(
   ", lp_fallback_window_periods=", lp_fallback_window_periods,
   ", lp_min_treated_retention=", lp_min_treated_retention,
   ", lp_nonabsorbing_lag=", if (is.na(lp_nonabsorbing_lag)) "auto" else lp_nonabsorbing_lag,
+  ", skip_distlag=", skip_distlag,
   ", skip_lpdid=", skip_lpdid,
+  ", only_complaint_suppression=", only_complaint_suppression,
   ", sample_mode=", sample_mode,
   ", sample_n=", sample_n,
   ", use_pid_filter=", use_pid_filter,
@@ -587,7 +743,11 @@ complaint_candidates <- c(
 )
 
 need_cols <- c("parcel_number", "period", "total_complaints", "total_severe_complaints",
-               "total_permits", "total_violations", complaint_candidates)
+               "total_permits", "total_violations",
+               "hazardous_violation_count", "unsafe_violation_count",
+               "electrical_permit_count", "plumbing_permit_count",
+               "mechanical_permit_count", "fire_suppression_permit_count",
+               complaint_candidates)
 dt <- read_panel_slice(panel_path, need_cols, pid_filter = pid_filter)
 assert_has_cols(dt, c("PID", "period", "total_complaints"), paste0(period_label, " building panel slice"))
 
@@ -662,7 +822,11 @@ setkey(ev_agg, PID, period)
 dt[ev_agg, num_filings := i.num_filings]
 dt[is.na(num_filings), num_filings := 0L]
 
-num_cols <- setdiff(names(dt), c("PID", "period"))
+non_numeric_cols <- c(
+  "PID", "period", "GEOID", "census_tract",
+  "building_type", "num_units_bin", "year_blt_decade", "num_stories_bin", "quality_grade"
+)
+num_cols <- setdiff(names(dt), non_numeric_cols)
 for (cc in num_cols) {
   suppressWarnings(dt[, (cc) := as.numeric(get(cc))])
   dt[is.na(get(cc)), (cc) := 0]
@@ -710,6 +874,10 @@ make_leads_lags(dt, stem = "non_severe", h = max_lead_lag)
 
 dt[, period_fe := as.factor(period)]
 
+# Availability flags used in multiple model blocks (including complaint suppression).
+has_geoid <- "GEOID" %in% names(dt) && dt[!is.na(GEOID) & nzchar(as.character(GEOID)), .N] > 0
+has_tract <- "census_tract" %in% names(dt)
+
 # No separate panel_pre copy — filter inline via dt[year <= pre_covid_end] to save memory
 n_pre <- dt[year <= pre_covid_end, .N]
 if (n_pre == 0L) stop("Pre-COVID sample is empty after filters.")
@@ -720,6 +888,7 @@ logf("Eviction filing rate (full): ", round(mean(dt$filed_eviction, na.rm = TRUE
 logf("Any complaint rate (full): ", round(mean(dt$filed_complaint, na.rm = TRUE), 6), log_file = log_file)
 logf("Severe complaint source: ", severe_source, log_file = log_file)
 
+if (!only_complaint_suppression) {
 model_specs <- data.table(
   sample = c("full", "full", "full", "pre", "pre", "pre"),
   stem = c("complaint", "severe", "non_severe", "complaint", "severe", "non_severe")
@@ -730,20 +899,43 @@ model_specs <- data.table(
 # etable is called per-model and concatenated, instead of storing all models in memory.
 etable_dist_lines <- list()
 coef_dist_list <- list()
-for (i in seq_len(nrow(model_specs))) {
-  s <- model_specs$sample[i]
-  stem <- model_specs$stem[i]
-  key <- paste0(s, "_", stem)
-  dat <- if (s == "pre") dt[year <= pre_covid_end] else dt
-  m <- fit_dist_lag(dat, stem = stem, h = h)
-  coef_dist_list[[key]] <- extract_dist_lag_coefs(m, stem = stem, sample_name = s)
-  etable_dist_lines[[key]] <- capture.output(etable(m, se.below = TRUE, digits = 3))
-  logf("Fitted dist-lag model: ", key, " | N=", nobs(m), log_file = log_file)
-  rm(m, dat); gc()
+coef_dist <- data.table(
+  sample = character(),
+  stem = character(),
+  model = character(),
+  timing = integer(),
+  estimate = numeric(),
+  std_error = numeric(),
+  t_value = numeric(),
+  p_value = numeric(),
+  conf_low = numeric(),
+  conf_high = numeric(),
+  stem_label = character(),
+  sample_label = character()
+)
+if (!skip_distlag) {
+  for (i in seq_len(nrow(model_specs))) {
+    s <- model_specs$sample[i]
+    stem <- model_specs$stem[i]
+    key <- paste0(s, "_", stem)
+    dat <- if (s == "pre") dt[year <= pre_covid_end] else dt
+    dat <- dat[!is.na(GEOID) & nzchar(as.character(GEOID))]
+    if (nrow(dat) < 100L) {
+      rm(dat); gc()
+      next
+    }
+    m <- fit_dist_lag(dat, stem = stem, h = h)
+    coef_dist_list[[key]] <- extract_dist_lag_coefs(m, stem = stem, sample_name = s)
+    etable_dist_lines[[key]] <- capture.output(etable(m, se.below = TRUE, digits = 3))
+    logf("Fitted dist-lag model: ", key, " | N=", nobs(m), log_file = log_file)
+    rm(m, dat); gc()
+  }
+  coef_dist <- rbindlist(coef_dist_list, use.names = TRUE, fill = TRUE)
+  coef_dist[, stem_label := pretty_stem(stem)]
+  coef_dist[, sample_label := fifelse(sample == "pre", paste0("Pre-COVID (<=", pre_covid_end, ")"), "Full Sample")]
+} else {
+  logf("Skipping distributed-lag block (--skip_distlag=TRUE).", log_file = log_file)
 }
-coef_dist <- rbindlist(coef_dist_list, use.names = TRUE, fill = TRUE)
-coef_dist[, stem_label := pretty_stem(stem)]
-coef_dist[, sample_label := fifelse(sample == "pre", paste0("Pre-COVID (<=", pre_covid_end, ")"), "Full Sample")]
 
 # Local projections DiD specs.
 models_lpdid <- list()
@@ -881,8 +1073,20 @@ if (has_geoid) {
     key <- paste0(s, "_", stem)
     dat <- if (s == "pre") dt[year <= pre_covid_end] else dt
 
-    m_base_tract <- fit_same_period_tract(dat, stem = stem, y = "filed_eviction")
-    m_tenant_tract <- fit_same_period_tract_tenant(dat, stem = stem, y = "filed_eviction")
+    m_base_tract <- safe_model_eval(
+      fit_same_period_tract(dat, stem = stem, y = "filed_eviction"),
+      model_label = paste0("tract_fe_same_period_base_", key),
+      log_file = log_file
+    )
+    m_tenant_tract <- safe_model_eval(
+      fit_same_period_tract_tenant(dat, stem = stem, y = "filed_eviction"),
+      model_label = paste0("tract_fe_same_period_tenant_", key),
+      log_file = log_file
+    )
+    if (is.null(m_base_tract) || is.null(m_tenant_tract)) {
+      rm(dat); gc()
+      next
+    }
 
     coef_tract_list[[paste0(key, "_base")]] <- extract_tenant_comp_coefs(
       m_base_tract, stem = stem, sample_name = s, spec_name = "tract_baseline"
@@ -907,8 +1111,8 @@ if (nrow(coef_tract)) {
   coef_tract[, stem_label := pretty_stem(stem)]
   coef_tract[, sample_label := fifelse(sample == "pre", paste0("Pre-COVID (<=", pre_covid_end, ")"), "Full Sample")]
 }
-etable_tract_txt <- unlist(etable_tract_lines)
-etable_tract_tex <- unlist(etable_tract_tex_lines)
+etable_tract_txt <- if (length(etable_tract_lines)) unlist(etable_tract_lines) else character()
+etable_tract_tex <- if (length(etable_tract_tex_lines)) unlist(etable_tract_tex_lines) else character()
 
 # ======================================================================
 # Retaliatory Targeting: among eviction filings, are retaliatory ones
@@ -921,9 +1125,17 @@ has_tract <- "census_tract" %in% names(dt)
 targeting_coef_list <- list()
 targeting_etable_lines <- list()
 targeting_etable_tex_lines <- list()
+targeting_btint_coef_list <- list()
+targeting_btint_etable_lines <- list()
+targeting_btint_etable_tex_lines <- list()
+targeting_btint_slopes_list <- list()
 bldg_year_targeting_coef_list <- list()
 bldg_year_targeting_etable_lines <- list()
 bldg_year_targeting_etable_tex_lines <- list()
+bldg_year_targeting_btint_coef_list <- list()
+bldg_year_targeting_btint_etable_lines <- list()
+bldg_year_targeting_btint_etable_tex_lines <- list()
+bldg_year_targeting_btint_slopes_list <- list()
 
 if (has_geoid && has_tract) {
   # Build retaliatory flags: same-period and within-bandwidth
@@ -951,7 +1163,12 @@ if (has_geoid && has_tract) {
     y_col <- paste0("retaliatory_", outcome_name)
     for (s in c("full", "pre")) {
       dat <- if (s == "pre") ev_dt[year <= pre_covid_end] else ev_dt
-      if (nrow(dat) < 100L) next
+      dat_tract <- dat[!is.na(census_tract) & nzchar(as.character(census_tract))]
+      dat_bg <- dat[!is.na(GEOID) & nzchar(as.character(GEOID))]
+      if (nrow(dat_tract) < 100L || nrow(dat_bg) < 100L) {
+        rm(dat, dat_tract, dat_bg); gc()
+        next
+      }
       key <- paste0(s, "_", outcome_name)
 
       # Tract FE
@@ -959,14 +1176,26 @@ if (has_geoid && has_tract) {
         y_col, " ~ tc_black_c + tc_female_c + tc_black_female_c + tc_cov_c",
         " + tenant_comp_missing | period_fe + census_tract"
       ))
-      m_tract <- feols(fml_tract, data = dat, cluster = ~census_tract, lean = TRUE)
+      m_tract <- safe_model_eval(
+        feols(fml_tract, data = dat_tract, cluster = ~census_tract, lean = TRUE),
+        model_label = paste0("targeting_", key, "_tract"),
+        log_file = log_file
+      )
 
       # BG FE
       fml_bg <- as.formula(paste0(
         y_col, " ~ tc_black_c + tc_female_c + tc_black_female_c + tc_cov_c",
         " + tenant_comp_missing | period_fe + GEOID"
       ))
-      m_bg <- feols(fml_bg, data = dat, cluster = ~GEOID, lean = TRUE)
+      m_bg <- safe_model_eval(
+        feols(fml_bg, data = dat_bg, cluster = ~GEOID, lean = TRUE),
+        model_label = paste0("targeting_", key, "_bg"),
+        log_file = log_file
+      )
+      if (is.null(m_tract) || is.null(m_bg)) {
+        rm(dat, dat_tract, dat_bg); gc()
+        next
+      }
 
       ct_tract <- as.data.table(summary(m_tract)$coeftable, keep.rownames = "term")
       ct_bg <- as.data.table(summary(m_bg)$coeftable, keep.rownames = "term")
@@ -989,9 +1218,111 @@ if (has_geoid && has_tract) {
       )
       logf("Fitted targeting model: ", key, " | N_tract=", nobs(m_tract),
            ", N_bg=", nobs(m_bg), log_file = log_file)
-      rm(m_tract, m_bg, dat); gc()
+      rm(m_tract, m_bg, dat, dat_tract, dat_bg); gc()
     }
   }
+
+  # Unit-bin slope heterogeneity for targeting (% Black / % women).
+  bt_counts_ev <- ev_dt[!is.na(num_units_bin) & nzchar(as.character(num_units_bin)), .N, by = num_units_bin][order(-N, num_units_bin)]
+  bt_ref_targeting <- if ("1" %in% bt_counts_ev$num_units_bin) {
+    "1"
+  } else if (nrow(bt_counts_ev)) {
+    as.character(bt_counts_ev$num_units_bin[1L])
+  } else {
+    NA_character_
+  }
+  if (is.na(bt_ref_targeting)) {
+    logf("Skipping targeting num_units_bin interactions: no non-missing num_units_bin.", log_file = log_file)
+  } else {
+    logf("Targeting num_units_bin interaction reference category: ", bt_ref_targeting, log_file = log_file)
+    for (outcome_name in c("same", "bw")) {
+      y_col <- paste0("retaliatory_", outcome_name)
+      for (s in c("full", "pre")) {
+        dat <- if (s == "pre") ev_dt[year <= pre_covid_end] else ev_dt
+        dat_tract <- dat[!is.na(census_tract) & nzchar(as.character(census_tract))]
+        dat_bg <- dat[!is.na(GEOID) & nzchar(as.character(GEOID))]
+        if (nrow(dat_tract) < 100L || nrow(dat_bg) < 100L) {
+          rm(dat, dat_tract, dat_bg); gc()
+          next
+        }
+        if (dat[!is.na(num_units_bin) & nzchar(as.character(num_units_bin)), uniqueN(num_units_bin)] < 2L) {
+          rm(dat, dat_tract, dat_bg); gc()
+          next
+        }
+        key <- paste0(s, "_", outcome_name)
+
+        fml_tract_btint <- as.formula(paste0(
+          y_col, " ~ tc_black_c + tc_female_c + tc_black_female_c + tc_cov_c + tenant_comp_missing",
+          " + i(num_units_bin, tc_black_c, ref = '", bt_ref_targeting, "')",
+          " + i(num_units_bin, tc_female_c, ref = '", bt_ref_targeting, "')",
+          " | period_fe + census_tract + num_units_bin"
+        ))
+        m_tract_btint <- safe_model_eval(
+          feols(fml_tract_btint, data = dat_tract, cluster = ~census_tract, lean = TRUE),
+          model_label = paste0("targeting_btint_", key, "_tract"),
+          log_file = log_file
+        )
+
+        fml_bg_btint <- as.formula(paste0(
+          y_col, " ~ tc_black_c + tc_female_c + tc_black_female_c + tc_cov_c + tenant_comp_missing",
+          " + i(num_units_bin, tc_black_c, ref = '", bt_ref_targeting, "')",
+          " + i(num_units_bin, tc_female_c, ref = '", bt_ref_targeting, "')",
+          " | period_fe + GEOID + num_units_bin"
+        ))
+        m_bg_btint <- safe_model_eval(
+          feols(fml_bg_btint, data = dat_bg, cluster = ~GEOID, lean = TRUE),
+          model_label = paste0("targeting_btint_", key, "_bg"),
+          log_file = log_file
+        )
+        if (is.null(m_tract_btint) || is.null(m_bg_btint)) {
+          rm(dat, dat_tract, dat_bg); gc()
+          next
+        }
+
+        targeting_btint_coef_list[[paste0(key, "_tract")]] <- extract_bt_interaction_coefs(
+          m_tract_btint, sample_name = s, outcome_name = outcome_name, fe_name = "tract", block_name = "targeting"
+        )
+        targeting_btint_coef_list[[paste0(key, "_bg")]] <- extract_bt_interaction_coefs(
+          m_bg_btint, sample_name = s, outcome_name = outcome_name, fe_name = "bg", block_name = "targeting"
+        )
+        bt_levels_dat <- dat[!is.na(num_units_bin) & nzchar(as.character(num_units_bin)), unique(as.character(num_units_bin))]
+        targeting_btint_slopes_list[[paste0(key, "_tract")]] <- build_bt_slope_table(
+          m_tract_btint,
+          sample_name = s,
+          outcome_name = outcome_name,
+          fe_name = "tract",
+          block_name = "targeting",
+          ref_building_type = bt_ref_targeting,
+          building_types_seen = bt_levels_dat,
+          group_var = "num_units_bin",
+          group_col = "num_units_bin",
+          ref_group_col = "ref_num_units_bin"
+        )
+        targeting_btint_slopes_list[[paste0(key, "_bg")]] <- build_bt_slope_table(
+          m_bg_btint,
+          sample_name = s,
+          outcome_name = outcome_name,
+          fe_name = "bg",
+          block_name = "targeting",
+          ref_building_type = bt_ref_targeting,
+          building_types_seen = bt_levels_dat,
+          group_var = "num_units_bin",
+          group_col = "num_units_bin",
+          ref_group_col = "ref_num_units_bin"
+        )
+        targeting_btint_etable_lines[[key]] <- capture.output(
+          etable(m_tract_btint, m_bg_btint, se.below = TRUE, digits = 4, headers = c("Tract FE", "BG FE"))
+        )
+        targeting_btint_etable_tex_lines[[key]] <- capture.output(
+          etable(m_tract_btint, m_bg_btint, se.below = TRUE, digits = 4, tex = TRUE, headers = c("Tract FE", "BG FE"))
+        )
+        logf("Fitted targeting num_units_bin interaction model: ", key, " | N_tract=", nobs(m_tract_btint),
+             ", N_bg=", nobs(m_bg_btint), log_file = log_file)
+        rm(m_tract_btint, m_bg_btint, dat, dat_tract, dat_bg); gc()
+      }
+    }
+  }
+
   # ------------------------------------------------------------------
   # Building-year level targeting: collapse to PID x year, then regress
   # share_retaliatory ~ demographics + building observables | tract/BG
@@ -1061,7 +1392,12 @@ if (has_geoid && has_tract) {
     y_col <- paste0("share_retaliatory_", outcome_name)
     for (s in c("full", "pre")) {
       dat <- if (s == "pre") pid_year_ev[year <= pre_covid_end] else pid_year_ev
-      if (nrow(dat) < 100L) next
+      dat_tract <- dat[!is.na(census_tract) & nzchar(as.character(census_tract))]
+      dat_bg <- dat[!is.na(GEOID) & nzchar(as.character(GEOID))]
+      if (nrow(dat_tract) < 100L || nrow(dat_bg) < 100L) {
+        rm(dat, dat_tract, dat_bg); gc()
+        next
+      }
       key <- paste0(s, "_", outcome_name)
 
       # Tract FE + building observables
@@ -1070,7 +1406,11 @@ if (has_geoid && has_tract) {
         " + tenant_comp_missing", obs_rhs,
         " | year + census_tract", obs_fe
       ))
-      m_tract <- feols(fml_tract, data = dat, cluster = ~census_tract, lean = TRUE)
+      m_tract <- safe_model_eval(
+        feols(fml_tract, data = dat_tract, cluster = ~census_tract, lean = TRUE),
+        model_label = paste0("bldg_year_targeting_", key, "_tract"),
+        log_file = log_file
+      )
 
       # BG FE + building observables
       fml_bg <- as.formula(paste0(
@@ -1078,7 +1418,15 @@ if (has_geoid && has_tract) {
         " + tenant_comp_missing", obs_rhs,
         " | year + GEOID", obs_fe
       ))
-      m_bg <- feols(fml_bg, data = dat, cluster = ~GEOID, lean = TRUE)
+      m_bg <- safe_model_eval(
+        feols(fml_bg, data = dat_bg, cluster = ~GEOID, lean = TRUE),
+        model_label = paste0("bldg_year_targeting_", key, "_bg"),
+        log_file = log_file
+      )
+      if (is.null(m_tract) || is.null(m_bg)) {
+        rm(m_tract, m_bg, dat, dat_tract, dat_bg); gc()
+        next
+      }
 
       ct_tract <- as.data.table(summary(m_tract)$coeftable, keep.rownames = "term")
       ct_bg <- as.data.table(summary(m_bg)$coeftable, keep.rownames = "term")
@@ -1101,11 +1449,115 @@ if (has_geoid && has_tract) {
       )
       logf("Fitted bldg-year targeting model: ", key, " | N_tract=", nobs(m_tract),
            ", N_bg=", nobs(m_bg), log_file = log_file)
-      rm(m_tract, m_bg, dat); gc()
+      rm(m_tract, m_bg, dat, dat_tract, dat_bg); gc()
     }
   }
 
-  rm(ev_dt, pid_year_ev); gc()
+  # Unit-bin slope heterogeneity for building-year targeting (% Black / % women).
+  bt_counts_byt <- pid_year_ev[!is.na(num_units_bin) & nzchar(as.character(num_units_bin)), .N, by = num_units_bin][order(-N, num_units_bin)]
+  bt_ref_bldg_year_targeting <- if ("1" %in% bt_counts_byt$num_units_bin) {
+    "1"
+  } else if (nrow(bt_counts_byt)) {
+    as.character(bt_counts_byt$num_units_bin[1L])
+  } else {
+    NA_character_
+  }
+  if (is.na(bt_ref_bldg_year_targeting)) {
+    logf("Skipping building-year targeting num_units_bin interactions: no non-missing num_units_bin.", log_file = log_file)
+  } else {
+    logf("Building-year targeting num_units_bin interaction reference category: ", bt_ref_bldg_year_targeting, log_file = log_file)
+    for (outcome_name in c("same", "bw")) {
+      y_col <- paste0("share_retaliatory_", outcome_name)
+      for (s in c("full", "pre")) {
+        dat <- if (s == "pre") pid_year_ev[year <= pre_covid_end] else pid_year_ev
+        dat_tract <- dat[!is.na(census_tract) & nzchar(as.character(census_tract))]
+        dat_bg <- dat[!is.na(GEOID) & nzchar(as.character(GEOID))]
+        if (nrow(dat_tract) < 100L || nrow(dat_bg) < 100L) {
+          rm(dat, dat_tract, dat_bg); gc()
+          next
+        }
+        if (dat[!is.na(num_units_bin) & nzchar(as.character(num_units_bin)), uniqueN(num_units_bin)] < 2L) {
+          rm(dat, dat_tract, dat_bg); gc()
+          next
+        }
+        key <- paste0(s, "_", outcome_name)
+
+        fml_tract_btint <- as.formula(paste0(
+          y_col, " ~ tc_black_c + tc_female_c + tc_black_female_c + tc_cov_c",
+          " + tenant_comp_missing",
+          " + i(num_units_bin, tc_black_c, ref = '", bt_ref_bldg_year_targeting, "')",
+          " + i(num_units_bin, tc_female_c, ref = '", bt_ref_bldg_year_targeting, "')",
+          obs_rhs,
+          " | year + census_tract", obs_fe
+        ))
+        m_tract_btint <- safe_model_eval(
+          feols(fml_tract_btint, data = dat_tract, cluster = ~census_tract, lean = TRUE),
+          model_label = paste0("bldg_year_targeting_btint_", key, "_tract"),
+          log_file = log_file
+        )
+
+        fml_bg_btint <- as.formula(paste0(
+          y_col, " ~ tc_black_c + tc_female_c + tc_black_female_c + tc_cov_c",
+          " + tenant_comp_missing",
+          " + i(num_units_bin, tc_black_c, ref = '", bt_ref_bldg_year_targeting, "')",
+          " + i(num_units_bin, tc_female_c, ref = '", bt_ref_bldg_year_targeting, "')",
+          obs_rhs,
+          " | year + GEOID", obs_fe
+        ))
+        m_bg_btint <- safe_model_eval(
+          feols(fml_bg_btint, data = dat_bg, cluster = ~GEOID, lean = TRUE),
+          model_label = paste0("bldg_year_targeting_btint_", key, "_bg"),
+          log_file = log_file
+        )
+        if (is.null(m_tract_btint) || is.null(m_bg_btint)) {
+          rm(dat, dat_tract, dat_bg); gc()
+          next
+        }
+
+        bldg_year_targeting_btint_coef_list[[paste0(key, "_tract")]] <- extract_bt_interaction_coefs(
+          m_tract_btint, sample_name = s, outcome_name = outcome_name, fe_name = "tract", block_name = "bldg_year_targeting"
+        )
+        bldg_year_targeting_btint_coef_list[[paste0(key, "_bg")]] <- extract_bt_interaction_coefs(
+          m_bg_btint, sample_name = s, outcome_name = outcome_name, fe_name = "bg", block_name = "bldg_year_targeting"
+        )
+        bt_levels_dat <- dat[!is.na(num_units_bin) & nzchar(as.character(num_units_bin)), unique(as.character(num_units_bin))]
+        bldg_year_targeting_btint_slopes_list[[paste0(key, "_tract")]] <- build_bt_slope_table(
+          m_tract_btint,
+          sample_name = s,
+          outcome_name = outcome_name,
+          fe_name = "tract",
+          block_name = "bldg_year_targeting",
+          ref_building_type = bt_ref_bldg_year_targeting,
+          building_types_seen = bt_levels_dat,
+          group_var = "num_units_bin",
+          group_col = "num_units_bin",
+          ref_group_col = "ref_num_units_bin"
+        )
+        bldg_year_targeting_btint_slopes_list[[paste0(key, "_bg")]] <- build_bt_slope_table(
+          m_bg_btint,
+          sample_name = s,
+          outcome_name = outcome_name,
+          fe_name = "bg",
+          block_name = "bldg_year_targeting",
+          ref_building_type = bt_ref_bldg_year_targeting,
+          building_types_seen = bt_levels_dat,
+          group_var = "num_units_bin",
+          group_col = "num_units_bin",
+          ref_group_col = "ref_num_units_bin"
+        )
+        bldg_year_targeting_btint_etable_lines[[key]] <- capture.output(
+          etable(m_tract_btint, m_bg_btint, se.below = TRUE, digits = 4, headers = c("Tract FE", "BG FE"))
+        )
+        bldg_year_targeting_btint_etable_tex_lines[[key]] <- capture.output(
+          etable(m_tract_btint, m_bg_btint, se.below = TRUE, digits = 4, tex = TRUE, headers = c("Tract FE", "BG FE"))
+        )
+        logf("Fitted bldg-year targeting num_units_bin interaction model: ", key, " | N_tract=", nobs(m_tract_btint),
+             ", N_bg=", nobs(m_bg_btint), log_file = log_file)
+        rm(m_tract_btint, m_bg_btint, dat, dat_tract, dat_bg); gc()
+      }
+    }
+  }
+
 } else {
   logf("Skipping targeting models: GEOID/census_tract not available.", log_file = log_file)
 }
@@ -1116,17 +1568,108 @@ etable_targeting_tex <- unlist(targeting_etable_tex_lines)
 etable_bldg_year_targeting_txt <- unlist(bldg_year_targeting_etable_lines)
 etable_bldg_year_targeting_tex <- unlist(bldg_year_targeting_etable_tex_lines)
 
+} else {
+  logf("Skipping non-suppression model blocks (--only_complaint_suppression=TRUE).", log_file = log_file)
+  targeting_coef_list <- list()
+  targeting_etable_lines <- list()
+  targeting_etable_tex_lines <- list()
+  targeting_btint_coef_list <- list()
+  targeting_btint_etable_lines <- list()
+  targeting_btint_etable_tex_lines <- list()
+  targeting_btint_slopes_list <- list()
+  bldg_year_targeting_coef_list <- list()
+  bldg_year_targeting_etable_lines <- list()
+  bldg_year_targeting_etable_tex_lines <- list()
+  bldg_year_targeting_btint_coef_list <- list()
+  bldg_year_targeting_btint_etable_lines <- list()
+  bldg_year_targeting_btint_etable_tex_lines <- list()
+  bldg_year_targeting_btint_slopes_list <- list()
+  coef_dist <- data.table()
+  coef_lpdid <- data.table()
+  lpdid_windows <- data.table()
+  models_lpdid <- list()
+  coef_same_period <- data.table()
+  coef_same_period_wide <- data.table()
+  coef_tract <- data.table()
+  coef_targeting <- data.table()
+  coef_bldg_year_targeting <- data.table()
+  coef_targeting_btint <- data.table()
+  coef_bldg_year_targeting_btint <- data.table()
+  slopes_targeting_btint <- data.table()
+  slopes_bldg_year_targeting_btint <- data.table()
+  etable_dist_txt <- character()
+  lpdid_txt <- character()
+  etable_same_period_txt <- character()
+  etable_same_period_tex <- character()
+  etable_same_period_lines <- list()
+  etable_same_period_tex_lines <- list()
+  etable_tract_txt <- character()
+  etable_tract_tex <- character()
+  etable_tract_lines <- list()
+  etable_tract_tex_lines <- list()
+  etable_targeting_txt <- character()
+  etable_targeting_tex <- character()
+  etable_bldg_year_targeting_txt <- character()
+  etable_bldg_year_targeting_tex <- character()
+  etable_targeting_btint_txt <- character()
+  etable_targeting_btint_tex <- character()
+  etable_bldg_year_targeting_btint_txt <- character()
+  etable_bldg_year_targeting_btint_tex <- character()
+  slopes_targeting_btint_txt <- character()
+  slopes_bldg_year_targeting_btint_txt <- character()
+  distlag_plot_note <- "Distributed-lag plot skipped (only_complaint_suppression=TRUE)"
+  lpdid_plot_note <- "LP-DiD plot skipped (only_complaint_suppression=TRUE)"
+}
+
 # ======================================================================
-# Complaint Suppression: controlling for maintenance (permits) and
-# building observables, do buildings with more Black / female tenants
-# file fewer complaints?
+# Complaint Suppression (panel LPM + aggregated PPML): controlling for
+# maintenance (permits) and building observables, do buildings with more
+# Black / female tenants file fewer complaints?
 # Sample: all building-periods
-# Outcome: filed_complaint (also filed_severe, filed_non_severe)
+# Panel outcomes: complaint indicators (any / severe / non-severe)
 # FE: period + tract; period + BG
 # ======================================================================
 suppression_coef_list <- list()
 suppression_etable_lines <- list()
 suppression_etable_tex_lines <- list()
+suppression_btint_coef_list <- list()
+suppression_btint_etable_lines <- list()
+suppression_btint_etable_tex_lines <- list()
+suppression_btint_slopes_list <- list()
+suppression_longrun_coef_list <- list()
+suppression_longrun_etable_lines <- list()
+suppression_longrun_etable_tex_lines <- list()
+suppression_severe_3spec_coef <- data.table(
+  model = character(),
+  term = character(),
+  estimate = numeric(),
+  std_error = numeric(),
+  t_value = numeric(),
+  p_value = numeric(),
+  n_obs = integer(),
+  n_pid = integer(),
+  sample_note = character()
+)
+suppression_severe_3spec_etable_txt <- character()
+suppression_severe_3spec_etable_tex <- character()
+suppression_severe_3spec_sample <- data.table(
+  model = character(),
+  n_obs = integer(),
+  n_pid = integer(),
+  lambda = numeric(),
+  maintenance_flow_source = character()
+)
+suppression_severe_3spec_missingness <- data.table(
+  stage = character(),
+  year = integer(),
+  n_obs = integer(),
+  n_pid = integer(),
+  share_tenant_black_missing = numeric(),
+  share_tenant_comp_missing = numeric(),
+  share_log_total_area_missing = numeric(),
+  share_missing_tract = numeric(),
+  share_missing_maint_stock = numeric()
+)
 
 if (has_geoid && has_tract) {
   # Ensure permit/violation and building observable columns are numeric
@@ -1138,7 +1681,7 @@ if (has_geoid && has_tract) {
       dt[, (cc) := 0]
     }
   }
-  for (cc in c("total_area", "total_units", "market_value")) {
+  for (cc in c("total_area", "total_units", "market_value", "year_built")) {
     if (cc %in% names(dt)) dt[, (cc) := suppressWarnings(as.numeric(get(cc)))]
   }
   if (!"log_total_area" %in% names(dt) && "total_area" %in% names(dt)) {
@@ -1150,70 +1693,658 @@ if (has_geoid && has_tract) {
     dt[!is.finite(log_market_value), log_market_value := NA_real_]
   }
 
+  # Cumulative maintenance / condition histories (through current period, by PID).
+  setorder(dt, PID, time_index)
+  dt[, cumulative_permit_count := cumsum(fifelse(is.na(total_permits), 0, total_permits)), by = PID]
+  dt[, cumulative_violations_count := cumsum(fifelse(is.na(total_violations), 0, total_violations)), by = PID]
+
   # Building observable controls + FE (matching price-regs-eb.R pattern)
-  sup_obs_rhs <- " + total_permits + total_violations + log_total_area + log_market_value"
+  sup_obs_rhs <- paste0(
+    " + total_permits + total_violations",
+    " + cumulative_permit_count + cumulative_violations_count",
+    " + log_total_area + log_market_value"
+  )
   sup_obs_fe <- " + num_units_bin + building_type + year_blt_decade + num_stories_bin"
 
-  suppression_outcomes <- c("complaint", "severe", "non_severe")
-  for (stem in suppression_outcomes) {
-    y_col <- paste0("filed_", stem)
-    for (s in c("full", "pre")) {
-      dat <- if (s == "pre") dt[year <= pre_covid_end] else dt
-      key <- paste0(s, "_", stem)
+  # Count outcomes for aggregated suppression specs.
+  dt[, complaints_any_count := pmax(0, suppressWarnings(as.numeric(total_complaints)))]
+  if ("total_severe_complaints" %in% names(dt)) {
+    dt[, complaints_severe_count := pmax(0, suppressWarnings(as.numeric(total_severe_complaints)))]
+  } else {
+    dt[, complaints_severe_count := rowSums(.SD, na.rm = TRUE), .SDcols = severe_cols]
+    dt[!is.finite(complaints_severe_count), complaints_severe_count := 0]
+  }
+  dt[, complaints_non_severe_count := rowSums(.SD, na.rm = TRUE), .SDcols = non_severe_cols]
+  dt[!is.finite(complaints_non_severe_count), complaints_non_severe_count := 0]
+  dt[, complaints_non_severe_count := pmax(0, complaints_non_severe_count)]
 
-      # Tract FE + building observables
-      fml_tract <- as.formula(paste0(
-        y_col, " ~ tc_black_c + tc_female_c + tc_black_female_c + tc_cov_c",
-        " + tenant_comp_missing", sup_obs_rhs,
-        " | period_fe + census_tract", sup_obs_fe
-      ))
-      m_tract <- feols(fml_tract, data = dat, cluster = ~census_tract, lean = TRUE)
+  # -------------------------------------------------------------------
+  # Severe complaint PPML (3-spec ladder, raw pct_black):
+  #   (1) pct_black + year FE
+  #   (2) + building chars + neighborhood (tract) FE + year FE
+  #   (3) + lagged maintenance stock per unit (preferred maintenance control)
+  # -------------------------------------------------------------------
+  collapse_quality_grade_abcde <- function(x) {
+    x <- toupper(trimws(as.character(x)))
+    x <- substr(x, 1L, 1L)
+    x[!(x %chin% c("A", "B", "C", "D", "E"))] <- "Other"
+    x[is.na(x) | !nzchar(x)] <- "Other"
+    x
+  }
+  make_fine_unit_bins <- function(total_units_obs) {
+    x <- suppressWarnings(as.numeric(total_units_obs))
+    out <- rep("Unknown", length(x))
+    ok <- is.finite(x) & x > 0
+    if (!any(ok)) return(as.character(out))
+    cuts <- c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 30, 40, 50, 75, 100, 150, 200, Inf)
+    labs <- c(
+      "1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
+      "11-12", "13-15", "16-20", "21-30", "31-40", "41-50",
+      "51-75", "76-100", "101-150", "151-200", "201+"
+    )
+    out[ok] <- as.character(cut(x[ok], breaks = cuts, labels = labs, include.lowest = TRUE, right = TRUE))
+    out[is.na(out) | !nzchar(out)] <- "Unknown"
+    out
+  }
+  ewma_vec <- function(x, lambda = 0.9) {
+    x <- as.numeric(x)
+    n <- length(x)
+    out <- numeric(n)
+    if (!n) return(out)
+    out[1L] <- ifelse(is.na(x[1L]), 0, x[1L])
+    if (n >= 2L) for (i in 2L:n) out[i] <- ifelse(is.na(x[i]), 0, x[i]) + lambda * out[i - 1L]
+    out
+  }
+  sev3_lambda <- 0.9
+  if (!("total_severe_complaints" %in% names(dt))) {
+    dt[, total_severe_complaints := complaints_severe_count]
+  }
+  dt[, total_units_wt := suppressWarnings(as.numeric(total_units))]
+  dt[!is.finite(total_units_wt) | total_units_wt <= 0, total_units_wt := 1]
+  dt[, quality_grade_abcde := collapse_quality_grade_abcde(quality_grade)]
+  dt[, unit_bin_fine := make_fine_unit_bins(total_units)]
+  dt[, log_total_area := suppressWarnings(as.numeric(log_total_area))]
+  dt[!is.finite(log_total_area), log_total_area := NA_real_]
+  repair_permit_cols <- intersect(
+    c("electrical_permit_count", "plumbing_permit_count", "mechanical_permit_count", "fire_suppression_permit_count"),
+    names(dt)
+  )
+  if (length(repair_permit_cols)) {
+    dt[, maint_flow_repairs := rowSums(.SD, na.rm = TRUE), .SDcols = repair_permit_cols]
+    sev3_flow_source <- paste(repair_permit_cols, collapse = ",")
+  } else {
+    dt[, maint_flow_repairs := fifelse(is.na(total_permits), 0, total_permits)]
+    sev3_flow_source <- "fallback_total_permits"
+  }
+  setorder(dt, PID, time_index)
+  dt[, maint_flow_repairs_l1 := shift(maint_flow_repairs, 1L, type = "lag", fill = 0), by = PID]
+  dt[, maint_stock_lag_sev3 := ewma_vec(maint_flow_repairs_l1, lambda = sev3_lambda), by = PID]
+  dt[, maint_stock_lag_rate_sev3 := maint_stock_lag_sev3 / pmax(total_units_wt, 1)]
 
-      # BG FE + building observables
-      fml_bg <- as.formula(paste0(
-        y_col, " ~ tc_black_c + tc_female_c + tc_black_female_c + tc_cov_c",
-        " + tenant_comp_missing", sup_obs_rhs,
-        " | period_fe + GEOID", sup_obs_fe
-      ))
-      m_bg <- feols(fml_bg, data = dat, cluster = ~GEOID, lean = TRUE)
+  dat_sev3_r1 <- dt[
+    tenant_comp_missing == 0L &
+      is.finite(total_severe_complaints) &
+      is.finite(infousa_pct_black)
+  ]
+  severe_viol_cols <- intersect(c("hazardous_violation_count", "unsafe_violation_count"), names(dt))
+  if (length(severe_viol_cols)) {
+    dt[, severe_viol_flow_sev3 := rowSums(.SD, na.rm = TRUE), .SDcols = severe_viol_cols]
+    sev3_viol_source <- paste(severe_viol_cols, collapse = ",")
+  } else {
+    dt[, severe_viol_flow_sev3 := fifelse(is.na(total_violations), 0, total_violations)]
+    sev3_viol_source <- "fallback_total_violations"
+  }
+  dt[, severe_viol_flow_l1_sev3 := shift(severe_viol_flow_sev3, 1L, type = "lag", fill = 0), by = PID]
+  dt[, severe_viol_stock_lag_sev3 := ewma_vec(severe_viol_flow_l1_sev3, lambda = sev3_lambda), by = PID]
+  dt[, severe_viol_stock_lag_rate_sev3 := severe_viol_stock_lag_sev3 / pmax(total_units_wt, 1)]
 
-      ct_tract <- as.data.table(summary(m_tract)$coeftable, keep.rownames = "term")
-      ct_bg <- as.data.table(summary(m_bg)$coeftable, keep.rownames = "term")
-      setnames(ct_tract, c("Estimate", "Std. Error", "t value", "Pr(>|t|)"),
-               c("estimate", "std_error", "t_value", "p_value"))
-      setnames(ct_bg, c("Estimate", "Std. Error", "t value", "Pr(>|t|)"),
-               c("estimate", "std_error", "t_value", "p_value"))
-      ct_tract[, `:=`(sample = s, stem = stem, fe = "tract")]
-      ct_bg[, `:=`(sample = s, stem = stem, fe = "bg")]
-      suppression_coef_list[[paste0(key, "_tract")]] <- ct_tract
-      suppression_coef_list[[paste0(key, "_bg")]] <- ct_bg
+  dat_sev3_r23 <- dt[
+    tenant_comp_missing == 0L &
+    is.finite(total_severe_complaints) &
+      is.finite(infousa_pct_black) &
+      is.finite(log_total_area) &
+      is.finite(maint_stock_lag_rate_sev3) &
+      is.finite(severe_viol_stock_lag_rate_sev3) &
+      !is.na(census_tract) & nzchar(as.character(census_tract))
+  ]
+  suppression_severe_3spec_missingness <- rbindlist(list(
+    dt[, .(
+      stage = "panel_all",
+      year = NA_integer_,
+      n_obs = .N,
+      n_pid = uniqueN(PID),
+      share_tenant_black_missing = mean(tenant_black_missing == 1L, na.rm = TRUE),
+      share_tenant_comp_missing = mean(tenant_comp_missing == 1L, na.rm = TRUE),
+      share_log_total_area_missing = mean(!is.finite(log_total_area), na.rm = TRUE),
+      share_missing_tract = mean(is.na(census_tract) | !nzchar(as.character(census_tract))),
+      share_missing_maint_stock = mean(!is.finite(maint_stock_lag_rate_sev3), na.rm = TRUE)
+    )],
+    dt[, .(
+      stage = "panel_all_by_year",
+      n_obs = .N,
+      n_pid = uniqueN(PID),
+      share_tenant_black_missing = mean(tenant_black_missing == 1L, na.rm = TRUE),
+      share_tenant_comp_missing = mean(tenant_comp_missing == 1L, na.rm = TRUE),
+      share_log_total_area_missing = mean(!is.finite(log_total_area), na.rm = TRUE),
+      share_missing_tract = mean(is.na(census_tract) | !nzchar(as.character(census_tract))),
+      share_missing_maint_stock = mean(!is.finite(maint_stock_lag_rate_sev3), na.rm = TRUE)
+    ), by = year],
+    dat_sev3_r1[, .(
+      stage = "reg1_sample",
+      year = NA_integer_,
+      n_obs = .N,
+      n_pid = uniqueN(PID),
+      share_tenant_black_missing = mean(tenant_black_missing == 1L, na.rm = TRUE),
+      share_tenant_comp_missing = mean(tenant_comp_missing == 1L, na.rm = TRUE),
+      share_log_total_area_missing = mean(!is.finite(log_total_area), na.rm = TRUE),
+      share_missing_tract = mean(is.na(census_tract) | !nzchar(as.character(census_tract))),
+      share_missing_maint_stock = mean(!is.finite(maint_stock_lag_rate_sev3), na.rm = TRUE)
+    )],
+    dat_sev3_r23[, .(
+      stage = "reg2_3_sample",
+      year = NA_integer_,
+      n_obs = .N,
+      n_pid = uniqueN(PID),
+      share_tenant_black_missing = mean(tenant_black_missing == 1L, na.rm = TRUE),
+      share_tenant_comp_missing = mean(tenant_comp_missing == 1L, na.rm = TRUE),
+      share_log_total_area_missing = mean(!is.finite(log_total_area), na.rm = TRUE),
+      share_missing_tract = mean(is.na(census_tract) | !nzchar(as.character(census_tract))),
+      share_missing_maint_stock = mean(!is.finite(maint_stock_lag_rate_sev3), na.rm = TRUE)
+    )]
+  ), use.names = TRUE, fill = TRUE)
 
-      suppression_etable_lines[[key]] <- capture.output(
-        etable(m_tract, m_bg, se.below = TRUE, digits = 4,
-               headers = c("Tract FE", "BG FE"))
-      )
-      suppression_etable_tex_lines[[key]] <- capture.output(
-        etable(m_tract, m_bg, se.below = TRUE, digits = 4, tex = TRUE,
-               headers = c("Tract FE", "BG FE"))
-      )
-      logf("Fitted suppression model: ", key, " | N_tract=", nobs(m_tract),
-           ", N_bg=", nobs(m_bg), log_file = log_file)
-      rm(m_tract, m_bg, dat); gc()
+  m_sev3_r1 <- safe_model_eval(
+    fepois(
+      total_severe_complaints ~ infousa_pct_black | year,
+      data = dat_sev3_r1,
+      weights = ~total_units_wt,
+      cluster = ~PID,
+      lean = TRUE
+    ),
+    model_label = "suppression_severe_ppml_3spec_reg1",
+    log_file = log_file
+  )
+  m_sev3_r2 <- safe_model_eval(
+    fepois(
+      total_severe_complaints ~ infousa_pct_black + log_total_area |
+        year + census_tract + building_type + unit_bin_fine + year_blt_decade + num_stories_bin + quality_grade_abcde,
+      data = dat_sev3_r23,
+      weights = ~total_units_wt,
+      cluster = ~PID,
+      lean = TRUE
+    ),
+    model_label = "suppression_severe_ppml_3spec_reg2",
+    log_file = log_file
+  )
+  m_sev3_r3 <- safe_model_eval(
+    fepois(
+      total_severe_complaints ~ infousa_pct_black + log_total_area + maint_stock_lag_rate_sev3 |
+        year + census_tract + building_type + unit_bin_fine + year_blt_decade + num_stories_bin + quality_grade_abcde,
+      data = dat_sev3_r23,
+      weights = ~total_units_wt,
+      cluster = ~PID,
+      lean = TRUE
+    ),
+    model_label = "suppression_severe_ppml_3spec_reg3",
+    log_file = log_file
+  )
+  m_sev3_r4 <- safe_model_eval(
+    fepois(
+      total_severe_complaints ~ infousa_pct_black + log_total_area + maint_stock_lag_rate_sev3 + severe_viol_stock_lag_rate_sev3 |
+        year + census_tract + building_type + unit_bin_fine + year_blt_decade + num_stories_bin + quality_grade_abcde,
+      data = dat_sev3_r23,
+      weights = ~total_units_wt,
+      cluster = ~PID,
+      lean = TRUE
+    ),
+    model_label = "suppression_severe_ppml_3spec_reg4_sevviol",
+    log_file = log_file
+  )
+  if (!is.null(m_sev3_r1) && !is.null(m_sev3_r2) && !is.null(m_sev3_r3) && !is.null(m_sev3_r4)) {
+    add_sev3_meta <- function(ct, model_name, n_pid, sample_note, n_obs_val) {
+      if (!nrow(ct)) return(ct)
+      ct[, `:=`(model = model_name, n_obs = as.integer(n_obs_val), n_pid = as.integer(n_pid), sample_note = sample_note)]
+      ct[]
     }
+    ct1 <- tidy_coeftable(m_sev3_r1)
+    ct2 <- tidy_coeftable(m_sev3_r2)
+    ct3 <- tidy_coeftable(m_sev3_r3)
+    suppression_severe_3spec_coef <- rbindlist(list(
+      add_sev3_meta(ct1, "reg1_pct_black_year", uniqueN(dat_sev3_r1$PID), "tenant_comp_missing==0", nobs(m_sev3_r1)),
+      add_sev3_meta(ct2, "reg2_plus_building_nhood_year", uniqueN(dat_sev3_r23$PID), "tenant_comp_missing==0 + area + tract", nobs(m_sev3_r2)),
+      add_sev3_meta(ct3, "reg3_plus_maintenance_stock", uniqueN(dat_sev3_r23$PID), "reg2 sample + maintenance stock", nobs(m_sev3_r3)),
+      add_sev3_meta(tidy_coeftable(m_sev3_r4), "reg4_plus_severe_violation_stock", uniqueN(dat_sev3_r23$PID), "reg3 sample + lagged severe violation stock", nobs(m_sev3_r4))
+    ), use.names = TRUE, fill = TRUE)
+    suppression_severe_3spec_etable_txt <- capture.output(
+      etable(
+        m_sev3_r1, m_sev3_r2, m_sev3_r3, m_sev3_r4,
+        se.below = TRUE, digits = 4,
+        headers = c("Reg 1", "Reg 2", "Reg 3", "Reg 4")
+      )
+    )
+    suppression_severe_3spec_etable_tex <- capture.output(
+      etable(
+        m_sev3_r1, m_sev3_r2, m_sev3_r3, m_sev3_r4,
+        se.below = TRUE, digits = 4, tex = TRUE,
+        headers = c("Reg 1", "Reg 2", "Reg 3", "Reg 4")
+      )
+    )
+    suppression_severe_3spec_sample <- data.table(
+      model = c("reg1_pct_black_year", "reg2_plus_building_nhood_year", "reg3_plus_maintenance_stock", "reg4_plus_severe_violation_stock"),
+      n_obs = c(nobs(m_sev3_r1), nobs(m_sev3_r2), nobs(m_sev3_r3), nobs(m_sev3_r4)),
+      n_pid = c(uniqueN(dat_sev3_r1$PID), uniqueN(dat_sev3_r23$PID), uniqueN(dat_sev3_r23$PID), uniqueN(dat_sev3_r23$PID)),
+      lambda = sev3_lambda,
+      maintenance_flow_source = sev3_flow_source,
+      severe_violation_flow_source = sev3_viol_source
+    )
+    sev3_key <- suppression_severe_3spec_coef[
+      term %chin% c("infousa_pct_black", "log_total_area", "maint_stock_lag_rate_sev3", "severe_viol_stock_lag_rate_sev3"),
+      .(model, term, estimate = round(estimate, 4), std_error = round(std_error, 4), p_value = signif(p_value, 4))
+    ]
+    if (nrow(sev3_key)) {
+      logf("Severe complaint 3-spec PPML key coefficients:\n", paste(capture.output(print(sev3_key)), collapse = "\n"), log_file = log_file)
+    }
+    if (nrow(suppression_severe_3spec_missingness)) {
+      miss_key <- copy(suppression_severe_3spec_missingness[stage %chin% c("panel_all", "reg1_sample", "reg2_3_sample")])
+      for (cc in names(miss_key)) if (is.numeric(miss_key[[cc]])) miss_key[, (cc) := round(get(cc), 4)]
+      logf("Severe complaint 3-spec pct_black missingness summary:\n", paste(capture.output(print(miss_key)), collapse = "\n"), log_file = log_file)
+    }
+    logf("Fitted severe complaint PPML ladder (4 specs incl. severe violations stock) | N1=", nobs(m_sev3_r1), ", N23=", nobs(m_sev3_r2),
+         ", maintenance_flow_source=", sev3_flow_source, ", severe_violation_flow_source=", sev3_viol_source,
+         ", lambda=", sev3_lambda, log_file = log_file)
+  }
+  rm(m_sev3_r1, m_sev3_r2, m_sev3_r3, m_sev3_r4, dat_sev3_r1, dat_sev3_r23); gc()
+
+  if (!only_complaint_suppression) {
+    suppression_outcomes <- c("complaint", "severe", "non_severe")
+    for (stem in suppression_outcomes) {
+      y_col <- paste0("filed_", stem)
+      for (s in c("full", "pre")) {
+        dat <- if (s == "pre") dt[year <= pre_covid_end] else dt
+        dat_tract <- dat[!is.na(census_tract) & nzchar(as.character(census_tract))]
+        dat_bg <- dat[!is.na(GEOID) & nzchar(as.character(GEOID))]
+        if (nrow(dat_tract) < 100L || nrow(dat_bg) < 100L) {
+          rm(dat, dat_tract, dat_bg); gc()
+          next
+        }
+        key <- paste0(s, "_", stem)
+
+        # Tract FE + building observables
+        fml_tract <- as.formula(paste0(
+          y_col, " ~ tc_black_c + tc_female_c + tc_black_female_c + tc_cov_c",
+          " + tenant_comp_missing", sup_obs_rhs,
+          " | period_fe + census_tract", sup_obs_fe
+        ))
+        m_tract <- safe_model_eval(
+          feols(fml_tract, data = dat_tract, cluster = ~census_tract, lean = TRUE),
+          model_label = paste0("suppression_", key, "_tract"),
+          log_file = log_file
+        )
+
+        # BG FE + building observables
+        fml_bg <- as.formula(paste0(
+          y_col, " ~ tc_black_c + tc_female_c + tc_black_female_c + tc_cov_c",
+          " + tenant_comp_missing", sup_obs_rhs,
+          " | period_fe + GEOID", sup_obs_fe
+        ))
+        m_bg <- safe_model_eval(
+          feols(fml_bg, data = dat_bg, cluster = ~GEOID, lean = TRUE),
+          model_label = paste0("suppression_", key, "_bg"),
+          log_file = log_file
+        )
+        if (is.null(m_tract) || is.null(m_bg)) {
+          rm(dat, dat_tract, dat_bg); gc()
+          next
+        }
+
+        ct_tract <- tidy_coeftable(m_tract)
+        ct_bg <- tidy_coeftable(m_bg)
+        ct_tract[, `:=`(sample = s, stem = stem, fe = "tract")]
+        ct_bg[, `:=`(sample = s, stem = stem, fe = "bg")]
+        suppression_coef_list[[paste0(key, "_tract")]] <- ct_tract
+        suppression_coef_list[[paste0(key, "_bg")]] <- ct_bg
+
+        suppression_etable_lines[[key]] <- capture.output(
+          etable(m_tract, m_bg, se.below = TRUE, digits = 4,
+                 headers = c("Tract FE", "BG FE"))
+        )
+        suppression_etable_tex_lines[[key]] <- capture.output(
+          etable(m_tract, m_bg, se.below = TRUE, digits = 4, tex = TRUE,
+                 headers = c("Tract FE", "BG FE"))
+        )
+        logf("Fitted suppression LPM model: ", key, " | N_tract=", nobs(m_tract),
+             ", N_bg=", nobs(m_bg), log_file = log_file)
+        rm(m_tract, m_bg, dat, dat_tract, dat_bg); gc()
+      }
+    }
+
+    # Unit-bin slope heterogeneity for complaint suppression (% Black / % women).
+    bt_counts_sup <- dt[!is.na(num_units_bin) & nzchar(as.character(num_units_bin)), .N, by = num_units_bin][order(-N, num_units_bin)]
+    bt_ref_suppression <- if ("1" %in% bt_counts_sup$num_units_bin) {
+      "1"
+    } else if (nrow(bt_counts_sup)) {
+      as.character(bt_counts_sup$num_units_bin[1L])
+    } else {
+      NA_character_
+    }
+    if (is.na(bt_ref_suppression)) {
+      logf("Skipping suppression num_units_bin interactions: no non-missing num_units_bin.", log_file = log_file)
+    } else {
+      logf("Suppression num_units_bin interaction reference category: ", bt_ref_suppression, log_file = log_file)
+      for (stem in suppression_outcomes) {
+        y_col <- paste0("filed_", stem)
+        for (s in c("full", "pre")) {
+          dat <- if (s == "pre") dt[year <= pre_covid_end] else dt
+          dat_tract <- dat[!is.na(census_tract) & nzchar(as.character(census_tract))]
+          dat_bg <- dat[!is.na(GEOID) & nzchar(as.character(GEOID))]
+          if (nrow(dat_tract) < 100L || nrow(dat_bg) < 100L) {
+            rm(dat, dat_tract, dat_bg); gc()
+            next
+          }
+          if (dat[!is.na(num_units_bin) & nzchar(as.character(num_units_bin)), uniqueN(num_units_bin)] < 2L) {
+            rm(dat, dat_tract, dat_bg); gc()
+            next
+          }
+          key <- paste0(s, "_", stem)
+
+          fml_tract_btint <- as.formula(paste0(
+            y_col, " ~ tc_black_c + tc_female_c + tc_black_female_c + tc_cov_c",
+            " + tenant_comp_missing",
+            " + i(num_units_bin, tc_black_c, ref = '", bt_ref_suppression, "')",
+            " + i(num_units_bin, tc_female_c, ref = '", bt_ref_suppression, "')",
+            sup_obs_rhs,
+            " | period_fe + census_tract", sup_obs_fe
+          ))
+          m_tract_btint <- safe_model_eval(
+            feols(fml_tract_btint, data = dat_tract, cluster = ~census_tract, lean = TRUE),
+            model_label = paste0("suppression_btint_", key, "_tract"),
+            log_file = log_file
+          )
+
+          fml_bg_btint <- as.formula(paste0(
+            y_col, " ~ tc_black_c + tc_female_c + tc_black_female_c + tc_cov_c",
+            " + tenant_comp_missing",
+            " + i(num_units_bin, tc_black_c, ref = '", bt_ref_suppression, "')",
+            " + i(num_units_bin, tc_female_c, ref = '", bt_ref_suppression, "')",
+            sup_obs_rhs,
+            " | period_fe + GEOID", sup_obs_fe
+          ))
+          m_bg_btint <- safe_model_eval(
+            feols(fml_bg_btint, data = dat_bg, cluster = ~GEOID, lean = TRUE),
+            model_label = paste0("suppression_btint_", key, "_bg"),
+            log_file = log_file
+          )
+          if (is.null(m_tract_btint) || is.null(m_bg_btint)) {
+            rm(dat, dat_tract, dat_bg); gc()
+            next
+          }
+
+          suppression_btint_coef_list[[paste0(key, "_tract")]] <- extract_bt_interaction_coefs(
+            m_tract_btint, sample_name = s, outcome_name = stem, fe_name = "tract", block_name = "suppression"
+          )
+          suppression_btint_coef_list[[paste0(key, "_bg")]] <- extract_bt_interaction_coefs(
+            m_bg_btint, sample_name = s, outcome_name = stem, fe_name = "bg", block_name = "suppression"
+          )
+          bt_levels_dat <- dat[!is.na(num_units_bin) & nzchar(as.character(num_units_bin)), unique(as.character(num_units_bin))]
+          suppression_btint_slopes_list[[paste0(key, "_tract")]] <- build_bt_slope_table(
+            m_tract_btint,
+            sample_name = s,
+            outcome_name = stem,
+            fe_name = "tract",
+            block_name = "suppression",
+            ref_building_type = bt_ref_suppression,
+            building_types_seen = bt_levels_dat,
+            group_var = "num_units_bin",
+            group_col = "num_units_bin",
+            ref_group_col = "ref_num_units_bin"
+          )
+          suppression_btint_slopes_list[[paste0(key, "_bg")]] <- build_bt_slope_table(
+            m_bg_btint,
+            sample_name = s,
+            outcome_name = stem,
+            fe_name = "bg",
+            block_name = "suppression",
+            ref_building_type = bt_ref_suppression,
+            building_types_seen = bt_levels_dat,
+            group_var = "num_units_bin",
+            group_col = "num_units_bin",
+            ref_group_col = "ref_num_units_bin"
+          )
+          suppression_btint_etable_lines[[key]] <- capture.output(
+            etable(m_tract_btint, m_bg_btint, se.below = TRUE, digits = 4, headers = c("Tract FE", "BG FE"))
+          )
+          suppression_btint_etable_tex_lines[[key]] <- capture.output(
+            etable(m_tract_btint, m_bg_btint, se.below = TRUE, digits = 4, tex = TRUE, headers = c("Tract FE", "BG FE"))
+          )
+          logf("Fitted suppression LPM num_units_bin interaction model: ", key, " | N_tract=", nobs(m_tract_btint),
+               ", N_bg=", nobs(m_bg_btint), log_file = log_file)
+          rm(m_tract_btint, m_bg_btint, dat, dat_tract, dat_bg); gc()
+        }
+      }
+    }
+
+    # Long-run parcel-level aggregates (pre-COVID only), with cumulative permit/violation counts.
+    dt_pre_longrun <- dt[year <= pre_covid_end]
+    pid_longrun <- dt_pre_longrun[, .(
+    n_periods_pre = .N,
+    total_complaints_any = sum(complaints_any_count, na.rm = TRUE),
+    total_complaints_severe = sum(complaints_severe_count, na.rm = TRUE),
+    total_complaints_non_severe = sum(complaints_non_severe_count, na.rm = TRUE),
+    cumulative_permit_count = sum(total_permits, na.rm = TRUE),
+    cumulative_violations_count = sum(total_violations, na.rm = TRUE),
+    tc_black_c = mean(tc_black_c, na.rm = TRUE),
+    tc_female_c = mean(tc_female_c, na.rm = TRUE),
+    tc_black_female_c = mean(tc_black_female_c, na.rm = TRUE),
+    tc_cov_c = mean(tc_cov_c, na.rm = TRUE),
+    tenant_comp_missing = mean(tenant_comp_missing, na.rm = TRUE),
+    GEOID = GEOID[1L],
+    census_tract = census_tract[1L],
+    total_area = mean(total_area, na.rm = TRUE),
+    total_units = mean(total_units, na.rm = TRUE),
+    market_value = mean(market_value, na.rm = TRUE),
+    year_built = mean(year_built, na.rm = TRUE),
+    building_type = building_type[1L],
+    num_units_bin = num_units_bin[1L],
+    year_blt_decade = year_blt_decade[1L],
+    num_stories_bin = num_stories_bin[1L],
+    exposure_periods_pre = sum(as.integer(
+      !is.finite(year_built) | is.na(year_built) | year_built <= 0 | year >= year_built
+    ), na.rm = TRUE)
+  ), by = PID]
+    pid_longrun[, log_total_area := suppressWarnings(log(total_area))]
+    pid_longrun[, log_market_value := suppressWarnings(log(market_value))]
+    pid_longrun[!is.finite(log_total_area), log_total_area := NA_real_]
+    pid_longrun[!is.finite(log_market_value), log_market_value := NA_real_]
+    pid_longrun[!is.finite(cumulative_violations_count), cumulative_violations_count := NA_real_]
+    pid_longrun[!is.finite(cumulative_permit_count), cumulative_permit_count := NA_real_]
+    pid_longrun[!is.finite(tc_black_c), tc_black_c := NA_real_]
+    pid_longrun[!is.finite(tc_female_c), tc_female_c := NA_real_]
+    pid_longrun[!is.finite(tc_black_female_c), tc_black_female_c := NA_real_]
+    pid_longrun[!is.finite(tc_cov_c), tc_cov_c := NA_real_]
+    pid_longrun[!is.finite(tenant_comp_missing), tenant_comp_missing := NA_real_]
+    pid_longrun[!is.finite(exposure_periods_pre), exposure_periods_pre := NA_real_]
+    pid_longrun <- pid_longrun[is.finite(exposure_periods_pre) & exposure_periods_pre > 0]
+    pid_longrun[, log_exposure_periods_pre := log(exposure_periods_pre)]
+
+    sup_longrun_rhs <- paste(
+      "tc_black_c + tc_female_c + tc_black_female_c + tc_cov_c + tenant_comp_missing",
+      "+ cumulative_permit_count + cumulative_violations_count + log_total_area + log_market_value",
+      "+ offset(log_exposure_periods_pre)"
+    )
+    sup_longrun_fe <- " + num_units_bin + building_type + year_blt_decade + num_stories_bin"
+    sup_longrun_outcomes <- c(any = "total_complaints_any", severe = "total_complaints_severe", non_severe = "total_complaints_non_severe")
+
+    for (nm in names(sup_longrun_outcomes)) {
+      y_col <- unname(sup_longrun_outcomes[[nm]])
+      dat_tract <- pid_longrun[!is.na(census_tract) & nzchar(as.character(census_tract))]
+      dat_bg <- pid_longrun[!is.na(GEOID) & nzchar(as.character(GEOID))]
+      if (nrow(dat_tract) < 100L || nrow(dat_bg) < 100L) next
+
+      fml_tract_long <- as.formula(paste0(
+        y_col, " ~ ", sup_longrun_rhs,
+        " | census_tract", sup_longrun_fe
+      ))
+      m_tract_long <- safe_model_eval(
+        fepois(fml_tract_long, data = dat_tract, cluster = ~census_tract, lean = TRUE),
+        model_label = paste0("suppression_longrun_pre_", nm, "_tract"),
+        log_file = log_file
+      )
+
+      fml_bg_long <- as.formula(paste0(
+        y_col, " ~ ", sup_longrun_rhs,
+        " | GEOID", sup_longrun_fe
+      ))
+      m_bg_long <- safe_model_eval(
+        fepois(fml_bg_long, data = dat_bg, cluster = ~GEOID, lean = TRUE),
+        model_label = paste0("suppression_longrun_pre_", nm, "_bg"),
+        log_file = log_file
+      )
+      if (is.null(m_tract_long) || is.null(m_bg_long)) {
+        rm(m_tract_long, m_bg_long); gc()
+        next
+      }
+
+      ct_tract_long <- tidy_coeftable(m_tract_long)
+      ct_bg_long <- tidy_coeftable(m_bg_long)
+      ct_tract_long[, `:=`(sample = "pre", stem = nm, fe = "tract", level = "parcel_longrun_pre")]
+      ct_bg_long[, `:=`(sample = "pre", stem = nm, fe = "bg", level = "parcel_longrun_pre")]
+      suppression_longrun_coef_list[[paste0(nm, "_tract")]] <- ct_tract_long
+      suppression_longrun_coef_list[[paste0(nm, "_bg")]] <- ct_bg_long
+
+      suppression_longrun_etable_lines[[nm]] <- capture.output(
+        etable(m_tract_long, m_bg_long, se.below = TRUE, digits = 4, headers = c("Tract FE", "BG FE"))
+      )
+      suppression_longrun_etable_tex_lines[[nm]] <- capture.output(
+        etable(m_tract_long, m_bg_long, se.below = TRUE, digits = 4, tex = TRUE, headers = c("Tract FE", "BG FE"))
+      )
+      logf("Fitted suppression long-run parcel-aggregate PPML model (pre-COVID): ", nm,
+           " | N_tract=", nobs(m_tract_long), ", N_bg=", nobs(m_bg_long), log_file = log_file)
+      rm(m_tract_long, m_bg_long); gc()
+    }
+  } else {
+    logf("Skipping legacy suppression LPM / long-run blocks (--only_complaint_suppression=TRUE); keeping severe PPML 3-spec ladder only.", log_file = log_file)
   }
 } else {
   logf("Skipping suppression models: GEOID/census_tract not available.", log_file = log_file)
 }
+if (exists("ev_dt")) rm(ev_dt)
+if (exists("pid_year_ev")) rm(pid_year_ev)
+gc()
 coef_suppression <- rbindlist(suppression_coef_list, use.names = TRUE, fill = TRUE)
 etable_suppression_txt <- unlist(suppression_etable_lines)
 etable_suppression_tex <- unlist(suppression_etable_tex_lines)
+coef_suppression_longrun <- if (length(suppression_longrun_coef_list)) {
+  rbindlist(suppression_longrun_coef_list, use.names = TRUE, fill = TRUE)
+} else {
+  data.table(
+    term = character(), estimate = numeric(), std_error = numeric(), t_value = numeric(), p_value = numeric(),
+    sample = character(), stem = character(), fe = character(), level = character()
+  )
+}
+etable_suppression_longrun_txt <- if (length(suppression_longrun_etable_lines)) unlist(suppression_longrun_etable_lines) else character()
+etable_suppression_longrun_tex <- if (length(suppression_longrun_etable_tex_lines)) unlist(suppression_longrun_etable_tex_lines) else character()
+coef_targeting_btint <- if (length(targeting_btint_coef_list)) {
+  rbindlist(targeting_btint_coef_list, use.names = TRUE, fill = TRUE)
+} else {
+  data.table(
+    term = character(), estimate = numeric(), std_error = numeric(), t_value = numeric(), p_value = numeric(),
+    sample = character(), outcome = character(), fe = character(), block = character(),
+    conf_low = numeric(), conf_high = numeric()
+  )
+}
+coef_bldg_year_targeting_btint <- if (length(bldg_year_targeting_btint_coef_list)) {
+  rbindlist(bldg_year_targeting_btint_coef_list, use.names = TRUE, fill = TRUE)
+} else {
+  data.table(
+    term = character(), estimate = numeric(), std_error = numeric(), t_value = numeric(), p_value = numeric(),
+    sample = character(), outcome = character(), fe = character(), block = character(),
+    conf_low = numeric(), conf_high = numeric()
+  )
+}
+coef_suppression_btint <- if (length(suppression_btint_coef_list)) {
+  rbindlist(suppression_btint_coef_list, use.names = TRUE, fill = TRUE)
+} else {
+  data.table(
+    term = character(), estimate = numeric(), std_error = numeric(), t_value = numeric(), p_value = numeric(),
+    sample = character(), outcome = character(), fe = character(), block = character(),
+    conf_low = numeric(), conf_high = numeric()
+  )
+}
+etable_targeting_btint_txt <- if (length(targeting_btint_etable_lines)) unlist(targeting_btint_etable_lines) else character()
+etable_targeting_btint_tex <- if (length(targeting_btint_etable_tex_lines)) unlist(targeting_btint_etable_tex_lines) else character()
+etable_bldg_year_targeting_btint_txt <- if (length(bldg_year_targeting_btint_etable_lines)) unlist(bldg_year_targeting_btint_etable_lines) else character()
+etable_bldg_year_targeting_btint_tex <- if (length(bldg_year_targeting_btint_etable_tex_lines)) unlist(bldg_year_targeting_btint_etable_tex_lines) else character()
+etable_suppression_btint_txt <- if (length(suppression_btint_etable_lines)) unlist(suppression_btint_etable_lines) else character()
+etable_suppression_btint_tex <- if (length(suppression_btint_etable_tex_lines)) unlist(suppression_btint_etable_tex_lines) else character()
+slopes_targeting_btint <- if (length(targeting_btint_slopes_list)) {
+  rbindlist(targeting_btint_slopes_list, use.names = TRUE, fill = TRUE)
+} else {
+  data.table(
+    block = character(), sample = character(), outcome = character(), fe = character(),
+    group_var = character(), group_level = character(), ref_group_level = character(),
+    slope_var = character(), slope_label = character(), num_units_bin = character(), ref_num_units_bin = character(),
+    base_term = character(), interaction_term = character(), estimable = logical(),
+    estimate = numeric(), std_error = numeric(), stat_value = numeric(), p_value = numeric(),
+    conf_low = numeric(), conf_high = numeric()
+  )
+}
+slopes_bldg_year_targeting_btint <- if (length(bldg_year_targeting_btint_slopes_list)) {
+  rbindlist(bldg_year_targeting_btint_slopes_list, use.names = TRUE, fill = TRUE)
+} else {
+  data.table(
+    block = character(), sample = character(), outcome = character(), fe = character(),
+    group_var = character(), group_level = character(), ref_group_level = character(),
+    slope_var = character(), slope_label = character(), num_units_bin = character(), ref_num_units_bin = character(),
+    base_term = character(), interaction_term = character(), estimable = logical(),
+    estimate = numeric(), std_error = numeric(), stat_value = numeric(), p_value = numeric(),
+    conf_low = numeric(), conf_high = numeric()
+  )
+}
+slopes_suppression_btint <- if (length(suppression_btint_slopes_list)) {
+  rbindlist(suppression_btint_slopes_list, use.names = TRUE, fill = TRUE)
+} else {
+  data.table(
+    block = character(), sample = character(), outcome = character(), fe = character(),
+    group_var = character(), group_level = character(), ref_group_level = character(),
+    slope_var = character(), slope_label = character(), num_units_bin = character(), ref_num_units_bin = character(),
+    base_term = character(), interaction_term = character(), estimable = logical(),
+    estimate = numeric(), std_error = numeric(), stat_value = numeric(), p_value = numeric(),
+    conf_low = numeric(), conf_high = numeric()
+  )
+}
+setorderv(slopes_targeting_btint, c("sample", "outcome", "fe", "slope_var", "group_level"))
+setorderv(slopes_bldg_year_targeting_btint, c("sample", "outcome", "fe", "slope_var", "group_level"))
+setorderv(slopes_suppression_btint, c("sample", "outcome", "fe", "slope_var", "group_level"))
+slopes_targeting_btint_txt <- if (nrow(slopes_targeting_btint)) {
+  capture.output(print(slopes_targeting_btint[
+    , .(sample, outcome, fe, group_var, slope_label, group_level, ref_group_level, estimate, std_error, p_value, estimable)
+  ]))
+} else character()
+slopes_bldg_year_targeting_btint_txt <- if (nrow(slopes_bldg_year_targeting_btint)) {
+  capture.output(print(slopes_bldg_year_targeting_btint[
+    , .(sample, outcome, fe, group_var, slope_label, group_level, ref_group_level, estimate, std_error, p_value, estimable)
+  ]))
+} else character()
+slopes_suppression_btint_txt <- if (nrow(slopes_suppression_btint)) {
+  capture.output(print(slopes_suppression_btint[
+    , .(sample, outcome, fe, group_var, slope_label, group_level, ref_group_level, estimate, std_error, p_value, estimable)
+  ]))
+} else character()
 
 bandwidth_tabs <- compute_bandwidth_tables(dt, max_bw = max_bw, time_unit = time_unit)
 band_summary <- bandwidth_tabs$summary
 band_status <- bandwidth_tabs$status
 
 # Concatenate per-model etable outputs (models were not stored to save memory)
-etable_dist_txt <- unlist(etable_dist_lines)
+etable_dist_txt <- if (skip_distlag) {
+  c(
+    "Distributed-Lag Summary",
+    "",
+    "Skipped (--skip_distlag=TRUE)."
+  )
+} else {
+  unlist(etable_dist_lines)
+}
 lpdid_txt <- if (skip_lpdid) {
   c(
     "Local Projections DiD Summary",
@@ -1238,8 +2369,8 @@ lpdid_txt <- if (skip_lpdid) {
   }
   out
 }
-etable_same_period_txt <- unlist(etable_same_period_lines)
-etable_same_period_tex <- unlist(etable_same_period_tex_lines)
+etable_same_period_txt <- if (length(etable_same_period_lines)) unlist(etable_same_period_lines) else character()
+etable_same_period_tex <- if (length(etable_same_period_tex_lines)) unlist(etable_same_period_tex_lines) else character()
 
 path_dist_coef <- file.path(out_dir, paste0(out_prefix, "_distlag_coefficients.csv"))
 path_lpdid_coef <- file.path(out_dir, paste0(out_prefix, "_lpdid_coefficients.csv"))
@@ -1266,6 +2397,29 @@ path_bldg_year_targeting_table_tex <- file.path(out_dir, paste0(out_prefix, "_bl
 path_suppression_coef <- file.path(out_dir, paste0(out_prefix, "_suppression_coefficients.csv"))
 path_suppression_table <- file.path(out_dir, paste0(out_prefix, "_suppression_model_table.txt"))
 path_suppression_table_tex <- file.path(out_dir, paste0(out_prefix, "_suppression_model_table.tex"))
+path_suppression_longrun_coef <- file.path(out_dir, paste0(out_prefix, "_suppression_longrun_pre_covid_coefficients.csv"))
+path_suppression_longrun_table <- file.path(out_dir, paste0(out_prefix, "_suppression_longrun_pre_covid_model_table.txt"))
+path_suppression_longrun_table_tex <- file.path(out_dir, paste0(out_prefix, "_suppression_longrun_pre_covid_model_table.tex"))
+path_suppression_severe_3spec_coef <- file.path(out_dir, paste0(out_prefix, "_suppression_severe_ppml_3spec_coefficients.csv"))
+path_suppression_severe_3spec_table <- file.path(out_dir, paste0(out_prefix, "_suppression_severe_ppml_3spec_model_table.txt"))
+path_suppression_severe_3spec_table_tex <- file.path(out_dir, paste0(out_prefix, "_suppression_severe_ppml_3spec_model_table.tex"))
+path_suppression_severe_3spec_sample <- file.path(out_dir, paste0(out_prefix, "_suppression_severe_ppml_3spec_sample.csv"))
+path_suppression_severe_3spec_missingness <- file.path(out_dir, paste0(out_prefix, "_suppression_severe_ppml_3spec_pct_black_missingness.csv"))
+path_targeting_btint_coef <- file.path(out_dir, paste0(out_prefix, "_targeting_num_units_bin_interactions_coefficients.csv"))
+path_targeting_btint_table <- file.path(out_dir, paste0(out_prefix, "_targeting_num_units_bin_interactions_model_table.txt"))
+path_targeting_btint_table_tex <- file.path(out_dir, paste0(out_prefix, "_targeting_num_units_bin_interactions_model_table.tex"))
+path_targeting_btint_slopes <- file.path(out_dir, paste0(out_prefix, "_targeting_num_units_bin_interactions_slopes.csv"))
+path_targeting_btint_slopes_txt <- file.path(out_dir, paste0(out_prefix, "_targeting_num_units_bin_interactions_slopes.txt"))
+path_bldg_year_targeting_btint_coef <- file.path(out_dir, paste0(out_prefix, "_bldg_year_targeting_num_units_bin_interactions_coefficients.csv"))
+path_bldg_year_targeting_btint_table <- file.path(out_dir, paste0(out_prefix, "_bldg_year_targeting_num_units_bin_interactions_model_table.txt"))
+path_bldg_year_targeting_btint_table_tex <- file.path(out_dir, paste0(out_prefix, "_bldg_year_targeting_num_units_bin_interactions_model_table.tex"))
+path_bldg_year_targeting_btint_slopes <- file.path(out_dir, paste0(out_prefix, "_bldg_year_targeting_num_units_bin_interactions_slopes.csv"))
+path_bldg_year_targeting_btint_slopes_txt <- file.path(out_dir, paste0(out_prefix, "_bldg_year_targeting_num_units_bin_interactions_slopes.txt"))
+path_suppression_btint_coef <- file.path(out_dir, paste0(out_prefix, "_suppression_num_units_bin_interactions_coefficients.csv"))
+path_suppression_btint_table <- file.path(out_dir, paste0(out_prefix, "_suppression_num_units_bin_interactions_model_table.txt"))
+path_suppression_btint_table_tex <- file.path(out_dir, paste0(out_prefix, "_suppression_num_units_bin_interactions_model_table.tex"))
+path_suppression_btint_slopes <- file.path(out_dir, paste0(out_prefix, "_suppression_num_units_bin_interactions_slopes.csv"))
+path_suppression_btint_slopes_txt <- file.path(out_dir, paste0(out_prefix, "_suppression_num_units_bin_interactions_slopes.txt"))
 path_qa <- file.path(out_dir, paste0(out_prefix, "_qa.txt"))
 
 fwrite(coef_dist, path_dist_coef)
@@ -1291,31 +2445,64 @@ if (length(etable_bldg_year_targeting_tex)) writeLines(etable_bldg_year_targetin
 if (nrow(coef_suppression)) fwrite(coef_suppression, path_suppression_coef)
 if (length(etable_suppression_txt)) writeLines(etable_suppression_txt, con = path_suppression_table)
 if (length(etable_suppression_tex)) writeLines(etable_suppression_tex, con = path_suppression_table_tex)
+if (nrow(coef_suppression_longrun)) fwrite(coef_suppression_longrun, path_suppression_longrun_coef)
+if (length(etable_suppression_longrun_txt)) writeLines(etable_suppression_longrun_txt, con = path_suppression_longrun_table)
+if (length(etable_suppression_longrun_tex)) writeLines(etable_suppression_longrun_tex, con = path_suppression_longrun_table_tex)
+if (nrow(suppression_severe_3spec_coef)) fwrite(suppression_severe_3spec_coef, path_suppression_severe_3spec_coef)
+if (length(suppression_severe_3spec_etable_txt)) writeLines(suppression_severe_3spec_etable_txt, con = path_suppression_severe_3spec_table)
+if (length(suppression_severe_3spec_etable_tex)) writeLines(suppression_severe_3spec_etable_tex, con = path_suppression_severe_3spec_table_tex)
+if (nrow(suppression_severe_3spec_sample)) fwrite(suppression_severe_3spec_sample, path_suppression_severe_3spec_sample)
+if (nrow(suppression_severe_3spec_missingness)) fwrite(suppression_severe_3spec_missingness, path_suppression_severe_3spec_missingness)
+if (nrow(coef_targeting_btint)) fwrite(coef_targeting_btint, path_targeting_btint_coef)
+if (length(etable_targeting_btint_txt)) writeLines(etable_targeting_btint_txt, con = path_targeting_btint_table)
+if (length(etable_targeting_btint_tex)) writeLines(etable_targeting_btint_tex, con = path_targeting_btint_table_tex)
+if (nrow(slopes_targeting_btint)) fwrite(slopes_targeting_btint, path_targeting_btint_slopes)
+if (length(slopes_targeting_btint_txt)) writeLines(slopes_targeting_btint_txt, con = path_targeting_btint_slopes_txt)
+if (nrow(coef_bldg_year_targeting_btint)) fwrite(coef_bldg_year_targeting_btint, path_bldg_year_targeting_btint_coef)
+if (length(etable_bldg_year_targeting_btint_txt)) writeLines(etable_bldg_year_targeting_btint_txt, con = path_bldg_year_targeting_btint_table)
+if (length(etable_bldg_year_targeting_btint_tex)) writeLines(etable_bldg_year_targeting_btint_tex, con = path_bldg_year_targeting_btint_table_tex)
+if (nrow(slopes_bldg_year_targeting_btint)) fwrite(slopes_bldg_year_targeting_btint, path_bldg_year_targeting_btint_slopes)
+if (length(slopes_bldg_year_targeting_btint_txt)) writeLines(slopes_bldg_year_targeting_btint_txt, con = path_bldg_year_targeting_btint_slopes_txt)
+if (nrow(coef_suppression_btint)) fwrite(coef_suppression_btint, path_suppression_btint_coef)
+if (length(etable_suppression_btint_txt)) writeLines(etable_suppression_btint_txt, con = path_suppression_btint_table)
+if (length(etable_suppression_btint_tex)) writeLines(etable_suppression_btint_tex, con = path_suppression_btint_table_tex)
+if (nrow(slopes_suppression_btint)) fwrite(slopes_suppression_btint, path_suppression_btint_slopes)
+if (length(slopes_suppression_btint_txt)) writeLines(slopes_suppression_btint_txt, con = path_suppression_btint_slopes_txt)
 
 theme_use <- theme_minimal()
 
-p_dist <- ggplot(coef_dist, aes(x = timing, y = estimate)) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "gray45") +
-  geom_point(size = 1.3) +
-  geom_errorbar(aes(ymin = conf_low, ymax = conf_high), width = 0.15) +
-  facet_grid(stem_label ~ sample_label) +
-  scale_x_continuous(breaks = seq(-h, h, by = 1)) +
-  labs(
-    title = paste0(period_label_title, " Distributed-Lag Estimates: Complaints and Eviction Filings"),
-    subtitle = paste0("LPM with PID and ", period_label, " fixed effects; clustered by PID"),
-    x = paste0(tools::toTitleCase(period_label_plural), " relative to complaint indicator"),
-    y = "Coefficient"
-  ) +
-  theme_use
+if (!skip_distlag && nrow(coef_dist)) {
+  p_dist <- ggplot(coef_dist, aes(x = timing, y = estimate)) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "gray45") +
+    geom_point(size = 1.3) +
+    geom_errorbar(aes(ymin = conf_low, ymax = conf_high), width = 0.15) +
+    facet_grid(stem_label ~ sample_label) +
+    scale_x_continuous(breaks = seq(-h, h, by = 1)) +
+    labs(
+      title = paste0(period_label_title, " Distributed-Lag Estimates: Complaints and Eviction Filings"),
+      subtitle = paste0("LPM with PID and ", period_label, " fixed effects; clustered by PID"),
+      x = paste0(tools::toTitleCase(period_label_plural), " relative to complaint indicator"),
+      y = "Coefficient"
+    ) +
+    theme_use
 
-ggsave(
-  filename = path_dist_plot,
-  plot = p_dist,
-  width = 11,
-  height = 8,
-  dpi = 300,
-  bg = "white"
-)
+  ggsave(
+    filename = path_dist_plot,
+    plot = p_dist,
+    width = 11,
+    height = 8,
+    dpi = 300,
+    bg = "white"
+  )
+}
+
+distlag_plot_note <- if (skip_distlag) {
+  "Distributed lag skipped; no dist-lag plot written."
+} else if (!nrow(coef_dist)) {
+  "Distributed lag ran but produced no coefficient rows; no dist-lag plot written."
+} else {
+  paste0("Wrote dist-lag plot: ", path_dist_plot)
+}
 
 if (!skip_lpdid && nrow(coef_lpdid)) {
   p_lpdid <- ggplot(coef_lpdid, aes(x = timing, y = estimate)) +
@@ -1366,6 +2553,7 @@ qa_lines <- c(
   paste0("Eviction filing rate (full): ", round(mean(dt$filed_eviction, na.rm = TRUE), 6)),
   paste0("Any complaint rate (full): ", round(mean(dt$filed_complaint, na.rm = TRUE), 6)),
   paste0("Time unit: ", time_unit),
+  paste0("skip_distlag: ", skip_distlag),
   paste0("skip_lpdid: ", skip_lpdid),
   paste0("Bandwidths evaluated: 1 to ", max_bw, " ", period_label_plural),
   paste0(
@@ -1396,9 +2584,25 @@ qa_lines <- c(
   if (has_geoid) paste0("Wrote tract FE model table (tex): ", path_tract_table_tex) else NULL,
   if (nrow(coef_targeting)) paste0("Wrote targeting coefficients CSV: ", path_targeting_coef) else "Targeting models skipped",
   if (length(etable_targeting_tex)) paste0("Wrote targeting model table (tex): ", path_targeting_table_tex) else NULL,
+  if (nrow(coef_targeting_btint)) paste0("Wrote targeting num_units_bin interaction coefficients CSV: ", path_targeting_btint_coef) else "Targeting num_units_bin interaction models skipped",
+  if (length(etable_targeting_btint_tex)) paste0("Wrote targeting num_units_bin interaction model table (tex): ", path_targeting_btint_table_tex) else NULL,
+  if (nrow(slopes_targeting_btint)) paste0("Wrote targeting num_units_bin interaction slopes CSV: ", path_targeting_btint_slopes) else "Targeting num_units_bin interaction slope tables skipped",
+  if (nrow(coef_bldg_year_targeting)) paste0("Wrote building-year targeting coefficients CSV: ", path_bldg_year_targeting_coef) else "Building-year targeting models skipped",
+  if (length(etable_bldg_year_targeting_tex)) paste0("Wrote building-year targeting model table (tex): ", path_bldg_year_targeting_table_tex) else NULL,
+  if (nrow(coef_bldg_year_targeting_btint)) paste0("Wrote building-year targeting num_units_bin interaction coefficients CSV: ", path_bldg_year_targeting_btint_coef) else "Building-year targeting num_units_bin interaction models skipped",
+  if (length(etable_bldg_year_targeting_btint_tex)) paste0("Wrote building-year targeting num_units_bin interaction model table (tex): ", path_bldg_year_targeting_btint_table_tex) else NULL,
+  if (nrow(slopes_bldg_year_targeting_btint)) paste0("Wrote building-year targeting num_units_bin interaction slopes CSV: ", path_bldg_year_targeting_btint_slopes) else "Building-year targeting num_units_bin interaction slope tables skipped",
   if (nrow(coef_suppression)) paste0("Wrote suppression coefficients CSV: ", path_suppression_coef) else "Suppression models skipped",
   if (length(etable_suppression_tex)) paste0("Wrote suppression model table (tex): ", path_suppression_table_tex) else NULL,
-  paste0("Wrote dist-lag plot: ", path_dist_plot),
+  if (nrow(coef_suppression_longrun)) paste0("Wrote suppression long-run pre-COVID coefficients CSV: ", path_suppression_longrun_coef) else "Suppression long-run pre-COVID models skipped",
+  if (length(etable_suppression_longrun_tex)) paste0("Wrote suppression long-run pre-COVID model table (tex): ", path_suppression_longrun_table_tex) else NULL,
+  if (nrow(suppression_severe_3spec_coef)) paste0("Wrote severe complaint PPML 3-spec coefficients CSV: ", path_suppression_severe_3spec_coef) else "Severe complaint PPML 3-spec ladder skipped",
+  if (length(suppression_severe_3spec_etable_tex)) paste0("Wrote severe complaint PPML 3-spec model table (tex): ", path_suppression_severe_3spec_table_tex) else NULL,
+  if (nrow(suppression_severe_3spec_missingness)) paste0("Wrote severe complaint PPML 3-spec pct_black missingness CSV: ", path_suppression_severe_3spec_missingness) else NULL,
+  if (nrow(coef_suppression_btint)) paste0("Wrote suppression num_units_bin interaction coefficients CSV: ", path_suppression_btint_coef) else "Suppression num_units_bin interaction models skipped",
+  if (length(etable_suppression_btint_tex)) paste0("Wrote suppression num_units_bin interaction model table (tex): ", path_suppression_btint_table_tex) else NULL,
+  if (nrow(slopes_suppression_btint)) paste0("Wrote suppression num_units_bin interaction slopes CSV: ", path_suppression_btint_slopes) else "Suppression num_units_bin interaction slope tables skipped",
+  distlag_plot_note,
   lpdid_plot_note
 )
 writeLines(qa_lines, con = path_qa)

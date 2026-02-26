@@ -4,6 +4,7 @@ author: "Philly Evictions Project"
 date: today
 format:
   pdf:
+    pdf-engine: xelatex
     documentclass: article
     geometry: margin=1in
     fontsize: 11pt
@@ -28,13 +29,22 @@ knitr::opts_chunk$set(
   fig.height = 7,
   dpi = 300
 )
+source(file.path(here::here(), "r", "config.R"))
+cfg_path <- file.path(here::here(), if (file.exists(file.path(here::here(), "config.yml"))) "config.yml" else "config.example.yml")
+cfg <- read_config(cfg_path, create_dirs = FALSE)
+retaliatory_time_unit <- tolower(as.character(cfg$run$retaliatory_time_unit %||% "quarter"))
+period_label <- if (retaliatory_time_unit == "quarter") "quarter" else "month"
+period_plural <- if (retaliatory_time_unit == "quarter") "quarters" else "months"
+period_title <- if (retaliatory_time_unit == "quarter") "Quarter" else "Month"
+period_adj <- if (retaliatory_time_unit == "quarter") "quarterly" else "monthly"
+eviction_periods_label <- if (retaliatory_time_unit == "quarter") "eviction-quarters" else "eviction-months"
 ```
 
 # Overview
 
 This document summarizes the retaliatory eviction analysis from `r/retaliatory-evictions.r`. The script investigates whether tenant complaints (code enforcement, maintenance, etc.) are associated with subsequent eviction filings --- a pattern consistent with retaliatory eviction.
 
-**Unit of analysis:** Building (PID) $\times$ period (month or quarter) panel.
+**Unit of analysis:** Building (PID) $\times$ `r period_label` panel.
 
 **Sample:** Rental buildings from the analytic sample, 2007--2024, with a pre-COVID subsample ($\leq$ 2019).
 
@@ -63,7 +73,7 @@ $$
 \text{filed\_eviction}_{it} = \sum_{k=-h}^{h} \beta_k \cdot \mathbb{1}[\text{complaint}_{i,t+k}] + \alpha_i + \gamma_t + \varepsilon_{it}
 $$
 
-where $h$ is the horizon (default 12 months or 4 quarters), $\alpha_i$ are building FE, and $\gamma_t$ are period FE. Standard errors clustered by PID.
+where $h$ is the horizon (default 12 months or 4 quarters, depending on time unit), $\alpha_i$ are building FE, and $\gamma_t$ are period FE. Standard errors clustered by PID.
 
 ## Model 2: Local Projections DiD (LP-DiD)
 
@@ -82,7 +92,14 @@ $$
 
 Tenant-composition augmented (tests whether retaliation varies with building demographics):
 $$
-\text{filed\_eviction}_{it} = \beta_0 \cdot C_{it} + \beta_1 \cdot C_{it} \times \widetilde{\text{Black}}_i + \beta_2 \cdot C_{it} \times \widetilde{\text{Female}}_i + \beta_3 \cdot C_{it} \times \widetilde{\text{Black}\times\text{Female}}_i + \beta_4 \cdot C_{it} \times \widetilde{\text{Coverage}}_i + \delta \cdot M_i + \alpha_i + \gamma_t + \varepsilon_{it}
+\begin{aligned}
+\text{filed\_eviction}_{it} =\;& \beta_0 \cdot C_{it}
+ + \beta_1 \cdot C_{it} \times \widetilde{\text{Black}}_i
+ + \beta_2 \cdot C_{it} \times \widetilde{\text{Female}}_i \\
+& + \beta_3 \cdot C_{it} \times \widetilde{\text{Black}\times\text{Female}}_i
+ + \beta_4 \cdot C_{it} \times \widetilde{\text{Coverage}}_i
+ + \delta \cdot M_i + \alpha_i + \gamma_t + \varepsilon_{it}
+\end{aligned}
 $$
 
 where $\widetilde{\cdot}$ denotes demeaned tenant composition and $M_i$ flags missing composition.
@@ -99,13 +116,19 @@ Sample restricted to eviction-filing periods. Estimated with both tract and bloc
 
 ## Model 5: Complaint Suppression
 
-Conditional on maintenance activity (permits) and building conditions (violations), do buildings with more Black/female tenants file fewer complaints?
+Current focus: a **severe-complaint PPML 4-spec ladder** testing how the `% Black` coefficient changes as we add building/neighborhood controls, a lagged maintenance-stock control, and a lagged severe-violations stock control.
 
 $$
-\text{filed\_complaint}_{it} = \beta_1 \cdot \widetilde{\text{Black}}_i + \gamma_1 \cdot \text{Permits}_{it} + \gamma_2 \cdot \text{Violations}_{it} + \delta M_i + \alpha_{\text{geo}} + \gamma_t + \varepsilon_{it}
+\text{severe\_complaints}_{it} =
+\beta_1 \cdot \text{pct\_black}_i + \gamma \cdot \text{maint\_stock}_{it-1} + \delta' X_{it} + \alpha + \varepsilon_{it}
 $$
 
-Estimated with tract and block group FE on the full panel.
+Estimated with **PPML** (weighted by units, clustered by PID) on the quarterly rental panel, using:
+
+1. `pct_black + year FE`
+2. `pct_black + building / neighborhood controls + year`
+3. Spec (2) + lagged maintenance stock per unit (`maint_stock_lag_rate_sev3`)
+4. Spec (3) + lagged severe-violations stock per unit (`severe_viol_stock_lag_rate_sev3`)
 
 ## Bandwidth Analysis
 
@@ -126,6 +149,14 @@ source("r/config.R")
 cfg <- read_config()
 out_dir <- p_out(cfg, "retaliatory")
 proj_root <- here::here()
+retaliatory_time_unit <- tolower(as.character(cfg$run$retaliatory_time_unit %||% "quarter"))
+retaliatory_stub <- paste0("retaliatory_", if (retaliatory_time_unit == "quarter") "quarterly" else "monthly")
+period_label <- if (retaliatory_time_unit == "quarter") "quarter" else "month"
+period_plural <- if (retaliatory_time_unit == "quarter") "quarters" else "months"
+period_title <- if (retaliatory_time_unit == "quarter") "Quarter" else "Month"
+period_adj <- if (retaliatory_time_unit == "quarter") "quarterly" else "monthly"
+eviction_periods_label <- if (retaliatory_time_unit == "quarter") "eviction-quarters" else "eviction-months"
+retaliatory_out <- function(suffix) file.path(out_dir, paste0(retaliatory_stub, "_", suffix))
 include_tex_table <- function(path, max_width = "\\textwidth") {
   if (!file.exists(path)) { cat("Table not found:", path); return(invisible(NULL)) }
   lines <- readLines(path)
@@ -147,6 +178,85 @@ include_tex_table <- function(path, max_width = "\\textwidth") {
     cat("\n\\end{adjustbox}\n")
   }
 }
+show_bt_slope_table <- function(path, caption, outcome_map = NULL) {
+  if (!file.exists(path)) {
+    cat("Building-type slope table not found:", path)
+    return(invisible(NULL))
+  }
+  x <- fread(path)
+  if (!nrow(x)) {
+    cat("Building-type slope table is empty.")
+    return(invisible(NULL))
+  }
+  x_show <- copy(x)
+  x_show[, Sample := fifelse(sample == "pre", "Pre-COVID", "Full")]
+  if ("outcome" %in% names(x_show)) {
+    x_show[, Outcome := if (!is.null(outcome_map)) fcase(
+      outcome == names(outcome_map)[1], unname(outcome_map[[1]]),
+      length(outcome_map) >= 2 & outcome == names(outcome_map)[2], unname(outcome_map[[2]]),
+      length(outcome_map) >= 3 & outcome == names(outcome_map)[3], unname(outcome_map[[3]]),
+      default = outcome
+    ) else outcome]
+  }
+  x_show[, FE := fifelse(fe == "tract", "Tract", "Block Group")]
+  x_show[, `Slope` := fcase(
+    slope_label == "pct_black", "Pct Black",
+    slope_label == "pct_women", "Pct Female",
+    default = slope_label
+  )]
+  group_col <- if ("group_level" %in% names(x_show)) {
+    "group_level"
+  } else if ("num_units_bin" %in% names(x_show)) {
+    "num_units_bin"
+  } else if ("building_type" %in% names(x_show)) {
+    "building_type"
+  } else {
+    NULL
+  }
+  ref_col <- if ("ref_group_level" %in% names(x_show)) {
+    "ref_group_level"
+  } else if ("ref_num_units_bin" %in% names(x_show)) {
+    "ref_num_units_bin"
+  } else if ("ref_building_type" %in% names(x_show)) {
+    "ref_building_type"
+  } else {
+    NULL
+  }
+  group_var_label <- "Group"
+  if ("group_var" %in% names(x_show)) {
+    gvars <- unique(na.omit(x_show$group_var))
+    if (length(gvars) == 1L && gvars[[1]] == "num_units_bin") group_var_label <- "Unit bin"
+    if (length(gvars) == 1L && gvars[[1]] == "building_type") group_var_label <- "Building type"
+  } else if (!is.null(group_col) && identical(group_col, "num_units_bin")) {
+    group_var_label <- "Unit bin"
+  } else if (!is.null(group_col) && identical(group_col, "building_type")) {
+    group_var_label <- "Building type"
+  }
+  keep <- c("Sample", if ("Outcome" %in% names(x_show)) "Outcome", "FE", "Slope",
+            group_col, ref_col, "estimate", "std_error", "p_value")
+  keep <- keep[!is.na(keep) & nzchar(keep)]
+  keep <- keep[keep %in% names(x_show)]
+  x_show <- x_show[, ..keep]
+  if (!is.null(group_col) && group_col %in% names(x_show)) setnames(x_show, group_col, group_var_label)
+  if (!is.null(ref_col) && ref_col %in% names(x_show)) setnames(x_show, ref_col, "Ref.")
+  if ("estimate" %in% names(x_show)) setnames(x_show, "estimate", "Estimate")
+  if ("std_error" %in% names(x_show)) setnames(x_show, "std_error", "SE")
+  if ("p_value" %in% names(x_show)) setnames(x_show, "p_value", "$p$")
+  if ("Estimate" %in% names(x_show)) x_show[, Estimate := round(Estimate, 4)]
+  if ("SE" %in% names(x_show)) x_show[, SE := round(SE, 4)]
+  if ("$p$" %in% names(x_show)) x_show[, `$p$` := round(`$p$`, 3)]
+  char_cols <- names(x_show)[vapply(x_show, is.character, logical(1))]
+  if (length(char_cols)) {
+    for (cc in char_cols) {
+      x_show[, (cc) := gsub("%", "\\\\%", get(cc), fixed = TRUE)]
+    }
+  }
+  setorderv(x_show, intersect(c("Sample", "Outcome", "FE", "Slope", "Unit bin", "Building type", "Group"), names(x_show)))
+  caption_tex <- gsub("% Black", "Pct Black", caption, fixed = TRUE)
+  caption_tex <- gsub("% Female", "Pct Female", caption_tex, fixed = TRUE)
+  kable(x_show, booktabs = TRUE, escape = FALSE, caption = caption_tex) |>
+    kable_styling(latex_options = c("hold_position", "scale_down"), font_size = 8)
+}
 ```
 
 # Results
@@ -156,14 +266,14 @@ include_tex_table <- function(path, max_width = "\\textwidth") {
 What share of eviction filings occur near a complaint?
 
 ```{r bandwidth-table}
-band_path <- file.path(out_dir, "retaliatory_monthly_bandwidth_summary.csv")
+band_path <- retaliatory_out("bandwidth_summary.csv")
 if (file.exists(band_path)) {
   band <- fread(band_path)
   # Handle both old (bandwidth_months/same_month_share) and new column names
   bw_col <- intersect(c("bandwidth_periods", "bandwidth_months"), names(band))[1]
   sp_col <- intersect(c("same_period_share", "same_month_share"), names(band))[1]
   band_show <- band[, .(
-    `Bandwidth (months)` = get(bw_col),
+    `Bandwidth` = get(bw_col),
     `Eviction rows` = format(eviction_rows, big.mark = ","),
     `Same period` = paste0(round(100 * get(sp_col), 1), "%"),
     `Within BW` = paste0(round(100 * within_bw_share, 1), "%"),
@@ -183,7 +293,7 @@ if (file.exists(band_path)) {
 ## Distributed Lag Estimates
 
 ```{r distlag-plot, fig.cap="Distributed-lag coefficients: effect of complaint indicator at lag/lead $k$ on eviction filing indicator. PID and period FE; clustered by PID."}
-plot_path <- file.path(proj_root, out_dir, "retaliatory_monthly_distlag_coefficients.png")
+plot_path <- file.path(proj_root, retaliatory_out("distlag_coefficients.png"))
 if (file.exists(plot_path)) {
   knitr::include_graphics(plot_path)
 } else {
@@ -192,20 +302,33 @@ if (file.exists(plot_path)) {
 ```
 
 ```{r distlag-table}
-coef_path <- file.path(out_dir, "retaliatory_monthly_distlag_coefficients.csv")
+coef_path <- retaliatory_out("distlag_coefficients.csv")
 if (file.exists(coef_path)) {
   coef_dist <- fread(coef_path)
-  # Show t-2 through t+3 for each sample x stem
-  key_timings <- coef_dist[timing >= -2 & timing <= 3]
-  key_wide <- dcast(key_timings,
-    sample + stem ~ timing,
-    value.var = "estimate"
-  )
-  setnames(key_wide, old = as.character(-2:3),
-           new = c("$t-2$", "$t-1$", "$t$", "$t+1$", "$t+2$", "$t+3$"))
-  kable(key_wide, booktabs = TRUE, escape = FALSE, digits = 4,
-        caption = "Distributed lag coefficients at $t-2$ through $t+3$") |>
-    kable_styling(latex_options = c("hold_position", "scale_down"))
+  if (!nrow(coef_dist) || !all(c("sample", "stem", "timing", "estimate") %in% names(coef_dist))) {
+    cat("Distributed lag coefficients not available (dist-lag was skipped or produced no rows).")
+  } else {
+    # Show t-2 through t+3 for each sample x stem
+    key_timings <- coef_dist[timing >= -2 & timing <= 3]
+    if (!nrow(key_timings)) {
+      cat("Distributed lag coefficients not available in the requested timing window.")
+    } else {
+      key_wide <- dcast(key_timings,
+        sample + stem ~ timing,
+        value.var = "estimate"
+      )
+      present_timing_cols <- intersect(as.character(-2:3), names(key_wide))
+      if (length(present_timing_cols)) {
+        pretty_names <- c(
+          "-2" = "$t-2$", "-1" = "$t-1$", "0" = "$t$", "1" = "$t+1$", "2" = "$t+2$", "3" = "$t+3$"
+        )
+        setnames(key_wide, old = present_timing_cols, new = unname(pretty_names[present_timing_cols]))
+      }
+      kable(key_wide, booktabs = TRUE, escape = FALSE, digits = 4,
+            caption = "Distributed lag coefficients at $t-2$ through $t+3$") |>
+        kable_styling(latex_options = c("hold_position", "scale_down"))
+    }
+  }
 }
 ```
 
@@ -214,7 +337,7 @@ if (file.exists(coef_path)) {
 ## Same-Period Retaliation with Tenant Composition
 
 ```{r same-period-table, results='asis'}
-include_tex_table(file.path(out_dir, "retaliatory_monthly_same_period_tenant_model_table.tex"))
+include_tex_table(retaliatory_out("same_period_tenant_model_table.tex"))
 ```
 
 ## Tenant Composition Interactions
@@ -222,7 +345,7 @@ include_tex_table(file.path(out_dir, "retaliatory_monthly_same_period_tenant_mod
 Do buildings with higher shares of Black tenants or female-headed households face more retaliatory eviction filings after a complaint? The interaction terms below test this: a positive coefficient on `Complaint × % Black` means that a complaint in a building with a higher Black tenant share is associated with a larger increase in eviction filings.
 
 ```{r tenant-coefs}
-tc_path <- file.path(out_dir, "retaliatory_monthly_same_period_tenant_coefficients.csv")
+tc_path <- retaliatory_out("same_period_tenant_coefficients.csv")
 if (file.exists(tc_path)) {
   tc <- fread(tc_path)
   # Clean up term labels
@@ -260,7 +383,7 @@ if (file.exists(tc_path)) {
 The main models above use building (PID) fixed effects, identifying off *within-building* time variation in complaints and evictions. The tract FE models below replace PID FE with census tract FE, also exploiting *cross-building* variation within neighborhoods. Comparison of the two identifies whether the complaint--eviction relationship is driven by within-building dynamics or cross-sectional sorting.
 
 ```{r tract-fe-table, results='asis'}
-tract_tex_path <- file.path(out_dir, "retaliatory_monthly_tract_fe_model_table.tex")
+tract_tex_path <- retaliatory_out("tract_fe_model_table.tex")
 if (file.exists(tract_tex_path)) {
   include_tex_table(tract_tex_path)
 } else {
@@ -269,7 +392,7 @@ if (file.exists(tract_tex_path)) {
 ```
 
 ```{r tract-fe-coefs}
-tract_path <- file.path(out_dir, "retaliatory_monthly_tract_fe_coefficients.csv")
+tract_path <- retaliatory_out("tract_fe_coefficients.csv")
 if (file.exists(tract_path)) {
   tc_tract <- fread(tract_path)
   tc_tract_int <- tc_tract[spec == "tract_tenant_augmented" & grepl("tc_|^filed_", term)]
@@ -314,7 +437,7 @@ $$
 A positive $\beta_1$ means that, among buildings filing evictions, those with more Black tenants are more likely to be retaliating against a complaint --- i.e., retaliatory eviction is disproportionately targeted at Black-occupied buildings.
 
 ```{r targeting-table, results='asis'}
-tgt_tex_path <- file.path(out_dir, "retaliatory_monthly_targeting_model_table.tex")
+tgt_tex_path <- retaliatory_out("targeting_model_table.tex")
 if (file.exists(tgt_tex_path)) {
   include_tex_table(tgt_tex_path)
 } else {
@@ -323,7 +446,7 @@ if (file.exists(tgt_tex_path)) {
 ```
 
 ```{r targeting-coefs}
-tgt_path <- file.path(out_dir, "retaliatory_monthly_targeting_coefficients.csv")
+tgt_path <- retaliatory_out("targeting_coefficients.csv")
 if (file.exists(tgt_path)) {
   tgt <- fread(tgt_path)
   tgt_show <- tgt[grepl("tc_", term), .(
@@ -341,16 +464,27 @@ if (file.exists(tgt_path)) {
     `$p$` = round(p_value, 3)
   )]
   kable(tgt_show, booktabs = TRUE, escape = FALSE,
-        caption = "Period-level targeting: among eviction-periods, is retaliation more likely in Black/female buildings?") |>
+        caption = sprintf("%s-level targeting: among %s, is retaliation more likely in Black/female buildings?",
+                          period_title, eviction_periods_label)) |>
     kable_styling(latex_options = c("hold_position", "scale_down"), font_size = 9)
 }
+```
+
+```{r targeting-bt-slopes}
+tgt_bt_slope_path <- retaliatory_out("targeting_num_units_bin_interactions_slopes.csv")
+show_bt_slope_table(
+  tgt_bt_slope_path,
+  caption = sprintf("%s-level targeting: total slopes for %% Black / %% Female by unit-count bin (reference = 1 unit)",
+                    period_title),
+  outcome_map = c(same = "Same period", bw = "Within BW")
+)
 ```
 
 \newpage
 
 ## Building-Year Retaliatory Share
 
-The period-level model above treats each month as a separate observation. An alternative aggregates to the **building $\times$ year** level: for each PID-year with at least one eviction, what share of eviction-months are retaliatory? This is regressed on tenant demographics and building observables (log area, log market value) with FE for unit count bin, building type, construction decade, stories bin, year, and tract/BG.
+The `r period_adj` period-level model above treats each `r period_label` as a separate observation. An alternative aggregates to the **building $\times$ year** level: for each PID-year with at least one eviction, what share of `r eviction_periods_label` are retaliatory? This is regressed on tenant demographics and building observables (log area, log market value) with FE for unit count bin, building type, construction decade, stories bin, year, and tract/BG.
 
 $$
 \text{share\_retaliatory}_{iy} = \beta_1 \cdot \widetilde{\text{Black}}_i + \beta_2 \cdot \widetilde{\text{Female}}_i + \delta' X_i + \alpha_{\text{geo}} + \gamma_y + \phi_b + \varepsilon_{iy}
@@ -359,7 +493,7 @@ $$
 **Sample:** PID-years with $\geq 1$ eviction filing. **FE:** Year + tract/BG + building type + unit bin + decade built + stories bin. **Controls:** log(total area), log(market value).
 
 ```{r bldg-year-targeting-table, results='asis'}
-byt_tex_path <- file.path(out_dir, "retaliatory_monthly_bldg_year_targeting_model_table.tex")
+byt_tex_path <- retaliatory_out("bldg_year_targeting_model_table.tex")
 if (file.exists(byt_tex_path)) {
   include_tex_table(byt_tex_path)
 } else {
@@ -368,7 +502,7 @@ if (file.exists(byt_tex_path)) {
 ```
 
 ```{r bldg-year-targeting-coefs}
-byt_path <- file.path(out_dir, "retaliatory_monthly_bldg_year_targeting_coefficients.csv")
+byt_path <- retaliatory_out("bldg_year_targeting_coefficients.csv")
 if (file.exists(byt_path)) {
   byt <- fread(byt_path)
   byt_show <- byt[grepl("tc_|log_total_area|log_market_value", term), .(
@@ -393,53 +527,121 @@ if (file.exists(byt_path)) {
 }
 ```
 
+```{r bldg-year-targeting-bt-slopes}
+byt_bt_slope_path <- retaliatory_out("bldg_year_targeting_num_units_bin_interactions_slopes.csv")
+show_bt_slope_table(
+  byt_bt_slope_path,
+  caption = "Building-year targeting: total slopes for % Black / % Female by unit-count bin (reference = 1 unit)",
+  outcome_map = c(same = "Same period", bw = "Within BW")
+)
+```
+
 \newpage
 
 ## Complaint Suppression
 
-Controlling for maintenance activity (permits as a proxy for landlord investment) and building conditions (violations), do buildings with more Black or female tenants file fewer complaints? A negative coefficient on % Black would indicate complaint suppression --- Black tenants may be less likely to complain even when conditions warrant it, possibly due to fear of retaliation.
+This section now reports the **severe-complaint PPML 4-spec ladder** that we are iterating on. The goal is to track the `% Black` coefficient as we add controls, then add the lagged maintenance-stock control, and then add a lagged severe-violations stock proxy for building quality.
+
+Outcome is `total_severe_complaints` (quarterly count). The maintenance control is a **lagged rolling stock of repair permits per unit** (electrical, plumbing, mechanical, fire suppression permits), with EWMA decay `\lambda = 0.9`.
 
 $$
-\text{filed\_complaint}_{it} = \beta_1 \cdot \widetilde{\text{Black}}_i + \beta_2 \cdot \widetilde{\text{Female}}_i + \beta_3 \cdot \widetilde{\text{Black} \times \text{Female}}_i + \gamma_1 \cdot \text{Permits}_{it} + \gamma_2 \cdot \text{Violations}_{it} + \delta' X_i + M_i + \alpha_{\text{geo}} + \gamma_t + \phi_b + \varepsilon_{it}
+\mathbb{E}[\text{severe\_complaints}_{it}\mid X] =
+\exp\left(\beta \cdot \text{pct\_black}_i + \gamma \cdot \text{maint\_stock\_lag\_rate}_{it} + \delta'X_{it} + \alpha\right)
 $$
 
-**Sample:** All building-periods. **Controls:** log(total area), log(market value), permits, violations. **FE:** Period + tract/BG + unit count bin + building type + decade built + stories bin.
+**Estimator:** PPML (`fepois`) with unit weights and PID-clustered standard errors.
 
-```{r suppression-table, results='asis'}
-sup_tex_path <- file.path(out_dir, "retaliatory_monthly_suppression_model_table.tex")
-if (file.exists(sup_tex_path)) {
-  include_tex_table(sup_tex_path)
+**Spec ladder:**
+
+1. `total_severe_complaints ~ infousa_pct_black | year`
+2. `+ log(total_area) + tract + building type + unit bin + year_built_decade + quality_grade_abcde + year`
+3. Spec (2) + `maint_stock_lag_rate_sev3`
+4. Spec (3) + `severe_viol_stock_lag_rate_sev3` (EWMA lagged severe violations per unit; `unsafe + hazardous`)
+
+**Important sample note:** these regressions restrict to `tenant_comp_missing == 0` (so missing tenant composition is not treated as `pct_black = 0`).
+
+```{r suppression-severe-3spec-table, results='asis'}
+sup_sev3_tex_path <- retaliatory_out("suppression_severe_ppml_3spec_model_table.tex")
+if (file.exists(sup_sev3_tex_path)) {
+  include_tex_table(sup_sev3_tex_path)
 } else {
-  cat("Suppression model table not found. Re-run retaliatory-evictions.r to generate.")
+  cat("Severe complaint PPML 3-spec model table not found. Re-run retaliatory-evictions.r to generate.")
 }
 ```
 
-```{r suppression-coefs}
-sup_path <- file.path(out_dir, "retaliatory_monthly_suppression_coefficients.csv")
-if (file.exists(sup_path)) {
-  sup <- fread(sup_path)
-  sup_show <- sup[grepl("tc_|total_permits|total_violations", term), .(
-    Sample = fifelse(sample == "pre", "Pre-COVID", "Full"),
-    `Complaint type` = fcase(
-      stem == "complaint", "Any",
-      stem == "severe", "Severe",
-      stem == "non_severe", "Non-severe",
-      default = stem),
-    FE = fifelse(fe == "tract", "Tract", "Block Group"),
+```{r suppression-severe-3spec-coefs}
+sup_sev3_path <- retaliatory_out("suppression_severe_ppml_3spec_coefficients.csv")
+if (file.exists(sup_sev3_path)) {
+  sup_sev3 <- fread(sup_sev3_path)
+  sup_sev3_show <- sup_sev3[term %chin% c("infousa_pct_black", "log_total_area", "maint_stock_lag_rate_sev3", "severe_viol_stock_lag_rate_sev3"), .(
+    Model = fcase(
+      model == "reg1_pct_black_year", "1. pct_black + year",
+      model == "reg2_plus_building_nhood_year", "2. + building/nhood/year",
+      model == "reg3_plus_maintenance_stock", "3. + maintenance stock",
+      model == "reg4_plus_severe_violation_stock", "4. + severe violations stock",
+      default = model
+    ),
     Term = fcase(
-      grepl("tc_black_c$", term), "% Black",
-      grepl("tc_female_c$", term), "% Female",
-      grepl("tc_black_female_c$", term), "% Black Female",
-      grepl("tc_cov_c$", term), "Demog Coverage",
-      term == "total_permits", "Permits",
-      term == "total_violations", "Violations",
-      default = term),
+      term == "infousa_pct_black", "Pct Black",
+      term == "log_total_area", "log(total_area)",
+      term == "maint_stock_lag_rate_sev3", "Lagged maintenance stock / unit",
+      term == "severe_viol_stock_lag_rate_sev3", "Lagged severe violations stock / unit",
+      default = term
+    ),
     Estimate = round(estimate, 4),
     SE = round(std_error, 4),
-    `$p$` = round(p_value, 3)
+    p = round(p_value, 4),
+    `N obs` = n_obs,
+    `N PID` = n_pid
   )]
-  kable(sup_show, booktabs = TRUE, escape = FALSE,
-        caption = "Complaint suppression: fewer complaints in buildings with more Black/female tenants?") |>
+  kable(sup_sev3_show, booktabs = TRUE,
+        caption = "Severe complaint PPML 4-spec ladder: key coefficients") |>
+    kable_styling(latex_options = c("hold_position", "scale_down"), font_size = 9)
+}
+```
+
+```{r suppression-severe-3spec-sample}
+sup_sev3_sample_path <- retaliatory_out("suppression_severe_ppml_3spec_sample.csv")
+if (file.exists(sup_sev3_sample_path)) {
+  sup_sev3_sample <- fread(sup_sev3_sample_path)
+  sup_sev3_sample_show <- sup_sev3_sample[, .(
+    Model = fcase(
+      model == "reg1_pct_black_year", "1. pct_black + year",
+      model == "reg2_plus_building_nhood_year", "2. + building/nhood/year",
+      model == "reg3_plus_maintenance_stock", "3. + maintenance stock",
+      model == "reg4_plus_severe_violation_stock", "4. + severe violations stock",
+      default = model
+    ),
+    `N obs` = n_obs,
+    `N PID` = n_pid,
+    lambda = lambda
+  )]
+  kable(sup_sev3_sample_show, booktabs = TRUE,
+        caption = "Severe complaint PPML 4-spec ladder: sample sizes and EWMA decay") |>
+    kable_styling(latex_options = c("hold_position", "scale_down"), font_size = 9)
+}
+```
+
+```{r suppression-severe-3spec-missingness}
+sup_sev3_miss_path <- retaliatory_out("suppression_severe_ppml_3spec_pct_black_missingness.csv")
+if (file.exists(sup_sev3_miss_path)) {
+  sup_sev3_miss <- fread(sup_sev3_miss_path)
+  miss_show <- sup_sev3_miss[stage %chin% c("panel_all", "reg1_sample", "reg2_3_sample"), .(
+    Stage = fcase(
+      stage == "panel_all", "All panel rows",
+      stage == "reg1_sample", "Reg 1 sample",
+      stage == "reg2_3_sample", "Reg 2/3 sample",
+      default = stage
+    ),
+    `N obs` = n_obs,
+    `N PID` = n_pid,
+    `pct_black missing` = round(100 * share_tenant_black_missing, 1),
+    `any tenant comp missing` = round(100 * share_tenant_comp_missing, 1),
+    `log(total_area) missing` = round(100 * share_log_total_area_missing, 1),
+    `tract missing` = round(100 * share_missing_tract, 1)
+  )]
+  kable(miss_show, booktabs = TRUE,
+        caption = "Severe complaint PPML 4-spec ladder: pct black / controls missingness by sample stage (percent)") |>
     kable_styling(latex_options = c("hold_position", "scale_down"), font_size = 9)
 }
 ```
@@ -454,6 +656,6 @@ The tract FE models provide a less restrictive comparison: if the PID FE and tra
 
 The **retaliatory targeting** analysis flips the question: among evictions that do happen, are retaliatory ones disproportionately concentrated in buildings with more Black/female tenants? This directly tests whether retaliation is a mechanism of demographic targeting.
 
-The **complaint suppression** analysis tests the complementary channel: controlling for maintenance and building conditions, do Black/female-occupied buildings file fewer complaints? Combined with the targeting results, this maps the full complaint--retaliation cycle and identifies where demographic disparities enter.
+The **complaint suppression** analysis (current iteration) focuses on a severe-complaint PPML 4-spec ladder: first `% Black + year`, then adding building/neighborhood controls, then adding lagged maintenance stock per unit, and then adding a lagged severe-violations stock proxy for building quality. We also report a `pct_black` missingness table so coefficient shifts can be interpreted alongside sample selection.
 
 The bandwidth analysis provides a complementary non-parametric measure: what fraction of eviction filings are "plausibly retaliatory" (occurring within $b$ periods of a complaint)?
