@@ -17,10 +17,11 @@ Reference for all major data products in the pipeline. Each entry documents the 
 7. [gender_imputed_case_sample](#gender_imputed_case_sample) — Eviction defendant gender (case-level)
 8. [parcel_occupancy_panel](#parcel_occupancy_panel) — Parcel occupancy panel
 9. [ever_rentals_panel](#ever_rentals_panel) — Rental activity panel
-10. [building_data](#building_data) — Building permits, violations, complaints
-11. [evictions_clean](#evictions_clean) — Cleaned eviction case data
-12. [evict_address_xwalk / evict_address_xwalk_case](#evict_address_xwalk) — Eviction-to-parcel crosswalks
-13. [evict_infousa_hh_matches / evict_infousa_hh_unmatched / evict_infousa_candidate_stats](#evict_infousa_household_linkage) — Eviction case-to-InfoUSA household linkage products
+10. [altos_pid_year_bedbin](#altos_pid_year_bedbin) — Altos PID-year-bedroom-bin cell panel
+11. [building_data](#building_data) — Building permits, violations, complaints
+12. [evictions_clean](#evictions_clean) — Cleaned eviction case data
+13. [evict_address_xwalk / evict_address_xwalk_case](#evict_address_xwalk) — Eviction-to-parcel crosswalks
+14. [evict_infousa_hh_matches / evict_infousa_hh_unmatched / evict_infousa_candidate_stats](#evict_infousa_household_linkage) — Eviction case-to-InfoUSA household linkage products
 
 ---
 
@@ -96,9 +97,33 @@ The main analysis panel. Merges parcel occupancy, rental activity, eviction fili
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `med_rent_altos` | numeric | Median monthly rent from Altos listings (PID-year level). |
-| `log_med_rent` | numeric | `log(med_rent_altos)`. Main price variable. |
-| `n_altos_listings` | integer | Number of Altos listings at PID in year. |
+| `med_rent_altos` | numeric | Legacy Altos PID-year rent alias (Phase 1 points to `med_rent_altos_raw`). |
+| `med_rent_altos_raw` | numeric | Phase 1 raw Altos PID-year rent (listing-row median from `altos_year_building`). `med_rent_altos` is currently an alias for backward compatibility. |
+| `med_rent_altos_std_fixed` | numeric | Phase 1 composition-robust Altos PID-year rent using fixed bedroom-bin weights by parcel `building_type` class, renormalized over observed bins. Computed whenever at least one bedroom bin is observed; coverage is tracked diagnostically via `altos_share_weight_observed`. |
+| `med_rent_eviction` | numeric | Alias for `med_eviction_rent` in Phase 2 rent harmonization code. |
+| `med_rent_eviction_std` | numeric | Eviction claimed rent calibrated onto the Altos standardized scale via a median log-ratio bridge (zip-year fallback hierarchy). |
+| `med_rent` | numeric | Unified rent contract (Phase 2): priority = `med_rent_altos_std_fixed` -> `med_rent_altos_raw` -> `med_rent_eviction_std` -> `med_rent_eviction`. |
+| `log_med_rent` | numeric | `log(med_rent)`. Main price variable after Phase 2 unified rent construction. |
+| `n_altos_listings` | integer | Number of Altos listing rows at PID in year (Phase 1 semantic fix; previously a bedroom-cell count in `make-rent-panel.R`). |
+| `n_altos_listing_rows` | integer | Explicit Altos listing-row count at PID in year (same value as `n_altos_listings` in Phase 1). |
+| `n_altos_cells` | integer | Number of observed Altos bedroom bins (`studio`, `1br`, `2br`, `3plus`) in PID-year. |
+| `altos_share_weight_observed` | numeric | Sum of fixed bedroom-bin weights observed in PID-year (0-1). Phase 1 diagnostic coverage metric for standardized Altos levels (not a hard inclusion rule for `med_rent_altos_std_fixed`). |
+| `altos_overlap_weight_prev` | numeric | Sum of fixed bedroom-bin weights observed in both year `t` and `t-1` for PID. Coverage diagnostic for overlap-based Altos rent growth. |
+| `altos_cell_overlap_prev` | integer | Count of bedroom bins overlapping between year `t` and `t-1` for PID. |
+| `dlog_rent_altos_overlap` | numeric | Phase 1 composition-robust Altos YoY log rent change using only bedroom bins observed in both `t` and `t-1`, weighted by fixed bedroom shares (requires minimum overlap coverage). |
+| `dlog_rent_altos_raw_yoy` | numeric | Diagnostic-only raw Altos YoY log change from `med_rent_altos_raw`; composition-sensitive. |
+| `share_altos_rows_with_bed_bin` | numeric | Share of Altos listing rows in PID-year that have a mappable bedroom bin (0-1). |
+| `evict_bridge_adj_log` | numeric | Log adjustment applied to `med_rent_eviction` to create `med_rent_eviction_std` (bridge level chosen by fallback hierarchy). |
+| `evict_bridge_n` | integer | Number of overlap observations used at the selected bridge level. |
+| `evict_bridge_level_used` | character | Bridge fallback level used for eviction standardization: `zip_year`, `zip`, `city_year`, `city`, `pooled`, or `none`. |
+| `rent_source` | character | Source chosen for unified `med_rent`: `altos_std_fixed`, `altos_raw`, `eviction_std`, `eviction`, or `missing`. |
+| `rent_source_std` | logical | TRUE when `rent_source` is standardized (`altos_std_fixed` or `eviction_std`). |
+| `rent_source_switch_prev` | logical | TRUE if unified rent source changes relative to the prior adjacent year (`t-1`) for the same PID. |
+| `year_gap_rent_prev` | integer | Gap to prior observed PID-year row used for source-change and YoY diagnostics. |
+| `year_gap_rent_prev_same_source` | integer | Gap to the prior observed PID-year row with the same `rent_source` (used for annualized safe rent changes). |
+| `dlog_med_rent_safe` | numeric | Source-safe adjacent-year log rent change. Refuses source mixing and uses `dlog_rent_altos_overlap` for `altos_std_fixed`. Preferred rent-change measure. |
+| `dlog_med_rent_safe_ann` | numeric | Source-safe annualized log rent change using prior same-source endpoint. For adjacent `altos_std_fixed` rows that pass overlap checks, equals `dlog_rent_altos_overlap`; for non-adjacent gaps, uses endpoint levels divided by gap. |
+| `dlog_med_rent_naive` | numeric | Diagnostic adjacent-year log change from unified `med_rent` without source protections. Not recommended for analysis. |
 
 ### Eviction filings
 
@@ -130,18 +155,29 @@ The main analysis panel. Merges parcel occupancy, rental activity, eviction fili
 
 ### BLP instruments
 
-All instruments computed within `market_id_zip_year` (zip x year).
+All instruments computed within `market_id_zip_year` (zip x year) by `make_blp_instruments()` in `make-analytic-sample.R`. For each continuous variable `v` below, three instrument columns are created: `z_sum_others_v` (sum at other-owner products), `z_sum_samefirm_v` (sum at same-owner other products), `z_sum_otherfirm_v` (sum at other-owner products — equivalent to `z_sum_others_v`). Count variables also produce `z_cnt_market`, `z_cnt_firm`, `z_cnt_others`, `z_cnt_samefirm`, `z_cnt_otherfirm`.
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `z_sum_others_total_units` | numeric | Sum of `total_units` at other firms in market. |
-| `z_sum_others_total_area` | numeric | Sum of `total_area` at other firms. |
-| `z_sum_others_total_livable_area` | numeric | Sum of `total_livable_area` at other firms. |
-| `z_sum_others_number_of_bedrooms` | numeric | Sum of bedrooms at other firms. |
-| `z_sum_others_number_of_bathrooms` | numeric | Sum of bathrooms at other firms. |
-| `z_sum_others_number_stories` | numeric | Sum of stories at other firms. |
-| `z_sum_samefirm_*` | numeric | Same-firm versions of above (sum across own firm's other products). |
-| `z_sum_otherfirm_*` | numeric | Other-firm versions (equivalent to `z_sum_others_*`). |
+Continuous variables used (`blp_cont_vars` in `make-analytic-sample.R`):
+
+| Variable | Description |
+|----------|-------------|
+| `total_units` | Total housing units. |
+| `log_med_rent` | Log unified rent. |
+| `hazardous_violation_count` | Hazardous code violations. |
+| `total_violations` | Total code violations. |
+| `total_severe_violations` | Severe violations (HAZARDOUS or IMMINENTLY DANGEROUS). |
+| `total_investigations` | Total L&I case investigations. |
+| `total_severe_investigations` | Severe investigations (`investigationtype`-based; pre-2020 only — see regime note in `building_data`). |
+| `building_permit_count` | Building permits. |
+| `general_permit_count` | General permits. |
+| `mechanical_permit_count` | Mechanical permits. |
+| `zoning_permit_count` | Zoning permits. |
+| `plumbing_permit_count` | Plumbing permits. |
+| `taxable_value` | OPA taxable value. |
+| `change_taxable_value` | Year-over-year change in taxable value. |
+| `log_taxable_value` | Log taxable value. |
+| `change_taxable_value_per_unit` | Per-unit change in taxable value. |
+| `log_taxable_value_per_unit` | Log per-unit taxable value. |
 
 ### Assessments
 
@@ -155,20 +191,29 @@ All instruments computed within `market_id_zip_year` (zip x year).
 | `log_market_value` | numeric | `log(market_value)`. |
 | `change_log_taxable_value` | numeric | Year-over-year change in log taxable value. Used as potential IV (weak under FE). |
 
-### Violations & complaints (from building_data merge)
+### Violations, complaints & investigations (from building_data merge)
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `imminently_dangerous_violation_count` | integer | Imminently dangerous code violations. |
-| `unsafe_violation_count` | integer | Unsafe code violations. |
-| `hazardous_violation_count` | integer | Hazardous code violations. |
+| `total_permits` | integer | Total permits at PID in year. |
+| `building_permit_count` | integer | Building permits. |
+| `electrical_permit_count` | integer | Electrical permits. |
+| `plumbing_permit_count` | integer | Plumbing permits. |
+| `total_complaints` | integer | Total L&I complaints at PID in year. |
+| `total_severe_complaints` | integer | Severe complaints (Heat, Fire, Drainage, Property Maintenance). |
 | `heat_complaint_count` | integer | Heat-related complaints. |
 | `fire_complaint_count` | integer | Fire-related complaints. |
-| `structural_deficiency_complaint_count` | integer | Structural deficiency complaints. |
 | `drainage_complaint_count` | integer | Drainage/plumbing complaints. |
-| `total_complaints` | integer | Total complaints at PID in year. |
-| `total_violations` | integer | Total violations at PID in year. |
-| `total_permits` | integer | Total permits at PID in year. |
+| `structural_deficiency_complaint_count` | integer | Structural deficiency complaints. |
+| `complaint_*_count` | integer | Other individual complaint type counts. |
+| `total_violations` | integer | Total code violations at PID in year. |
+| `total_severe_violations` | integer | Severe violations (`caseprioritydesc` ∈ HAZARDOUS, IMMINENTLY DANGEROUS). |
+| `hazardous_violation_count` | integer | Hazardous violations. |
+| `imminently_dangerous_violation_count` | integer | Imminently dangerous violations. |
+| `violation_*_count` | integer | Other individual violation type counts. |
+| `total_investigations` | integer | Total L&I case investigations at PID in year. |
+| `total_severe_investigations` | integer | Severe investigations (`investigationtype`-based; pre-2020 reliable only — see `building_data` regime note). |
+| `investigation_*_count` | integer | Individual investigation type counts. |
 
 ### Rental flags
 
@@ -469,8 +514,21 @@ Rental-only panel: PIDs with any rental evidence (license, listing, or eviction)
 |--------|------|-------------|
 | `PID` | character | Parcel ID. |
 | `year` | integer | Calendar year. |
-| `med_rent_altos` | numeric | Median Altos listing rent. |
-| `n_altos_listings` | integer | Number of Altos listings. |
+| `med_rent_altos` | numeric | Legacy Altos PID-year rent alias (Phase 1 points to `med_rent_altos_raw`). |
+| `med_rent_altos_raw` | numeric | Phase 1 raw Altos PID-year rent (listing-row median from `altos_year_building`). |
+| `med_rent_altos_std_fixed` | numeric | Phase 1 composition-robust Altos PID-year rent using fixed bedroom-bin weights by parcel `building_type` class. Computed whenever at least one bedroom bin is observed; `altos_share_weight_observed` remains a diagnostic coverage metric. |
+| `dlog_rent_altos_overlap` | numeric | Phase 1 overlap-based composition-robust Altos YoY log change. Uses only bedroom bins observed in both `t` and `t-1`. |
+| `dlog_rent_altos_raw_yoy` | numeric | Diagnostic-only raw Altos YoY log change (composition-sensitive). |
+| `n_altos_listings` | integer | Number of Altos listing rows (Phase 1 semantic fix; legacy name retained). |
+| `n_altos_listing_rows` | integer | Explicit Altos listing-row count. Same value as `n_altos_listings` in Phase 1. |
+| `n_altos_cells` | integer | Number of observed Altos bedroom bins in PID-year. |
+| `n_altos_listing_rows_with_bed_bin` | integer | Altos listing rows in PID-year with a mappable bedroom bin (subset of `n_altos_listing_rows`). |
+| `share_altos_rows_with_bed_bin` | numeric | Share of Altos listing rows with a mappable bedroom bin. |
+| `altos_share_weight_observed` | numeric | Sum of fixed bedroom-bin weights observed in PID-year (Phase 1 diagnostic coverage metric for standardized Altos levels). |
+| `altos_overlap_weight_prev` | numeric | Sum of fixed bedroom-bin weights overlapping between `t` and `t-1` (coverage diagnostic for overlap growth). |
+| `altos_cell_overlap_prev` | integer | Number of overlapping bedroom bins between `t` and `t-1`. |
+| `mix_class` | character | Coarse building-type-based bedroom mix class used to assign fixed Phase 1 Altos weights (`small_apartment`, `mid_apartment`, `large_apartment`). |
+| `year_gap_altos_prev` | integer | Gap in years to previous observed Altos PID-year. `dlog_rent_altos_raw_yoy` is only defined when this equals 1. |
 | `lic_num_units` | integer | Units from rental license. |
 | `num_filings` | integer | Eviction filings in year. |
 | `num_filings_with_ha` | integer | Filings with housing authority. |
@@ -489,6 +547,35 @@ Rental-only panel: PIDs with any rental evidence (license, listing, or eviction)
 
 ---
 
+## altos_pid_year_bedbin
+
+| Field | Value |
+|-------|-------|
+| **Config key** | `products.altos_pid_year_bedbin` |
+| **Path** | `data/processed/panels/altos_pid_year_bedbin.csv` |
+| **Producing script** | `r/make-altos-aggs.R` |
+| **Primary key** | `PID` x `year` x `bed_bin` |
+| **Conceptual unit** | Altos listing-price cell (parcel-year-bedroom-bin) |
+
+Phase 1 Altos composition standardization input product. Each row is a parcel-year-bedroom-bin cell built directly from de-staled Altos listing rows.
+
+### Key columns
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `PID` | character | Parcel ID (OPA parcel number). |
+| `year` | integer | Calendar year. |
+| `bed_bin` | character | Bedroom bin: `studio`, `1br`, `2br`, `3plus`. |
+| `med_rent_cell` | numeric | Median listing rent among Altos rows in this PID-year-bedroom-bin cell. |
+| `mean_rent_cell` | numeric | Mean listing rent in cell. |
+| `p25_rent_cell` | numeric | 25th percentile listing rent in cell (QC). |
+| `p75_rent_cell` | numeric | 75th percentile listing rent in cell (QC). |
+| `n_listing_rows_cell` | integer | Number of Altos listing rows in the cell. |
+| `n_price_points_cell` | integer | Number of unique list prices observed in the cell-year. |
+| `n_price_changes_cell` | integer | Count of within-year observed price changes across listings in the cell (QC summary). |
+
+---
+
 ## building_data
 
 | Field | Value |
@@ -501,6 +588,23 @@ Rental-only panel: PIDs with any rental evidence (license, listing, or eviction)
 | **Columns** | 38 |
 
 Building-level permits, violations, complaints, and investigations. The year CSV covers all parcels; the parquet files are rental-only at finer time granularity.
+
+### Coverage notes (complaints/permits)
+
+Empirical coverage check run on 2026-02-27 (from `building_data_rental_quarter`):
+
+- `total_complaints` and `total_permits` are structurally non-missing across all years in the rental-quarter panel.
+- Positive activity is effectively zero in 2005-2006, then appears from 2007 onward.
+- For retaliatory-evictions analysis defaults, the active window is `2011-2019`.
+
+| Year | Share of PID-quarter rows with `total_complaints > 0` | Share with `total_permits > 0` |
+|------|---------------------------------------------------------|----------------------------------|
+| 2005 | 0.0000 | 0.0000 |
+| 2006 | 0.0000 | 0.0000 |
+| 2007 | 0.0158 | 0.0134 |
+| 2011 | 0.0237 | 0.0132 |
+| 2019 | 0.0332 | 0.0182 |
+| 2022 | 0.0264 | 0.0138 |
 
 ### Consumed by
 
@@ -522,10 +626,21 @@ Building-level permits, violations, complaints, and investigations. The year CSV
 | `total_severe_complaints` | integer | Severe/hazardous complaints subset. |
 | `complaint_*_count` | integer | Individual complaint type counts (e.g., `complaint_fire_count`, `complaint_plumbing_count`, etc.). |
 | `total_violations` | integer | Total code violations. |
+| `total_severe_violations` | integer | Severe violations (HAZARDOUS or IMMINENTLY DANGEROUS `caseprioritydesc`). |
 | `hazardous_violation_count` | integer | Hazardous violations specifically. |
 | `violation_*_count` | integer | Individual violation type counts. |
 | `total_investigations` | integer | Total L&I case investigations. |
+| `total_severe_investigations` | integer | Severe investigations (code enforcement, lead, hazmat; classified via `investigationtype`). **Structurally zero for 2021+ due to data regime change — see note below.** |
 | `investigation_*_count` | integer | Individual investigation type counts. |
+
+### Investigation data regime note
+
+The L&I case investigations dataset underwent a classification regime change around 2020:
+
+- **Pre-2020**: `investigationtype` carries the meaningful type codes (e.g., `HCEU INSP`, `PRECOURT`, `CI HAZMAT`). `casepriority` is blank for 100% of rows.
+- **2020+**: `casepriority` is populated (0% blank); `investigationtype` codes change and no longer map cleanly to the pre-2020 severe categories.
+
+`total_severe_investigations` (and the typed `investigation_*_count` columns) are built from `investigationtype` and are therefore **reliable for pre-2020 years only**. Post-2020 values are structurally zero or near-zero and should not be used. There is no clean mapping between the two regimes.
 
 ---
 

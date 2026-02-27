@@ -328,6 +328,8 @@ complaints_agg <- pivot_wider(
 ) |> janitor::clean_names() |> as.data.table()
 
 # ---------- VIOLATIONS ----------
+severe_violation_types <- c("HAZARDOUS", "IMMINENTLY DANGEROUS", "UNSAFE")
+
 violations[, period := to_period(violationdate, agg_level)]
 violations[, violation_standardized := fifelse(
   caseprioritydesc == "", "OTHER", toupper(trimws(caseprioritydesc))
@@ -339,7 +341,12 @@ violations_agg_long <- violations[
   .(num_violations = .N),
   by = .(parcel_number = opa_account_num, period, violation_standardized)
 ]
-violations_agg_long[ , total_violations := sum(num_violations), by = .(parcel_number, period)]
+violations_agg_long[, severe_flag := violation_standardized %chin% severe_violation_types]
+violations_agg_long[ , `:=`(
+  total_violations        = sum(num_violations),
+  total_severe_violations = sum(num_violations[severe_flag], na.rm = TRUE)
+), by = .(parcel_number, period)]
+violations_agg_long[, severe_flag := NULL]
 
 violations_agg <- pivot_wider(
   violations_agg_long,
@@ -349,18 +356,113 @@ violations_agg <- pivot_wider(
 ) |> janitor::clean_names() |> as.data.table()
 
 # ---------- INVESTIGATIONS ----------
-investigations[, period := to_period(investigationcompleted, agg_level)]
-investigations[, investigation_standardized := fifelse(
-  casepriority == "", "OTHER", toupper(trimws(casepriority))
-)]
-valid_investigations <- investigations[ , .N, by = investigation_standardized][order(-N)][N > 10000, investigation_standardized]
+investigationtype_lookup <- tribble(
+  ~raw,           ~clean,
+  "",             "Unknown/Blank",
+  "HCEU INSP",    "Code Enforcement (Housing)",
+  "PRECOURT",     "Code Enforcement (Pre-Court)",
+  "ADMIN INSP",   "Administrative Inspection",
+  "CEASE INSP",   "Enforcement (Cease/Stop)",
+  "NTF INSP",     "Nuisance Task Force",
+  "CSTF INSP",    "Construction Site Task Force",
+  "COMP INSP",    "Compliance Inspection",
+  "NP INSP",      "Nuisance Property",
+  "AIU INSP",     "Audits/Investigations",
+  "CI INSP",      "Construction Inspection",
+  "CI TANK",      "Construction Inspection (Tank)",
+  "CI HAZMAT",    "Hazardous Material",
+  "BP_BLDG",      "Building Permit / Building",
+  "BP_LICENSE",   "License/Business",
+  "EP_ELEC",      "Electrical",
+  "PP_PLUMB",     "Plumbing",
+  "ZP_ZONING",    "Zoning",
+  "SIGN",         "Signage",
+  "FACAD INSP",   "Facade/Exterior",
+  "ASBESTOS",     "Hazardous Material",
+  "POST C&S",     "Construction (Post Clean & Seal)",
+  "DEMO PUNCH",   "Demolition",
+  "CSUINITIAL",   "Case Support / Utility Inspection",
+  "CSUFINAL",     "Case Support / Utility Inspection",
+  "CSUCURBINT",   "Case Support / Utility Inspection",
+  "CSUSTUBAR",    "Case Support / Utility Inspection",
+  "CSUTESTPIT",   "Case Support / Utility Inspection",
+  "CSUEQTY",      "Case Support / Utility Inspection",
+  "CSUPOSTCS",    "Case Support / Utility Inspection",
+  "L_CLIP",       "CLIP / Vacant Lot / Blight",
+  "L_INITIAL",    "Lead Inspection",
+  "L_FINAL",      "Lead Inspection",
+  "L_ENCAPS_I",   "Lead Abatement / Encapsulation",
+  "L_BARGEBRD",   "Lead / Exterior Abatement",
+  "L_STUCCO",     "Lead / Exterior Abatement",
+  "L_LATERAL",    "Lead / Exterior Abatement",
+  "L_COMPLY",     "Lead Compliance",
+  "L_REINSPCT",   "Lead Reinspection",
+  "L_ADJACENT",   "Lead / Adjacent Property",
+  "L_SIDEWALK",   "Lead / Exterior Surface",
+  "L_FOOTWAY",    "Lead / Exterior Surface",
+  "L_WATERPRF",   "Lead / Exterior Surface",
+  "L_CLRFLOOR",   "Lead / Clearance",
+  "L_WOODCHK",    "Lead / Clearance",
+  "L_MAINT",      "Lead / Maintenance",
+  "L_STARTWRK",   "Lead Abatement / Work Start",
+  "L_TESTDIG",    "Lead / Soil or Test Dig",
+  "L_MEASURE",    "Lead / Measurement",
+  "VAC INSP",     "Vacant Property",
+  "VACLOT",       "Vacant Lot",
+  "BC INSP",      "Building/Code Inspection",
+  "BRU INSP",     "Building/Code Inspection",
+  "HC FAMILY",    "Housing / Residential Program",
+  "HC HI RISE",   "Housing / High-Rise",
+  "HC PCH INS",   "Housing Program Inspection",
+  "HC MENTOR",    "Housing Program / Administrative",
+  "HC ZBA",       "Zoning / Appeals (Housing)",
+  "HC SHELTER",   "Housing / Shelter",
+  "HC BOARD",     "Housing / Board",
+  "HC CLA",       "Housing / Administrative",
+  "WM STATION",   "Weights & Measures",
+  "WM SMSCALE",   "Weights & Measures",
+  "WM SCANNER",   "Weights & Measures",
+  "WM DEVICES",   "Weights & Measures",
+  "WM METER",     "Weights & Measures"
+)
 
+clean_investigation_type <- function(x, lookup = investigationtype_lookup) {
+  key_dt <- as.data.table(lookup)[, .(key = toupper(trimws(raw)), clean)]
+  inp <- data.table(i = seq_along(x), raw = x)[, key := toupper(trimws(raw))]
+  res <- key_dt[inp, on = .(key), nomatch = NA][order(i)][, ifelse(is.na(clean), raw, clean)]
+  return(res)
+}
+
+severe_investigation_types <- c(
+  "Code Enforcement (Housing)",
+  "Code Enforcement (Pre-Court)",
+  "Hazardous Material",
+  "Lead Inspection",
+  "Lead Abatement / Encapsulation",
+  "Lead Abatement / Work Start",
+  "Lead / Exterior Abatement",
+  "Lead Compliance",
+  "Lead Reinspection",
+  "Electrical",
+  "Plumbing",
+  "Enforcement (Cease/Stop)"
+
+)
+
+investigations[, period := to_period(investigationcompleted, agg_level)]
+investigations[, investigation_standardized := clean_investigation_type(investigationtype)]
+investigations[, severe_flag := investigation_standardized %chin% severe_investigation_types]
+investigations[, severe_post_2020 := casepriority %in% c("HAZARDOUS","IMMINENTLY DANGEROUS","UNSAFE", "STANDARD")]
 investigations_agg_long <- investigations[
-  investigation_standardized %in% valid_investigations,
-  .(num_investigations = .N),
+  ,list(num_investigations = .N),
   by = .(parcel_number = opa_account_num, period, investigation_standardized)
 ]
-investigations_agg_long[ , total_investigations := sum(num_investigations), by = .(parcel_number, period)]
+investigations_agg_long[, severe_flag := investigation_standardized %chin% severe_investigation_types ]
+investigations_agg_long[ , `:=`(
+  total_investigations        = sum(num_investigations),
+  total_severe_investigations = sum(num_investigations[severe_flag], na.rm = TRUE)
+), by = .(parcel_number, period)]
+investigations_agg_long[, severe_flag := NULL]
 
 investigations_agg <- pivot_wider(
   investigations_agg_long,
@@ -410,11 +512,11 @@ complaints_agg <- complaints_agg |>
 logf("  complaints_agg: ", nrow(complaints_agg), " rows, ", uniqueN(complaints_agg$parcel_number), " unique parcels", log_file = log_file)
 
 violations_agg <- violations_agg |>
-  rename_with(~paste0(.x, "_violation_count"), -c(parcel_number, period, total_violations))
+  rename_with(~paste0(.x, "_violation_count"), -c(parcel_number, period, total_violations, total_severe_violations))
 logf("  violations_agg: ", nrow(violations_agg), " rows, ", uniqueN(violations_agg$parcel_number), " unique parcels", log_file = log_file)
 
 investigations_agg <- investigations_agg |>
-  rename_with(~paste0(.x, "_investigation_count"), -c(parcel_number, period, total_investigations))
+  rename_with(~paste0(.x, "_investigation_count"), -c(parcel_number, period, total_investigations, total_severe_investigations))
 logf("  investigations_agg: ", nrow(investigations_agg), " rows, ", uniqueN(investigations_agg$parcel_number), " unique parcels", log_file = log_file)
 
 logf("  parcel_grid: ", nrow(parcel_grid), " rows", log_file = log_file)
@@ -433,11 +535,13 @@ building_data <- building_data |>
 
 # Optional: summary by period for quick QC
 building_data[ , .(
-  total_permits        = sum(total_permits,        na.rm = TRUE),
-  total_complaints     = sum(total_complaints,     na.rm = TRUE),
-  total_severe_complaints = sum(total_severe_complaints, na.rm = TRUE),
-  total_violations     = sum(total_violations,     na.rm = TRUE),
-  total_investigations = sum(total_investigations, na.rm = TRUE)
+  total_permits               = sum(total_permits,               na.rm = TRUE),
+  total_complaints            = sum(total_complaints,            na.rm = TRUE),
+  total_severe_complaints     = sum(total_severe_complaints,     na.rm = TRUE),
+  total_violations            = sum(total_violations,            na.rm = TRUE),
+  total_severe_violations     = sum(total_severe_violations,     na.rm = TRUE),
+  total_investigations        = sum(total_investigations,        na.rm = TRUE),
+  total_severe_investigations = sum(total_severe_investigations, na.rm = TRUE)
 ), by = period][order(period)] |> print()
 
 # Derive year integer (useful even for month/quarter outputs)
@@ -459,7 +563,8 @@ if (n_total != n_unique_keys) {
 
 # Verify required columns
 required_cols <- c("parcel_number", "period", "year", "total_permits", "total_complaints",
-                   "total_severe_complaints", "total_violations", "total_investigations")
+                   "total_severe_complaints", "total_violations", "total_severe_violations",
+                   "total_investigations", "total_severe_investigations")
 missing_cols <- setdiff(required_cols, names(building_data))
 if (length(missing_cols) > 0) {
   stop("Missing required columns: ", paste(missing_cols, collapse = ", "))
@@ -470,6 +575,16 @@ if (building_data[, any(total_severe_complaints > total_complaints, na.rm = TRUE
   stop("Assertion failed: total_severe_complaints cannot exceed total_complaints within a period.")
 }
 logf("  Assertion PASSED: total_severe_complaints <= total_complaints for all rows", log_file = log_file)
+
+if (building_data[, any(total_severe_violations > total_violations, na.rm = TRUE)]) {
+  stop("Assertion failed: total_severe_violations cannot exceed total_violations within a period.")
+}
+logf("  Assertion PASSED: total_severe_violations <= total_violations for all rows", log_file = log_file)
+
+if (building_data[, any(total_severe_investigations > total_investigations, na.rm = TRUE)]) {
+  stop("Assertion failed: total_severe_investigations cannot exceed total_investigations within a period.")
+}
+logf("  Assertion PASSED: total_severe_investigations <= total_investigations for all rows", log_file = log_file)
 
 # ---- Write output ----
 outfile_csv <- p_proc(cfg, glue("panels/building_data_{agg_level}.csv"))

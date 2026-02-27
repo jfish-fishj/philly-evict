@@ -40,6 +40,12 @@ normalize_pid <- function(x) {
 }
 fco <- function(x, val = 0) fifelse(is.na(x), val, x)
 
+# ---- Phase 2 rent bridge settings ----
+ALTOS_BRIDGE_MIN_COVERAGE <- 0.60
+ALTOS_OVERLAP_MIN_FOR_SAFE_CHANGE <- 0.60
+EVICT_BRIDGE_N_MIN <- 20L
+EVICT_BRIDGE_WARN_ABS_LOG <- 1.5
+
 # ---- Load input data ----
 logf("Loading input data...", log_file = log_file)
 
@@ -150,6 +156,15 @@ logf("  bldg_panel rows after merge: ", nrow(bldg_panel), log_file = log_file)
 assert_unique(bldg_panel, c("PID", "year"), "bldg_panel after ever_panel merge")
 logf("  Assertion passed: (PID, year) unique after ever_panel merge", log_file = log_file)
 
+phase1_altos_cols <- c(
+  "med_rent_altos_raw", "med_rent_altos_std_fixed", "dlog_rent_altos_overlap",
+  "altos_share_weight_observed", "altos_overlap_weight_prev", "altos_cell_overlap_prev",
+  "n_altos_listing_rows", "n_altos_cells"
+)
+logf("  Altos Phase 1 columns present after ever_panel merge: ",
+     sum(phase1_altos_cols %in% names(bldg_panel)), "/", length(phase1_altos_cols),
+     log_file = log_file)
+
 ## Coalesce pm.zip: prefer ever_panel's, fall back to parcels_clean
 ## Must convert empty strings to NA first — otherwise coalesce treats "" as non-missing
 clean_zip <- function(z) {
@@ -193,9 +208,43 @@ bldg_panel <- merge(
   all.x = TRUE
 )
 
+# Phase 2A cleanup: occupancy and demographics can both carry an
+# `infousa_any_ownership_unsafe` flag. Merge() suffixes these to .x/.y; collapse
+# them back to one conservative flag and drop the suffix artifacts.
+unsafe_x_col <- "infousa_any_ownership_unsafe.x"
+unsafe_y_col <- "infousa_any_ownership_unsafe.y"
+if (all(c(unsafe_x_col, unsafe_y_col) %in% names(bldg_panel))) {
+  unsafe_x <- as.logical(bldg_panel[[unsafe_x_col]])
+  unsafe_y <- as.logical(bldg_panel[[unsafe_y_col]])
+  both_nonmissing <- !is.na(unsafe_x) & !is.na(unsafe_y)
+  mismatch_n <- sum(both_nonmissing & (unsafe_x != unsafe_y))
+  if (mismatch_n > 0L) {
+    logf("  WARNING: infousa_any_ownership_unsafe .x/.y disagree on ", mismatch_n,
+         " PID-year rows; using conservative OR collapse", log_file = log_file)
+  }
+  unsafe_collapsed <- (fcoalesce(unsafe_x, FALSE) | fcoalesce(unsafe_y, FALSE))
+  unsafe_collapsed[is.na(unsafe_x) & is.na(unsafe_y)] <- NA
+  bldg_panel[, infousa_any_ownership_unsafe := unsafe_collapsed]
+  bldg_panel[, c(unsafe_x_col, unsafe_y_col) := NULL]
+  logf("  Collapsed infousa_any_ownership_unsafe.x/.y into infousa_any_ownership_unsafe",
+       log_file = log_file)
+}
+
 logf("  bldg_panel rows after merge: ", nrow(bldg_panel), log_file = log_file)
 assert_unique(bldg_panel, c("PID", "year"), "bldg_panel after infousa demographics merge")
 logf("  Assertion passed: (PID, year) unique after infousa demographics merge", log_file = log_file)
+phase2a_cols <- intersect(
+  c("infousa_demog_provenance", "infousa_any_ownership_unsafe", "infousa_link_type"),
+  names(bldg_panel)
+)
+if (length(phase2a_cols) > 0L) {
+  logf("  Phase 2A InfoUSA provenance columns present: ", paste(phase2a_cols, collapse = ", "), log_file = log_file)
+  if ("infousa_demog_provenance" %in% names(bldg_panel)) {
+    logf("  infousa_demog_provenance mix:\n",
+         paste(capture.output(print(bldg_panel[, .N, by = infousa_demog_provenance][order(-N)])), collapse = "\n"),
+         log_file = log_file)
+  }
+}
 
 ## ------------------------------------------------------------
 ## 3) ASSESSMENTS: BUILD VARIABLES ON THE FLY (from ass <- fread(...))
@@ -330,22 +379,6 @@ bldg_panel[, occupied_units_scaled := fifelse(
   occupied_units
 )]
 
-## Rent variable (Altos)
-bldg_panel[,med_rent := coalesce(
-  med_rent_altos,
-  med_eviction_rent,
-)]
-bldg_panel[
-  ,
-  log_med_rent := fifelse(
-    !is.na(med_rent) & med_rent > 0,
-    log(med_rent),
-    NA_real_
-  )
-]
-
-
-
 ## ------------------------------------------------------------
 ## 5) MARKET & OWNER IDS
 ## ------------------------------------------------------------
@@ -364,6 +397,376 @@ bldg_panel[
   ,
   market_zip := str_pad(as.character(get(market_zip_col)), width = 5, side = "left", pad = "0")
 ]
+
+## ------------------------------------------------------------
+## 4b) PHASE 2 RENT BRIDGE + UNIFIED RENT + SAFE CHANGES
+## ------------------------------------------------------------
+
+# Keep an explicit alias with Phase 2 naming conventions.
+if (!"med_rent_eviction" %in% names(bldg_panel)) {
+  bldg_panel[, med_rent_eviction := med_eviction_rent]
+}
+
+for (v in c("med_rent_altos_std_fixed", "med_rent_altos_raw", "med_rent_eviction", "altos_share_weight_observed")) {
+  if (!v %in% names(bldg_panel)) bldg_panel[, (v) := NA_real_]
+}
+
+bldg_panel[, med_rent_altos_std_fixed := as.numeric(med_rent_altos_std_fixed)]
+bldg_panel[, med_rent_altos_raw := as.numeric(med_rent_altos_raw)]
+bldg_panel[, med_rent_eviction := as.numeric(med_rent_eviction)]
+bldg_panel[, altos_share_weight_observed := as.numeric(altos_share_weight_observed)]
+
+build_bridge_table <- function(dt, by_cols) {
+  out <- dt[
+    ,
+    .(
+      evict_bridge_adj_log = median(delta_bridge, na.rm = TRUE),
+      evict_bridge_n = .N
+    ),
+    by = by_cols
+  ]
+  assert_unique(out, by_cols, paste0("evict bridge table [", paste(by_cols, collapse = ","), "]"))
+  out[]
+}
+
+logf("Phase 2 rent bridge: building eviction->Altos calibration bridge...", log_file = log_file)
+
+overlap_bridge <- bldg_panel[
+  !is.na(market_zip) & nzchar(market_zip) &
+    is.finite(med_rent_altos_std_fixed) & med_rent_altos_std_fixed > 0 &
+    is.finite(med_rent_eviction) & med_rent_eviction > 0 &
+    is.finite(altos_share_weight_observed) &
+    altos_share_weight_observed >= ALTOS_BRIDGE_MIN_COVERAGE
+][
+  ,
+  delta_bridge := log(med_rent_altos_std_fixed) - log(med_rent_eviction)
+][
+  is.finite(delta_bridge)
+]
+
+logf("  Overlap sample size (bridge estimation): ", nrow(overlap_bridge), log_file = log_file)
+
+if (nrow(overlap_bridge) == 0L) {
+  logf("WARNING: No overlap sample for eviction bridge. med_rent_eviction_std will remain NA.", log_file = log_file)
+  bldg_panel[, `:=`(
+    evict_bridge_adj_log = NA_real_,
+    evict_bridge_n = NA_integer_,
+    evict_bridge_level_used = "none",
+    med_rent_eviction_std = NA_real_
+  )]
+} else {
+  bridge_zip_year <- build_bridge_table(overlap_bridge, c("market_zip", "year"))
+  setnames(bridge_zip_year, c("evict_bridge_adj_log", "evict_bridge_n"),
+           c("adj_zip_year", "n_zip_year"))
+
+  bridge_zip <- build_bridge_table(overlap_bridge, c("market_zip"))
+  setnames(bridge_zip, c("evict_bridge_adj_log", "evict_bridge_n"),
+           c("adj_zip", "n_zip"))
+
+  bridge_city_year <- build_bridge_table(overlap_bridge, c("year"))
+  setnames(bridge_city_year, c("evict_bridge_adj_log", "evict_bridge_n"),
+           c("adj_city_year", "n_city_year"))
+
+  bridge_city <- overlap_bridge[, .(
+    adj_city = median(delta_bridge, na.rm = TRUE),
+    n_city = .N
+  )]
+  bridge_pooled <- overlap_bridge[, .(
+    adj_pooled = median(delta_bridge, na.rm = TRUE),
+    n_pooled = .N
+  )]
+
+  bldg_panel <- merge(bldg_panel, bridge_zip_year, by = c("market_zip", "year"), all.x = TRUE)
+  bldg_panel <- merge(bldg_panel, bridge_zip, by = "market_zip", all.x = TRUE)
+  bldg_panel <- merge(bldg_panel, bridge_city_year, by = "year", all.x = TRUE)
+
+  bldg_panel[, `:=`(
+    adj_city = bridge_city$adj_city[1],
+    n_city = as.integer(bridge_city$n_city[1]),
+    adj_pooled = bridge_pooled$adj_pooled[1],
+    n_pooled = as.integer(bridge_pooled$n_pooled[1])
+  )]
+
+  # Deterministic fallback hierarchy for rows with eviction rents.
+  has_evict_rent <- is.finite(bldg_panel$med_rent_eviction) & bldg_panel$med_rent_eviction > 0
+
+  bldg_panel[, evict_bridge_level_used := fcase(
+    has_evict_rent & !is.na(n_zip_year) & n_zip_year >= EVICT_BRIDGE_N_MIN, "zip_year",
+    has_evict_rent & !is.na(n_zip) & n_zip >= EVICT_BRIDGE_N_MIN, "zip",
+    has_evict_rent & !is.na(n_city_year) & n_city_year >= EVICT_BRIDGE_N_MIN, "city_year",
+    has_evict_rent & !is.na(n_city) & n_city >= EVICT_BRIDGE_N_MIN, "city",
+    has_evict_rent & !is.na(n_pooled) & n_pooled > 0, "pooled",
+    default = "none"
+  )]
+
+  bldg_panel[, evict_bridge_adj_log := fcase(
+    evict_bridge_level_used == "zip_year", adj_zip_year,
+    evict_bridge_level_used == "zip", adj_zip,
+    evict_bridge_level_used == "city_year", adj_city_year,
+    evict_bridge_level_used == "city", adj_city,
+    evict_bridge_level_used == "pooled", adj_pooled,
+    default = NA_real_
+  )]
+
+  bldg_panel[, evict_bridge_n := as.integer(fcase(
+    evict_bridge_level_used == "zip_year", n_zip_year,
+    evict_bridge_level_used == "zip", n_zip,
+    evict_bridge_level_used == "city_year", n_city_year,
+    evict_bridge_level_used == "city", n_city,
+    evict_bridge_level_used == "pooled", n_pooled,
+    default = NA_integer_
+  ))]
+
+  bldg_panel[, med_rent_eviction_std := fifelse(
+    is.finite(med_rent_eviction) & med_rent_eviction > 0 & is.finite(evict_bridge_adj_log),
+    med_rent_eviction * exp(evict_bridge_adj_log),
+    NA_real_
+  )]
+
+  extreme_bridge_n <- bldg_panel[
+    evict_bridge_level_used != "none" & is.finite(evict_bridge_adj_log) &
+      abs(evict_bridge_adj_log) > EVICT_BRIDGE_WARN_ABS_LOG,
+    .N
+  ]
+  if (extreme_bridge_n > 0) {
+    logf("WARNING: ", extreme_bridge_n, " rows have |evict_bridge_adj_log| > ",
+         EVICT_BRIDGE_WARN_ABS_LOG, log_file = log_file)
+  }
+
+  # QC logging for bridge quality.
+  bridge_level_dist <- bldg_panel[evict_bridge_level_used != "none", .N, by = evict_bridge_level_used][order(-N)]
+  if (nrow(bridge_level_dist) > 0) {
+    logf("  Bridge level usage:", log_file = log_file)
+    for (i in 1:nrow(bridge_level_dist)) {
+      logf("    ", bridge_level_dist$evict_bridge_level_used[i], ": ", bridge_level_dist$N[i], log_file = log_file)
+    }
+  }
+
+  bridge_n_vals <- bldg_panel[evict_bridge_level_used != "none" & !is.na(evict_bridge_n), evict_bridge_n]
+  if (length(bridge_n_vals) > 0) {
+    qn <- quantile(bridge_n_vals, c(0, 0.25, 0.5, 0.75, 0.9, 1), na.rm = TRUE)
+    logf(sprintf("  evict_bridge_n dist: min=%d q1=%d med=%d q3=%d p90=%d max=%d",
+                 as.integer(qn[1]), as.integer(qn[2]), as.integer(qn[3]),
+                 as.integer(qn[4]), as.integer(qn[5]), as.integer(qn[6])),
+         log_file = log_file)
+  }
+
+  adj_vals <- bldg_panel[evict_bridge_level_used != "none" & is.finite(evict_bridge_adj_log), evict_bridge_adj_log]
+  if (length(adj_vals) > 0) {
+    qa <- quantile(adj_vals, c(0.01, 0.1, 0.5, 0.9, 0.99), na.rm = TRUE)
+    logf(sprintf("  evict_bridge_adj_log dist: p01=%.3f p10=%.3f med=%.3f p90=%.3f p99=%.3f",
+                 qa[1], qa[2], qa[3], qa[4], qa[5]), log_file = log_file)
+  }
+
+  overlap_qc <- bldg_panel[
+    !is.na(med_rent_altos_std_fixed) & med_rent_altos_std_fixed > 0 &
+      !is.na(med_rent_eviction_std) & med_rent_eviction_std > 0 &
+      altos_share_weight_observed >= ALTOS_BRIDGE_MIN_COVERAGE,
+    log(med_rent_altos_std_fixed) - log(med_rent_eviction_std)
+  ]
+  if (length(overlap_qc) > 0) {
+    logf(sprintf("  Bridge QC overlap residual median (log Altos_std - log Evict_std): %.4f",
+                 median(overlap_qc, na.rm = TRUE)), log_file = log_file)
+  }
+
+  drop_bridge_cols <- c(
+    "adj_zip_year", "n_zip_year", "adj_zip", "n_zip",
+    "adj_city_year", "n_city_year", "adj_city", "n_city",
+    "adj_pooled", "n_pooled"
+  )
+  bldg_panel[, (drop_bridge_cols) := NULL]
+}
+
+## Unified rent (Phase 2 contract)
+bldg_panel[, med_rent := fcoalesce(
+  med_rent_altos_std_fixed,
+  med_rent_altos_raw,
+  med_rent_eviction_std,
+  med_rent_eviction
+)]
+
+bldg_panel[, rent_source := fcase(
+  is.finite(med_rent_altos_std_fixed) & med_rent_altos_std_fixed > 0, "altos_std_fixed",
+  is.finite(med_rent_altos_raw) & med_rent_altos_raw > 0, "altos_raw",
+  is.finite(med_rent_eviction_std) & med_rent_eviction_std > 0, "eviction_std",
+  is.finite(med_rent_eviction) & med_rent_eviction > 0, "eviction",
+  default = "missing"
+)]
+
+bldg_panel[, rent_source_std := rent_source %in% c("altos_std_fixed", "eviction_std")]
+
+## Source-aware changes (adjacent-year only)
+setorder(bldg_panel, PID, year)
+bldg_panel[, year_gap_rent_prev := year - data.table::shift(year), by = PID]
+bldg_panel[, rent_source_prev := data.table::shift(rent_source), by = PID]
+bldg_panel[, med_rent_prev := data.table::shift(med_rent), by = PID]
+bldg_panel[, med_rent_altos_raw_prev := data.table::shift(med_rent_altos_raw), by = PID]
+bldg_panel[, med_rent_eviction_std_prev := data.table::shift(med_rent_eviction_std), by = PID]
+bldg_panel[, med_rent_eviction_prev := data.table::shift(med_rent_eviction), by = PID]
+
+bldg_panel[, rent_source_switch_prev := fifelse(
+  year_gap_rent_prev == 1 &
+    !is.na(rent_source_prev) &
+    rent_source_prev != "missing" & rent_source != "missing",
+  rent_source != rent_source_prev,
+  FALSE
+)]
+
+bldg_panel[, dlog_med_rent_naive := fifelse(
+  year_gap_rent_prev == 1 &
+    is.finite(med_rent) & med_rent > 0 &
+    is.finite(med_rent_prev) & med_rent_prev > 0,
+  log(med_rent) - log(med_rent_prev),
+  NA_real_
+)]
+
+bldg_panel[, dlog_med_rent_safe := NA_real_]
+
+# Case A: Altos standardized uses overlap-based change (same-source + overlap threshold)
+bldg_panel[
+  year_gap_rent_prev == 1 &
+    rent_source == "altos_std_fixed" &
+    rent_source_prev == "altos_std_fixed" &
+    !rent_source_switch_prev &
+    is.finite(altos_overlap_weight_prev) &
+    altos_overlap_weight_prev >= ALTOS_OVERLAP_MIN_FOR_SAFE_CHANGE,
+  dlog_med_rent_safe := dlog_rent_altos_overlap
+]
+
+# Case B: Altos raw
+bldg_panel[
+  year_gap_rent_prev == 1 &
+    rent_source == "altos_raw" &
+    rent_source_prev == "altos_raw" &
+    !rent_source_switch_prev &
+    is.finite(med_rent_altos_raw) & med_rent_altos_raw > 0 &
+    is.finite(med_rent_altos_raw_prev) & med_rent_altos_raw_prev > 0,
+  dlog_med_rent_safe := log(med_rent_altos_raw) - log(med_rent_altos_raw_prev)
+]
+
+# Case C: Eviction standardized
+bldg_panel[
+  year_gap_rent_prev == 1 &
+    rent_source == "eviction_std" &
+    rent_source_prev == "eviction_std" &
+    !rent_source_switch_prev &
+    is.finite(med_rent_eviction_std) & med_rent_eviction_std > 0 &
+    is.finite(med_rent_eviction_std_prev) & med_rent_eviction_std_prev > 0,
+  dlog_med_rent_safe := log(med_rent_eviction_std) - log(med_rent_eviction_std_prev)
+]
+
+# Case D: Eviction raw
+bldg_panel[
+  year_gap_rent_prev == 1 &
+    rent_source == "eviction" &
+    rent_source_prev == "eviction" &
+    !rent_source_switch_prev &
+    is.finite(med_rent_eviction) & med_rent_eviction > 0 &
+    is.finite(med_rent_eviction_prev) & med_rent_eviction_prev > 0,
+  dlog_med_rent_safe := log(med_rent_eviction) - log(med_rent_eviction_prev)
+]
+
+# Final enforcement: never allow source-mixed safe changes.
+bldg_panel[rent_source_switch_prev == TRUE, dlog_med_rent_safe := NA_real_]
+
+# Annualized safe change (same-source endpoints; allows non-adjacent years).
+# For adjacent Altos standardized rows that pass overlap checks, this matches
+# dlog_rent_altos_overlap. For non-adjacent gaps, it uses endpoint levels.
+bldg_panel[, dlog_med_rent_safe_ann := NA_real_]
+bldg_panel[, year_prev_same_source := data.table::shift(year), by = .(PID, rent_source)]
+bldg_panel[, med_rent_prev_same_source := data.table::shift(med_rent), by = .(PID, rent_source)]
+bldg_panel[, year_gap_rent_prev_same_source := fifelse(
+  rent_source == "missing" | is.na(year_prev_same_source),
+  NA_integer_,
+  as.integer(year - year_prev_same_source)
+)]
+
+# Default annualized same-source endpoint change.
+bldg_panel[
+  rent_source != "missing" &
+    is.finite(year_gap_rent_prev_same_source) &
+    year_gap_rent_prev_same_source >= 1 &
+    is.finite(med_rent) & med_rent > 0 &
+    is.finite(med_rent_prev_same_source) & med_rent_prev_same_source > 0,
+  dlog_med_rent_safe_ann := (log(med_rent) - log(med_rent_prev_same_source)) / year_gap_rent_prev_same_source
+]
+
+# Prefer overlap-based Altos change when adjacent and overlap threshold passes.
+bldg_panel[
+  year_gap_rent_prev == 1 &
+    rent_source == "altos_std_fixed" &
+    rent_source_prev == "altos_std_fixed" &
+    !rent_source_switch_prev &
+    is.finite(altos_overlap_weight_prev) &
+    altos_overlap_weight_prev >= ALTOS_OVERLAP_MIN_FOR_SAFE_CHANGE &
+    is.finite(dlog_rent_altos_overlap),
+  dlog_med_rent_safe_ann := dlog_rent_altos_overlap
+]
+
+# Clean up temporary lag columns used for change construction.
+bldg_panel[, c(
+  "rent_source_prev", "med_rent_prev",
+  "med_rent_altos_raw_prev", "med_rent_eviction_std_prev", "med_rent_eviction_prev",
+  "year_prev_same_source", "med_rent_prev_same_source"
+) := NULL]
+
+bldg_panel[
+  ,
+  log_med_rent := fifelse(
+    !is.na(med_rent) & med_rent > 0,
+    log(med_rent),
+    NA_real_
+  )
+]
+
+# Phase 2 logging: source composition and change diagnostics
+rent_source_overall <- bldg_panel[, .N, by = rent_source][order(-N)]
+logf("Rent source distribution (overall):", log_file = log_file)
+for (i in 1:nrow(rent_source_overall)) {
+  logf("  ", rent_source_overall$rent_source[i], ": ", rent_source_overall$N[i],
+       " (", round(100 * rent_source_overall$N[i] / nrow(bldg_panel), 1), "%)",
+       log_file = log_file)
+}
+
+rent_source_year <- bldg_panel[rent_source != "missing", .N, by = .(year, rent_source)]
+if (nrow(rent_source_year) > 0) {
+  source_year_tot <- rent_source_year[, .(N_total = sum(N)), by = year]
+  rent_source_year <- merge(rent_source_year, source_year_tot, by = "year", all.x = TRUE)
+  rent_source_year[, pct := 100 * N / N_total]
+  logf("Rent source distribution by year (top entries):", log_file = log_file)
+  top_rows <- rent_source_year[order(year, -N)][, head(.SD, 4), by = year]
+  for (i in 1:nrow(top_rows)) {
+    logf("  ", top_rows$year[i], " ", top_rows$rent_source[i], ": ",
+         top_rows$N[i], " (", round(top_rows$pct[i], 1), "%)", log_file = log_file)
+  }
+}
+
+switch_by_year <- bldg_panel[year_gap_rent_prev == 1 & rent_source != "missing", .(
+  n_rows = .N,
+  switch_rate = mean(rent_source_switch_prev, na.rm = TRUE)
+), by = year][order(year)]
+if (nrow(switch_by_year) > 0) {
+  logf("Rent source switch rate by year (adjacent-year rows):", log_file = log_file)
+  for (i in 1:nrow(switch_by_year)) {
+    logf("  ", switch_by_year$year[i], ": ", round(100 * switch_by_year$switch_rate[i], 1),
+         "% (n=", switch_by_year$n_rows[i], ")", log_file = log_file)
+  }
+}
+
+naive_safe_diff <- bldg_panel[is.finite(dlog_med_rent_naive) & is.finite(dlog_med_rent_safe),
+                              dlog_med_rent_naive - dlog_med_rent_safe]
+if (length(naive_safe_diff) > 0) {
+  qd <- quantile(naive_safe_diff, c(0.01, 0.1, 0.5, 0.9, 0.99), na.rm = TRUE)
+  logf(sprintf("Naive-safe dlog diff dist: p01=%.4f p10=%.4f med=%.4f p90=%.4f p99=%.4f",
+               qd[1], qd[2], qd[3], qd[4], qd[5]), log_file = log_file)
+}
+
+safe_ann_vals <- bldg_panel[is.finite(dlog_med_rent_safe_ann), dlog_med_rent_safe_ann]
+if (length(safe_ann_vals) > 0) {
+  qa <- quantile(safe_ann_vals, c(0.01, 0.1, 0.5, 0.9, 0.99), na.rm = TRUE)
+  logf(sprintf("Safe annualized dlog dist: p01=%.4f p10=%.4f med=%.4f p90=%.4f p99=%.4f",
+               qa[1], qa[2], qa[3], qa[4], qa[5]), log_file = log_file)
+}
 
 ## Unit-size bins (created here so we can support both:
 ##   - zip-year markets across all bins, and
@@ -909,6 +1312,9 @@ blp_cont_vars <- c(
   "log_med_rent",
   "hazardous_violation_count",
   "total_violations",
+  "total_severe_violations",
+  "total_investigations",
+  "total_severe_investigations",
   "building_permit_count",
   "general_permit_count",
   "mechanical_permit_count",

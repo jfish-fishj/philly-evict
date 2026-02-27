@@ -280,6 +280,97 @@ clean_complaint_type <- function(x, lookup = complaint_lookup) {
 
 severe_complaint_types <- c("Heat", "Fire", "Drainage", "Property Maintenance")
 
+severe_violation_types <- c("HAZARDOUS", "IMMINENTLY DANGEROUS")
+
+investigationtype_lookup <- tribble(
+  ~raw,           ~clean,
+  "",             "Unknown/Blank",
+  "HCEU INSP",    "Code Enforcement (Housing)",
+  "PRECOURT",     "Code Enforcement (Pre-Court)",
+  "ADMIN INSP",   "Administrative Inspection",
+  "CEASE INSP",   "Enforcement (Cease/Stop)",
+  "NTF INSP",     "Nuisance Task Force",
+  "CSTF INSP",    "Construction Site Task Force",
+  "COMP INSP",    "Compliance Inspection",
+  "NP INSP",      "Nuisance Property",
+  "AIU INSP",     "Audits/Investigations",
+  "CI INSP",      "Construction Inspection",
+  "CI TANK",      "Construction Inspection (Tank)",
+  "CI HAZMAT",    "Hazardous Material",
+  "BP_BLDG",      "Building Permit / Building",
+  "BP_LICENSE",   "License/Business",
+  "EP_ELEC",      "Electrical",
+  "PP_PLUMB",     "Plumbing",
+  "ZP_ZONING",    "Zoning",
+  "SIGN",         "Signage",
+  "FACAD INSP",   "Facade/Exterior",
+  "ASBESTOS",     "Hazardous Material",
+  "POST C&S",     "Construction (Post Clean & Seal)",
+  "DEMO PUNCH",   "Demolition",
+  "CSUINITIAL",   "Case Support / Utility Inspection",
+  "CSUFINAL",     "Case Support / Utility Inspection",
+  "CSUCURBINT",   "Case Support / Utility Inspection",
+  "CSUSTUBAR",    "Case Support / Utility Inspection",
+  "CSUTESTPIT",   "Case Support / Utility Inspection",
+  "CSUEQTY",      "Case Support / Utility Inspection",
+  "CSUPOSTCS",    "Case Support / Utility Inspection",
+  "L_CLIP",       "CLIP / Vacant Lot / Blight",
+  "L_INITIAL",    "Lead Inspection",
+  "L_FINAL",      "Lead Inspection",
+  "L_ENCAPS_I",   "Lead Abatement / Encapsulation",
+  "L_BARGEBRD",   "Lead / Exterior Abatement",
+  "L_STUCCO",     "Lead / Exterior Abatement",
+  "L_LATERAL",    "Lead / Exterior Abatement",
+  "L_COMPLY",     "Lead Compliance",
+  "L_REINSPCT",   "Lead Reinspection",
+  "L_ADJACENT",   "Lead / Adjacent Property",
+  "L_SIDEWALK",   "Lead / Exterior Surface",
+  "L_FOOTWAY",    "Lead / Exterior Surface",
+  "L_WATERPRF",   "Lead / Exterior Surface",
+  "L_CLRFLOOR",   "Lead / Clearance",
+  "L_WOODCHK",    "Lead / Clearance",
+  "L_MAINT",      "Lead / Maintenance",
+  "L_STARTWRK",   "Lead Abatement / Work Start",
+  "L_TESTDIG",    "Lead / Soil or Test Dig",
+  "L_MEASURE",    "Lead / Measurement",
+  "VAC INSP",     "Vacant Property",
+  "VACLOT",       "Vacant Lot",
+  "BC INSP",      "Building/Code Inspection",
+  "BRU INSP",     "Building/Code Inspection",
+  "HC FAMILY",    "Housing / Residential Program",
+  "HC HI RISE",   "Housing / High-Rise",
+  "HC PCH INS",   "Housing Program Inspection",
+  "HC MENTOR",    "Housing Program / Administrative",
+  "HC ZBA",       "Zoning / Appeals (Housing)",
+  "HC SHELTER",   "Housing / Shelter",
+  "HC BOARD",     "Housing / Board",
+  "HC CLA",       "Housing / Administrative",
+  "WM STATION",   "Weights & Measures",
+  "WM SMSCALE",   "Weights & Measures",
+  "WM SCANNER",   "Weights & Measures",
+  "WM DEVICES",   "Weights & Measures",
+  "WM METER",     "Weights & Measures"
+)
+
+clean_investigation_type <- function(x, lookup = investigationtype_lookup) {
+  key_dt <- as.data.table(lookup)[, .(key = toupper(trimws(raw)), clean)]
+  inp <- data.table(i = seq_along(x), raw = x)[, key := toupper(trimws(raw))]
+  res <- key_dt[inp, on = .(key), nomatch = NA][order(i)][, ifelse(is.na(clean), raw, clean)]
+  return(res)
+}
+
+severe_investigation_types <- c(
+  "Code Enforcement (Housing)",
+  "Code Enforcement (Pre-Court)",
+  "Hazardous Material",
+  "Lead Inspection",
+  "Lead Abatement / Encapsulation",
+  "Lead Abatement / Work Start",
+  "Lead / Exterior Abatement",
+  "Lead Compliance",
+  "Lead Reinspection"
+)
+
 # ---------- Pre-process: add parcel_number and filter to rentals ----------
 permits[, parcel_number := opa_account_num]
 complaints[, parcel_number := opa_account_num]
@@ -309,9 +400,7 @@ violations[, violation_standardized := fifelse(
 )]
 valid_violations <- violations[, .N, by = violation_standardized][order(-N)][N > 10000, violation_standardized]
 
-investigations[, investigation_standardized := fifelse(
-  casepriority == "", "OTHER", toupper(trimws(casepriority))
-)]
+investigations[, investigation_standardized := clean_investigation_type(investigationtype)]
 valid_investigations <- investigations[, .N, by = investigation_standardized][order(-N)][N > 10000, investigation_standardized]
 
 # ========== Build panels for each aggregation level ==========
@@ -367,7 +456,12 @@ for (agg_level in c("year", "quarter", "month")) {
     .(num_violations = .N),
     by = .(parcel_number, period, violation_standardized)
   ]
-  violations_agg_long[, total_violations := sum(num_violations), by = .(parcel_number, period)]
+  violations_agg_long[, severe_flag := violation_standardized %chin% severe_violation_types]
+  violations_agg_long[, `:=`(
+    total_violations        = sum(num_violations),
+    total_severe_violations = sum(num_violations[severe_flag], na.rm = TRUE)
+  ), by = .(parcel_number, period)]
+  violations_agg_long[, severe_flag := NULL]
 
   violations_agg <- pivot_wider(
     violations_agg_long,
@@ -382,7 +476,12 @@ for (agg_level in c("year", "quarter", "month")) {
     .(num_investigations = .N),
     by = .(parcel_number, period, investigation_standardized)
   ]
-  investigations_agg_long[, total_investigations := sum(num_investigations), by = .(parcel_number, period)]
+  investigations_agg_long[, severe_flag := investigation_standardized %chin% severe_investigation_types]
+  investigations_agg_long[, `:=`(
+    total_investigations        = sum(num_investigations),
+    total_severe_investigations = sum(num_investigations[severe_flag], na.rm = TRUE)
+  ), by = .(parcel_number, period)]
+  investigations_agg_long[, severe_flag := NULL]
 
   investigations_agg <- pivot_wider(
     investigations_agg_long,
@@ -403,10 +502,10 @@ for (agg_level in c("year", "quarter", "month")) {
     rename_with(~paste0(.x, "_complaint_count"), -c(parcel_number, period, total_complaints, total_severe_complaints))
 
   violations_agg <- violations_agg |>
-    rename_with(~paste0(.x, "_violation_count"), -c(parcel_number, period, total_violations))
+    rename_with(~paste0(.x, "_violation_count"), -c(parcel_number, period, total_violations, total_severe_violations))
 
   investigations_agg <- investigations_agg |>
-    rename_with(~paste0(.x, "_investigation_count"), -c(parcel_number, period, total_investigations))
+    rename_with(~paste0(.x, "_investigation_count"), -c(parcel_number, period, total_investigations, total_severe_investigations))
 
   building_data <- parcel_grid |>
     merge(permits_agg,        by = c("parcel_number","period"), all.x = TRUE) |>
@@ -425,6 +524,12 @@ for (agg_level in c("year", "quarter", "month")) {
 
   if (building_data[, any(total_severe_complaints > total_complaints, na.rm = TRUE)]) {
     stop("Assertion failed: total_severe_complaints cannot exceed total_complaints within a period.")
+  }
+  if (building_data[, any(total_severe_violations > total_violations, na.rm = TRUE)]) {
+    stop("Assertion failed: total_severe_violations cannot exceed total_violations within a period.")
+  }
+  if (building_data[, any(total_severe_investigations > total_investigations, na.rm = TRUE)]) {
+    stop("Assertion failed: total_severe_investigations cannot exceed total_investigations within a period.")
   }
 
   # --- Assertions ---
