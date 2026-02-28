@@ -320,6 +320,18 @@ if (!is.na(sample_n) && sample_n > 0L && sample_n < nrow(dt)) {
   logf("Sample mode: kept ", nrow(dt), " rows from ", n_after_year_filter, " using seed=", seed, log_file = log_file)
 }
 
+normalize_block_geoid_local <- function(x) {
+  x <- as.character(x)
+  x[is.na(x)] <- ""
+  x <- str_trim(x)
+  x <- str_replace_all(x, "[^0-9]", "")
+  x[nchar(x) == 0L] <- NA_character_
+  x[!is.na(x) & nchar(x) > 15L] <- NA_character_
+  short <- !is.na(x) & nchar(x) < 15L
+  x[short] <- stringr::str_pad(x[short], width = 15L, side = "left", pad = "0")
+  x
+}
+
 logf("Loading id->PID xwalk...", log_file = log_file)
 xwalk_case <- fread(xwalk_case_path, select = c("id", "PID", "num_parcels_matched"))
 setDT(xwalk_case)
@@ -342,6 +354,23 @@ setDT(pid_geo)
 pid_geo[, PID := normalize_pid(PID)]
 pid_geo[, GEOID := normalize_bg_geoid(GEOID)]
 pid_geo <- unique(pid_geo[, .(PID, GEOID)])
+
+# Load parcel-level block_geoid (from clean-parcel-addresses.R spatial join) as fallback
+# for cases geocoded via PID but with no lat/lon for the case-level spatial join.
+parcels_clean_path <- tryCatch(p_product(cfg, "parcels_clean"), error = function(e) NULL)
+pid_block_geo <- NULL
+if (!is.null(parcels_clean_path) && file.exists(parcels_clean_path)) {
+  pid_block_geo_raw <- fread(parcels_clean_path, select = c("parcel_number", "block_geoid"))
+  setDT(pid_block_geo_raw)
+  pid_block_geo_raw[, PID := normalize_pid(parcel_number)]
+  pid_block_geo_raw[, parcel_number := NULL]
+  pid_block_geo_raw[, block_geoid := normalize_block_geoid_local(block_geoid)]
+  pid_block_geo <- pid_block_geo_raw[!is.na(block_geoid), .(block_geoid = block_geoid[1L]), by = PID]
+  logf("Loaded parcel block_geoid from parcels_clean: ", nrow(pid_block_geo),
+       " PIDs with block_geoid", log_file = log_file)
+} else {
+  logf("parcels_clean not found; parcel-path block_geoid fallback unavailable.", log_file = log_file)
+}
 n_pid_geo_raw <- nrow(pid_geo)
 
 pid_geo_counts <- pid_geo[!is.na(GEOID), .(n_geoid = uniqueN(GEOID)), by = PID]
@@ -405,17 +434,6 @@ case_geo[, tract_geoid := fifelse(!is.na(GEOID), substr(GEOID, 1L, 11L), NA_char
 assert_unique(case_geo, "id", "case_geo final id uniqueness")
 
 # ---- Block-level spatial join (optional; skipped if block_shp_path is unavailable) ----
-normalize_block_geoid_local <- function(x) {
-  x <- as.character(x)
-  x[is.na(x)] <- ""
-  x <- str_trim(x)
-  x <- str_replace_all(x, "[^0-9]", "")
-  x[nchar(x) == 0L] <- NA_character_
-  x[!is.na(x) & nchar(x) > 15L] <- NA_character_
-  short <- !is.na(x) & nchar(x) < 15L
-  x[short] <- stringr::str_pad(x[short], width = 15L, side = "left", pad = "0")
-  x
-}
 
 case_geo[, block_geoid := NA_character_]
 n_case_block_geoid <- 0L
@@ -459,6 +477,18 @@ if (!is.null(block_shp_path) && nzchar(block_shp_path %||% "") && file.exists(bl
 } else {
   logf("Block shapefile not available; skipping block-level spatial join.", log_file = log_file)
   logf("  (Set inputs.philly_block_shp in config.yml to enable block-level priors.)", log_file = log_file)
+}
+
+# Fill block_geoid from parcel (parcels_clean spatial join) for cases still missing it.
+# This covers parcel-path cases (have PID, no case-level lat/lon).
+if (!is.null(pid_block_geo) && nrow(pid_block_geo) > 0L) {
+  n_before_parcel_fill <- case_geo[!is.na(block_geoid), .N]
+  case_geo[is.na(block_geoid) & !is.na(PID),
+           block_geoid := pid_block_geo[.SD, on = "PID", x.block_geoid]]
+  n_after_parcel_fill <- case_geo[!is.na(block_geoid), .N]
+  n_filled <- n_after_parcel_fill - n_before_parcel_fill
+  logf("Block GEOID from parcel fallback: filled ", n_filled, " additional cases (",
+       n_after_parcel_fill, " total with block_geoid)", log_file = log_file)
 }
 case_geo[, bg_geoid := fifelse(!is.na(GEOID), GEOID, NA_character_)]
 

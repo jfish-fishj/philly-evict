@@ -44,18 +44,38 @@ logf("Loading: ", input_path, log_file = log_file)
 philly_sf <- read_sf(input_path)
 logf("Loaded ", nrow(philly_sf), " parcels", log_file = log_file)
 
-# Transform and extract coordinates
-logf("Transforming coordinates to EPSG:4326", log_file = log_file)
+# Load census block shapefile for block_geoid spatial join
+block_shp_path <- p_input(cfg, "philly_block_shp")
+logf("Loading census block shapefile: ", block_shp_path, log_file = log_file)
+blocks_sf <- st_read(block_shp_path, quiet = TRUE) %>%
+  st_transform("EPSG:4326") %>%
+  select(GEOID10)
+logf("Loaded ", nrow(blocks_sf), " census blocks", log_file = log_file)
+
+# Transform and extract coordinates; spatial join to census block for block_geoid
+logf("Transforming coordinates to EPSG:4326 and joining to census blocks", log_file = log_file)
 philly_sf_dt <- philly_sf %>%
   st_transform("EPSG:4326") %>%
   mutate(
     geocode_x = st_coordinates(.)[, 1],
     geocode_y = st_coordinates(.)[, 2]
   ) %>%
+  st_join(blocks_sf, join = st_within, left = TRUE) %>%
+  rename(block_geoid = GEOID10) %>%
   select(-SHAPE) %>%
   as.data.table()
 
-logf("Converted to data.table: ", nrow(philly_sf_dt), " rows", log_file = log_file)
+# st_join (left) can produce duplicates if a parcel centroid lands on a block boundary.
+# Keep the first match per parcel to preserve 1:1 key.
+n_before_dedup <- nrow(philly_sf_dt)
+philly_sf_dt <- unique(philly_sf_dt, by = "parcel_number")
+n_duped <- n_before_dedup - nrow(philly_sf_dt)
+if (n_duped > 0) logf("Dropped ", n_duped, " duplicate rows from block spatial join (boundary parcels)", log_file = log_file)
+
+n_with_block <- sum(!is.na(philly_sf_dt$block_geoid))
+logf("Converted to data.table: ", nrow(philly_sf_dt), " rows; ",
+     n_with_block, " (", round(100 * n_with_block / nrow(philly_sf_dt), 1), "%) have block_geoid",
+     log_file = log_file)
 
 # ---- Set up postmastr dictionaries ----
 dirs <- pm_dictionary(type = "directional", filter = c("N", "S", "E", "W"), locale = "us")
@@ -139,6 +159,11 @@ philly_sf_dt_adds_sample <- philly_sf_dt_adds_sample %>% mutate(
     str_replace_all("[Mm]c ", "mc") %>%
     str_replace_all("[Ss]t ", "saint ")
 )
+
+# Align parcel street tokens with the shared canonicalizer used by InfoUSA/licenses.
+# This avoids cross-source mismatches like "mount pleasant" vs "mt pleasant".
+philly_sf_dt_adds_sample <- philly_sf_dt_adds_sample %>%
+  mutate(pm.street = standardize_street_name_vec(pm.street))
 
 # ---- Step 6: Create composite address key ----
 logf("Step 6: Creating composite address key", log_file = log_file)
