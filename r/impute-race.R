@@ -115,7 +115,7 @@ if (!file.exists(first_probs_path) || !file.exists(last_probs_path) || !file.exi
   stop("One or more name probability files are missing.")
 }
 
-write_wru_name_cache(first_probs_path, last_probs_path, middle_probs_path, log_file = log_file)
+name_dicts <- build_name_dictionaries(first_probs_path, last_probs_path, middle_probs_path, log_file = log_file)
 
 # Load and sample input
 
@@ -228,7 +228,8 @@ pred_first <- run_wru_predict(
   year = wru_year,
   census_key = census_key,
   retry = retry,
-  log_file = log_file
+  log_file = log_file,
+  name_dictionaries = name_dicts
 )
 
 pred_last <- run_wru_predict(
@@ -239,7 +240,8 @@ pred_last <- run_wru_predict(
   year = wru_year,
   census_key = census_key,
   retry = retry,
-  log_file = log_file
+  log_file = log_file,
+  name_dictionaries = name_dicts
 )
 
 pred_u <- rbindlist(list(pred_first, pred_last), use.names = TRUE, fill = TRUE)

@@ -402,12 +402,13 @@ apply_bg_low_n_tract_shrink <- function(geo_priors, min_n = 100, k = 100, log_fi
 
 # ---- WRU predict wrapper ----
 
-run_wru_predict <- function(vf, names_to_use, census_data, census_geo, year, census_key, retry, log_file, skip_bad_geos = FALSE) {
+run_wru_predict <- function(vf, names_to_use, census_data, census_geo, year, census_key, retry, log_file, skip_bad_geos = FALSE, name_dictionaries = NULL) {
   if (!nrow(vf)) return(data.table())
 
   msg <- if (names_to_use == "surname") "surname-only" else "surname+first"
   logf(
-    "Running wru::predict_race on ", nrow(vf), " unique rows (", msg, ", geo=", census_geo, ")...",
+    "Running wru::predict_race on ", nrow(vf), " unique rows (", msg, ", geo=", census_geo,
+    ", custom_name_dicts=", !is.null(name_dictionaries), ")...",
     log_file = log_file
   )
 
@@ -425,7 +426,8 @@ run_wru_predict <- function(vf, names_to_use, census_data, census_geo, year, cen
       skip_bad_geos = skip_bad_geos,
       use.counties = FALSE,
       model = "BISG",
-      names.to.use = names_to_use
+      names.to.use = names_to_use,
+      name.dictionaries = name_dictionaries
     ),
     error = function(e) {
       stop("wru::predict_race failed (", msg, "): ", conditionMessage(e))
@@ -457,9 +459,16 @@ build_wru_voter_file <- function(x, census_geo, include_first) {
   out
 }
 
-# ---- WRU name cache ----
+# ---- WRU name dictionaries ----
 
-write_wru_name_cache <- function(first_probs_path, last_probs_path, middle_probs_path, log_file) {
+# Builds a name.dictionaries list suitable for passing directly to
+# wru::predict_race(..., name.dictionaries = ...).
+# Column names match WRU's internal first_c / census_last_c / mid_c format:
+#   first_c:  first_name,  c_whi_first,  c_bla_first,  c_his_first,  c_asi_first,  c_oth_first
+#   last_c:   last_name,   c_whi_last,   c_bla_last,   c_his_last,   c_asi_last,   c_oth_last
+#   mid_c:    middle_name, c_whi_middle, c_bla_middle, c_his_middle, c_asi_middle, c_oth_middle
+# This bypasses wru_data_preflight() which always overwrites tempdir with overwrite=TRUE.
+build_name_dictionaries <- function(first_probs_path, last_probs_path, middle_probs_path, log_file = NULL) {
   prep_name_table <- function(path, key_col, suffix) {
     dt <- fread(path)
     assert_has_cols(dt, c("name", "whi", "bla", "his", "asi", "oth"), paste0("name probs: ", path))
@@ -476,20 +485,20 @@ write_wru_name_cache <- function(first_probs_path, last_probs_path, middle_probs
     setnames(out, "nm", key_col)
     setnames(out, c("c_whi", "c_bla", "c_his", "c_asi", "c_oth"),
              paste0(c("c_whi", "c_bla", "c_his", "c_asi", "c_oth"), "_", suffix))
-    out
+    as.data.frame(out)
   }
 
-  dest <- tempdir()
-  first_c <- prep_name_table(first_probs_path, "first_name", "first")
-  mid_c <- prep_name_table(middle_probs_path, "middle_name", "middle")
-  last_c <- prep_name_table(last_probs_path, "last_name", "last")
-  census_last_c <- copy(last_c)
+  first_df <- prep_name_table(first_probs_path,  "first_name",  "first")
+  mid_df   <- prep_name_table(middle_probs_path, "middle_name", "middle")
+  last_df  <- prep_name_table(last_probs_path,   "last_name",   "last")
 
-  saveRDS(first_c, file.path(dest, "wru-data-first_c.rds"))
-  saveRDS(mid_c, file.path(dest, "wru-data-mid_c.rds"))
-  saveRDS(last_c, file.path(dest, "wru-data-last_c.rds"))
-  saveRDS(census_last_c, file.path(dest, "wru-data-census_last_c.rds"))
-  logf("Wrote WRU name cache files to: ", dest, log_file = log_file)
+  logf(
+    "Built name dictionaries: first=", nrow(first_df),
+    " rows, last=", nrow(last_df),
+    " rows, middle=", nrow(mid_df), " rows",
+    log_file = log_file
+  )
+  list(surname = last_df, first = first_df, middle = mid_df)
 }
 
 # ---- Entropy ----
