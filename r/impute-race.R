@@ -250,6 +250,41 @@ if (u[is.na(state), .N] > 0L) {
 u_first <- u[!is.na(first) & nzchar(first)]
 u_last <- u[is.na(first) | !nzchar(first)]
 
+# --- Name dictionary coverage QA ---
+# Report % of unique names + case-weighted % that have a hit in our custom name files.
+{
+  last_dict  <- toupper(name_dicts$surname$last_name)
+  first_dict <- toupper(name_dicts$first$first_name)
+
+  uniq_last  <- unique(u$last_u[!is.na(u$last_u)])
+  uniq_first <- unique(u_first$first_u[!is.na(u_first$first_u)])
+
+  n_last_match  <- sum(uniq_last  %in% last_dict)
+  n_first_match <- sum(uniq_first %in% first_dict)
+
+  # Case-weighted: count person-rows (in targets) whose name is in the dict
+  n_targets_last_match  <- targets[!is.na(last_u)  & toupper(last_u)  %in% last_dict,  .N]
+  n_targets_first_match <- targets[!is.na(first_u) & toupper(first_u) %in% first_dict, .N]
+  n_targets_has_first   <- targets[!is.na(first_u) & nzchar(first_u), .N]
+
+  logf(
+    "Name dict coverage — unique names:",
+    " last=",  n_last_match,  "/", length(uniq_last),
+    " (", round(100 * n_last_match  / max(1L, length(uniq_last)),  1), "%)",
+    " first=", n_first_match, "/", length(uniq_first),
+    " (", round(100 * n_first_match / max(1L, length(uniq_first)), 1), "%)",
+    log_file = log_file
+  )
+  logf(
+    "Name dict coverage — case-weighted:",
+    " last=",  n_targets_last_match,  "/", nrow(targets),
+    " (", round(100 * n_targets_last_match  / max(1L, nrow(targets)),       1), "%)",
+    " first=", n_targets_first_match, "/", n_targets_has_first,
+    " (", round(100 * n_targets_first_match / max(1L, n_targets_has_first), 1), "%)",
+    log_file = log_file
+  )
+}
+
 pred_first <- run_wru_predict(
   vf = build_wru_voter_file(u_first, census_geo = inference_geo, include_first = TRUE),
   names_to_use = "surname, first",

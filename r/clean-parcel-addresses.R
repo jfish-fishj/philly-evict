@@ -53,6 +53,9 @@ blocks_sf <- st_read(block_shp_path, quiet = TRUE) %>%
 logf("Loaded ", nrow(blocks_sf), " census blocks", log_file = log_file)
 
 # Transform and extract coordinates; spatial join to census block for block_geoid
+# Disable S2 spherical geometry to avoid duplicate-vertex validation errors in
+# OPA parcel polygons (planar join is fine for city-scale spatial joins).
+sf::sf_use_s2(FALSE)
 logf("Transforming coordinates to EPSG:4326 and joining to census blocks", log_file = log_file)
 philly_sf_dt <- philly_sf %>%
   st_transform("EPSG:4326") %>%
