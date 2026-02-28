@@ -14,3 +14,7 @@ Output/*/sample*
 Output/logs*
 claude-chats/*
 Codex-chats/*
+claude-plans/
+codex-plans/
+scratch/
+**/smoke*/

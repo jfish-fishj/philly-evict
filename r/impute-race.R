@@ -180,7 +180,19 @@ dt[is.na(last_u) & is_defendant == TRUE, impute_status := "missing_surname"]
 targets <- dt[is_analysis_defendant == TRUE & impute_status == "ok"]
 logf("Target rows (analysis-defendant & preflight ok): ", nrow(targets), log_file = log_file)
 
-
+# For finer-grained geographies (block, block_group), some "ok" rows may lack a
+# geo_chr if they were geocoded at a coarser level (e.g., parcel GEOID only at BG
+# level but no block spatial join match). Downgrade these gracefully rather than
+# hard-stopping — they will appear in QA as "no_<geo>_geoid".
+n_missing_geo <- dt[is_analysis_defendant == TRUE & impute_status == "ok" & is.na(geo_chr), .N]
+if (n_missing_geo > 0L) {
+  dt[is_analysis_defendant == TRUE & impute_status == "ok" & is.na(geo_chr),
+     impute_status := paste0("no_", inference_geo, "_geoid")]
+  logf("Downgraded ", n_missing_geo, " ok rows with missing ", inference_geo,
+       " geoid to no_", inference_geo, "_geoid (coarser geo source only).", log_file = log_file)
+  targets <- dt[is_analysis_defendant == TRUE & impute_status == "ok"]
+  logf("Target rows after geo downgrade: ", nrow(targets), log_file = log_file)
+}
 
 if (targets[is.na(geo_chr), .N] > 0L) {
   stop("Found defendant/impute_status=ok rows with missing ", inference_geo, " geoid.")

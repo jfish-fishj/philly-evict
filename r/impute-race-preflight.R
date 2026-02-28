@@ -236,7 +236,11 @@ input_path <- opts$input %||% p_input(cfg, "evictions_party_names")
 evictions_case_path <- opts$evictions_case %||% p_product(cfg, "evictions_clean")
 xwalk_case_path <- opts$xwalk_case %||% p_product(cfg, "evict_address_xwalk_case")
 parcel_panel_path <- opts$parcel_panel %||% p_product(cfg, "parcel_occupancy_panel")
-bg_shp_path <- opts$bg_shp %||% p_input(cfg, "philly_bg_shp")
+bg_shp_path    <- opts$bg_shp    %||% p_input(cfg, "philly_bg_shp")
+block_shp_path <- opts$block_shp %||% {
+  key_val <- tryCatch(p_input(cfg, "philly_block_shp"), error = function(e) NULL)
+  key_val
+}
 surname_path <- opts$surname_file %||% p_in(cfg, "census/Names_2010Census.csv")
 firstname_path <- opts$firstname_file %||% p_in(cfg, "name-files/first_nameRaceProbs.csv")
 
@@ -253,6 +257,7 @@ logf("Config: ", cfg$meta$config_path, log_file = log_file)
 logf("Inputs: names=", input_path, ", xwalk_case=", xwalk_case_path,
      ", parcel_panel=", parcel_panel_path, ", evictions_case=", evictions_case_path,
      ", bg_shp=", bg_shp_path,
+     ", block_shp=", ifelse(is.null(block_shp_path) || !nzchar(block_shp_path %||% ""), "(none)", block_shp_path),
      ", surname=", surname_path,
      ", firstname=", firstname_path, log_file = log_file)
 logf("Outputs: person=", out_person, ", case=", out_case, ", qa=", out_qa, log_file = log_file)
@@ -399,6 +404,64 @@ case_geo[, GEOID := fifelse(!is.na(GEOID_spatial), GEOID_spatial, GEOID_parcel)]
 case_geo[, tract_geoid := fifelse(!is.na(GEOID), substr(GEOID, 1L, 11L), NA_character_)]
 assert_unique(case_geo, "id", "case_geo final id uniqueness")
 
+# ---- Block-level spatial join (optional; skipped if block_shp_path is unavailable) ----
+normalize_block_geoid_local <- function(x) {
+  x <- as.character(x)
+  x[is.na(x)] <- ""
+  x <- str_trim(x)
+  x <- str_replace_all(x, "[^0-9]", "")
+  x[nchar(x) == 0L] <- NA_character_
+  x[!is.na(x) & nchar(x) > 15L] <- NA_character_
+  short <- !is.na(x) & nchar(x) < 15L
+  x[short] <- stringr::str_pad(x[short], width = 15L, side = "left", pad = "0")
+  x
+}
+
+case_geo[, block_geoid := NA_character_]
+n_case_block_geoid <- 0L
+if (!is.null(block_shp_path) && nzchar(block_shp_path %||% "") && file.exists(block_shp_path)) {
+  logf("Running spatial join from case lat/lon to Census blocks...", log_file = log_file)
+  blk_sf <- st_read(block_shp_path, quiet = TRUE)
+  # Detect GEOID column (2010 blocks use GEOID10)
+  blk_geoid_col <- if ("GEOID10" %in% names(blk_sf)) "GEOID10" else
+                   if ("GEOID"   %in% names(blk_sf)) "GEOID"   else
+                   if ("GEOID20" %in% names(blk_sf)) "GEOID20" else
+                   stop("Could not find GEOID column in block shapefile (expected GEOID10/GEOID/GEOID20).")
+  blk_sf$block_geoid_raw <- normalize_block_geoid_local(
+    gsub("^1500000US", "", as.character(blk_sf[[blk_geoid_col]]))
+  )
+  blk_sf <- blk_sf[!is.na(blk_sf$block_geoid_raw), "block_geoid_raw"]
+
+  # Reuse the already-prepared pts_sf from the BG join if it exists, else rebuild
+  if (!exists("pts_sf") || is.null(pts_sf) || nrow(pts_sf) == 0L) {
+    case_pts2 <- case_geo[is.finite(latitude) & is.finite(longitude), .(id, longitude, latitude)]
+    case_pts2 <- unique(case_pts2, by = "id")
+    if (nrow(case_pts2) > 0L) {
+      pts_sf <- st_as_sf(case_pts2, coords = c("longitude", "latitude"), crs = 4326, remove = FALSE)
+    }
+  }
+  if (exists("pts_sf") && !is.null(pts_sf) && nrow(pts_sf) > 0L) {
+    if (!is.na(st_crs(blk_sf)) && st_crs(blk_sf) != st_crs(pts_sf)) {
+      pts_sf_blk <- st_transform(pts_sf, st_crs(blk_sf))
+    } else {
+      pts_sf_blk <- pts_sf
+    }
+    blk_join_sf  <- st_join(pts_sf_blk, blk_sf, join = st_intersects, left = TRUE)
+    blk_join_dt  <- as.data.table(st_drop_geometry(blk_join_sf))
+    blk_join_dt[, block_geoid_raw := normalize_block_geoid_local(block_geoid_raw)]
+    blk_join_dt  <- blk_join_dt[, .(block_geoid = mode_chr(block_geoid_raw)), by = id]
+    assert_unique(blk_join_dt, "id", "block spatial join id->block_geoid")
+    case_geo[blk_join_dt, block_geoid := i.block_geoid, on = "id"]
+  }
+  n_case_block_geoid <- case_geo[!is.na(block_geoid), .N]
+  logf("Block GEOID coverage from spatial join: ", n_case_block_geoid, " / ",
+       nrow(case_geo), " cases", log_file = log_file)
+} else {
+  logf("Block shapefile not available; skipping block-level spatial join.", log_file = log_file)
+  logf("  (Set inputs.philly_block_shp in config.yml to enable block-level priors.)", log_file = log_file)
+}
+case_geo[, bg_geoid := fifelse(!is.na(GEOID), GEOID, NA_character_)]
+
 n_case_parcel_geoid <- case_geo[!is.na(GEOID_parcel), .N]
 n_case_spatial_geoid <- case_geo[!is.na(GEOID_spatial), .N]
 n_case_geoid_final <- case_geo[!is.na(GEOID), .N]
@@ -418,6 +481,8 @@ dt[, `:=`(
   PID = NA_character_,
   GEOID = NA_character_,
   tract_geoid = NA_character_,
+  bg_geoid = NA_character_,
+  block_geoid = NA_character_,
   GEOID_spatial = NA_character_,
   GEOID_parcel = NA_character_,
   geoid_source = NA_character_,
@@ -427,6 +492,8 @@ dt[case_geo, `:=`(
   PID = i.PID,
   GEOID = i.GEOID,
   tract_geoid = i.tract_geoid,
+  bg_geoid = i.bg_geoid,
+  block_geoid = i.block_geoid,
   GEOID_spatial = i.GEOID_spatial,
   GEOID_parcel = i.GEOID_parcel,
   geoid_source = i.geoid_source,
@@ -593,6 +660,7 @@ qa_lines <- c(
   paste0("  xwalk_case: ", xwalk_case_path),
   paste0("  parcel_panel: ", parcel_panel_path),
   paste0("  bg_shp: ", bg_shp_path),
+  paste0("  block_shp: ", ifelse(is.null(block_shp_path) || !nzchar(block_shp_path %||% ""), "(none)", block_shp_path)),
   paste0("  surname file: ", surname_path),
   paste0("  first-name file: ", firstname_path),
   "",
@@ -609,6 +677,7 @@ qa_lines <- c(
   paste0("  case IDs with parcel GEOID: ", n_case_parcel_geoid),
   paste0("  case IDs with spatial GEOID: ", n_case_spatial_geoid),
   paste0("  case IDs with preferred GEOID: ", n_case_geoid_final),
+  paste0("  case IDs with block GEOID (spatial): ", n_case_block_geoid),
   paste0("  case IDs with both spatial + parcel GEOID: ", n_case_both_geoids),
   paste0("  agreement count where both available: ", n_case_geoid_agree),
   paste0("  disagreement count where both available: ", n_case_geoid_disagree),
