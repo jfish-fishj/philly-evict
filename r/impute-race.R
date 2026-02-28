@@ -148,6 +148,36 @@ if (inference_geo == "block_group" && isTRUE(bg_shrink_enabled)) {
 }
 prior_source_geo <- unique(geo_priors$prior_source_geo)[1]
 geo_priors[, prior_source_geo := NULL]
+
+# Capture zero-pop block geoids BEFORE citywide-mean substitution in
+# build_wru_census_data_from_priors so we can route them to a BG fallback.
+zero_pop_block_geoids <- character(0L)
+fallback_census_data  <- NULL
+if (inference_geo == "block") {
+  zero_pop_block_geoids <- geo_priors[is.na(p_black_prior), geo_geoid]
+  logf("Zero-pop block geoids (NA priors, will use BG fallback): ",
+       length(zero_pop_block_geoids), log_file = log_file)
+  if (length(zero_pop_block_geoids) > 0L) {
+    fb_priors_path <- default_prior_candidates(cfg, 2013L, "block_group", prior_type)[1]
+    if (!is.null(fb_priors_path) && file.exists(fb_priors_path)) {
+      logf("Loading BG fallback priors: ", fb_priors_path, log_file = log_file)
+      fb_raw <- fread(fb_priors_path)
+      fb_geo <- coerce_priors_to_geo(fb_raw, "block_group")
+      if (isTRUE(bg_shrink_enabled)) {
+        fb_geo <- apply_bg_low_n_tract_shrink(fb_geo, min_n = bg_shrink_min_n,
+                                              k = bg_shrink_k, log_file = log_file)
+      }
+      fb_geo[, prior_source_geo := NULL]
+      fallback_census_data <- build_wru_census_data_from_priors(fb_geo, "block_group", year = wru_year)
+      logf("Built BG fallback census.data (states: ",
+           paste(names(fallback_census_data), collapse = ", "), ")", log_file = log_file)
+    } else {
+      logf("No BG fallback priors found at: ", fb_priors_path,
+           "; zero-pop blocks will use citywide mean.", log_file = log_file)
+    }
+  }
+}
+
 census_data <- build_wru_census_data_from_priors(geo_priors, census_geo = inference_geo, year = wru_year)
 logf(
   "Built WRU census.data for states: ", paste(names(census_data), collapse = ", "),
@@ -289,6 +319,104 @@ pred_u[ok_pred, `:=`(
 ), on = .(first_u, last_u, geo_chr)]
 
 assert_unique(pred_u, c("first_u", "last_u", "geo_chr"), "wru prediction rows")
+
+# === BG fallback for zero-pop block cases ===
+# For blocks with NA priors (zero-pop), main WRU used citywide-mean substitution.
+# Override those predictions with actual BG-level priors for better accuracy.
+if (length(zero_pop_block_geoids) > 0L && !is.null(fallback_census_data)) {
+  # Build block → BG mapping from targets (targets has both geo_chr=block and bg_geoid)
+  blk_bg_map <- unique(
+    targets[geo_chr %in% zero_pop_block_geoids & !is.na(bg_geoid),
+            .(geo_chr, bg_norm = normalize_bg_geoid(bg_geoid))]
+  )
+  blk_bg_map <- blk_bg_map[!is.na(bg_norm)]
+
+  # Tag each zero-pop-block row in pred_u with its BG geoid for the fallback join
+  pred_u[blk_bg_map, fb_geo := i.bg_norm, on = .(geo_chr)]
+
+  u_fb <- unique(pred_u[!is.na(fb_geo), .(first_u, last_u, geo_chr = fb_geo)])
+  u_fb[, `:=`(
+    surname      = last_u,
+    first        = fifelse(!is.na(first_u) & nzchar(first_u), first_u, NA_character_),
+    state        = state_abbr_from_fips(substr(geo_chr, 1L, 2L)),
+    county_code  = substr(geo_chr, 3L, 5L),
+    geo_mid_code = substr(geo_chr, 6L, 11L),
+    bg_code      = substr(geo_chr, 12L, 12L)
+  )]
+  u_fb_first <- u_fb[!is.na(first) & nzchar(first)]
+  u_fb_last  <- u_fb[is.na(first)  | !nzchar(first)]
+
+  logf("BG fallback WRU: ", nrow(u_fb), " unique name×BG combos for ",
+       length(zero_pop_block_geoids), " zero-pop blocks", log_file = log_file)
+
+  fb_pred_first <- run_wru_predict(
+    vf = build_wru_voter_file(u_fb_first, "block_group", TRUE),
+    names_to_use = "surname, first",
+    census_data = fallback_census_data, census_geo = "block_group",
+    year = wru_year, census_key = census_key, retry = retry,
+    log_file = log_file, name_dictionaries = name_dicts
+  )
+  fb_pred_last <- run_wru_predict(
+    vf = build_wru_voter_file(u_fb_last, "block_group", FALSE),
+    names_to_use = "surname",
+    census_data = fallback_census_data, census_geo = "block_group",
+    year = wru_year, census_key = census_key, retry = retry,
+    log_file = log_file, name_dictionaries = name_dicts
+  )
+
+  fb_pred <- rbindlist(list(fb_pred_first, fb_pred_last), use.names = TRUE, fill = TRUE)
+  setDT(fb_pred)
+  fb_pred <- fb_pred[, .(
+    first_u, last_u, geo_chr,
+    p_white_fb    = as.numeric(pred.whi),
+    p_black_fb    = as.numeric(pred.bla),
+    p_hispanic_fb = as.numeric(pred.his),
+    p_asian_fb    = as.numeric(pred.asi),
+    p_other_fb    = as.numeric(pred.oth),
+    method_fb = fifelse(
+      !is.na(first_u) & nzchar(first_u),
+      paste0("wru_firstname+surname+block_bg_fallback"),
+      paste0("wru_surname+block_bg_fallback")
+    )
+  )]
+  # Normalize fallback probabilities
+  ok_fb <- fb_pred[!is.na(p_white_fb) & !is.na(p_black_fb)]
+  ok_fb[, psum := p_white_fb + p_black_fb + p_hispanic_fb + p_asian_fb + p_other_fb]
+  ok_fb[psum > 0, `:=`(
+    p_white_fb    = p_white_fb    / psum,
+    p_black_fb    = p_black_fb    / psum,
+    p_hispanic_fb = p_hispanic_fb / psum,
+    p_asian_fb    = p_asian_fb    / psum,
+    p_other_fb    = p_other_fb    / psum
+  )]
+  ok_fb[, psum := NULL]
+  fb_pred[ok_fb, `:=`(
+    p_white_fb = i.p_white_fb, p_black_fb = i.p_black_fb,
+    p_hispanic_fb = i.p_hispanic_fb, p_asian_fb = i.p_asian_fb, p_other_fb = i.p_other_fb
+  ), on = .(first_u, last_u, geo_chr)]
+
+  # Override zero-pop block predictions in pred_u with BG fallback (when fallback succeeded)
+  pred_u[fb_pred, on = .(first_u, last_u, fb_geo = geo_chr), `:=`(
+    p_white    = fifelse(!is.na(i.p_white_fb),    i.p_white_fb,    p_white),
+    p_black    = fifelse(!is.na(i.p_black_fb),    i.p_black_fb,    p_black),
+    p_hispanic = fifelse(!is.na(i.p_hispanic_fb), i.p_hispanic_fb, p_hispanic),
+    p_asian    = fifelse(!is.na(i.p_asian_fb),    i.p_asian_fb,    p_asian),
+    p_other    = fifelse(!is.na(i.p_other_fb),    i.p_other_fb,    p_other),
+    race_impute_method  = fifelse(!is.na(i.p_white_fb), i.method_fb, race_impute_method),
+    prior_level         = fifelse(!is.na(i.p_white_fb), "block_group_fallback", prior_level)
+  )]
+  pred_u[, fb_geo := NULL]
+
+  n_fb_ok <- pred_u[prior_level == "block_group_fallback", .N]
+  logf("BG fallback applied to ", n_fb_ok, " unique name×block-geo rows.", log_file = log_file)
+}
+
+# Re-evaluate status after fallback: any remaining NA predictions
+pred_u[, race_impute_status := fifelse(
+  is.na(p_white) | is.na(p_black) | is.na(p_hispanic) | is.na(p_asian) | is.na(p_other),
+  "name_lookup_failed",
+  "ok"
+)]
 
 # Merge predictions back
 setkey(dt, first_u, last_u, geo_chr)

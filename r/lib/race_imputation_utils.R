@@ -303,18 +303,29 @@ coerce_priors_to_geo <- function(priors_raw, target_geo) {
     is.finite(total_renters) & total_renters > 0, total_renters,
     fifelse(is.finite(total_pop) & total_pop > 0, total_pop, 1)
   )]
+  # w_eff = 0 for rows where any prior is NA.  This prevents sum(NA*w, na.rm=TRUE)
+  # from silently returning 0 when ALL contributing rows have NA priors (e.g. zero-pop
+  # census blocks).  Without this, zero-pop blocks aggregate to all-zero priors, WRU
+  # multiplies name-likelihood × 0 for every race → NaN → false "name_lookup_failed".
+  p[, w_eff := fifelse(
+    is.na(p_white_prior) | is.na(p_black_prior) | is.na(p_hispanic_prior) |
+      is.na(p_asian_prior) | is.na(p_other_prior),
+    0, w
+  )]
 
   out <- p[, .(
-    w_sum = sum(w, na.rm = TRUE),
-    white_num = sum(p_white_prior * w, na.rm = TRUE),
-    black_num = sum(p_black_prior * w, na.rm = TRUE),
-    hisp_num = sum(p_hispanic_prior * w, na.rm = TRUE),
-    asian_num = sum(p_asian_prior * w, na.rm = TRUE),
-    other_num = sum(p_other_prior * w, na.rm = TRUE),
+    w_sum = sum(w_eff, na.rm = TRUE),
+    white_num = sum(p_white_prior * w_eff, na.rm = TRUE),
+    black_num = sum(p_black_prior * w_eff, na.rm = TRUE),
+    hisp_num = sum(p_hispanic_prior * w_eff, na.rm = TRUE),
+    asian_num = sum(p_asian_prior * w_eff, na.rm = TRUE),
+    other_num = sum(p_other_prior * w_eff, na.rm = TRUE),
     total_renters = sum(fifelse(is.finite(total_renters) & total_renters > 0, total_renters, 0), na.rm = TRUE),
     total_pop = sum(fifelse(is.finite(total_pop) & total_pop > 0, total_pop, 0), na.rm = TRUE)
   ), by = geo_geoid]
+  p[, w_eff := NULL]
 
+  # w_sum == 0 means every contributing row had NA priors → output NA (not 0)
   out[, `:=`(
     p_white_prior = fifelse(w_sum > 0, white_num / w_sum, NA_real_),
     p_black_prior = fifelse(w_sum > 0, black_num / w_sum, NA_real_),
