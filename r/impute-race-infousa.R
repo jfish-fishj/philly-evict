@@ -55,6 +55,13 @@ parse_cli_args <- function(args) {
   out
 }
 
+normalize_pid <- function(x) {
+  x <- as.character(x)
+  x <- gsub("[^0-9]", "", x)
+  x[nchar(x) == 0L] <- NA_character_
+  stringr::str_pad(x, width = 9L, side = "left", pad = "0")
+}
+
 opts <- parse_cli_args(commandArgs(trailingOnly = TRUE))
 cfg <- read_config(opts$config %||% Sys.getenv("PHILLY_EVICTIONS_CONFIG", unset = "config.yml"))
 
@@ -213,7 +220,12 @@ logf("Melted to person-level: ", n_persons, " rows (after dropping empty name ro
 
 logf("Loading xwalk_infousa_to_parcel...", log_file = log_file)
 xwalk_path <- p_product(cfg, "xwalk_infousa_to_parcel")
-xwalk <- fread(xwalk_path, select = c("n_sn_ss_c", "parcel_number", "match_tier"))
+xwalk_hdr <- names(fread(xwalk_path, nrows = 0L))
+xwalk_keep <- intersect(
+  c("n_sn_ss_c", "parcel_number", "match_tier", "xwalk_status", "link_type", "link_id", "anchor_pid", "ownership_unsafe"),
+  xwalk_hdr
+)
+xwalk <- fread(xwalk_path, select = xwalk_keep)
 setDT(xwalk)
 
 # Deduplicate: one winner per n_sn_ss_c (take best match_tier)
@@ -222,11 +234,26 @@ setorder(xwalk, n_sn_ss_c, match_tier)
 xwalk <- xwalk[, .SD[1L], by = n_sn_ss_c]
 xwalk[, match_tier := NULL]
 setnames(xwalk, "parcel_number", "PID")
+xwalk[, PID := normalize_pid(PID)]
+if ("anchor_pid" %in% names(xwalk)) xwalk[, anchor_pid := normalize_pid(anchor_pid)]
+if (!"link_type" %in% names(xwalk)) xwalk[, link_type := "parcel"]
+if (!"link_id" %in% names(xwalk)) xwalk[, link_id := PID]
+if (!"anchor_pid" %in% names(xwalk)) xwalk[, anchor_pid := PID]
+if (!"ownership_unsafe" %in% names(xwalk)) xwalk[, ownership_unsafe := FALSE]
+if (!"xwalk_status" %in% names(xwalk)) xwalk[, xwalk_status := fifelse(!is.na(PID), "unique_match", "unmatched_address")]
+xwalk[, ownership_unsafe := as.logical(ownership_unsafe)]
 n_xwalk <- nrow(xwalk)
 logf("Xwalk: ", n_xwalk, " unique n_sn_ss_c -> PID mappings", log_file = log_file)
 
-# Join PID
-persons[xwalk, PID := i.PID, on = "n_sn_ss_c"]
+# Join PID + link metadata
+persons[xwalk, `:=`(
+  PID = i.PID,
+  infousa_link_type = i.link_type,
+  infousa_link_id = i.link_id,
+  infousa_anchor_pid = i.anchor_pid,
+  infousa_ownership_unsafe = i.ownership_unsafe,
+  infousa_xwalk_status = i.xwalk_status
+), on = "n_sn_ss_c"]
 n_pid_linked <- persons[!is.na(PID), .N]
 logf("PID link: ", n_pid_linked, " / ", n_persons, " persons linked to a PID (",
      round(100 * n_pid_linked / n_persons, 1), "%)", log_file = log_file)
@@ -265,6 +292,7 @@ logf("Loading parcel_occupancy_panel for GEOID crosscheck...", log_file = log_fi
 pop_path <- p_product(cfg, "parcel_occupancy_panel")
 pid_geo <- fread(pop_path, select = c("PID", "GEOID"))
 setDT(pid_geo)
+pid_geo[, PID := normalize_pid(PID)]
 pid_geo[, GEOID := normalize_bg_geoid(GEOID)]
 pid_geo <- unique(pid_geo[!is.na(PID) & !is.na(GEOID)], by = "PID")
 # If PID maps to multiple GEOIDs, take first (most are unique)
@@ -371,7 +399,7 @@ logf("Deduped for WRU: ", nrow(u), " unique (first, last, bg_geoid) from ", nrow
 ## ============================================================
 
 logf("Loading and preparing race priors...", log_file = log_file)
-write_wru_name_cache(first_probs_path, last_probs_path, middle_probs_path, log_file = log_file)
+name_dicts <- build_name_dictionaries(first_probs_path, last_probs_path, middle_probs_path, log_file = log_file)
 
 priors_raw <- fread(priors_path)
 setDT(priors_raw)
@@ -429,7 +457,8 @@ pred_first <- run_wru_predict(
   census_key = census_key,
   retry = retry,
   log_file = log_file,
-  skip_bad_geos = TRUE
+  skip_bad_geos = TRUE,
+  name_dictionaries = name_dicts
 )
 
 pred_last <- run_wru_predict(
@@ -441,7 +470,8 @@ pred_last <- run_wru_predict(
   census_key = census_key,
   retry = retry,
   log_file = log_file,
-  skip_bad_geos = TRUE
+  skip_bad_geos = TRUE,
+  name_dictionaries = name_dicts
 )
 
 pred_u <- rbindlist(list(pred_first, pred_last), use.names = TRUE, fill = TRUE)
@@ -543,6 +573,7 @@ out_cols <- c(
   "familyid", "family_id", "locationid", "individual_id",
   "person_num", "head_of_household", "year",
   "PID", "bg_geoid", "geo_source",
+  "infousa_link_type", "infousa_link_id", "infousa_anchor_pid", "infousa_ownership_unsafe", "infousa_xwalk_status",
   "first_name", "last_name", "middle_name",
   "ethnicity_code", "gender", "age",
   "p_white", "p_black", "p_hispanic", "p_asian", "p_other",
