@@ -53,6 +53,11 @@ logf("Config: ", cfg$meta$config_path, log_file = log_file)
 
 `%||%` <- function(a, b) if (is.null(a) || all(is.na(a))) b else a
 normalize_pid <- function(x) stringr::str_pad(as.character(x), 9, "left", "0")
+normalize_addr_key <- function(x) {
+  y <- stringr::str_squish(stringr::str_to_lower(as.character(x)))
+  y[!nzchar(y)] <- NA_character_
+  y
+}
 
 # -----------------------------
 # small utilities
@@ -140,6 +145,11 @@ philly_infousa_dt  <- fread(infousa_path)
 philly_bldgs       <- fread(p_product(cfg, "parcel_building_summary"))  # building rows: PID, max_hgt, square_ft
 philly_parcels     <- fread(p_product(cfg, "parcels_clean"))     # parcel rows
 info_usa_xwalk     <- fread(p_product(cfg, "infousa_address_xwalk"))
+info_usa_xwalk_best <- NULL
+info_usa_xwalk_best_path <- tryCatch(p_product(cfg, "xwalk_infousa_to_parcel"), error = function(e) NULL)
+if (!is.null(info_usa_xwalk_best_path) && file.exists(info_usa_xwalk_best_path)) {
+  info_usa_xwalk_best <- fread(info_usa_xwalk_best_path)
+}
 
 tenure_bg_2010     <- fread(p_input(cfg, "tenure_bg_2010"))
 uis_tr_2010        <- fread(p_input(cfg, "uis_tr_2010"))
@@ -148,12 +158,20 @@ ever_rentals_panel <- fread(p_product(cfg, "ever_rentals_panel"))
 ever_rentals_pid <- fread(p_product(cfg, "ever_rentals_pid"))
 
 setDT(philly_infousa_dt); setDT(philly_bldgs); setDT(philly_parcels); setDT(info_usa_xwalk)
+if (!is.null(info_usa_xwalk_best)) setDT(info_usa_xwalk_best)
 setDT(tenure_bg_2010); setDT(uis_tr_2010); setDT(ever_rentals_panel)
 
 # Normalize PIDs
 philly_parcels[, PID := normalize_pid(parcel_number)]
 philly_bldgs[,   PID := normalize_pid(PID)]
 info_usa_xwalk[, PID := normalize_pid(PID)]
+if (!is.null(info_usa_xwalk_best)) {
+  if ("parcel_number" %in% names(info_usa_xwalk_best)) {
+    info_usa_xwalk_best[, PID := normalize_pid(parcel_number)]
+  } else if ("PID" %in% names(info_usa_xwalk_best)) {
+    info_usa_xwalk_best[, PID := normalize_pid(PID)]
+  }
+}
 ever_rentals_panel[, PID := normalize_pid(PID)]
 ever_rentals_pid[, PID := normalize_pid(PID)]
 philly_infousa_dt[, obs_id := .I]
@@ -168,24 +186,331 @@ logf("  Ever rentals panel: ", nrow(ever_rentals_panel), " rows", log_file = log
 # -------------------------------
 logf("Merging InfoUSA with parcels...", log_file = log_file)
 
-xwalk_1 <- info_usa_xwalk[num_parcels_matched == 1 & !is.na(PID)]
-logf("  xwalk_1 (unique matches): ", nrow(xwalk_1), " rows", log_file = log_file)
+xwalk_addr_unique <- unique(
+  info_usa_xwalk[
+    num_parcels_matched == 1 & !is.na(PID) & !is.na(n_sn_ss_c) & nzchar(n_sn_ss_c),
+    .(n_sn_ss_c, PID)
+  ],
+  by = "n_sn_ss_c"
+)
+assert_unique(xwalk_addr_unique, "n_sn_ss_c", "xwalk_addr_unique (infousa_address_xwalk unique)")
+logf("  xwalk_addr_unique (legacy unique address xwalk): ", nrow(xwalk_addr_unique), " rows", log_file = log_file)
+
+xwalk_best_dedup <- NULL
+if (!is.null(info_usa_xwalk_best) &&
+    all(c("n_sn_ss_c", "PID") %in% names(info_usa_xwalk_best))) {
+  xwalk_best_dedup <- copy(info_usa_xwalk_best)
+  if (!"match_tier" %in% names(xwalk_best_dedup)) xwalk_best_dedup[, match_tier := NA_character_]
+  if (!"xwalk_status" %in% names(xwalk_best_dedup)) xwalk_best_dedup[, xwalk_status := NA_character_]
+  if (!"link_type" %in% names(xwalk_best_dedup)) xwalk_best_dedup[, link_type := NA_character_]
+  if (!"link_id" %in% names(xwalk_best_dedup)) xwalk_best_dedup[, link_id := NA_character_]
+  if (!"anchor_pid" %in% names(xwalk_best_dedup)) xwalk_best_dedup[, anchor_pid := NA_character_]
+  if (!"ownership_unsafe" %in% names(xwalk_best_dedup)) xwalk_best_dedup[, ownership_unsafe := FALSE]
+  xwalk_best_dedup <- xwalk_best_dedup[
+    !is.na(n_sn_ss_c) & nzchar(n_sn_ss_c) & !is.na(PID),
+    .(n_sn_ss_c, PID, match_tier, xwalk_status, link_type, link_id, anchor_pid, ownership_unsafe)
+  ]
+  setorder(xwalk_best_dedup, n_sn_ss_c, match_tier)
+  xwalk_best_dedup <- xwalk_best_dedup[, .SD[1L], by = n_sn_ss_c]
+  xwalk_best_dedup[, `:=`(
+    infousa_xwalk_status = as.character(fcoalesce(xwalk_status, "unique_match")),
+    infousa_link_type = as.character(fcoalesce(link_type, "parcel")),
+    infousa_link_id = fifelse(
+      !is.na(as.character(link_id)) & nzchar(as.character(link_id)),
+      as.character(link_id),
+      as.character(PID)
+    ),
+    infousa_anchor_pid = normalize_pid(fifelse(
+      !is.na(as.character(anchor_pid)) & nzchar(as.character(anchor_pid)),
+      as.character(anchor_pid),
+      as.character(PID)
+    )),
+    infousa_ownership_unsafe = as.logical(fcoalesce(ownership_unsafe, FALSE))
+  )]
+  xwalk_best_dedup[, c("xwalk_status", "link_type", "link_id", "anchor_pid", "ownership_unsafe") := NULL]
+  assert_unique(xwalk_best_dedup, "n_sn_ss_c", "xwalk_best_dedup (xwalk_infousa_to_parcel best)")
+  logf("  xwalk_best_dedup (harmonized with race-impute bestmatch): ", nrow(xwalk_best_dedup), " rows", log_file = log_file)
+
+  n_overlap_keys <- xwalk_best_dedup[n_sn_ss_c %chin% xwalk_addr_unique$n_sn_ss_c, .N]
+  n_best_only_keys <- xwalk_best_dedup[!n_sn_ss_c %chin% xwalk_addr_unique$n_sn_ss_c, .N]
+  n_addr_only_keys <- xwalk_addr_unique[!n_sn_ss_c %chin% xwalk_best_dedup$n_sn_ss_c, .N]
+  logf(
+    "  xwalk overlap on n_sn_ss_c: overlap=", n_overlap_keys,
+    ", best_only=", n_best_only_keys,
+    ", addr_unique_only=", n_addr_only_keys,
+    log_file = log_file
+  )
+}
+
+# Harmonized InfoUSA linkage:
+# Prefer xwalk_infousa_to_parcel bestmatch (same resolver used in impute-race-infousa),
+# then fall back to legacy unique address xwalk for addresses absent from the new xwalk.
+if (!is.null(xwalk_best_dedup) && nrow(xwalk_best_dedup) > 0L) {
+  xwalk_1 <- rbindlist(list(
+    xwalk_best_dedup[, .(
+      n_sn_ss_c, PID,
+      infousa_xwalk_status, infousa_link_type, infousa_link_id, infousa_anchor_pid, infousa_ownership_unsafe,
+      xwalk_source = "xwalk_infousa_to_parcel_bestmatch"
+    )],
+    xwalk_addr_unique[!n_sn_ss_c %chin% xwalk_best_dedup$n_sn_ss_c,
+                      .(
+                        n_sn_ss_c, PID,
+                        infousa_xwalk_status = "unique_match",
+                        infousa_link_type = "parcel",
+                        infousa_link_id = as.character(PID),
+                        infousa_anchor_pid = as.character(PID),
+                        infousa_ownership_unsafe = FALSE,
+                        xwalk_source = "infousa_address_xwalk_unique_fallback"
+                      )]
+  ), use.names = TRUE, fill = TRUE)
+} else {
+  xwalk_1 <- xwalk_addr_unique[, .(
+    n_sn_ss_c, PID,
+    infousa_xwalk_status = "unique_match",
+    infousa_link_type = "parcel",
+    infousa_link_id = as.character(PID),
+    infousa_anchor_pid = as.character(PID),
+    infousa_ownership_unsafe = FALSE,
+    xwalk_source = "infousa_address_xwalk_unique_only"
+  )]
+}
+xwalk_1[, infousa_anchor_pid := normalize_pid(infousa_anchor_pid)]
+xwalk_1[, infousa_ownership_unsafe := as.logical(fcoalesce(infousa_ownership_unsafe, FALSE))]
+xwalk_1[, infousa_link_type := as.character(fifelse(infousa_link_type == "condo_group", "condo_group", "parcel"))]
+xwalk_1[, infousa_link_id := fifelse(
+  !is.na(as.character(infousa_link_id)) & nzchar(as.character(infousa_link_id)),
+  as.character(infousa_link_id),
+  as.character(PID)
+)]
+assert_unique(xwalk_1, "n_sn_ss_c", "xwalk_1 harmonized InfoUSA link")
+logf("  xwalk_1 (harmonized InfoUSA link): ", nrow(xwalk_1), " rows", log_file = log_file)
+logf("  xwalk_1 source mix:\n", paste(capture.output(print(xwalk_1[, .N, by = xwalk_source][order(-N)])), collapse = "\n"),
+     log_file = log_file)
+if ("infousa_xwalk_status" %in% names(xwalk_1)) {
+  logf("  xwalk_1 Phase 2A xwalk_status mix:\n",
+       paste(capture.output(print(xwalk_1[, .N, by = infousa_xwalk_status][order(-N)])), collapse = "\n"),
+       log_file = log_file)
+}
+
+infousa_link_pids <- unique(xwalk_1$PID)
+logf("  Unique PIDs in harmonized InfoUSA link: ", length(infousa_link_pids), log_file = log_file)
+
+# Parcel->InfoUSA link map via shared parsed address key.
+# This is used later to redistribute link-level households across sibling parcels
+# in ambiguous address groups (instead of leaving one anchor PID with all HH mass).
+xwalk_key_map <- unique(
+  xwalk_1[, .(
+    n_sn_ss_c = normalize_addr_key(n_sn_ss_c),
+    infousa_link_id,
+    infousa_link_type,
+    infousa_anchor_pid,
+    infousa_xwalk_status
+  )],
+  by = "n_sn_ss_c"
+)
+pid_key_map <- unique(
+  philly_parcels[, .(
+    PID,
+    n_sn_ss_c = normalize_addr_key(n_sn_ss_c)
+  )],
+  by = "PID"
+)
+pid_link_map <- merge(
+  pid_key_map[!is.na(n_sn_ss_c)],
+  xwalk_key_map[!is.na(n_sn_ss_c)],
+  by = "n_sn_ss_c",
+  all = FALSE
+)
+assert_unique(pid_link_map, "PID", "pid_link_map")
+pid_link_map[, `:=`(
+  n_pid_link_total = uniqueN(PID),
+  is_ambiguous_link_group = (
+    infousa_xwalk_status %chin% c("ambiguous_match_condo_groupable", "ambiguous_match_noncondo")
+  )
+), by = infousa_link_id]
+logf(
+  "  PID->InfoUSA link map: ",
+  nrow(pid_link_map),
+  " PIDs mapped; ambiguous-group PIDs=",
+  pid_link_map[is_ambiguous_link_group == TRUE & n_pid_link_total > 1L, .N],
+  log_file = log_file
+)
+
+# QA: quantify what harmonizing the xwalk changes for rental PID coverage.
+# This is specifically to compare occupancy's historical legacy unique xwalk
+# against the harmonized link (bestmatch xwalk + legacy fallback).
+legacy_infousa_link_pids <- unique(xwalk_addr_unique$PID)
+
+rental_pid_xwalk_qa <- unique(
+  ever_rentals_pid[, .(
+    PID,
+    ever_rental_altos,
+    ever_rental_license,
+    ever_rental_evict,
+    years_any_evidence,
+    years_altos,
+    years_license,
+    years_evict,
+    mode_num_units,
+    num_units,
+    mean_num_units
+  )],
+  by = "PID"
+)
+assert_unique(rental_pid_xwalk_qa, "PID", "rental_pid_xwalk_qa")
+rental_pid_xwalk_qa[, units_wt := fifelse(
+  is.finite(as.numeric(mode_num_units)) & as.numeric(mode_num_units) > 0,
+  as.numeric(mode_num_units),
+  fifelse(
+    is.finite(as.numeric(num_units)) & as.numeric(num_units) > 0,
+    as.numeric(num_units),
+    fifelse(
+      is.finite(as.numeric(mean_num_units)) & as.numeric(mean_num_units) > 0,
+      as.numeric(mean_num_units),
+      1
+    )
+  )
+)]
+rental_pid_xwalk_qa[!is.finite(units_wt) | is.na(units_wt) | units_wt <= 0, units_wt := 1]
+rental_pid_xwalk_qa[, `:=`(
+  in_legacy_unique_xwalk = PID %chin% legacy_infousa_link_pids,
+  in_harmonized_xwalk = PID %chin% infousa_link_pids
+)]
+rental_pid_xwalk_qa[, `:=`(
+  gained_by_harmonized = in_harmonized_xwalk & !in_legacy_unique_xwalk,
+  lost_vs_legacy = in_legacy_unique_xwalk & !in_harmonized_xwalk
+)]
+
+n_rental_pid_total <- nrow(rental_pid_xwalk_qa)
+units_rental_total <- rental_pid_xwalk_qa[, sum(units_wt, na.rm = TRUE)]
+
+xwalk_cov_summary <- rbindlist(list(
+  rental_pid_xwalk_qa[, .(
+    scenario = "legacy_unique_xwalk",
+    n_rental_pid_total = n_rental_pid_total,
+    n_rental_pid_covered = sum(in_legacy_unique_xwalk, na.rm = TRUE),
+    share_rental_pid_covered = mean(in_legacy_unique_xwalk, na.rm = TRUE),
+    units_rental_total = units_rental_total,
+    units_covered = sum(fifelse(in_legacy_unique_xwalk, units_wt, 0), na.rm = TRUE),
+    share_units_covered = sum(fifelse(in_legacy_unique_xwalk, units_wt, 0), na.rm = TRUE) / units_rental_total
+  )],
+  rental_pid_xwalk_qa[, .(
+    scenario = "harmonized_xwalk",
+    n_rental_pid_total = n_rental_pid_total,
+    n_rental_pid_covered = sum(in_harmonized_xwalk, na.rm = TRUE),
+    share_rental_pid_covered = mean(in_harmonized_xwalk, na.rm = TRUE),
+    units_rental_total = units_rental_total,
+    units_covered = sum(fifelse(in_harmonized_xwalk, units_wt, 0), na.rm = TRUE),
+    share_units_covered = sum(fifelse(in_harmonized_xwalk, units_wt, 0), na.rm = TRUE) / units_rental_total
+  )],
+  rental_pid_xwalk_qa[, .(
+    scenario = "delta_harmonized_minus_legacy",
+    n_rental_pid_total = n_rental_pid_total,
+    n_rental_pid_covered = sum(gained_by_harmonized, na.rm = TRUE) - sum(lost_vs_legacy, na.rm = TRUE),
+    share_rental_pid_covered = mean(in_harmonized_xwalk, na.rm = TRUE) - mean(in_legacy_unique_xwalk, na.rm = TRUE),
+    units_rental_total = units_rental_total,
+    units_covered = sum(fifelse(gained_by_harmonized, units_wt, 0), na.rm = TRUE) -
+      sum(fifelse(lost_vs_legacy, units_wt, 0), na.rm = TRUE),
+    share_units_covered =
+      (sum(fifelse(in_harmonized_xwalk, units_wt, 0), na.rm = TRUE) -
+         sum(fifelse(in_legacy_unique_xwalk, units_wt, 0), na.rm = TRUE)) / units_rental_total
+  )]
+), use.names = TRUE, fill = TRUE)
+
+gained_rental_pids <- rental_pid_xwalk_qa[gained_by_harmonized == TRUE, .(
+  PID, units_wt, mode_num_units, num_units, mean_num_units,
+  ever_rental_altos, ever_rental_license, ever_rental_evict,
+  years_any_evidence, years_altos, years_license, years_evict
+)][order(-units_wt, -years_any_evidence, PID)]
+
+lost_rental_pids <- rental_pid_xwalk_qa[lost_vs_legacy == TRUE, .(
+  PID, units_wt, mode_num_units, num_units, mean_num_units,
+  ever_rental_altos, ever_rental_license, ever_rental_evict,
+  years_any_evidence, years_altos, years_license, years_evict
+)][order(-units_wt, -years_any_evidence, PID)]
+
+gained_by_evidence <- rental_pid_xwalk_qa[gained_by_harmonized == TRUE, .(
+  n_pid = .N,
+  units = sum(units_wt, na.rm = TRUE)
+), by = .(
+  ever_rental_altos = as.integer(ever_rental_altos %in% TRUE),
+  ever_rental_license = as.integer(ever_rental_license %in% TRUE),
+  ever_rental_evict = as.integer(ever_rental_evict %in% TRUE)
+)][order(-units, -n_pid)]
+
+xwalk_cov_out <- p_out(cfg, "qa", "infousa_xwalk_harmonization_rental_coverage_summary.csv")
+xwalk_gain_out <- p_out(cfg, "qa", "infousa_xwalk_harmonization_rental_pids_gained.csv")
+xwalk_lost_out <- p_out(cfg, "qa", "infousa_xwalk_harmonization_rental_pids_lost.csv")
+xwalk_gain_evid_out <- p_out(cfg, "qa", "infousa_xwalk_harmonization_rental_pids_gained_by_evidence.csv")
+fwrite(xwalk_cov_summary, xwalk_cov_out)
+fwrite(gained_rental_pids, xwalk_gain_out)
+fwrite(lost_rental_pids, xwalk_lost_out)
+fwrite(gained_by_evidence, xwalk_gain_evid_out)
+
+logf("  [QA xwalk harmonization] Rental coverage summary:\n",
+     paste(capture.output(print(xwalk_cov_summary)), collapse = "\n"),
+     log_file = log_file)
+logf(
+  "  [QA xwalk harmonization] gained rental PIDs=",
+  nrow(gained_rental_pids),
+  " (units=",
+  round(gained_rental_pids[, sum(units_wt, na.rm = TRUE)], 1),
+  "), lost vs legacy=",
+  nrow(lost_rental_pids),
+  " (units=",
+  round(lost_rental_pids[, sum(units_wt, na.rm = TRUE)], 1),
+  ")",
+  log_file = log_file
+)
+logf("  [QA xwalk harmonization] Wrote: ", xwalk_cov_out, log_file = log_file)
+logf("  [QA xwalk harmonization] Wrote: ", xwalk_gain_out, log_file = log_file)
+logf("  [QA xwalk harmonization] Wrote: ", xwalk_lost_out, log_file = log_file)
+logf("  [QA xwalk harmonization] Wrote: ", xwalk_gain_evid_out, log_file = log_file)
 
 infousa_m <- merge(
   philly_infousa_dt,
-  xwalk_1[, .(n_sn_ss_c, PID)],
+  xwalk_1[, .(
+    n_sn_ss_c, PID,
+    infousa_xwalk_status, infousa_link_type, infousa_link_id, infousa_anchor_pid, infousa_ownership_unsafe
+  )],
   by = "n_sn_ss_c",
   all.x = TRUE
 )
 
 infousa_m[, home_owner := owner_renter_status %in% c(7, 8, 9)]
 infousa_m[, num_households := .N, by = .(PID, year)]
+infousa_m[!is.na(infousa_link_id), num_households_link_entity := .N, by = .(infousa_link_id, year)]
 infousa_m[, num_years_in_sample := .N, by = family_id]
 infousa_m[, first_year_in_sample := min(year) == year, by = family_id]
 infousa_m[, first_year_at_parcel := min(year) == year, by = .(family_id, PID)]
 infousa_m[, last_year_at_parcel  := max(year) == year, by = .(family_id, PID)]
 infousa_m[, num_households_g1    := sum(num_years_in_sample > 1), by = .(PID, year)]
 infousa_m[, max_households       := max(num_households, na.rm = TRUE), by = PID]
+infousa_m[!is.na(infousa_link_id), max_households_link_entity := max(num_households_link_entity, na.rm = TRUE), by = infousa_link_id]
+
+yearly_infousa_link <- infousa_m[
+  !is.na(infousa_link_id),
+  .(
+    num_households_link_entity_year = .N,
+    num_homeowners_link_entity_year = sum(home_owner, na.rm = TRUE)
+  ),
+  by = .(infousa_link_id, year)
+]
+assert_unique(yearly_infousa_link, c("infousa_link_id", "year"), "yearly_infousa_link")
+logf(
+  "  Link-year household table: ",
+  nrow(yearly_infousa_link),
+  " rows",
+  log_file = log_file
+)
+
+logf(
+  "  [Phase 2A occupancy scaffold] InfoUSA person rows with condo_group link_type: ",
+  infousa_m[infousa_link_type == "condo_group", .N],
+  " / ", nrow(infousa_m),
+  " (", round(100 * infousa_m[infousa_link_type == "condo_group", .N] / pmax(1, nrow(infousa_m)), 1), "%)",
+  log_file = log_file
+)
 
 # Raw InfoUSA completion for one-year interior family gaps:
 # if a family is observed at PID in t and t+2, add t+1 as a high-confidence
@@ -399,7 +724,8 @@ for (nm in c("ever_rental_altos","ever_rental_license","ever_rental_evict","ever
 # Intentional design choice: requiring InfoUSA presence for "definitely residential"
 # parcels reduces risk that large non-residential parcels (e.g., hotels/admin
 # parcels) enter the residential denominator with implausible unit counts.
-parcel_agg[,in_infousa := PID %in% info_usa_xwalk$PID]
+# Use the harmonized InfoUSA link (bestmatch xwalk + legacy unique fallback).
+parcel_agg[,in_infousa := PID %in% infousa_link_pids]
 
 parcel_agg[, is_def_res := (building_type %in% c(
   "ROW","TWIN","DETACHED",
@@ -1034,20 +1360,48 @@ parcel_static <- parcel_agg[, .(
 )]
 
 # yearly InfoUSA summary (panel)
+logf("  Summarizing yearly InfoUSA metrics...", log_file = log_file)
+t_yearly_info <- Sys.time()
 yearly_infousa <- infousa_m[!is.na(PID),
                             .(
                               num_households    = first(num_households),
                               num_households_g1 = first(num_households_g1),
                               num_homeowners    = sum(home_owner, na.rm = TRUE),
-                              max_households    = first(max_households)
+                              max_households    = first(max_households),
+                              infousa_any_ownership_unsafe = any(infousa_ownership_unsafe %in% TRUE, na.rm = TRUE),
+                              infousa_any_condo_group_link = any(infousa_link_type == "condo_group", na.rm = TRUE),
+                              infousa_num_link_ids = uniqueN(infousa_link_id[!is.na(infousa_link_id)]),
+                              infousa_num_households_link_max = {
+                                z <- num_households_link_entity[is.finite(num_households_link_entity)]
+                                if (length(z) == 0L) NA_integer_ else as.integer(max(z, na.rm = TRUE))
+                              },
+                              infousa_link_type_mode = {
+                                lt <- infousa_link_type[!is.na(infousa_link_type) & nzchar(as.character(infousa_link_type))]
+                                if (length(lt) == 0L) NA_character_ else as.character(lt[1L])
+                              }
                             ),
                             by = .(PID, year)
 ]
+logf(
+  "  Built yearly_infousa summary: ",
+  nrow(yearly_infousa),
+  " rows in ",
+  round(as.numeric(difftime(Sys.time(), t_yearly_info, units = "secs")), 2),
+  "s",
+  log_file = log_file
+)
+t_yearly_info <- Sys.time()
 yearly_infousa <- merge(
   yearly_infousa,
   infousa_gapfill_pid_year,
   by = c("PID", "year"),
   all = TRUE
+)
+logf(
+  "  Added raw-gapfill columns to yearly_infousa in ",
+  round(as.numeric(difftime(Sys.time(), t_yearly_info, units = "secs")), 2),
+  "s",
+  log_file = log_file
 )
 
 # rental panel info
@@ -1062,13 +1416,120 @@ ever_panel_year <- ever_rentals_panel[, .(
 
 all_pids  <- sort(unique(c(parcel_static$PID, yearly_infousa$PID, ever_panel_year$PID)))
 years_seq <- sort(unique(c(yearly_infousa$year, ever_panel_year$year)))
+logf(
+  "  Panel key universes: ",
+  length(all_pids),
+  " unique PIDs, ",
+  length(years_seq),
+  " unique years",
+  log_file = log_file
+)
+
+assert_unique(parcel_static, "PID", "parcel_static")
+assert_unique(parcel_keep_2010, c("PID", "GEOID", "year_built"), "parcel_keep_2010")
+assert_unique(yearly_infousa, c("PID", "year"), "yearly_infousa")
+assert_unique(ever_panel_year, c("PID", "year"), "ever_panel_year")
 
 panel <- CJ(PID = all_pids, year = years_seq)
-panel <- merge(panel, parcel_static, by = "PID", all.x = TRUE)
-panel[,GEOID := as.numeric(GEOID)]
-panel <- merge(panel, parcel_keep_2010, by = c("PID","GEOID","year_built"), all.x = TRUE)
-panel <- merge(panel, yearly_infousa, by = c("PID","year"), all.x = TRUE)
-panel <- merge(panel, ever_panel_year, by = c("PID","year"), all.x = TRUE)
+logf(
+  "  Panel seed: ",
+  nrow(panel),
+  " rows (",
+  length(all_pids),
+  " PIDs x ",
+  length(years_seq),
+  " years)",
+  log_file = log_file
+)
+
+t_panel_join <- Sys.time()
+setkey(panel, PID, year)
+
+setkey(parcel_static, PID)
+parcel_static_cols <- setdiff(names(parcel_static), "PID")
+panel[parcel_static, (parcel_static_cols) := mget(paste0("i.", parcel_static_cols)), on = "PID"]
+panel[, GEOID := as.numeric(GEOID)]
+logf(
+  "  Joined parcel_static in ",
+  round(as.numeric(difftime(Sys.time(), t_panel_join, units = "secs")), 2),
+  "s",
+  log_file = log_file
+)
+
+t_panel_join <- Sys.time()
+setkey(parcel_keep_2010, PID, GEOID, year_built)
+pk_cols <- setdiff(names(parcel_keep_2010), c("PID", "GEOID", "year_built"))
+panel[
+  parcel_keep_2010,
+  (pk_cols) := mget(paste0("i.", pk_cols)),
+  on = .(PID, GEOID, year_built)
+]
+logf(
+  "  Joined parcel_keep_2010 in ",
+  round(as.numeric(difftime(Sys.time(), t_panel_join, units = "secs")), 2),
+  "s",
+  log_file = log_file
+)
+
+t_panel_join <- Sys.time()
+setkey(yearly_infousa, PID, year)
+yi_cols <- setdiff(names(yearly_infousa), c("PID", "year"))
+panel[yearly_infousa, (yi_cols) := mget(paste0("i.", yi_cols)), on = .(PID, year)]
+logf(
+  "  Joined yearly_infousa in ",
+  round(as.numeric(difftime(Sys.time(), t_panel_join, units = "secs")), 2),
+  "s",
+  log_file = log_file
+)
+
+t_panel_join <- Sys.time()
+setkey(ever_panel_year, PID, year)
+ep_cols <- setdiff(names(ever_panel_year), c("PID", "year"))
+panel[ever_panel_year, (ep_cols) := mget(paste0("i.", ep_cols)), on = .(PID, year)]
+logf(
+  "  Joined ever_panel_year in ",
+  round(as.numeric(difftime(Sys.time(), t_panel_join, units = "secs")), 2),
+  "s",
+  log_file = log_file
+)
+
+t_panel_join <- Sys.time()
+setkey(pid_link_map, PID)
+panel[
+  pid_link_map,
+  `:=`(
+    infousa_link_id_addr = i.infousa_link_id,
+    infousa_link_type_addr = i.infousa_link_type,
+    infousa_anchor_pid_addr = i.infousa_anchor_pid,
+    infousa_xwalk_status_addr = i.infousa_xwalk_status,
+    n_pid_link_total_addr = i.n_pid_link_total,
+    is_ambiguous_link_group_addr = i.is_ambiguous_link_group
+  ),
+  on = "PID"
+]
+logf(
+  "  Joined pid_link_map in ",
+  round(as.numeric(difftime(Sys.time(), t_panel_join, units = "secs")), 2),
+  "s",
+  log_file = log_file
+)
+
+t_panel_join <- Sys.time()
+setkey(yearly_infousa_link, infousa_link_id, year)
+panel[
+  yearly_infousa_link,
+  `:=`(
+    num_households_link_entity_year = i.num_households_link_entity_year,
+    num_homeowners_link_entity_year = i.num_homeowners_link_entity_year
+  ),
+  on = .(infousa_link_id_addr = infousa_link_id, year)
+]
+logf(
+  "  Joined yearly_infousa_link in ",
+  round(as.numeric(difftime(Sys.time(), t_panel_join, units = "secs")), 2),
+  "s",
+  log_file = log_file
+)
 
 # Respect year_built: drop pre-construction years
 panel <- panel[is.na(year_built) | year >= year_built]
@@ -1111,6 +1572,83 @@ panel[
 
 # Defensive clamp: keep unit counts strictly positive in final panel.
 panel[is.na(total_units) | total_units <= 0, total_units := 1L]
+
+# Redistribute link-level households across sibling parcels for ambiguous link groups.
+# This addresses "present in InfoUSA but unlinked PID" rows while preserving a
+# clear provenance split between parcel-observed and link-allocated HH counts.
+panel[, num_households_observed_raw := num_households]
+panel[, rental_row_for_link_fill := (
+  ever_rental_any_year %in% TRUE |
+    rental_from_altos %in% TRUE |
+    rental_from_license %in% TRUE |
+    rental_from_evict %in% TRUE
+)]
+
+n_rental_missing_before_link_fill <- panel[
+  rental_row_for_link_fill == TRUE & is.na(num_households_observed_raw),
+  .N
+]
+
+link_alloc <- panel[
+  is_ambiguous_link_group_addr %in% TRUE &
+    n_pid_link_total_addr > 1L &
+    rental_row_for_link_fill == TRUE &
+    !is.na(infousa_link_id_addr) &
+    !is.na(num_households_link_entity_year),
+  .(
+    PID, year, infousa_link_id_addr,
+    num_households_link_entity_year,
+    total_units
+  )
+]
+
+if (nrow(link_alloc) > 0L) {
+  link_alloc[, alloc_w := fifelse(
+    is.finite(total_units) & total_units > 0,
+    as.numeric(total_units),
+    1
+  )]
+  link_alloc[, num_households_link_alloc := {
+    target <- as.integer(num_households_link_entity_year[1L])
+    if (!is.finite(target) || is.na(target) || target < 0L) target <- 0L
+    w <- alloc_w
+    w_sum <- sum(w, na.rm = TRUE)
+    if (!is.finite(w_sum) || w_sum <= 0) {
+      w <- rep(1, .N)
+      w_sum <- .N
+    }
+    largest_remainder_round(target * (w / w_sum), target)
+  }, by = .(infousa_link_id_addr, year)]
+  link_alloc <- link_alloc[, .(PID, year, num_households_link_alloc)]
+  assert_unique(link_alloc, c("PID", "year"), "link_alloc PID-year")
+} else {
+  link_alloc <- panel[0, .(PID, year, num_households_link_alloc = integer())]
+}
+
+panel[link_alloc, num_households_link_alloc := i.num_households_link_alloc, on = .(PID, year)]
+panel[!is.na(num_households_link_alloc), num_households := as.integer(num_households_link_alloc)]
+panel[, num_households_from_link_alloc := !is.na(num_households_link_alloc)]
+
+n_rental_missing_after_link_fill <- panel[
+  rental_row_for_link_fill == TRUE & is.na(num_households),
+  .N
+]
+n_rental_filled_link <- n_rental_missing_before_link_fill - n_rental_missing_after_link_fill
+n_anchor_rows_redistributed <- panel[
+  num_households_from_link_alloc == TRUE & !is.na(num_households_observed_raw),
+  .N
+]
+logf(
+  "  [link-group HH redistribution] rental missing before=",
+  n_rental_missing_before_link_fill,
+  ", after=",
+  n_rental_missing_after_link_fill,
+  ", filled=",
+  n_rental_filled_link,
+  ", rows_redistributed_from_anchor_observed=",
+  n_anchor_rows_redistributed,
+  log_file = log_file
+)
 
 # Combine observed InfoUSA household counts with deterministic raw-gap fill counts.
 panel[, num_households_completed := fifelse(
@@ -1484,7 +2022,12 @@ panel[, c("has_hh_data", "pid_has_any_hh", "pid_has_rental_evidence",
            "has_hh_observed", "has_hh_completed",
            "pid_has_any_hh_observed", "pid_has_any_hh_completed",
            "in_leaseup_window", "coverage_category", "rental_row",
-           "hh_obs_prev", "hh_obs_next", "spotty_adjacent_observed") := NULL]
+           "hh_obs_prev", "hh_obs_next", "spotty_adjacent_observed",
+           "rental_row_for_link_fill",
+           "infousa_link_id_addr", "infousa_link_type_addr",
+           "infousa_anchor_pid_addr", "infousa_xwalk_status_addr",
+           "n_pid_link_total_addr", "is_ambiguous_link_group_addr",
+           "num_households_link_entity_year", "num_homeowners_link_entity_year") := NULL]
 
 # Compute occupancy_rate. After Fix 2, most renter_occ values are filled.
 # Any remaining NAs (no BG match) fall back to 0 conservatively.

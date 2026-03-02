@@ -7,6 +7,55 @@ Here are some basic issues im having with the occupancy vars and blp estimation:
 
 ---
 
+Updates implemented (2026-03-01):
+
+12) Fix for "present_in_infousa_but_unlinked" in `make-occupancy-vars.r`
+
+Problem:
+- A large share of rental PID-years had missing `num_households` even when the address existed in InfoUSA.
+- Root cause was sibling-parcel address groups: one parcel got the InfoUSA link winner, sibling parcels at the same parsed address (`n_sn_ss_c`) stayed missing.
+
+Implementation:
+- Added a parcel-to-link map via parsed address keys:
+  - `PID -> infousa_link_id` using shared `n_sn_ss_c` from `xwalk_infousa_to_parcel` + `parcels_clean`.
+- Built link-level household counts:
+  - `num_households_link_entity_year` at `infousa_link_id x year` from raw InfoUSA person rows.
+- Added deterministic redistribution for ambiguous link groups (`ambiguous_match_condo_groupable` / `ambiguous_match_noncondo`):
+  - On rental rows only, allocate link-level households across sibling parcels by `total_units` weights.
+  - Integerization uses largest-remainder rounding (deterministic).
+- Preserved provenance columns:
+  - `num_households_observed_raw`
+  - `num_households_link_alloc`
+  - `num_households_from_link_alloc`
+
+Rerun sequence:
+- `Rscript r/make-occupancy-vars.r`
+- `Rscript r/make-analytic-sample.R`
+- `Rscript r/qa-rental-infousa-missing.R --tag=post_unlinked_fix`
+
+Measured impact:
+- From occupancy log:
+  - `[link-group HH redistribution] rental missing before=517747, after=495114, filled=22633`
+- Missing rental share:
+  - overall: `32.85% -> 31.41%` (`-22,633` rows)
+  - `<=2022`: `24.32% -> 22.70%` (`-22,633` rows)
+- `present_in_infousa_but_unlinked` bucket:
+  - overall: `30,601 -> 2,526` (`-28,075`)
+  - `<=2022`: `23,272 -> 588` (`-22,684`)
+
+Notes:
+- This fix is intentionally a linkage/provenance correction, not an "assume occupied" override.
+- Remaining missingness is now more concentrated in:
+  - `temporal_gap_or_partial_coverage`
+  - `near_match_off_by_number`
+  - `likely_not_in_infousa_or_bad_address`
+
+Key QA outputs:
+- `output/qa/rental_infousa_missing_delta_year_pre_vs_post_unlinked_fix.csv`
+- `output/qa/rental_infousa_missing_delta_bucket_pre_vs_post_unlinked_fix.csv`
+
+---
+
 Updates implemented (2026-02-15):
 
 1) Share construction / pyblp interface

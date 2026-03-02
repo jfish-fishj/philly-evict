@@ -50,6 +50,20 @@ Assignment logic:
 - Floored at 0
 - **Hard clamp** (added 2026-02-17): After all imputation, `renter_occ` is clamped to `<= total_units`. See "BG renter re-normalization issue" below for why this is necessary.
 
+**Link-group redistribution for "present but unlinked" rows (added 2026-03-01):**
+
+For ambiguous InfoUSA address groups (`xwalk_status` in `ambiguous_match_condo_groupable` or `ambiguous_match_noncondo`) with multiple sibling parcels at the same parsed address key:
+
+1. Build link-level counts at `infousa_link_id × year` from raw InfoUSA person rows.
+2. Map sibling parcels into the same `infousa_link_id` via shared parsed address key (`n_sn_ss_c`).
+3. For rental PID-years, distribute link-level households across sibling parcels using deterministic largest-remainder rounding, weighted by parcel `total_units`.
+4. Keep provenance columns:
+   - `num_households_observed_raw` (pre-redistribution parcel-observed value)
+   - `num_households_link_alloc` (allocated value from link-group redistribution)
+   - `num_households_from_link_alloc` (flag)
+
+This addresses the case where the address exists in InfoUSA but only one sibling parcel previously carried the household mass.
+
 **Occupancy imputation** (added 2026-02-16, replaces the old forced-zero policy):
 
 When `renter_occ` is NA after the initial assignment, three mechanisms are applied in order:
@@ -80,6 +94,7 @@ Clamped to [0, 1]. Each bin gets its own factor. After the 2026-02-16 fixes, sca
 
 ### Output
 - `parcel_occupancy_panel` (key: PID × year)
+- New provenance columns (added 2026-03-01): `num_households_observed_raw`, `num_households_link_alloc`, `num_households_from_link_alloc`
 
 ## 2. `make-analytic-sample.R` — Shares
 
@@ -146,7 +161,7 @@ This is a conceptual shift from Census-matched totals: `sum(total_units)` is the
 
 Expected inside share sums per market: 0.5–0.8 (healthy)
 
-## 4. QA and Remaining Limitations (as of 2026-02-20)
+## 4. QA and Remaining Limitations (as of 2026-03-01)
 
 ### QA outputs from `make-occupancy-vars.r`
 - `output/qa/units_vs_max_households_worst_offenders.csv`
@@ -171,7 +186,7 @@ Expected inside share sums per market: 0.5–0.8 (healthy)
   - Fix 2 diagnostic: PIDs with no InfoUSA ever, by size and rental evidence
   - Scale factor guard: warns if any bin's factor > 1.5
 
-### What improved (2026-02-16, 2026-02-17)
+### What improved (2026-02-16, 2026-02-17, 2026-03-01)
 - Occupancy rates now 0.88-0.91 (scaled) across all bins for 2015-2019, vs 0.55-0.70 before.
 - ~2M missing renter_occ rows filled via LOCF/NOCB interpolation + BG fallback (99.5%).
 - Unit over-imputation constrained via 1.5× max_households ceiling.
@@ -184,6 +199,9 @@ Expected inside share sums per market: 0.5–0.8 (healthy)
 - Selective raking: small bins skip raking (ROW homes get 1 unit, not fractional); large bins only raked at ≥70% coverage.
 - Renter re-normalization removed: `renters_final = pmin(renters_scaled, units_raked)`, no BG re-scaling.
 - BG-level total HU raking (step 6b) removed: no longer re-distorts small-building unit counts.
+- "Present in InfoUSA but unlinked" recovery (2026-03-01): link-group redistribution filled **22,633** rental PID-years that were previously missing household counts.
+- Missing rental share dropped from **32.85% to 31.41%** overall (and from **24.32% to 22.70%** for years `<= 2022`).
+- `present_in_infousa_but_unlinked` bucket dropped from **30,601 to 2,526** rows overall (for `<=2022`: **23,272 to 588**).
 
 ### Known remaining issues
 
@@ -195,7 +213,7 @@ Expected inside share sums per market: 0.5–0.8 (healthy)
 
 **OTHER/COMMERCIAL type dead weight**: 15K OTHER and 5K COMMERCIAL PIDs in the panel. 95% are u_1_attached (row homes with non-standard building codes). ~10K have neither rental evidence nor InfoUSA households in a given year — they entered the panel from signals in other years but contribute little.
 
-**Address mismatches**: 1,635 InfoUSA addresses with >=5 households have no parcel match at all. 1,336 matched PIDs are "oversubscribed" (households >> units). Both patterns suggest address mismatches where residents report a slightly different address than the parcel record (e.g., "133 Main St" vs "123 Main St"). The QA outputs allow cross-referencing unmatched addresses with nearby oversubscribed PIDs in the same zip. A Tier 5 fuzzy house-number match (±10, same street/zip, unique match only) was added to the crosswalk (2026-02-17), recovering 86 additional addresses.
+**Address mismatches / non-linkable rows**: The 2026-03-01 link-group redistribution resolves most sibling-parcel "present but unlinked" cases, but true address mismatch and true non-coverage remain. `near_match_off_by_number` and `likely_not_in_infousa_or_bad_address` are still material buckets and require additional alias/crosswalk work.
 
 ### Within-PID share variation is minimal
 - Variance decomposition: ~98% between-PID, ~2% within-PID
