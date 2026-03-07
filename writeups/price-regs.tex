@@ -169,7 +169,7 @@
 \IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
 \urlstyle{same}
 \hypersetup{
-  pdftitle={Hedonic Rent Regressions: Long-Run Filing Rate},
+  pdftitle={Hedonic Rent Regressions: Raw Long-Run Filing Rate},
   pdfauthor={Philly Evictions Project},
   colorlinks=true,
   linkcolor={blue},
@@ -179,7 +179,7 @@
   pdfcreator={LaTeX via pandoc}}
 
 
-\title{Hedonic Rent Regressions: Long-Run Filing Rate}
+\title{Hedonic Rent Regressions: Raw Long-Run Filing Rate}
 \author{Philly Evictions Project}
 \date{2026-03-01}
 \begin{document}
@@ -196,7 +196,7 @@
 
 This document summarizes the hedonic rent regressions from
 \texttt{r/price-regs.R}. The script estimates the relationship between
-eviction filing intensity (raw long-run pre-COVID filing rate) and rent
+eviction filing intensity (raw long-run filing rate, pre-2019) and rent
 levels, controlling for building and neighborhood characteristics.
 
 \textbf{Unit of analysis:} Building (PID) \(\times\) year panel,
@@ -218,10 +218,15 @@ levels, controlling for building and neighborhood characteristics.
 \item
   Years 2014--2019 (pre-COVID hedonic)
 \item
-  Non-missing long-run pre-COVID filing rate
+  Non-missing raw filing rate (pre-2019)
 \item
   Filing rate \(\leq 0.75\) (excludes extreme outliers)
 \end{itemize}
+
+\textbf{Key measure:} \texttt{filing\_rate\_longrun\_pre2019} = total
+pre-2019 filings / total units / years observed pre-2019. This is the
+unshrunk filing rate (contrast with the Empirical Bayes version in
+\texttt{price-regs-eb.R}).
 
 \section{Eviction Intensity Measures}\label{eviction-intensity-measures}
 
@@ -230,11 +235,10 @@ Two representations of eviction filing intensity are used:
 \begin{itemize}
 \tightlist
 \item
-  \textbf{Binned:} Long-run pre-COVID filing rate cut at 0, 5\%, 10\%,
-  20\%, with reference category (5--10\%{]}
+  \textbf{Binned:} Pre-2019 raw filing rate cut at 0, 5\%, 10\%, 20\%,
+  with reference category (5--10\%{]}
 \item
-  \textbf{Continuous:} Raw long-run filing rate (pre-COVID), entering
-  linearly
+  \textbf{Continuous:} Raw filing rate (pre-2019), entering linearly
 \end{itemize}
 
 \section{Empirical Strategy}\label{empirical-strategy}
@@ -274,7 +278,7 @@ Regressions are weighted by total units and clustered by PID.
 (Baseline)}\label{model-1-binned-filing-rate-baseline}
 
 \[
-\log(\text{rent}_{it}) = \sum_{b} \beta_b \cdot \mathbb{1}[\text{filing rate bin}_i = b] + \gamma_1 \cdot \text{ViolFlag}_i + \gamma_2 \cdot \text{ComplaintFlag}_i + \delta' X_i + \alpha_{\text{tract}} + \phi_t + \varepsilon_{it}
+\log(\text{rent}_{it}) = \sum_{b} \beta_b \cdot \mathbb{1}[\text{rate bin}_i = b] + \gamma_1 \cdot \text{ViolFlag}_i + \gamma_2 \cdot \text{ComplaintFlag}_i + \delta' X_i + \alpha_{\text{tract}} + \phi_t + \varepsilon_{it}
 \]
 
 where \(\text{ViolFlag}_i\) indicates any unsafe/dangerous/hazardous
@@ -285,7 +289,7 @@ heat/fire/drainage/plumbing complaint. Reference bin: (5--10\%{]}.
 Rate}\label{model-2-continuous-filing-rate}
 
 \[
-\log(\text{rent}_{it}) = \beta \cdot \overline{\text{filing rate}}_i + \delta' X_i + \alpha_{\text{tract}} + \phi_t + \varepsilon_{it}
+\log(\text{rent}_{it}) = \beta \cdot \text{rate}_i + \delta' X_i + \alpha_{\text{tract}} + \phi_t + \varepsilon_{it}
 \]
 
 \subsection{Models 3--4: Tenant Composition
@@ -315,8 +319,8 @@ Interaction}{Model 5: Complaint \textbackslash times High-Eviction Interaction}}
 \log(\text{rent}_{it}) = \beta_1 \cdot \text{ComplaintFlag}_i + \beta_2 \cdot \text{HighEvict}_i + \beta_3 \cdot \text{ComplaintFlag}_i \times \text{HighEvict}_i + \delta' X_i + \alpha_{\text{tract}} + \phi_t + \varepsilon_{it}
 \]
 
-where \(\text{HighEvict}_i = \mathbb{1}[\text{filing rate}_i > 0.20]\).
-Uses a sparser FE set (year + GEOID + unit count bin).
+where \(\text{HighEvict}_i = \mathbb{1}[\text{rate}_i > 0.20]\). Uses a
+sparser FE set (year + GEOID + unit count bin).
 
 \section{Results}\label{results}
 
@@ -424,25 +428,25 @@ Controls}\label{full-table-with-tenant-composition-controls}
 
 \end{adjustbox}
 
-\subsection{Coefficient Comparison: Eviction Intensity Across
-Specifications}\label{coefficient-comparison-eviction-intensity-across-specifications}
+\subsection{Coefficient Comparison: Filing Rate Across
+Specifications}\label{coefficient-comparison-filing-rate-across-specifications}
 
 \begingroup\fontsize{9}{11}\selectfont
 
 \begin{longtable}[t]{llrrr}
-\caption{\label{tab:coef-compare}Eviction intensity coefficients: baseline vs tenant-composition controlled}\\
+\caption{\label{tab:coef-compare}Filing rate coefficients: baseline vs tenant-composition controlled}\\
 \toprule
 Model & Term & Estimate & SE & \$p\$\\
 \midrule
-baseline\_bin & 0 & 0.0953 & 0.0118 & 0.000\\
-baseline\_bin & (0-5\%] & 0.0477 & 0.0130 & 0.000\\
-baseline\_bin & (10-20\%] & -0.0295 & 0.0110 & 0.008\\
-baseline\_bin & 20\%+ & -0.0377 & 0.0097 & 0.000\\
-tenant\_bin & 0 & 0.0911 & 0.0117 & 0.000\\
+baseline\_bin & filing\_rate\_bin0 & 0.0953 & 0.0118 & 0.000\\
+baseline\_bin & filing\_rate\_bin(0-5\%] & 0.0477 & 0.0130 & 0.000\\
+baseline\_bin & filing\_rate\_bin(10-20\%] & -0.0295 & 0.0110 & 0.008\\
+baseline\_bin & filing\_rate\_bin20\%+ & -0.0377 & 0.0097 & 0.000\\
+tenant\_bin & filing\_rate\_bin0 & 0.0911 & 0.0117 & 0.000\\
 \addlinespace
-tenant\_bin & (0-5\%] & 0.0463 & 0.0129 & 0.000\\
-tenant\_bin & (10-20\%] & -0.0261 & 0.0110 & 0.018\\
-tenant\_bin & 20\%+ & -0.0343 & 0.0096 & 0.000\\
+tenant\_bin & filing\_rate\_bin(0-5\%] & 0.0463 & 0.0129 & 0.000\\
+tenant\_bin & filing\_rate\_bin(10-20\%] & -0.0261 & 0.0110 & 0.018\\
+tenant\_bin & filing\_rate\_bin20\%+ & -0.0343 & 0.0096 & 0.000\\
 baseline\_cont & filing\_rate\_longrun\_pre2019 & -0.3270 & 0.0284 & 0.000\\
 tenant\_cont & filing\_rate\_longrun\_pre2019 & -0.3024 & 0.0280 & 0.000\\
 \bottomrule
@@ -458,9 +462,9 @@ Model}\label{coefficient-plot-binned-model}
 
 }
 
-\caption{Hedonic rent penalty by filing intensity bin (baseline
-specification). Reference category: 5-10 percent long-run filing rate
-bin. Tract and year FE with building controls.}
+\caption{Hedonic rent penalty by raw filing rate bin (baseline
+specification). Reference category: 5-10 percent filing rate bin. Tract
+and year FE with building controls.}
 
 \end{figure}%
 
@@ -468,12 +472,12 @@ bin. Tract and year FE with building controls.}
 
 \section{Exploratory Diagnostics}\label{exploratory-diagnostics}
 
-These plots residualize both rent and eviction intensity on the same
-controls and fixed effects used in the hedonic regressions, then examine
-the remaining relationship.
+These plots residualize both rent and filing rate on the same controls
+and fixed effects used in the hedonic regressions, then examine the
+remaining relationship.
 
-\subsection{Residual Variation in Filing
-Rate}\label{residual-variation-in-filing-rate}
+\subsection{Residual Variation in Raw Filing
+Rate}\label{residual-variation-in-raw-filing-rate}
 
 \begin{figure}[H]
 
@@ -481,14 +485,14 @@ Rate}\label{residual-variation-in-filing-rate}
 
 }
 
-\caption{Distribution of residualized long-run filing rate (pre-2019).
+\caption{Distribution of residualized raw filing rate (pre-2019).
 Residualized on year + tract + building controls; weighted by total
 units.}
 
 \end{figure}%
 
-\subsection{Residualized Rent vs Eviction Intensity: Bin
-Scatter}\label{residualized-rent-vs-eviction-intensity-bin-scatter}
+\subsection{Residualized Rent vs Filing Rate: Bin
+Scatter}\label{residualized-rent-vs-filing-rate-bin-scatter}
 
 \begin{figure}[H]
 
@@ -496,14 +500,51 @@ Scatter}\label{residualized-rent-vs-eviction-intensity-bin-scatter}
 
 }
 
-\caption{Binned scatter of residualized log rent vs residualized
-long-run filing rate. Both residualized on the same controls/FE;
-weighted by total units.}
+\caption{Binned scatter of residualized log rent vs residualized raw
+filing rate. Both residualized on the same controls/FE; weighted by
+total units.}
 
 \end{figure}%
 
-\subsection{Spline-Implied Stigma
-Curve}\label{spline-implied-stigma-curve}
+\subsection{Spline-Implied Stigma Curve
+(Cubic)}\label{spline-implied-stigma-curve-cubic}
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=1\linewidth,height=\textheight,keepaspectratio]{../output/price-regs/figs/spline_stigma_curve_raw.png}
+
+}
+
+\caption{Spline-implied stigma curve with partial-residual binned means.
+The curve shows the fitted cubic natural spline component of log rent as
+a function of raw filing rate (relative to never-filers), with 95\%
+confidence band. Points are binned means of partial residuals.}
+
+\end{figure}%
+
+\subsection{Spline Robustness: Linear vs Quadratic vs
+Cubic}\label{spline-robustness-linear-vs-quadratic-vs-cubic}
+
+To assess sensitivity of the stigma curve shape to the smoothness
+assumption, we estimate three spline specifications with identical knot
+placement (concentrated at low filing rates: 1\%, 2.5\%, 5\%, 8\%, 12\%,
+20\%):
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Linear (degree 1):} Piecewise-linear with kinks at each knot.
+  Imposes no curvature within segments; slope changes occur only at
+  knots.
+\item
+  \textbf{Quadratic (degree 2):} Piecewise-quadratic; allows smooth
+  curvature but constrains the second derivative to be
+  piecewise-constant.
+\item
+  \textbf{Cubic (degree 3, natural spline):} Piecewise-cubic with
+  natural boundary constraints (linear beyond boundary knots). Most
+  flexible within the interior.
+\end{itemize}
 
 \begin{figure}[H]
 
@@ -511,10 +552,53 @@ Curve}\label{spline-implied-stigma-curve}
 
 }
 
-\caption{Spline-implied stigma curve: linear, quadratic, and cubic
-B-spline specifications overlaid. All three use hurdle=FALSE (spline
-through zero); knots at 1\%, 2.5\%, 5\%, 8\%, 12\%, 20\%. The similarity
-across degrees indicates robustness of the shape to spline flexibility.}
+\caption{Comparison of stigma curves across spline degrees. All three
+specifications use the same knots concentrated at low filing rates.
+Shaded regions are 95\% confidence bands (delta method). Points are
+binned partial residuals from the cubic model.}
+
+\end{figure}%
+
+\subsection{Hump Diagnostic: Never-Filer
+Composition}\label{hump-diagnostic-never-filer-composition}
+
+The spline curves show a hump near zero filing rate: buildings with very
+low positive rates appear to have \emph{higher} rents than never-filers.
+This reflects composition differences --- never-filers are 100\%
+Altos-sourced (since eviction court records mechanically require a
+filing), include 25\% single-family homes, and have a median of 1 unit.
+The barely-ever-filers ((0, 1\%{]} bin) are large, high-quality
+apartment complexes (median 46 units, 26\% quality-A).
+
+To test whether the hump is a composition artifact, we re-estimate the
+cubic spline under progressively richer controls:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  \textbf{Baseline} (no source FE --- as in the main spline)
+\item
+  \textbf{+ Source FE} (absorbs Altos vs eviction-court rent level
+  differences)
+\item
+  \textbf{+ Source FE + panel tenure} (controls for years observed
+  pre-2019)
+\item
+  \textbf{Multi-family only} (drops SFH, which are 25\% of never-filers)
+\item
+  \textbf{Multi-family + source + tenure} (all three adjustments)
+\end{enumerate}
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=1\linewidth,height=\textheight,keepaspectratio]{../output/price-regs/figs/spline_hump_diagnostic.png}
+
+}
+
+\caption{Hump diagnostic: cubic spline under alternative controls and
+sample restrictions. Hump attenuates with source FE and disappears when
+restricting to multi-family buildings.}
 
 \end{figure}%
 
@@ -534,10 +618,10 @@ associated with eviction filing intensity, conditional on neighborhood
   highest-evicting buildings vs moderate-evicting buildings \emph{within
   the same tract and building type}.
 \item
-  \textbf{Continuous model (Model 2):} A one-unit increase in the
-  long-run filing rate (e.g., from 0 to 1, which spans the entire range)
-  is associated with a \(\beta\)-log-point change in rent. For typical
-  variation (0 to 0.20), multiply by 0.20.
+  \textbf{Continuous model (Model 2):} A one-unit increase in raw filing
+  rate (e.g., from 0 to 1, which spans the entire range) is associated
+  with a \(\beta\)-log-point change in rent. For typical variation (0 to
+  0.20), multiply by 0.20.
 \item
   \textbf{Tenant composition stability:} If adding tenant composition
   controls (Models 3--4) substantially attenuates the eviction intensity
@@ -550,6 +634,26 @@ associated with eviction filing intensity, conditional on neighborhood
   eviction rates have differentially lower rents, consistent with a
   ``stigma'' or quality channel.
 \end{itemize}
+
+\subsection{Comparison with EB
+Estimates}\label{comparison-with-eb-estimates}
+
+The raw long-run filing rate differs from the Empirical Bayes version in
+\texttt{price-regs-eb.R}:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Raw rate:} Simple ratio of total filings to total units to
+  years observed. Noisier for small buildings (few units, few years).
+\item
+  \textbf{EB rate:} Shrinks extreme raw rates toward a prior (city- or
+  ZIP-level mean). More stable for buildings with thin data.
+\end{itemize}
+
+Both should produce qualitatively similar results for large,
+well-observed buildings. Differences for small buildings reflect the EB
+shrinkage pulling extreme rates toward the mean.
 
 
 

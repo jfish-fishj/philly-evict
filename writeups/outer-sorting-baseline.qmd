@@ -1,0 +1,623 @@
+---
+title: "Outer Sorting Baseline Simulation Memo"
+author: "Philly Evictions Project"
+date: today
+format:
+  pdf:
+    pdf-engine: xelatex
+    documentclass: article
+    geometry: margin=1in
+    fontsize: 11pt
+    keep-tex: true
+    number-sections: true
+    toc: true
+    include-in-header:
+      text: |
+        \usepackage{booktabs}
+        \usepackage{longtable}
+        \usepackage{adjustbox}
+        \usepackage{float}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 9,
+  fig.height = 6,
+  dpi = 300
+)
+```
+
+```{r load, include=FALSE}
+suppressPackageStartupMessages({
+  library(data.table)
+  library(ggplot2)
+  library(knitr)
+  library(kableExtra)
+  library(patchwork)
+})
+
+resolve_proj_root <- function() {
+  candidates <- c(getwd(), ".", "..", "../..")
+  for (cand in candidates) {
+    cfg_path <- file.path(cand, "config.yml")
+    r_cfg_path <- file.path(cand, "r", "config.R")
+    if (file.exists(cfg_path) && file.exists(r_cfg_path)) {
+      return(normalizePath(cand, winslash = "/", mustWork = TRUE))
+    }
+  }
+  stop("Could not locate project root from the Quarto render working directory.")
+}
+
+proj_root <- resolve_proj_root()
+source(file.path(proj_root, "r", "config.R"))
+source(file.path(proj_root, "r", "build-renter-poverty-geo.R"))
+source(file.path(proj_root, "r", "build-outer-sorting-empirical-moments.R"))
+
+old_wd <- getwd()
+setwd(proj_root)
+on.exit(setwd(old_wd), add = TRUE)
+
+cfg <- read_config(file.path(proj_root, "config.yml"))
+cfg_raw <- yaml::read_yaml(file.path(proj_root, "config.yml"))
+cfg$paths$repo_root <- proj_root
+cfg$paths$input_dir <- normalizePath(
+  file.path(proj_root, cfg_raw$paths$input_dir %||% "data/input"),
+  winslash = "/",
+  mustWork = FALSE
+)
+cfg$paths$processed_dir <- normalizePath(
+  file.path(proj_root, cfg_raw$paths$processed_dir %||% "data/processed"),
+  winslash = "/",
+  mustWork = FALSE
+)
+cfg$paths$output_dir <- normalizePath(
+  file.path(proj_root, cfg_raw$paths$output_dir %||% "output"),
+  winslash = "/",
+  mustWork = FALSE
+)
+cfg$paths$tmp_dir <- normalizePath(
+  file.path(proj_root, cfg_raw$paths$tmp_dir %||% "tmp"),
+  winslash = "/",
+  mustWork = FALSE
+)
+
+panel_path <- p_product(cfg, "outer_sorting_sim_panel")
+moments_path <- p_product(cfg, "outer_sorting_sim_moments")
+diagnostics_path <- p_product(cfg, "outer_sorting_sim_diagnostics")
+calib_dir <- p_out(cfg, "outer_sorting")
+
+panel <- fread(panel_path)
+mom <- fread(moments_path)
+diag <- fread(diagnostics_path)
+best_params <- fread(file.path(calib_dir, "outer_sorting_calibration_best_params.csv"))
+moment_compare <- fread(file.path(calib_dir, "outer_sorting_calibration_moment_comparison.csv"))
+opt_summary <- fread(file.path(calib_dir, "outer_sorting_calibration_optimization_summary.csv"))
+emp_built <- build_outer_sorting_empirical_panel(cfg)
+emp_panel <- emp_built$panel
+
+tab_dir <- file.path(calib_dir, "tables")
+dir.create(tab_dir, recursive = TRUE, showWarnings = FALSE)
+
+include_tex_table <- function(path, max_width = "\\textwidth") {
+  if (!file.exists(path)) {
+    cat("Table not found:", path)
+    return(invisible(NULL))
+  }
+  lines <- readLines(path)
+  if (identical(max_width, "\\tiny")) {
+    begin_idx <- grep("^\\\\begin\\{table\\}", lines)
+    if (length(begin_idx) >= 1L) {
+      lines <- append(lines, values = "\\tiny", after = begin_idx[1])
+    } else {
+      lines <- c("{\\tiny", lines, "}")
+    }
+  }
+  cat(lines, sep = "\n")
+  cat("\n")
+}
+
+write_table_bundle <- function(dt, stem, caption, digits = 3) {
+  csv_path <- file.path(tab_dir, paste0(stem, ".csv"))
+  tex_path <- file.path(tab_dir, paste0(stem, ".tex"))
+  fwrite(dt, csv_path)
+  tex_lines <- capture.output(
+    knitr::kable(
+      dt,
+      format = "latex",
+      booktabs = TRUE,
+      caption = caption,
+      digits = digits,
+      linesep = ""
+    )
+  )
+  tex_lines <- sub("\\\\caption\\{\\\\label\\{tab:load\\}", "\\\\caption{", tex_lines)
+  writeLines(tex_lines, tex_path)
+  invisible(list(csv = csv_path, tex = tex_path))
+}
+
+outer_cfg <- cfg$run$outer_sorting
+mu <- as.numeric(outer_cfg$mu)
+delta_L <- as.numeric(outer_cfg$delta_L)
+delta_H <- as.numeric(outer_cfg$delta_H)
+avg_default <- (1 - mu) * delta_L + mu * delta_H
+
+emp_units_year_from <- as.integer(outer_cfg$units_empirical_year_from %||% outer_cfg$empirical$year_from %||% 2011L)
+emp_units_year_to <- as.integer(outer_cfg$units_empirical_year_to %||% outer_cfg$empirical$year_to %||% 2019L)
+emp_units_year_built_col <- as.character(outer_cfg$units_empirical_year_built_col %||% outer_cfg$empirical$year_built_col %||% "year_built")
+emp_units_path <- p_product(cfg, outer_cfg$units_empirical_product_key %||% outer_cfg$empirical$bldg_panel_product_key %||% "bldg_panel_blp")
+emp_units_dt <- fread(emp_units_path, select = c("PID", "year", "total_units", emp_units_year_built_col))
+setnames(emp_units_dt, emp_units_year_built_col, "year_built")
+emp_units_dt[, year_built := suppressWarnings(as.integer(year_built))]
+emp_units_dt <- emp_units_dt[
+  year >= emp_units_year_from &
+    year <= emp_units_year_to &
+    (is.na(year_built) | year_built <= emp_units_year_to) &
+    is.finite(total_units) &
+    total_units > 0
+]
+emp_units_pid <- emp_units_dt[, .(
+  observed_years = uniqueN(year),
+  units_unit_years = sum(total_units, na.rm = TRUE)
+), by = PID]
+emp_units_pid <- emp_units_pid[observed_years > 0]
+emp_units_pid[, avg_units := units_unit_years / observed_years]
+
+unit_draw_summary <- data.table(
+  sample = c("Empirical PID average annual units", "Simulated buildings"),
+  n = c(nrow(emp_units_pid), nrow(panel)),
+  mean_units = c(mean(emp_units_pid$avg_units), mean(panel$units)),
+  p50_units = c(stats::quantile(emp_units_pid$avg_units, 0.50), stats::quantile(panel$units, 0.50)),
+  p90_units = c(stats::quantile(emp_units_pid$avg_units, 0.90), stats::quantile(panel$units, 0.90)),
+  p95_units = c(stats::quantile(emp_units_pid$avg_units, 0.95), stats::quantile(panel$units, 0.95)),
+  p99_units = c(stats::quantile(emp_units_pid$avg_units, 0.99), stats::quantile(panel$units, 0.99)),
+  max_units = c(max(emp_units_pid$avg_units), max(panel$units))
+)
+
+param_table <- data.table(
+  block = c(
+    "Tenant-side anchors", "Tenant-side anchors", "Tenant-side anchors",
+    "Built environment", "Built environment",
+    "Sorting",
+    "Filing", "Filing", "Filing",
+    "Complaints", "Complaints", "Complaints", "Complaints",
+    "Maintenance", "Maintenance", "Maintenance",
+    "Numerics", "Numerics", "Numerics", "Numerics"
+  ),
+  parameter = c(
+    "mu", "delta_L", "delta_H",
+    "p_bad_shape1", "p_bad_shape2",
+    "Dalph",
+    "aF", "bF_theta", "bF_delta",
+    "aC", "bC_theta", "bC_s", "bC_M",
+    "aM", "bM_theta", "bM_C",
+    "lam", "tol", "max_iter", "high_filing_threshold"
+  ),
+  value = c(
+    outer_cfg$mu, outer_cfg$delta_L, outer_cfg$delta_H,
+    outer_cfg$p_bad_shape1, outer_cfg$p_bad_shape2,
+    outer_cfg$Dalph,
+    outer_cfg$aF, outer_cfg$bF_theta, outer_cfg$bF_delta,
+    outer_cfg$aC, outer_cfg$bC_theta, outer_cfg$bC_s, outer_cfg$bC_M,
+    outer_cfg$aM, outer_cfg$bM_theta, outer_cfg$bM_C,
+    outer_cfg$lam, outer_cfg$tol, outer_cfg$max_iter, outer_cfg$high_filing_threshold
+  ),
+  status = c(
+    "Fixed", "Fixed", "Fixed",
+    "Calibrated", "Calibrated",
+    "Calibrated",
+    "Calibrated", "Calibrated", "Calibrated",
+    "Calibrated", "Calibrated", "Calibrated", "Calibrated",
+    "Calibrated", "Calibrated", "Calibrated",
+    "Numeric", "Numeric", "Numeric", "Fixed"
+  ),
+  note = c(
+    "Citywide high-risk / precarious tenant share.",
+    "Anchored low-risk default probability.",
+    "Anchored high-risk default probability.",
+    "Beta shape parameter for tract bad-type prevalence.",
+    "Beta shape parameter for tract bad-type prevalence.",
+    "Sorting strength in the logistic update.",
+    "Filing intercept.",
+    "Bad-type filing shift.",
+    "Sensitivity of filings to average tenant default risk.",
+    "Complaint intercept.",
+    "Bad-type complaint shift.",
+    "Complaint-composition slope.",
+    "Complaint response to maintenance.",
+    "Maintenance intercept.",
+    "Bad-type maintenance shift.",
+    "Maintenance response to complaint intensity.",
+    "Damping parameter in the fixed-point iteration.",
+    "Stopping tolerance on the composition update.",
+    "Maximum fixed-point iterations.",
+    "Absolute filing-rate cutoff for high-filing moments."
+  )
+)
+
+convergence_table <- data.table(
+  metric = c(
+    "Converged", "Iterations", "Max composition change",
+    "Mass residual before final projection", "Mass residual after final projection",
+    "Final xi", "Target mu", "Weighted mean s"
+  ),
+  value = c(
+    as.character(diag$converged[1]),
+    as.character(diag$iters[1]),
+    format(diag$max_diff[1], scientific = TRUE, digits = 3),
+    format(diag$mass_resid_before_final_proj[1], scientific = TRUE, digits = 3),
+    format(diag$mass_resid_final[1], scientific = TRUE, digits = 3),
+    sprintf("%.4f", diag$xi_final[1]),
+    sprintf("%.3f", diag$mu_target[1]),
+    sprintf("%.3f", diag$s_weighted_mean[1])
+  )
+)
+
+eq_summary <- data.table(
+  moment = c(
+    "Mean filing rate", "Mean maintenance rate", "Mean complaint rate",
+    "Zero filings share", "Zero maintenance share", "Zero complaints share",
+    "Sorting slope on high filing within neighborhood",
+    "Sorting slope: top filing bin vs low filing bin",
+    "Complaint on composition",
+    "Complaint on composition x high filing",
+    "Maintenance on complaint intensity",
+    "Residual SD of filing rate after neighborhood FE"
+  ),
+  value = c(
+    mom$mean_f_rate[1],
+    mom$mean_m_rate[1],
+    mom$mean_c_rate[1],
+    mom$zero_share_f[1],
+    mom$zero_share_m[1],
+    mom$zero_share_c[1],
+    mom$sorting_coef_high_filing_nhood[1],
+    mom$sorting_coef_high_bin_nhood[1],
+    mom$beta_ppml_s[1],
+    mom$beta_ppml_s_x_high_filing[1],
+    mom$beta_maint_on_log1p_c_rate[1],
+    mom$filing_resid_sd_nhood_fe[1]
+  )
+)
+
+theta_summary <- panel[, .(
+  mean_s = weighted.mean(s, units),
+  mean_f_rate = weighted.mean(f_rate, units),
+  mean_c_rate = weighted.mean(c_rate, units),
+  mean_m_rate = weighted.mean(m_rate, units),
+  zero_f = mean(F == 0L),
+  zero_c = mean(C == 0L),
+  zero_m = mean(M == 0L)
+), by = theta]
+
+nhood_summary <- panel[, .(
+  mean_s = weighted.mean(s, units),
+  mean_f_rate = weighted.mean(f_rate, units),
+  mean_theta_bad = weighted.mean(theta_bad, units),
+  total_units = sum(units),
+  n_buildings = .N
+), by = nhood]
+nhood_summary[, size_bin := cut(
+  total_units,
+  breaks = unique(quantile(total_units, probs = seq(0, 1, 0.25), na.rm = TRUE)),
+  include.lowest = TRUE,
+  ordered_result = TRUE
+)]
+
+emp_nhood_summary <- emp_panel[, .(
+  mean_s = weighted.mean(s, units),
+  mean_f_rate = weighted.mean(f_rate, units),
+  total_units = sum(units),
+  n_buildings = .N
+), by = nhood]
+
+empirical_rate_check <- data.table(
+  sample = c("Empirical target panel", "Empirical target panel"),
+  statistic = c("mean_f_rate (unit-weighted)", "mean_f_rate (unweighted)"),
+  value = c(
+    weighted.mean(emp_panel$f_rate, emp_panel$units),
+    mean(emp_panel$f_rate)
+  )
+)
+
+nhood_dist_summary <- rbindlist(list(
+  data.table(
+    sample = "Empirical neighborhoods",
+    metric = c("Neighborhood mean filing rate", "Neighborhood mean poverty share"),
+    mean = c(mean(emp_nhood_summary$mean_f_rate), mean(emp_nhood_summary$mean_s)),
+    p50 = c(stats::quantile(emp_nhood_summary$mean_f_rate, 0.50), stats::quantile(emp_nhood_summary$mean_s, 0.50)),
+    p90 = c(stats::quantile(emp_nhood_summary$mean_f_rate, 0.90), stats::quantile(emp_nhood_summary$mean_s, 0.90))
+  ),
+  data.table(
+    sample = "Simulated neighborhoods",
+    metric = c("Neighborhood mean filing rate", "Neighborhood mean poverty share"),
+    mean = c(mean(nhood_summary$mean_f_rate), mean(nhood_summary$mean_s)),
+    p50 = c(stats::quantile(nhood_summary$mean_f_rate, 0.50), stats::quantile(nhood_summary$mean_s, 0.50)),
+    p90 = c(stats::quantile(nhood_summary$mean_f_rate, 0.90), stats::quantile(nhood_summary$mean_s, 0.90))
+  )
+))
+
+moment_compare_show <- moment_compare[, .(
+  moment,
+  target = round(target, 4),
+  simulated = round(simulated, 4),
+  weight,
+  diff = signif(diff, 3)
+)]
+
+calibrated_compare <- best_params[
+  calibrated == TRUE & param %chin% names(outer_cfg),
+  .(
+    parameter = param,
+    baseline = as.numeric(unlist(outer_cfg[param])),
+    calibrated = value,
+    change = value - as.numeric(unlist(outer_cfg[param]))
+  )
+]
+
+calibration_run_table <- data.table(
+  metric = c("Target product", "Convergence code", "Objective", "Evaluations"),
+  value = c(
+    cfg$run$outer_sorting$calibration$target_product_key,
+    as.character(opt_summary$convergence_code[1]),
+    sprintf("%.4f", opt_summary$objective_best[1]),
+    as.character(opt_summary$n_evaluations[1])
+  )
+)
+
+top_miss_table <- moment_compare[order(-weighted_sq_error)][
+  1:min(.N, 8L),
+  .(
+    moment,
+    target = round(target, 4),
+    simulated = round(simulated, 4),
+    diff = round(diff, 4),
+    weighted_sq_error = round(weighted_sq_error, 4)
+  )
+]
+
+write_table_bundle(param_table, "outer_sorting_baseline_parameters", "Baseline outer sorting parameters", digits = 4)
+write_table_bundle(convergence_table, "outer_sorting_convergence_summary", "Fixed-point convergence summary", digits = 4)
+write_table_bundle(eq_summary, "outer_sorting_equilibrium_summary", "Equilibrium summary moments", digits = 4)
+write_table_bundle(theta_summary, "outer_sorting_type_summary", "Equilibrium summary by landlord type", digits = 4)
+write_table_bundle(moment_compare_show, "outer_sorting_moment_comparison_compact", "Calibration target vs simulated moments", digits = 4)
+write_table_bundle(calibration_run_table, "outer_sorting_calibration_run_summary", "Calibration run summary", digits = 4)
+write_table_bundle(calibrated_compare, "outer_sorting_calibrated_parameter_changes", "Baseline vs calibrated parameters", digits = 4)
+write_table_bundle(top_miss_table, "outer_sorting_top_moment_misses", "Largest calibration moment misses", digits = 4)
+write_table_bundle(unit_draw_summary, "outer_sorting_unit_draw_summary", "Empirical vs simulated unit distribution summary", digits = 4)
+write_table_bundle(empirical_rate_check, "outer_sorting_empirical_rate_check", "Empirical filing-rate check", digits = 4)
+write_table_bundle(nhood_dist_summary, "outer_sorting_nhood_distribution_summary", "Empirical vs simulated neighborhood distribution summary", digits = 4)
+```
+
+# Overview
+
+This memo summarizes the baseline outer sorting simulation currently implemented in `r/simulate-outer-sorting.R` and the associated first-pass calibration setup in `r/calibrate-outer-sorting.R`.
+
+The baseline normalization is:
+
+$$
+\bar\delta_b = s_b\delta_H + (1 - s_b)\delta_L,
+\qquad
+\log \bar f_b = a_F + b_{F\theta}\mathbf{1}\{\theta_b = B\} + b_{F\delta}\bar\delta_b,
+\qquad
+x_b \equiv \bar f_b,
+\qquad
+s_b^\star(\xi) = \Lambda(\xi + \Delta \alpha \bar f_b).
+$$
+
+The filing block now maps building composition into expected filings through average tenant default risk rather than through a direct reduced-form composition slope. The sorting signal is still the expected filing rate, and the simulation iterates on expected maintenance, complaint, and filing rates until the building composition vector is a fixed point under the citywide mass constraint.
+
+# Simulation Setup
+
+The baseline parameterization fixes the citywide high-risk share at $\mu = `r sprintf("%.2f", mu)`$, interpretable as a rough renter-poverty / precarious-tenant share. The tenant default anchors are set to $\delta_L = `r sprintf("%.2f", delta_L)`$ and $\delta_H = `r sprintf("%.2f", delta_H)`$, implying an average anchored default probability of roughly `r sprintf("%.3f", avg_default)`.
+
+The baseline filing block now uses average default risk, $\bar\delta_b = s_b\delta_H + (1-s_b)\delta_L$, so the anchored tenant-side parameters are active inputs to the equilibrium. The first-pass design calibrates the outer-layer parameters governing sorting, tract-level bad-type dispersion, filing, complaints, and maintenance. Simulated building units are now drawn by empirical resampling from the observed PID-level average annual `total_units` distribution in `bldg_panel_blp` over `r emp_units_year_from`-`r emp_units_year_to`, rather than from the old stylized unit bins.
+
+```{r parameter-table, results='asis'}
+include_tex_table(file.path(tab_dir, "outer_sorting_baseline_parameters.tex"), max_width = "\\tiny")
+```
+
+## Unit Exposure
+
+```{r unit-draw-table, results='asis'}
+include_tex_table(file.path(tab_dir, "outer_sorting_unit_draw_summary.tex"))
+```
+
+## Empirical Filing-Rate Check
+
+```{r empirical-rate-check-table, results='asis'}
+include_tex_table(file.path(tab_dir, "outer_sorting_empirical_rate_check.tex"), max_width = "0.65\\textwidth")
+```
+
+Under the current empirical target construction, the filing-rate target is about `r sprintf("%.3f", weighted.mean(emp_panel$f_rate, emp_panel$units))` on a unit-weighted basis and `r sprintf("%.3f", mean(emp_panel$f_rate))` on an unweighted building basis. If the intended raw-data benchmark is closer to `0.06`, that likely reflects a definitional difference in the empirical target rather than a calibration problem by itself.
+
+# Convergence
+
+The deterministic fixed-point algorithm converged cleanly in the current baseline run. The maximum change in the composition vector was below the configured tolerance, and the final citywide mass residual was effectively zero.
+
+```{r convergence-table, results='asis'}
+include_tex_table(file.path(tab_dir, "outer_sorting_convergence_summary.tex"), max_width = "0.75\\textwidth")
+```
+
+The simulation is solving the stationary equilibrium under the exact citywide mass constraint, so the weighted mean of simulated composition lines up with the target $\mu$ by construction.
+
+# Resulting Equilibrium
+
+The baseline equilibrium implies:
+
+- unit-weighted mean filing, maintenance, and complaint rates of about `r sprintf("%.3f", mom$mean_f_rate[1])`, `r sprintf("%.3f", mom$mean_m_rate[1])`, and `r sprintf("%.3f", mom$mean_c_rate[1])` per unit
+- substantial zero mass in all three outcomes, where zero shares are unweighted shares of buildings
+- higher group-1 shares and higher filing / complaint intensity in bad-type buildings than in good-type buildings
+
+```{r equilibrium-table, results='asis'}
+include_tex_table(file.path(tab_dir, "outer_sorting_equilibrium_summary.tex"))
+```
+
+## By Landlord Type
+
+```{r type-table, results='asis'}
+include_tex_table(file.path(tab_dir, "outer_sorting_type_summary.tex"))
+```
+
+## Outcome Distributions
+
+```{r rate-histograms, fig.cap="Distribution of realized filing, complaint, and maintenance rates across simulated buildings.", fig.align='center', out.width='95%'}
+plot_dt <- melt(
+  panel[, .(f_rate, c_rate, m_rate)],
+  measure.vars = c("f_rate", "c_rate", "m_rate"),
+  variable.name = "rate_type",
+  value.name = "rate"
+)
+plot_dt[, rate_type := factor(rate_type, levels = c("f_rate", "c_rate", "m_rate"),
+                              labels = c("Filing rate", "Complaint rate", "Maintenance rate"))]
+
+ggplot(plot_dt, aes(x = rate)) +
+  geom_histogram(bins = 50, fill = "#28536B", color = "white") +
+  facet_wrap(~rate_type, scales = "free_x") +
+  labs(x = "Rate", y = "Buildings") +
+  theme_minimal(base_size = 11)
+```
+
+## Sorting Pattern
+
+```{r sorting-figure, fig.cap="Distribution of equilibrium composition shares and realized filing rates by landlord type.", fig.align='center', out.width='92%'}
+plot_type_dt <- melt(
+  panel[, .(theta, s, f_rate)],
+  id.vars = "theta",
+  measure.vars = c("s", "f_rate"),
+  variable.name = "metric",
+  value.name = "value"
+)
+plot_type_dt[, metric := factor(
+  metric,
+  levels = c("s", "f_rate"),
+  labels = c("Group-1 share", "Realized filing rate")
+)]
+
+ggplot(plot_type_dt, aes(x = value, fill = theta)) +
+  geom_histogram(bins = 45, alpha = 0.65, position = "identity") +
+  facet_wrap(~metric, scales = "free_x") +
+  scale_fill_manual(values = c("G" = "#2A9D8F", "B" = "#D1495B")) +
+  labs(x = NULL, y = "Buildings", fill = "Type") +
+  theme_minimal(base_size = 11)
+```
+
+## Neighborhood Patterns
+
+```{r nhood-summary-table, results='asis'}
+include_tex_table(file.path(tab_dir, "outer_sorting_nhood_distribution_summary.tex"))
+```
+
+```{r nhood-figures, fig.cap="Neighborhood-level equilibrium variation in filing rates and group-1 share, using unit-weighted neighborhood means.", fig.align='center', out.width='95%'}
+nhood_plot_dt <- melt(
+  nhood_summary[, .(mean_f_rate, mean_s)],
+  measure.vars = c("mean_f_rate", "mean_s"),
+  variable.name = "metric",
+  value.name = "value"
+)
+nhood_plot_dt[, metric := factor(
+  metric,
+  levels = c("mean_f_rate", "mean_s"),
+  labels = c("Neighborhood mean filing rate", "Neighborhood mean group-1 share")
+)]
+
+ggplot(nhood_plot_dt, aes(x = value)) +
+  geom_histogram(bins = 35, fill = "#3D405B", color = "white") +
+  facet_wrap(~metric, scales = "free_x") +
+  labs(x = NULL, y = "Neighborhoods") +
+  theme_minimal(base_size = 11)
+```
+
+```{r nhood-empirical-vs-sim, fig.cap="Empirical vs simulated neighborhood distributions for unit-weighted neighborhood mean filing rates and neighborhood mean poverty shares.", fig.align='center', out.width='95%', fig.width=10, fig.height=7}
+compare_nhood_dt <- rbindlist(list(
+  data.table(source = "Empirical", metric = "Neighborhood mean filing rate", value = emp_nhood_summary$mean_f_rate),
+  data.table(source = "Simulated", metric = "Neighborhood mean filing rate", value = nhood_summary$mean_f_rate),
+  data.table(source = "Empirical", metric = "Neighborhood mean poverty share", value = emp_nhood_summary$mean_s),
+  data.table(source = "Simulated", metric = "Neighborhood mean poverty share", value = nhood_summary$mean_s)
+))
+
+ggplot(compare_nhood_dt, aes(x = value, fill = source)) +
+  geom_histogram(bins = 35, alpha = 0.55, position = "identity") +
+  facet_wrap(~metric, scales = "free_x") +
+  scale_fill_manual(values = c("Empirical" = "#264653", "Simulated" = "#D1495B")) +
+  labs(x = NULL, y = "Neighborhoods", fill = NULL) +
+  theme_minimal(base_size = 11)
+```
+
+```{r nhood-diagnostics, fig.cap="Neighborhood diagnostic views: ranked neighborhood group-1 shares and neighborhood mean filing rates against neighborhood mean group-1 shares.", fig.align='center', out.width='95%', fig.width=10, fig.height=8}
+nhood_rank_dt <- copy(nhood_summary)[order(mean_s)]
+nhood_rank_dt[, rank_s := .I]
+
+p_rank <- ggplot(nhood_rank_dt, aes(x = rank_s, y = mean_s)) +
+  geom_point(color = "#2A9D8F", alpha = 0.8, size = 1.5) +
+  labs(x = "Neighborhood rank", y = "Neighborhood mean group-1 share") +
+  theme_minimal(base_size = 11)
+
+p_scatter <- ggplot(nhood_summary, aes(x = mean_s, y = mean_f_rate, size = total_units)) +
+  geom_point(color = "#D1495B", alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, color = "#3D405B", linewidth = 0.9) +
+  labs(x = "Neighborhood mean group-1 share", y = "Neighborhood mean filing rate", size = "Units") +
+  theme_minimal(base_size = 11)
+
+(p_rank + p_scatter) + patchwork::plot_layout(ncol = 1)
+```
+
+```{r nhood-filing-drivers, fig.cap="Neighborhood filing-rate variation against neighborhood bad-type share and by neighborhood size.", fig.align='center', out.width='95%', fig.width=10, fig.height=8}
+p_bad_share <- ggplot(nhood_summary, aes(x = mean_theta_bad, y = mean_f_rate, size = total_units)) +
+  geom_point(color = "#264653", alpha = 0.65) +
+  geom_smooth(method = "lm", se = FALSE, color = "#E76F51", linewidth = 0.9) +
+  labs(x = "Neighborhood mean bad-type share", y = "Neighborhood mean filing rate", size = "Units") +
+  theme_minimal(base_size = 11)
+
+p_size_bin <- ggplot(nhood_summary[!is.na(size_bin)], aes(x = size_bin, y = mean_f_rate)) +
+  geom_boxplot(fill = "#E9C46A", color = "#3D405B", outlier.alpha = 0.35) +
+  labs(x = "Neighborhood total-units quartile", y = "Neighborhood mean filing rate") +
+  theme_minimal(base_size = 11)
+
+(p_bad_share + p_size_bin) + patchwork::plot_layout(ncol = 1)
+```
+
+# First-Pass Calibration Targets
+
+The first-pass calibration objective uses a compact 12-moment target set:
+
+1. Three marginal means: filing, maintenance, and complaint rates.
+2. Three zero shares: zero filings, zero maintenance, and zero complaints.
+3. Two sorting moments: composition on high filing within neighborhood, and composition for the top filing bin relative to the low filing bin within neighborhood.
+4. Two complaint-gradient moments: complaints on composition, and complaints on composition $\times$ high filing.
+5. One maintenance-discipline moment: maintenance on complaint intensity.
+6. One filing-dispersion moment: residual SD of filing rates after neighborhood fixed effects.
+
+The current calibration target product is `r cfg$run$outer_sorting$calibration$target_product_key`, so the moment comparison table below should be read as an empirical fit diagnostic rather than a self-calibration check.
+
+```{r moment-compare-table, results='asis'}
+include_tex_table(file.path(tab_dir, "outer_sorting_moment_comparison_compact.tex"))
+```
+
+## Current Calibration Run
+
+```{r calibration-run-table, results='asis'}
+include_tex_table(file.path(tab_dir, "outer_sorting_calibration_run_summary.tex"), max_width = "0.75\\textwidth")
+```
+
+The current empirical calibration run did not fully converge in the optimizer. The fixed-point solver inside each simulation evaluation is behaving, but the outer optimizer stopped at convergence code `r opt_summary$convergence_code[1]` with objective `r sprintf("%.3f", opt_summary$objective_best[1])` after `r opt_summary$n_evaluations[1]` evaluations.
+
+```{r calibrated-parameter-table, results='asis'}
+include_tex_table(file.path(tab_dir, "outer_sorting_calibrated_parameter_changes.tex"))
+```
+
+```{r top-miss-table, results='asis'}
+include_tex_table(file.path(tab_dir, "outer_sorting_top_moment_misses.tex"))
+```
+
+The largest misses are informative. In the current run, the model still overpredicts filing and maintenance rates, produces too little zero mass, and generates much stronger sorting gradients than the empirical target. The maintenance-discipline moment is also much smaller in the simulated equilibrium than in the data target.
+
+# Current Interpretation
+
+The baseline equilibrium does the basic qualitative work the model is supposed to do: bad-type buildings end up with higher filing rates and higher group-1 shares, while maintenance is lower on average in those buildings and complaints are higher. The citywide mass constraint is satisfied tightly and the deterministic fixed point converges quickly.
+
+The empirical calibration results suggest that the current baseline is directionally coherent but still too aggressive relative to the data. The main gaps are in outcome levels, zero mass, sorting strength, and the complaint-maintenance discipline link.
+
+The next substantive question is whether these misses come mostly from the empirical target construction, from the poverty-share proxy for composition, or from the structural tightness of the filing, complaint, and maintenance blocks themselves.

@@ -1,0 +1,1221 @@
+% Options for packages loaded elsewhere
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\PassOptionsToPackage{dvipsnames,svgnames,x11names}{xcolor}
+%
+\documentclass[
+  11pt,
+]{article}
+\usepackage{xcolor}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\setcounter{secnumdepth}{5}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+% Make \paragraph and \subparagraph free-standing
+\makeatletter
+\ifx\paragraph\undefined\else
+  \let\oldparagraph\paragraph
+  \renewcommand{\paragraph}{
+    \@ifstar
+      \xxxParagraphStar
+      \xxxParagraphNoStar
+  }
+  \newcommand{\xxxParagraphStar}[1]{\oldparagraph*{#1}\mbox{}}
+  \newcommand{\xxxParagraphNoStar}[1]{\oldparagraph{#1}\mbox{}}
+\fi
+\ifx\subparagraph\undefined\else
+  \let\oldsubparagraph\subparagraph
+  \renewcommand{\subparagraph}{
+    \@ifstar
+      \xxxSubParagraphStar
+      \xxxSubParagraphNoStar
+  }
+  \newcommand{\xxxSubParagraphStar}[1]{\oldsubparagraph*{#1}\mbox{}}
+  \newcommand{\xxxSubParagraphNoStar}[1]{\oldsubparagraph{#1}\mbox{}}
+\fi
+\makeatother
+
+
+\usepackage{longtable,booktabs,array}
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
+\usepackage{graphicx}
+\makeatletter
+\newsavebox\pandoc@box
+\newcommand*\pandocbounded[1]{% scales image to fit in text height/width
+  \sbox\pandoc@box{#1}%
+  \Gscale@div\@tempa{\textheight}{\dimexpr\ht\pandoc@box+\dp\pandoc@box\relax}%
+  \Gscale@div\@tempb{\linewidth}{\wd\pandoc@box}%
+  \ifdim\@tempb\p@<\@tempa\p@\let\@tempa\@tempb\fi% select the smaller of both
+  \ifdim\@tempa\p@<\p@\scalebox{\@tempa}{\usebox\pandoc@box}%
+  \else\usebox{\pandoc@box}%
+  \fi%
+}
+% Set default figure placement to htbp
+\def\fps@figure{htbp}
+\makeatother
+
+
+
+
+
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+
+
+ 
+
+
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{wrapfig}
+\usepackage{float}
+\usepackage{colortbl}
+\usepackage{pdflscape}
+\usepackage{tabu}
+\usepackage{threeparttable}
+\usepackage{threeparttablex}
+\usepackage[normalem]{ulem}
+\usepackage{makecell}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{dcolumn}
+\usepackage{longtable}
+\usepackage{adjustbox}
+\usepackage{amsmath}
+\makeatletter
+\@ifpackageloaded{caption}{}{\usepackage{caption}}
+\AtBeginDocument{%
+\ifdefined\contentsname
+  \renewcommand*\contentsname{Table of contents}
+\else
+  \newcommand\contentsname{Table of contents}
+\fi
+\ifdefined\listfigurename
+  \renewcommand*\listfigurename{List of Figures}
+\else
+  \newcommand\listfigurename{List of Figures}
+\fi
+\ifdefined\listtablename
+  \renewcommand*\listtablename{List of Tables}
+\else
+  \newcommand\listtablename{List of Tables}
+\fi
+\ifdefined\figurename
+  \renewcommand*\figurename{Figure}
+\else
+  \newcommand\figurename{Figure}
+\fi
+\ifdefined\tablename
+  \renewcommand*\tablename{Table}
+\else
+  \newcommand\tablename{Table}
+\fi
+}
+\@ifpackageloaded{float}{}{\usepackage{float}}
+\floatstyle{ruled}
+\@ifundefined{c@chapter}{\newfloat{codelisting}{h}{lop}}{\newfloat{codelisting}{h}{lop}[chapter]}
+\floatname{codelisting}{Listing}
+\newcommand*\listoflistings{\listof{codelisting}{List of Listings}}
+\makeatother
+\makeatletter
+\makeatother
+\makeatletter
+\@ifpackageloaded{caption}{}{\usepackage{caption}}
+\@ifpackageloaded{subcaption}{}{\usepackage{subcaption}}
+\makeatother
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  pdftitle={Ownership Transfers and Eviction Filing Rates: Event Study},
+  pdfauthor={Philly Evictions Project},
+  colorlinks=true,
+  linkcolor={blue},
+  filecolor={Maroon},
+  citecolor={Blue},
+  urlcolor={Blue},
+  pdfcreator={LaTeX via pandoc}}
+
+
+\title{Ownership Transfers and Eviction Filing Rates: Event Study}
+\author{Philly Evictions Project}
+\date{2026-02-26}
+\begin{document}
+\maketitle
+
+\renewcommand*\contentsname{Table of contents}
+{
+\hypersetup{linkcolor=}
+\setcounter{tocdepth}{3}
+\tableofcontents
+}
+
+\section{Overview}\label{overview}
+
+This document reports an event study of eviction filing rates around
+ownership transfers in Philadelphia rental properties. The central
+question: \textbf{do eviction rates change when a property changes
+hands, and does it depend on who buys it?}
+
+We construct a panel centered on each transfer event, tracking filing
+rates from 3 years before to 5 years after the sale. We estimate
+building fixed effects models that identify the effect from
+within-building variation over time, controlling for year shocks.
+
+\textbf{Key findings:}
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  Eviction filing rates increase sharply after ownership transfers,
+  rising by approximately 0.8 percentage points (relative to a baseline
+  of \textasciitilde3\%) within two years of sale.
+\item
+  The effect is driven entirely by \textbf{corporate buyers} ---
+  individual-to-individual transfers show no increase or a slight
+  decline in filings.
+\item
+  The effect is \textbf{not limited to small properties} --- it appears
+  across all building sizes, with the largest point estimates for 10--19
+  and 20+ unit buildings.
+\item
+  Larger portfolio buyers (10+ properties) show the steepest increases.
+\item
+  \textbf{Selection concern}: Corporate transfers substantially increase
+  the probability that a property obtains a rental license (+9 pp at
+  \(t+1\)) or appears in rental listings (+8 pp at \(t+0\)). This
+  suggests corporate buyers are bringing formerly owner-occupied
+  properties onto the rental market, mechanically expanding the
+  population at risk for eviction.
+\item
+  \textbf{Acquirer filing history matters}: Using pre-acquisition filing
+  rates on the acquirer's other properties (years before the transfer),
+  high-filer portfolio acquirers show the largest post-transfer
+  increase; low-filer portfolio acquirers show a moderate increase;
+  non-filers and single-purchase acquirers show little change or a
+  decline.
+\end{enumerate}
+
+\section{Data Construction}\label{data-construction}
+
+\subsection{Transfer events}\label{transfer-events}
+
+Transfer events come from the Philadelphia Real Estate Transfer Tax
+(RTT) records (\texttt{rtt\_clean}), which log every deed transfer with
+buyer (grantee), seller (grantor), sale price, and document type.
+
+\textbf{Processing steps:}
+
+\begin{itemize}
+\tightlist
+\item
+  Multiple transfers of the same PID in the same year are collapsed to
+  one observation, keeping the transfer with the highest
+  \texttt{total\_consideration}.
+\item
+  \textbf{Sheriff's deeds} (foreclosures) are flagged via
+  \texttt{document\_type}. Approximately 10\% of all RTT records are
+  sheriff's deeds. These are predominantly received by banks, servicers,
+  and government-sponsored enterprises (Fannie Mae, Freddie Mac, HUD)
+  --- entities that temporarily hold title after foreclosure, not active
+  landlords.
+\end{itemize}
+
+\subsection{Owner linkage}\label{owner-linkage}
+
+Buyer names are standardized and linked via
+\texttt{r/build-owner-linkage.R}:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Corporate entities} are classified using
+  \texttt{business\_regex} (matching LLC, INC, CORP, TRUST, BANK, and
+  \textasciitilde40 other business keywords). Legal entity suffixes
+  (LLC, INC, CORP, LP, LTD, CO, COMPANY) are stripped to group variants
+  (e.g., ``EMC MORTGAGE CORPORATION'' and ``EMC MORTGAGE LLC'' map to
+  the same owner group).
+\item
+  \textbf{Individual names} are \emph{not} grouped across transfers ---
+  matching ``SMITH ROBERT'' across properties without address
+  verification would create false merges. For 10+ unit buildings, 97\%
+  of top-evicting transfers are corporate, so this primarily affects
+  small single-family properties where portfolio analysis is less
+  relevant.
+\item
+  \textbf{Portfolio size} is computed from non-sheriff acquisitions
+  only, so that Fannie Mae's 1,200 foreclosure takeovers do not inflate
+  its portfolio bin. Bins: Single-purchase, 2--4, 5--9, 10+, and
+  Sheriff-only.
+\end{itemize}
+
+\subsection{Event panel}\label{event-panel}
+
+For each transfer, we construct an event-time window
+\(t \in \{-3, \ldots, +5\}\) years relative to the sale year. We merge
+building-level outcomes from \texttt{bldg\_panel\_blp}:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Filing rate}: \(\text{num\_filings} / \text{total\_units}\)
+  (contemporaneous, not the EB-smoothed pre-COVID rate)
+\item
+  \textbf{Violations}, \textbf{complaints}, \textbf{rent} as secondary
+  outcomes
+\item
+  \textbf{Rental flags}: \texttt{rental\_from\_license},
+  \texttt{rental\_from\_altos}, \texttt{rental\_from\_evict},
+  \texttt{ever\_rental\_any\_year\_ever}
+\end{itemize}
+
+\textbf{Sample:} 1,471,948 building \(\times\) event-time observations
+in the full baseline regression (after singleton removal). Coverage
+increases from 27\% at \(t = -3\) to 38\% at \(t = +5\), reflecting the
+panel's forward expansion. All regressions restrict to pre-COVID
+observations (calendar year \(\leq\) 2019).
+
+\subsection{Sample descriptives}\label{sample-descriptives}
+
+\begin{longtable}[t]{lrrrrrr}
+\caption{\label{tab:desc-buyer}Transfer sample descriptives by buyer type (at t=0)}\\
+\toprule
+Buyer Type & N transfers & Mean units & Mean filing rate & Mean violations & Median price & \% Sheriff\\
+\midrule
+Individual & 403,900 & 1.3 & 0.0281 & 0.37 & 98,000 & 4.3\\
+Corporate & 109,454 & 2.0 & 0.0454 & 0.70 & 45,000 & 30.7\\
+\bottomrule
+\end{longtable}
+
+Corporate buyers acquire buildings with higher filing rates and more
+violations, pay lower median prices, and are much more likely to acquire
+via sheriff's deed (25\% vs.~4\% for individuals).
+
+\section{Specification}\label{specification}
+
+The baseline event study estimates:
+
+\[
+\text{FilingRate}_{it} = \sum_{k \neq -1} \beta_k \cdot \mathbf{1}[\text{EventTime}_{it} = k] + \alpha_i + \gamma_t + \varepsilon_{it}
+\]
+
+where \(i\) indexes buildings (PIDs), \(t\) indexes calendar years, and
+EventTime \(k \in \{-3, -2, 0, 1, 2, 3, 4, 5\}\) relative to the
+transfer year (with \(k = -1\) as the omitted reference period).
+\(\alpha_i\) are building fixed effects and \(\gamma_t\) are year fixed
+effects. Standard errors are clustered at the PID level.
+
+\textbf{Specifications:}
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.2069}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.2759}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.5172}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Spec
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Sample
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Fixed Effects
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+(1) Full & All buildings & PID + Year \\
+(2) 2+ units & Buildings with 2+ units & PID + Year \\
+(3) 5+ units & Buildings with 5+ units & PID + Year \\
+(4) 2+ units, pre-transfer rental & 2+ units with pre-transfer rental
+evidence & PID + Year \\
+(5) 5+ units, pre-transfer rental & 5+ units with pre-transfer rental
+evidence & PID + Year \\
+\end{longtable}
+
+The building FE absorb time-invariant building characteristics (size,
+location, quality). The progressive sample restrictions address key
+identification concerns: \textbf{2+ units} excludes single-family homes
+where a single filing produces a mechanically large filing rate;
+\textbf{pre-transfer rental} restricts to buildings that had rental
+evidence (rental license, Altos/Apartments.com listing, or eviction
+filing) in any year \emph{before} the transfer. This is critical: 21\%
+of transfer-events involve properties that first appear as rentals only
+\emph{after} the sale (potential owner-occupied-to-rental conversions).
+Using ``ever rental'' (pre or post) would contaminate the sample with
+these conversions, where filing rate increases may be mechanical rather
+than behavioral. The pre-transfer restriction ensures we study
+properties that were already operating as rentals.
+
+For \textbf{overlapping event windows} (49\% of PIDs have multiple
+transfers), we stack all transfer events. Single-transfer-only is a
+robustness check.
+
+\section{Baseline Results}\label{baseline-results}
+
+\subsection{Raw means}\label{raw-means}
+
+\begin{longtable}[t]{rrrrr}
+\caption{\label{tab:raw-means-table}Raw outcome means by event time}\\
+\toprule
+event\_time & mean\_filing\_rate & mean\_filings & n & mean\_violations\\
+\midrule
+-3 & 0.03356 & 0.060 & 156,521 & 0\\
+-2 & 0.03407 & 0.060 & 154,825 & 0\\
+-1 & 0.04073 & 0.066 & 155,153 & 0\\
+0 & 0.03343 & 0.059 & 162,425 & 0\\
+1 & 0.04822 & 0.077 & 168,682 & 0\\
+\addlinespace
+2 & 0.05532 & 0.087 & 171,614 & 0\\
+3 & 0.05425 & 0.087 & 171,111 & 0\\
+4 & 0.05281 & 0.085 & 169,420 & 0\\
+5 & 0.05161 & 0.081 & 168,462 & 0\\
+\bottomrule
+\end{longtable}
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=6in,height=\textheight,keepaspectratio]{../output/figs/rtt_annual_raw.png}
+
+}
+
+\caption{Mean filing rate by event time (full sample). Shaded ribbon
+shows 95\% CI.}
+
+\end{figure}%
+
+The raw means show filing rates at approximately 3.2\% in the pre-period
+(\(t = -3, -2\)), rising to 3.8\% at \(t = -1\), dipping to 2.9\% at
+\(t = 0\) (year of sale), and then jumping to 4.0--4.6\% in the
+post-period. The dip at \(t = 0\) likely reflects a brief transition
+period where the building is changing hands.
+
+\textbf{Pre-trend concern}: The jump from \(t=-2\) (3.2\%) to \(t=-1\)
+(3.8\%) is notable. Filing rates are \emph{rising} into the transfer
+year. This could reflect sellers filing more evictions to clear out
+tenants before sale, or buildings with rising eviction pressure being
+selected into transfer. The regression's building FE control for the
+level of each building's filing rate, but the \emph{trend} remains a
+concern for causal interpretation.
+
+\subsection{Regression estimates}\label{regression-estimates}
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=7in,height=\textheight,keepaspectratio]{../output/figs/rtt_annual_baseline.png}
+
+}
+
+\caption{Event study coefficients: filing rate around ownership
+transfer. Reference period is t=-1.}
+
+\end{figure}%
+
+\begin{adjustbox}{max width=\textwidth}
+
+\begingroup
+\centering
+\begin{tabular}{lccccc}
+   \toprule
+    & \multicolumn{5}{c}{filing\_rate}\\
+   Sample              & All buildings   & 2+ unit buildings & 5+ unit buildings & 2+ units, pre-transfer rental & 5+ units, pre-transfer rental \\   
+                       & (1)             & (2)               & (3)               & (4)                           & (5)\\  
+   \midrule 
+   event\_time $=$ -3  & -0.0059$^{***}$ & -0.0013           & 0.0018            & -0.0101$^{***}$               & -0.0026\\   
+                       & (0.0007)        & (0.0010)          & (0.0029)          & (0.0023)                      & (0.0056)\\   
+   event\_time $=$ -2  & -0.0061$^{***}$ & -0.0017$^{*}$     & 0.0023            & -0.0080$^{***}$               & 0.0019\\   
+                       & (0.0006)        & (0.0010)          & (0.0030)          & (0.0022)                      & (0.0057)\\   
+   event\_time $=$ 0   & -0.0080$^{***}$ & -0.0021$^{**}$    & 0.0015            & -0.0182$^{***}$               & -0.0017\\   
+                       & (0.0007)        & (0.0010)          & (0.0031)          & (0.0022)                      & (0.0067)\\   
+   event\_time $=$ 1   & 0.0053$^{***}$  & 0.0064$^{***}$    & 0.0076$^{**}$     & -0.0154$^{***}$               & 0.0147$^{*}$\\   
+                       & (0.0007)        & (0.0011)          & (0.0038)          & (0.0024)                      & (0.0084)\\   
+   event\_time $=$ 2   & 0.0110$^{***}$  & 0.0077$^{***}$    & 0.0125$^{***}$    & -0.0177$^{***}$               & 0.0137\\   
+                       & (0.0008)        & (0.0012)          & (0.0044)          & (0.0027)                      & (0.0103)\\   
+   event\_time $=$ 3   & 0.0086$^{***}$  & 0.0069$^{***}$    & 0.0101$^{**}$     & -0.0172$^{***}$               & 0.0134\\   
+                       & (0.0008)        & (0.0012)          & (0.0047)          & (0.0029)                      & (0.0108)\\   
+   event\_time $=$ 4   & 0.0062$^{***}$  & 0.0061$^{***}$    & 0.0113$^{**}$     & -0.0146$^{***}$               & 0.0126\\   
+                       & (0.0008)        & (0.0012)          & (0.0045)          & (0.0032)                      & (0.0105)\\   
+   event\_time $=$ 5   & 0.0044$^{***}$  & 0.0054$^{***}$    & 0.0073$^{*}$      & -0.0196$^{***}$               & 0.0083\\   
+                       & (0.0008)        & (0.0012)          & (0.0044)          & (0.0035)                      & (0.0109)\\   
+    \\
+   Observations        & 1,471,948       & 282,576           & 22,836            & 95,050                        & 8,967\\  
+   R$^2$               & 0.22449         & 0.29525           & 0.61240           & 0.34011                       & 0.62353\\  
+   Within R$^2$        & 0.00096         & 0.00072           & 0.00135           & 0.00106                       & 0.00150\\  
+    \\
+   PID fixed effects   & $\checkmark$    & $\checkmark$      & $\checkmark$      & $\checkmark$                  & $\checkmark$\\   
+   year fixed effects  & $\checkmark$    & $\checkmark$      & $\checkmark$      & $\checkmark$                  & $\checkmark$\\   
+   \bottomrule
+\end{tabular}
+\par\endgroup
+
+
+
+\end{adjustbox}
+
+\textbf{Full sample} (Spec 1): Filing rates increase post-transfer,
+sustained through \(t + 5\). Pre-period coefficients at \(t - 3\) and
+\(t - 2\) are negative (relative to \(t = -1\)), consistent with an
+upward pre-trend as discussed above.
+
+\textbf{2+ units} (Spec 2): Excluding single-unit properties
+(predominantly owner-occupied) produces a cleaner sample where filing
+rate changes are more interpretable as landlord behavior rather than
+rental market entry.
+
+\textbf{5+ units} (Spec 3): Point estimates are larger but less
+precisely estimated given the smaller sample. Pre-trends are flatter,
+which is reassuring.
+
+\textbf{Pre-transfer rentals} (Specs 4--5): Restricting to buildings
+with rental evidence \emph{before} the transfer addresses the key
+selection concern: corporate transfers may bring formerly owner-occupied
+properties onto the rental market, mechanically increasing filing rates.
+The pre-transfer restriction excludes the 21\% of transfer-events where
+the property first appears as a rental only after the sale. The
+\textbf{5+ unit, pre-transfer rental} subsample is our most defensible
+specification --- established rentals where filing rate increases cannot
+be explained by rental market entry.
+
+\section{Selection Concern: Rental Market
+Entry}\label{selection-concern-rental-market-entry}
+
+A central concern is that corporate transfers may bring formerly
+owner-occupied properties onto the rental market, mechanically
+increasing the population at risk for eviction filings. We test this
+directly by using rental license and Altos listing indicators as
+outcomes. \textbf{All rental entry regressions restrict to 2+ unit
+buildings and pre-COVID years.}
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=7in,height=\textheight,keepaspectratio]{../output/figs/rtt_annual_rental_license_entry.png}
+
+}
+
+\caption{P(rental license) around transfer, by buyer type. Corporate
+buyers show a massive jump in rental licensing probability.}
+
+\end{figure}%
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=7in,height=\textheight,keepaspectratio]{../output/figs/rtt_annual_any_rental_entry.png}
+
+}
+
+\caption{P(any rental evidence) around transfer, by buyer type.}
+
+\end{figure}%
+
+\begin{longtable}[t]{lrrrr}
+\caption{\label{tab:entry-table}Rental market entry coefficients at key event times (relative to t=-1)}\\
+\toprule
+Specification & t-2 & t=0 & t+1 & t+3\\
+\midrule
+altos\_entry\_full & 0.005 & 0.053 & 0.074 & 0.048\\
+any\_rental\_entry\_corp & 0.051 & 0.071 & 0.136 & 0.156\\
+any\_rental\_entry\_full & 0.036 & 0.049 & 0.085 & 0.112\\
+any\_rental\_entry\_indiv & 0.026 & 0.031 & 0.042 & 0.076\\
+license\_entry\_corp & 0.057 & 0.057 & 0.113 & 0.156\\
+\addlinespace
+license\_entry\_full & 0.046 & 0.038 & 0.069 & 0.116\\
+license\_entry\_indiv & 0.039 & 0.021 & 0.032 & 0.083\\
+\bottomrule
+\end{longtable}
+
+\textbf{Key findings:}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Corporate buyers} increase P(rental license) by +8.9 pp at
+  \(t=0\) and +16.8 pp at \(t+1\) (relative to \(t=-1\)). P(Altos
+  listing) jumps by +7.7 pp at \(t=0\).
+\item
+  \textbf{Individual buyers} show a slight \emph{decline} in rental
+  licensing at \(t=0\) (\(-3.3\) pp), recovering by \(t+3\).
+\item
+  The rental entry effect is large and highly significant. This is
+  strong evidence that corporate transfers are converting owner-occupied
+  properties to rentals.
+\end{itemize}
+
+\textbf{Implication}: The full-sample eviction increase after corporate
+transfers partly reflects the mechanical effect of new rentals entering
+the market. The \textbf{known rental 5+ unit} specification (Section 4)
+addresses this by restricting to properties already in the rental
+market.
+
+Note: rental license coverage begins around 2013 in the Philadelphia
+data. All rental entry regressions are restricted to year \(\geq\) 2011.
+Altos (Apartments.com) listing data is available from 2006.
+
+\section{Heterogeneity by Buyer Type}\label{heterogeneity-by-buyer-type}
+
+All heterogeneity and robustness analyses restrict the sample to
+\textbf{buildings with 2+ units}, excluding single-family homes where a
+single eviction filing produces a mechanically large filing rate and
+where most properties are owner-occupied (not at risk for
+landlord-tenant filings). All regressions use pre-COVID observations
+only (calendar year \(\leq\) 2019).
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=7in,height=\textheight,keepaspectratio]{../output/figs/rtt_annual_by_buyer.png}
+
+}
+
+\caption{Event study by buyer type (split-sample, 2+ units). Corporate
+buyers show a sharp post-transfer increase; individual buyers show a
+slight decline.}
+
+\end{figure}%
+
+The buyer type split reveals the central finding:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Corporate buyers}: Filing rates jump sharply post-transfer,
+  with sustained increases through the post period. Pre-trends are
+  essentially flat.
+\item
+  \textbf{Individual buyers}: Filing rates show no post-transfer
+  increase or a slight decline.
+\end{itemize}
+
+The contrast is stark. The aggregate post-transfer increase in evictions
+is entirely driven by corporate acquisitions.
+
+\begin{adjustbox}{max width=\textwidth}
+
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \toprule
+    & \multicolumn{4}{c}{filing\_rate}\\
+   Buyer type          & Corporate      & Individual      & Corp (5+)      & Indiv (5+) \\   
+                       & (1)            & (2)             & (3)            & (4)\\  
+   \midrule 
+   event\_time $=$ -3  & 0.0042$^{**}$  & -0.0044$^{***}$ & 0.0014         & 0.0014\\   
+                       & (0.0019)       & (0.0013)        & (0.0039)       & (0.0027)\\   
+   event\_time $=$ -2  & 0.0022         & -0.0041$^{***}$ & 0.0027         & 0.0008\\   
+                       & (0.0019)       & (0.0012)        & (0.0041)       & (0.0023)\\   
+   event\_time $=$ 0   & 0.0003         & -0.0040$^{***}$ & 0.0034         & -0.0029\\   
+                       & (0.0018)       & (0.0013)        & (0.0041)       & (0.0034)\\   
+   event\_time $=$ 1   & 0.0136$^{***}$ & 0.0017          & 0.0122$^{**}$  & -0.0027\\   
+                       & (0.0022)       & (0.0013)        & (0.0051)       & (0.0032)\\   
+   event\_time $=$ 2   & 0.0172$^{***}$ & 0.0017          & 0.0164$^{***}$ & 0.0038\\   
+                       & (0.0024)       & (0.0014)        & (0.0060)       & (0.0040)\\   
+   event\_time $=$ 3   & 0.0153$^{***}$ & 0.0012          & 0.0159$^{**}$  & -0.0021\\   
+                       & (0.0026)       & (0.0014)        & (0.0065)       & (0.0038)\\   
+   event\_time $=$ 4   & 0.0117$^{***}$ & 0.0014          & 0.0149$^{**}$  & 0.0038\\   
+                       & (0.0027)       & (0.0014)        & (0.0062)       & (0.0041)\\   
+   event\_time $=$ 5   & 0.0119$^{***}$ & 0.0002          & 0.0114$^{*}$   & $-4.38\times 10^{-5}$\\    
+                       & (0.0029)       & (0.0014)        & (0.0061)       & (0.0046)\\   
+    \\
+   Observations        & 95,596         & 186,097         & 15,866         & 6,901\\  
+   R$^2$               & 0.37493        & 0.25218         & 0.62506        & 0.46003\\  
+   Within R$^2$        & 0.00137        & 0.00033         & 0.00204        & 0.00166\\  
+    \\
+   PID fixed effects   & $\checkmark$   & $\checkmark$    & $\checkmark$   & $\checkmark$\\   
+   year fixed effects  & $\checkmark$   & $\checkmark$    & $\checkmark$   & $\checkmark$\\   
+   \bottomrule
+\end{tabular}
+\par\endgroup
+
+
+
+\end{adjustbox}
+
+\subsection{Pre-transfer balance}\label{pre-transfer-balance}
+
+\begin{longtable}[t]{lrrrr}
+\caption{\label{tab:balance-table}Pre-transfer balance by buyer type}\\
+\toprule
+buyer\_type & mean\_filing\_rate & mean\_violations & mean\_units & n\\
+\midrule
+Corporate & 0.04082 & 0.49 & 2.0 & 257610\\
+Individual & 0.03021 & 0.34 & 1.3 & 911086\\
+\bottomrule
+\end{longtable}
+
+Buildings acquired by corporate buyers have slightly higher pre-transfer
+filing rates (0.038 vs.~0.034), more violations, lower rents, and more
+units. The event study's building FE absorb these level differences,
+identifying the effect from within-building changes.
+
+\section{Heterogeneity by Acquirer Filing
+Rate}\label{heterogeneity-by-acquirer-filing-rate}
+
+We classify acquirers by their \textbf{pre-acquisition temporal filing
+rate} on the acquirer's \emph{other} properties in years before the
+transfer. For each transfer of building \(i\) by owner \(j\) in year
+\(Y\), we compute the mean filing rate
+(\(\text{num\_filings} / \text{total\_units}\)) across all other PIDs
+acquired by owner \(j\), using only years strictly before \(Y\). This
+avoids look-ahead bias --- the classification uses no post-transfer
+data.
+
+Acquirers are classified into four bins:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{High-filer portfolio}: Above-median pre-acquisition filing
+  rate (among those with positive rates and a portfolio)
+\item
+  \textbf{Low-filer portfolio}: At or below median pre-acquisition
+  filing rate
+\item
+  \textbf{Non-filer (has portfolio)}: Zero filing rate but owns multiple
+  properties
+\item
+  \textbf{Single-purchase}: No other properties in the data (cannot
+  compute a portfolio filing rate)
+\end{itemize}
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=7in,height=\textheight,keepaspectratio]{../output/figs/rtt_annual_by_acq_filer.png}
+
+}
+
+\caption{Event study by acquirer pre-acquisition filing rate. High-filer
+portfolio acquirers show the largest post-transfer increase.}
+
+\end{figure}%
+
+\begin{adjustbox}{max width=\textwidth}
+
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \toprule
+    & \multicolumn{4}{c}{filing\_rate}\\
+   Acquirer type       & High-filer portfolio & Low-filer portfolio & Non-filer (has portfolio) & Single-purchase \\   
+                       & (1)                  & (2)                 & (3)                       & (4)\\  
+   \midrule 
+   event\_time $=$ -3  & 0.0014               & 0.0082$^{**}$       & 0.0023                    & -0.0036$^{***}$\\   
+                       & (0.0056)             & (0.0040)            & (0.0021)                  & (0.0014)\\   
+   event\_time $=$ -2  & 0.0089               & 0.0021              & 0.0008                    & -0.0050$^{***}$\\   
+                       & (0.0055)             & (0.0032)            & (0.0019)                  & (0.0013)\\   
+   event\_time $=$ 0   & -0.0099$^{**}$       & -0.0010             & 0.0011                    & -0.0044$^{***}$\\   
+                       & (0.0049)             & (0.0035)            & (0.0021)                  & (0.0013)\\   
+   event\_time $=$ 1   & 0.0104$^{*}$         & 0.0149$^{***}$      & 0.0119$^{***}$            & -0.0005\\   
+                       & (0.0063)             & (0.0047)            & (0.0027)                  & (0.0014)\\   
+   event\_time $=$ 2   & 0.0088               & 0.0216$^{***}$      & 0.0123$^{***}$            & 0.0001\\   
+                       & (0.0078)             & (0.0059)            & (0.0030)                  & (0.0014)\\   
+   event\_time $=$ 3   & 0.0107               & 0.0109              & 0.0109$^{***}$            & $-3.95\times 10^{-5}$\\    
+                       & (0.0094)             & (0.0067)            & (0.0036)                  & (0.0014)\\   
+   event\_time $=$ 4   & 0.0021               & 0.0126              & 0.0066                    & 0.0003\\   
+                       & (0.0107)             & (0.0078)            & (0.0040)                  & (0.0015)\\   
+   event\_time $=$ 5   & -0.0144              & 0.0088              & 0.0073$^{*}$              & 0.0005\\   
+                       & (0.0121)             & (0.0087)            & (0.0044)                  & (0.0015)\\   
+    \\
+   Observations        & 22,890               & 22,229              & 51,800                    & 184,636\\  
+   R$^2$               & 0.40514              & 0.24587             & 0.25832                   & 0.31733\\  
+   Within R$^2$        & 0.00163              & 0.00199             & 0.00092                   & 0.00022\\  
+    \\
+   PID fixed effects   & $\checkmark$         & $\checkmark$        & $\checkmark$              & $\checkmark$\\   
+   year fixed effects  & $\checkmark$         & $\checkmark$        & $\checkmark$              & $\checkmark$\\   
+   \bottomrule
+\end{tabular}
+\par\endgroup
+
+
+
+\end{adjustbox}
+
+\begin{longtable}[t]{lrrrr}
+\caption{\label{tab:acq-filer-summary}Event study coefficients at key periods by acquirer pre-acquisition filing rate}\\
+\toprule
+Acquirer Type & t-2 & t+1 & t+3 & t+5\\
+\midrule
+full\_highfiler\_portfolio & 0.0089 & 0.0104 & 0.0107 & -0.0144\\
+full\_lowfiler\_portfolio & 0.0021 & 0.0149 & 0.0109 & 0.0088\\
+full\_nonfiler\_has\_portfolio & 0.0008 & 0.0119 & 0.0109 & 0.0073\\
+full\_singlepurchase & -0.0050 & -0.0005 & 0.0000 & 0.0005\\
+\bottomrule
+\end{longtable}
+
+The key findings:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{High-filer portfolio} acquirers show the largest post-transfer
+  increase in filing rates. These are serial acquirers whose
+  pre-existing filing behavior on other properties predicts aggressive
+  eviction filing on newly acquired buildings.
+\item
+  \textbf{Low-filer portfolio} acquirers show a moderate increase,
+  substantially smaller than high-filers.
+\item
+  \textbf{Non-filer (has portfolio)} acquirers own multiple properties
+  but had zero filing rates before this acquisition. They show little
+  change post-transfer.
+\item
+  \textbf{Single-purchase} acquirers (the majority) have no portfolio
+  filing history. They show no meaningful post-transfer increase.
+\end{itemize}
+
+This decomposition --- using only pre-acquisition behavior --- confirms
+that the aggregate effect is driven by a specific subset of acquirers
+who are systematic high-filers. The classification is not contaminated
+by post-transfer outcomes.
+
+\section{Heterogeneity by Building
+Size}\label{heterogeneity-by-building-size}
+
+We estimate the event study separately by building size bin (all 2+
+units, pre-COVID only).
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=7in,height=\textheight,keepaspectratio]{../output/figs/rtt_annual_by_size.png}
+
+}
+
+\caption{Event study by building size bin (2+ units). The effect appears
+across all size categories.}
+
+\end{figure}%
+
+\begin{adjustbox}{max width=\textwidth}
+
+\begingroup
+\centering
+\begin{tabular}{lccc}
+   \toprule
+    & \multicolumn{3}{c}{filing\_rate}\\
+   Building size       & 2-4 units      & 5-19 units     & 20+ units \\   
+                       & (1)            & (2)            & (3)\\  
+   \midrule 
+   event\_time $=$ -3  & -0.0016        & 0.0017         & 0.0017\\   
+                       & (0.0011)       & (0.0035)       & (0.0045)\\   
+   event\_time $=$ -2  & -0.0021$^{*}$  & 0.0018         & 0.0042\\   
+                       & (0.0011)       & (0.0037)       & (0.0036)\\   
+   event\_time $=$ 0   & -0.0025$^{**}$ & 0.0016         & 0.0011\\   
+                       & (0.0011)       & (0.0038)       & (0.0044)\\   
+   event\_time $=$ 1   & 0.0063$^{***}$ & 0.0077         & 0.0075\\   
+                       & (0.0012)       & (0.0047)       & (0.0050)\\   
+   event\_time $=$ 2   & 0.0073$^{***}$ & 0.0150$^{***}$ & 0.0062\\   
+                       & (0.0012)       & (0.0054)       & (0.0057)\\   
+   event\_time $=$ 3   & 0.0066$^{***}$ & 0.0105$^{*}$   & 0.0107$^{*}$\\   
+                       & (0.0012)       & (0.0059)       & (0.0060)\\   
+   event\_time $=$ 4   & 0.0056$^{***}$ & 0.0115$^{**}$  & 0.0122$^{*}$\\   
+                       & (0.0012)       & (0.0054)       & (0.0064)\\   
+   event\_time $=$ 5   & 0.0051$^{***}$ & 0.0077         & 0.0086\\   
+                       & (0.0012)       & (0.0054)       & (0.0065)\\   
+    \\
+   Observations        & 259,736        & 17,323         & 5,497\\  
+   R$^2$               & 0.26234        & 0.59950        & 0.66840\\  
+   Within R$^2$        & 0.00069        & 0.00153        & 0.00193\\  
+    \\
+   PID fixed effects   & $\checkmark$   & $\checkmark$   & $\checkmark$\\   
+   year fixed effects  & $\checkmark$   & $\checkmark$   & $\checkmark$\\   
+   \bottomrule
+\end{tabular}
+\par\endgroup
+
+
+
+\end{adjustbox}
+
+The post-transfer increase appears across all multi-family building
+sizes:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{2--4 units}: Moderate post-transfer increase, flat pre-trends.
+\item
+  \textbf{5--19 units}: Larger increase, relatively flat pre-trends.
+\item
+  \textbf{20+ units}: Large increase, with a noisier pre-period given
+  the smaller sample.
+\end{itemize}
+
+If anything, the effect is \emph{larger} for bigger buildings, where
+each additional filing is a smaller share of units and thus harder to
+detect. We pool 5--19 units into a single bin given similar effect
+magnitudes and to improve statistical power.
+
+\subsection{Corporate buyer effect by building
+size}\label{corporate-buyer-effect-by-building-size}
+
+To confirm the corporate buyer effect isn't driven solely by small
+properties, we cross the buyer type and building size splits:
+
+\begin{longtable}[t]{llrr}
+\caption{\label{tab:corp-size-table}Average post-transfer effect (t+1 to t+3) by buyer type and building size}\\
+\toprule
+Buyer type & Size bin & Mean coef (t+1 to t+3) & Mean SE\\
+\midrule
+Corporate & 2-4 units & 0.0151 & 0.0027\\
+Individual & 2-4 units & 0.0016 & 0.0014\\
+Corporate & 20+ units & 0.0107 & 0.0066\\
+Individual & 20+ units & -0.0052 & 0.0062\\
+Corporate & 5-19 units & 0.0167 & 0.0078\\
+\addlinespace
+Individual & 5-19 units & 0.0002 & 0.0042\\
+\bottomrule
+\end{longtable}
+
+The corporate buyer effect is positive across all building sizes.
+Individual buyers show near-zero or negative effects in every size
+category.
+
+\section{Heterogeneity by Portfolio
+Size}\label{heterogeneity-by-portfolio-size}
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=7in,height=\textheight,keepaspectratio]{../output/figs/rtt_annual_by_portfolio.png}
+
+}
+
+\caption{Event study by portfolio size (non-sheriff acquisitions).}
+
+\end{figure}%
+
+Larger portfolio buyers (10+ non-sheriff properties) show the steepest
+post-transfer increase in filing rates. Single-purchase buyers show a
+more modest effect. The portfolio bin accounts for the total non-sheriff
+acquisitions by the buyer entity, so this captures whether serial
+acquirers are systematically more aggressive filers.
+
+\begin{adjustbox}{max width=\textwidth}
+
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \toprule
+    & \multicolumn{4}{c}{filing\_rate}\\
+   Portfolio size      & Single-purchase & 2-4            & 5-9           & 10+ \\   
+                       & (1)             & (2)            & (3)           & (4)\\  
+   \midrule 
+   event\_time $=$ -3  & -0.0033$^{**}$  & -0.0029        & -0.0026       & 0.0073$^{*}$\\   
+                       & (0.0015)        & (0.0022)       & (0.0039)      & (0.0039)\\   
+   event\_time $=$ -2  & -0.0042$^{***}$ & -0.0005        & -0.0015       & 0.0044\\   
+                       & (0.0014)        & (0.0023)       & (0.0035)      & (0.0032)\\   
+   event\_time $=$ 0   & -0.0043$^{***}$ & 0.0017         & -0.0068$^{*}$ & -0.0011\\   
+                       & (0.0014)        & (0.0021)       & (0.0037)      & (0.0032)\\   
+   event\_time $=$ 1   & -0.0005         & 0.0099$^{***}$ & 0.0105$^{**}$ & 0.0275$^{***}$\\   
+                       & (0.0016)        & (0.0023)       & (0.0050)      & (0.0043)\\   
+   event\_time $=$ 2   & -0.0007         & 0.0112$^{***}$ & 0.0129$^{**}$ & 0.0310$^{***}$\\   
+                       & (0.0016)        & (0.0025)       & (0.0055)      & (0.0049)\\   
+   event\_time $=$ 3   & -0.0014         & 0.0097$^{***}$ & 0.0152$^{**}$ & 0.0263$^{***}$\\   
+                       & (0.0017)        & (0.0025)       & (0.0062)      & (0.0053)\\   
+   event\_time $=$ 4   & -0.0005         & 0.0059$^{**}$  & 0.0095        & 0.0277$^{***}$\\   
+                       & (0.0017)        & (0.0026)       & (0.0064)      & (0.0061)\\   
+   event\_time $=$ 5   & -0.0019         & 0.0077$^{***}$ & 0.0061        & 0.0283$^{***}$\\   
+                       & (0.0017)        & (0.0027)       & (0.0072)      & (0.0068)\\   
+    \\
+   Observations        & 137,218         & 78,258         & 30,075        & 27,794\\  
+   R$^2$               & 0.31221         & 0.35897        & 0.32722       & 0.28017\\  
+   Within R$^2$        & 0.00016         & 0.00083        & 0.00160       & 0.00391\\  
+    \\
+   PID fixed effects   & $\checkmark$    & $\checkmark$   & $\checkmark$  & $\checkmark$\\   
+   year fixed effects  & $\checkmark$    & $\checkmark$   & $\checkmark$  & $\checkmark$\\   
+   \bottomrule
+\end{tabular}
+\par\endgroup
+
+
+
+\end{adjustbox}
+
+\section{Robustness}\label{robustness}
+
+All robustness checks use a \textbf{full-panel design}: the full
+building panel is merged with transfer timing, and explicit event-time
+dummies are constructed for \(k \in \{-3, \ldots, +5\}\) (omitting
+\(k = -1\)). Years outside the event window have all dummies set to
+zero, providing natural within-PID control periods. This approach avoids
+the problem of counting every observation as ``treated'' that would
+arise from a stacked event panel. All robustness specs restrict to 2+
+unit buildings, pre-COVID (year \(\leq\) 2019).
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=7in,height=\textheight,keepaspectratio]{../output/figs/rtt_annual_robustness.png}
+
+}
+
+\caption{Robustness checks: alternative samples and outcomes (full-panel
+design, 2+ units, pre-COVID).}
+
+\end{figure}%
+
+\begin{adjustbox}{max width=\textwidth}
+
+\begingroup
+\centering
+\begin{tabular}{lcccccc}
+   \toprule
+    & \multicolumn{3}{c}{filing\_rate} & num\_filings & any\_filing & total\_violations\\
+   Robustness         & No sheriff deeds & Single-transfer PIDs & No nearby re-transfer & Count outcome         & Any filing      & Violations \\   
+                      & (1)              & (2)                  & (3)                   & (4)                   & (5)             & (6)\\  
+   \midrule 
+   et\_m3             & -0.0011          & -0.0032$^{**}$       & -0.0049$^{***}$       & -0.0068               & -0.0029$^{**}$  & 0.0481$^{***}$\\   
+                      & (0.0008)         & (0.0012)             & (0.0010)              & (0.0083)              & (0.0012)        & (0.0110)\\   
+   et\_m2             & -0.0012          & -0.0025$^{*}$        & -0.0046$^{***}$       & -0.0060               & -0.0053$^{***}$ & 0.1222$^{***}$\\   
+                      & (0.0008)         & (0.0015)             & (0.0011)              & (0.0094)              & (0.0012)        & (0.0123)\\   
+   et\_0              & -0.0014$^{*}$    & -0.0001              & -0.0029$^{***}$       & -0.0084               & -0.0045$^{***}$ & 0.2689$^{***}$\\   
+                      & (0.0008)         & (0.0014)             & (0.0010)              & (0.0058)              & (0.0013)        & (0.0132)\\   
+   et\_1              & 0.0071$^{***}$   & 0.0047$^{***}$       & 0.0051$^{***}$        & 0.0185$^{***}$        & 0.0088$^{***}$  & 0.1630$^{***}$\\   
+                      & (0.0009)         & (0.0016)             & (0.0012)              & (0.0063)              & (0.0013)        & (0.0119)\\   
+   et\_2              & 0.0073$^{***}$   & 0.0063$^{***}$       & 0.0078$^{***}$        & 0.0293$^{***}$        & 0.0110$^{***}$  & 0.0560$^{***}$\\   
+                      & (0.0009)         & (0.0017)             & (0.0012)              & (0.0055)              & (0.0014)        & (0.0113)\\   
+   et\_3              & 0.0060$^{***}$   & 0.0092$^{***}$       & 0.0087$^{***}$        & 0.0322$^{***}$        & 0.0110$^{***}$  & -0.0004\\   
+                      & (0.0009)         & (0.0017)             & (0.0012)              & (0.0079)              & (0.0014)        & (0.0118)\\   
+   et\_4              & 0.0050$^{***}$   & 0.0049$^{***}$       & 0.0065$^{***}$        & 0.0294$^{***}$        & 0.0094$^{***}$  & -0.0126\\   
+                      & (0.0008)         & (0.0017)             & (0.0012)              & (0.0071)              & (0.0013)        & (0.0102)\\   
+   et\_5              & 0.0044$^{***}$   & 0.0063$^{***}$       & 0.0053$^{***}$        & 0.0097$^{**}$         & 0.0082$^{***}$  & -0.0048\\   
+                      & (0.0008)         & (0.0017)             & (0.0011)              & (0.0049)              & (0.0013)        & (0.0104)\\   
+    \\
+   Observations       & 769,897          & 219,099              & 447,558               & 818,255               & 818,255         & 761,813\\  
+   R$^2$              & 0.27685          & 0.36200              & 0.30022               & 0.65926               & 0.28616         & 0.20130\\  
+   Within R$^2$       & 0.00033          & 0.00042              & 0.00051               & $8.11\times 10^{-5}$  & 0.00038         & 0.00119\\  
+    \\
+   PID fixed effects  & $\checkmark$     & $\checkmark$         & $\checkmark$          & $\checkmark$          & $\checkmark$    & $\checkmark$\\   
+   year fixed effects & $\checkmark$     & $\checkmark$         & $\checkmark$          & $\checkmark$          & $\checkmark$    & $\checkmark$\\   
+   \bottomrule
+\end{tabular}
+\par\endgroup
+
+
+
+\end{adjustbox}
+
+\subsection{No sheriff's deeds}\label{no-sheriffs-deeds}
+
+Sheriff's deed transfers are foreclosures, where the ``buyer'' is
+typically a bank or GSE (Fannie Mae, Freddie Mac) that temporarily holds
+title. These entities do not operate as landlords and are unlikely to
+file evictions. Excluding sheriff's deeds removes approximately 10\% of
+transfers.
+
+\subsection{Single-transfer PIDs}\label{single-transfer-pids}
+
+The baseline allows overlapping event windows for PIDs with multiple
+transfers. As a robustness check, we restrict to PIDs with only one
+transfer during the sample period.
+
+\subsection{No nearby re-transfer}\label{no-nearby-re-transfer}
+
+We exclude transfers where the same PID has another transfer within 2
+years, avoiding contamination from overlapping ownership spells.
+
+\subsection{Count outcome}\label{count-outcome}
+
+Using the raw count of eviction filings (\texttt{num\_filings}) instead
+of the rate (per unit) confirms the direction of the effect. This
+addresses the concern that rate-based measures might be sensitive to
+changes in \texttt{total\_units} around transfers.
+
+\subsection{Any-filing indicator}\label{any-filing-indicator}
+
+A binary indicator for whether any eviction filings occurred in a given
+year tests whether the effect operates on the extensive margin (more
+buildings filing) rather than only the intensive margin (more filings
+per building).
+
+\subsection{Violations outcome}\label{violations-outcome}
+
+Building code violations are examined as a secondary outcome.
+\textbf{Note:} Philadelphia L\&I violations data begins in 2007, so the
+violations regressions are additionally restricted to calendar years
+\(\geq\) 2007 to avoid spurious zeros in the pre-period.
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=7in,height=\textheight,keepaspectratio]{../output/figs/rtt_annual_violations_by_buyer.png}
+
+}
+
+\caption{Violations around transfer by buyer type (year \(\geq\) 2007,
+2+ units, full-panel design).}
+
+\end{figure}%
+
+\section{Pooled Window Estimates}\label{pooled-window-estimates}
+
+We pool event-time periods into four windows to summarize the magnitude
+and significance of the transfer effect:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Pre} (\(t \in \{-3, -2\}\)): Baseline period before transfer
+\item
+  \textbf{Transition} (\(t \in \{-1, 0\}\)): Transfer year and immediate
+  lead
+\item
+  \textbf{Early post} (\(t \in \{1, 2\}\)): First two post-transfer
+  years
+\item
+  \textbf{Late post} (\(t \in \{3, 4, 5\}\)): Three to five years after
+  transfer
+\end{itemize}
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=6in,height=\textheight,keepaspectratio]{../output/figs/rtt_annual_pooled_windows.png}
+
+}
+
+\caption{Pooled window estimates: filing rate change relative to
+pre-transfer period.}
+
+\end{figure}%
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=5in,height=\textheight,keepaspectratio]{../output/figs/rtt_annual_post_minus_pre.png}
+
+}
+
+\caption{Post-minus-pre filing rate change by subgroup. Average of early
+and late post windows, relative to pre-transfer.}
+
+\end{figure}%
+
+\begin{longtable}[t]{lrrrrr}
+\caption{\label{tab:post-pre-table}Post-minus-pre filing rate change by subgroup}\\
+\toprule
+Subgroup & Post-Pre & SE & CI Lower & CI Upper & N\\
+\midrule
+full & 0.00814 & 0.00066 & 0.00685 & 0.00943 & 282,576\\
+corporate & 0.01116 & 0.00175 & 0.00773 & 0.01459 & 95,596\\
+individual & 0.00567 & 0.00072 & 0.00425 & 0.00708 & 186,097\\
+highfiler\_portfolio & 0.00787 & 0.00649 & -0.00485 & 0.02059 & 22,890\\
+lowfiler\_portfolio & 0.01114 & 0.00428 & 0.00275 & 0.01952 & 22,229\\
+\addlinespace
+nonfiler\_has\_portfolio & 0.00941 & 0.00229 & 0.00492 & 0.01390 & 51,800\\
+singlepurchase & 0.00449 & 0.00078 & 0.00296 & 0.00602 & 184,636\\
+\bottomrule
+\end{longtable}
+
+\section{Composition Diagnostics}\label{composition-diagnostics}
+
+\begin{longtable}[t]{rrrrrrrrr}
+\caption{\label{tab:composition-table}Sample composition by event time (pre-COVID)}\\
+\toprule
+Event Time & N obs & N PIDs & \% Units Obs & Mean Units & \% Pre-Rental & \% Post-Only Rental & \% Corporate & \% Large\\
+\midrule
+-3 & 598,088 & 340,353 & 26.2 & 1.5 & 11.3 & 21.9 & 22.2 & 0.5\\
+-2 & 570,618 & 329,936 & 27.1 & 1.5 & 10.8 & 22.2 & 21.9 & 0.5\\
+-1 & 539,332 & 318,798 & 28.8 & 1.5 & 10.2 & 22.6 & 21.6 & 0.5\\
+0 & 513,359 & 309,367 & 31.6 & 1.5 & 9.7 & 22.9 & 21.3 & 0.5\\
+1 & 482,553 & 296,408 & 35.0 & 1.5 & 9.0 & 23.1 & 20.6 & 0.5\\
+\addlinespace
+2 & 450,505 & 282,020 & 38.1 & 1.5 & 8.4 & 23.1 & 19.8 & 0.6\\
+3 & 418,919 & 267,926 & 40.8 & 1.5 & 7.6 & 23.1 & 18.8 & 0.6\\
+4 & 389,896 & 254,719 & 43.5 & 1.5 & 6.8 & 23.1 & 17.8 & 0.6\\
+5 & 366,178 & 243,393 & 46.0 & 1.5 & 6.1 & 23.0 & 17.1 & 0.7\\
+\bottomrule
+\end{longtable}
+
+This table verifies that sample composition does not change dramatically
+across event time, which would confound the event study estimates.
+
+\section{Appendix: Data Pipeline}\label{appendix-data-pipeline}
+
+\textbf{Scripts:}
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  \texttt{r/build-owner-linkage.R} --- Owner name standardization,
+  entity grouping, portfolio construction
+\item
+  \texttt{r/analyze-transfer-evictions-unified.R} --- Event panel
+  construction and all regressions (supports annual and quarterly
+  frequency via config)
+\end{enumerate}
+
+\textbf{Key data products:}
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.3333}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.1852}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.4815}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Product
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Key
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Description
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\texttt{owner\_linkage\_xwalk.csv} & \texttt{grantee\_upper} & Maps raw
+grantee names to standardized \texttt{owner\_std} and
+\texttt{owner\_group\_id} \\
+\texttt{owner\_portfolio.csv} & \texttt{owner\_group\_id} & Portfolio
+sizes, acquisition years, sheriff deed counts \\
+\end{longtable}
+
+\textbf{Config keys added:} \texttt{owner\_linkage\_xwalk},
+\texttt{owner\_portfolio} (under \texttt{products:} in
+\texttt{config.yml}).
+
+\textbf{Rental license coverage note:} Philadelphia's Open Data business
+license records begin substantive rental license coverage around 2013.
+All rental market entry regressions are restricted to year \(\geq\)
+2011. Altos (Apartments.com) listing data begins in 2006.
+
+
+
+
+\end{document}

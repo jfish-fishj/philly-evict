@@ -5,6 +5,7 @@ date: today
 format:
   pdf:
     documentclass: article
+    pdf-engine: pdflatex
     geometry: margin=1in
     fontsize: 11pt
     keep-tex: true
@@ -16,6 +17,7 @@ format:
         \usepackage{dcolumn}
         \usepackage{longtable}
         \usepackage{adjustbox}
+        \usepackage{amsmath}
 ---
 
 ```{r setup, include=FALSE}
@@ -51,6 +53,32 @@ This document summarizes the address history analysis from `r/address-history-an
 - `bldg_panel_blp` --- building characteristics, filing rates, rents, occupancy
 - `infousa_race_imputed_person`, `infousa_gender_imputed_person` --- demographic imputations
 
+# Empirical Bayes Filing-Rate Memo
+
+Main filing-intensity regressions in this writeup use `filing_rate_eb_pre_covid` as the default building-level eviction measure.
+
+In the production pipeline (`r/make-analytic-sample.R`, section `6b`), this is built as a Gamma-Poisson Empirical Bayes posterior mean:
+
+$$
+y_{it} \mid \lambda_i \sim \text{Poisson}(E_{it}\lambda_i), \qquad
+\lambda_i \sim \text{Gamma}(\alpha,\beta),
+$$
+
+with pooled pre-2019 sufficient statistics:
+
+$$
+Y_i = \sum_{t \le 2019} y_{it}, \qquad
+E_i = \sum_{t \le 2019} E_{it},
+$$
+
+and posterior mean:
+
+$$
+\mathbb{E}[\lambda_i \mid Y_i, E_i] = \frac{\alpha + Y_i}{\beta + E_i}.
+$$
+
+City and ZIP priors are estimated by method-of-moments; ZIP priors fall back to city prior when support is thin. Raw long-run filing-rate results are kept as appendix robustness tables only.
+
 ```{r load-data}
 suppressPackageStartupMessages({
   library(data.table)
@@ -59,7 +87,7 @@ suppressPackageStartupMessages({
 })
 source("r/config.R")
 cfg <- read_config()
-tab_dir <- p_out(cfg, "tables")
+tab_dir <- p_out(cfg, "address-history-analysis", "tables")
 qa_dir <- p_out(cfg, "qa")
 proj_root <- here::here()
 include_tex_table <- function(path, max_width = "\\textwidth") {
@@ -85,6 +113,34 @@ include_tex_table <- function(path, max_width = "\\textwidth") {
 }
 ```
 
+# Data Construction
+
+## Rent Variables
+
+The rent variable `med_rent` is the coalesced value of Altos median listing rent and eviction ongoing rent. The nominal log rent `log_med_rent` is used for descriptive purposes.
+
+For regression analysis, we construct a **hedonic-deflated real rent** (`log_med_rent_real`) by estimating a hedonic price index. We estimate a weighted regression of log rent on year, building type, and census tract fixed effects:
+
+$$
+\log(\text{rent}_{it}) = \alpha_t + \eta_k + \gamma_g + \varepsilon_{it}
+$$
+
+where $\alpha_t$ are year fixed effects, $\eta_k$ building type, and $\gamma_g$ census tract. The year FE $\hat\alpha_t$ capture aggregate rent inflation. Real rent is:
+$$
+\log(\text{rent}^{\text{real}}_{it}) = \log(\text{rent}_{it}) - (\hat\alpha_t - \hat\alpha_{t_0})
+$$
+where $t_0$ is the earliest year in the sample.
+
+## Filing Rate Variables
+
+Three filing rate measures are available:
+
+- **`filing_rate_raw`**: Annual filings / occupied units. Year-varying, volatile, subject to small-denominator noise.
+- **`filing_rate_longrun_pre2019`**: Total pre-2019 filings / (total units $\times$ years observed pre-2019). Time-invariant building-level average. Noisier for buildings with short panels.
+- **`filing_rate_eb_pre_covid`**: Empirical Bayes shrinkage estimator (Gamma-Poisson model), pre-2019, city-wide prior. Time-invariant. Shrinks noisy short-panel rates toward the city mean.
+
+Main-text filing regressions use `filing_rate_eb_pre_covid`. Raw long-run filing-rate regressions (`filing_rate_longrun_pre2019`) are reported in the appendix for robustness.
+
 # Tracking Descriptives
 
 ## Movers vs. Stayers
@@ -101,24 +157,38 @@ include_tex_table(file.path(tab_dir, "tracking_descriptives.tex"))
 
 The core persistence analysis asks: conditional on a household *moving*, does the eviction filing rate at their **previous** building predict the filing rate at their **current** building?
 
-**Sample:** Rental-to-rental movers (both origin and current address are rental buildings). Filing rates are capped at reasonable bounds to exclude outliers.
+**Sample:** Rental-to-rental movers (both origin and current address are rental buildings). Filing rates are pre-COVID, time-invariant building characteristics (not annual rates).
 
 ## Regression Specifications
 
-| Model | LHS | RHS | Fixed Effects | Sample restriction |
-|-------|-----|-----|---------------|-------------------|
-| m1 | Filing rate | Prev. filing rate | None | Rate $\leq 1$ |
-| m2 | Filing rate | Prev. filing rate | Unit bins + BG (current \& prev) | Rate $\leq 1$ |
-| m3 | Filing rate | Prev. filing rate + imputed rent | Unit bins + BG | Rate $\leq 0.5$ |
-| m4 | Filing rate | Prev. filing rate + actual rent | Unit bins + BG | Rate $\leq 1$ |
-| m5\_no\_rent | High-filer ($>$10\%) | Prev. high-filer | Unit bins + BG | Rate $\leq 0.5$ |
-| m5 | High-filer | Prev. high-filer + rent | Unit bins + BG | Rate $\leq 0.5$, multi-unit |
-| m\_rent | Log rent | Prev. filing rate + prev. rent + filing rate | Unit bins + BG | Rate $\leq 0.5$ |
+The persistence regressions estimate:
+$$
+\text{FilingRate}^{EB}_{i,\text{dest}} = \beta \cdot \text{FilingRate}^{EB}_{i,\text{origin}} + \gamma' X_i + \alpha_{\text{tract,dest}} + \alpha_{\text{tract,orig}} + \varepsilon_i
+$$
+where $\text{FilingRate}^{EB}$ is the EB shrinkage filing rate, $X_i$ includes hedonic-deflated real rent at origin and destination, and $\alpha_{\text{tract}}$ are census tract fixed effects (used instead of block group to avoid over-absorption with building-level time-invariant rates). Standard errors are clustered by destination PID.
 
-All models cluster standard errors by PID.
+**Specifications:**
+
+- **m1** (bivariate): Filing rate at destination $\sim$ filing rate at origin
+- **m2** (+ FE): Add unit bin and census tract fixed effects (current and previous)
+- **m3** (+ real rent): Add hedonic-deflated log rent at origin and destination
+
+Raw long-run versions of these same specs are shown in the appendix.
 
 ```{r persist-table, results='asis'}
 include_tex_table(file.path(tab_dir, "evict_persist.tex"))
+```
+
+## High-Filer and Rent Regressions
+
+The high-filer regressions use a binary indicator ($\ge 15\%$ EB filing rate) in place of the continuous rate:
+
+- **m4**: High-filer (dest) $\sim$ high-filer (origin) + FE
+- **m5**: Add hedonic-deflated rent controls, restrict to multi-unit buildings
+- **m\_rent**: Real rent (dest) $\sim$ filing rate (origin) + real rent (origin) + filing rate (dest) + FE
+
+```{r persist-hf-table, results='asis'}
+include_tex_table(file.path(tab_dir, "evict_persist_hf_rent.tex"))
 ```
 
 # Inflow and Outflow Analysis
@@ -128,22 +198,22 @@ include_tex_table(file.path(tab_dir, "evict_persist.tex"))
 For each building, the LOO tract eviction rate is:
 
 $$
-\text{LOO}_{i} = \frac{\sum_{j \in \text{tract}(i), j \neq i} \text{filings}_{j}}{\sum_{j \in \text{tract}(i), j \neq i} \text{units}_{j}}
+\text{LOO}_{i} = \frac{\sum_{j \in \text{tract}(i), j \neq i} \text{filings}_{j}}{\sum_{j \in \text{tract}(i), j \neq i} \text{unit-years}_{j}}
 $$
 
 This measures the eviction environment of the building's neighborhood, excluding the building's own contribution.
 
 ## Eviction Intensity Bins
 
-Buildings are classified using the empirical Bayes eviction filing rate (pre-COVID), with true never-filers (zero pre-2019 filings) separated from the low-rate category:
+Buildings are classified using the empirical Bayes eviction filing rate (pre-COVID):
 
 | Bin | Definition |
 |-----|-----------|
-| No filings | `total_filings_pre2019 == 0` |
-| (0--5\%] | EB rate $\leq 0.05$, at least 1 filing |
-| (5--10\%] | EB rate $\in (0.05, 0.10]$ |
-| (10--20\%] | EB rate $\in (0.10, 0.20]$ |
-| 20\%+ | EB rate $> 0.20$ |
+| [0,1) | EB rate $\in [0, 0.01)$ |
+| [1,5) | EB rate $\in [0.01, 0.05)$ |
+| [5,10) | EB rate $\in [0.05, 0.10)$ |
+| [10,20) | EB rate $\in [0.10, 0.20)$ |
+| [20,inf) | EB rate $\ge 0.20$ |
 
 ## Inflow: Where Do Tenants at High-Eviction Buildings Come From?
 
@@ -163,7 +233,8 @@ if (file.exists(inflow_path)) {
   )]
   kable(inflow_show, booktabs = TRUE,
         caption = "Origin characteristics of movers, by destination eviction intensity") |>
-    kable_styling(latex_options = c("hold_position", "scale_down"))
+    kable_styling(latex_options = c("hold_position", "scale_down"),
+                  full_width = FALSE, font_size = 9)
 } else {
   cat("Inflow summary not found.")
 }
@@ -186,7 +257,8 @@ if (file.exists(outflow_path)) {
   )]
   kable(outflow_show, booktabs = TRUE, escape = FALSE,
         caption = "Destination characteristics of movers, by origin eviction intensity") |>
-    kable_styling(latex_options = c("hold_position", "scale_down"))
+    kable_styling(latex_options = c("hold_position", "scale_down"),
+                  full_width = FALSE, font_size = 9)
 } else {
   cat("Outflow summary not found.")
 }
@@ -202,12 +274,20 @@ $$
 \text{Origin} \xrightarrow{\text{move 1}} \text{Middle} \xrightarrow{\text{move 2}} \text{Destination}
 $$
 
-The key question: conditional on origin neighborhood, does the eviction intensity of the **middle** building predict worse neighborhood outcomes at the **destination**?
+The key question: conditional on origin neighborhood, does the eviction intensity of the **middle** building predict worse outcomes at the **destination** building?
 
-The outcome is the change in LOO tract eviction rate from origin to destination:
+**Primary filing outcomes** use building-level EB filing rates directly, capturing within-neighborhood sorting:
+
+- $\Delta\text{FR}^{\text{EB}} = \text{FR}^{\text{EB}}_{\text{dest}} - \text{FR}^{\text{EB}}_{\text{origin}}$ (change in EB filing rate)
+
+Raw long-run filing-rate versions are reported in the appendix as robustness checks.
+
+**Secondary outcome** uses the LOO tract eviction rate (neighborhood-level, excluding the focal building):
 $$
 \Delta\text{LOO} = \text{LOO}_{\text{dest}} - \text{LOO}_{\text{origin}}
 $$
+
+The LOO rate averages over all buildings in the tract and thus misses within-tract sorting --- a tenant moving between two high-eviction buildings in the same tract shows zero change in LOO. Building-level rates capture this directly.
 
 ## Descriptive Summary
 
@@ -215,18 +295,41 @@ $$
 traj_path <- file.path(tab_dir, "trajectory_by_mid_eviction_bin.csv")
 if (file.exists(traj_path)) {
   traj <- fread(traj_path)
-  traj_show <- traj[, .(
-    `Middle bin` = mid_evict_bin,
-    `N trajectories` = format(n_traj, big.mark = ","),
-    `Origin LOO` = round(mean_orig_loo_tract, 4),
-    `Dest LOO` = round(mean_dest_loo_tract, 4),
-    `$\\Delta$ LOO` = round(mean_delta_loo_tract, 4),
-    `Origin EB rate` = round(mean_orig_evict_eb, 4),
-    `Dest EB rate` = round(mean_dest_evict_eb, 4)
-  )]
+  # Select columns that exist (handles both old and new format)
+  cols_avail <- names(traj)
+  traj_show_list <- list(
+    `Middle bin` = traj$mid_evict_bin,
+    `N traj.` = format(traj$n_traj, big.mark = ",")
+  )
+  if ("mean_orig_evict_eb" %in% cols_avail)
+    traj_show_list[["Orig EB"]] <- round(traj$mean_orig_evict_eb, 4)
+  if ("mean_dest_evict_eb" %in% cols_avail)
+    traj_show_list[["Dest EB"]] <- round(traj$mean_dest_evict_eb, 4)
+  if ("mean_delta_evict_eb" %in% cols_avail)
+    traj_show_list[["$\\Delta$ EB"]] <- round(traj$mean_delta_evict_eb, 4)
+  if ("mean_orig_loo_tract" %in% cols_avail)
+    traj_show_list[["Orig LOO"]] <- round(traj$mean_orig_loo_tract, 4)
+  if ("mean_dest_loo_tract" %in% cols_avail)
+    traj_show_list[["Dest LOO"]] <- round(traj$mean_dest_loo_tract, 4)
+  if ("mean_delta_loo_tract" %in% cols_avail)
+    traj_show_list[["$\\Delta$ LOO"]] <- round(traj$mean_delta_loo_tract, 4)
+  if ("mean_orig_loo_tract_eb" %in% cols_avail)
+    traj_show_list[["Orig LOO (EB)"]] <- round(traj$mean_orig_loo_tract_eb, 4)
+  if ("mean_dest_loo_tract_eb" %in% cols_avail)
+    traj_show_list[["Dest LOO (EB)"]] <- round(traj$mean_dest_loo_tract_eb, 4)
+  if ("mean_delta_loo_tract_eb" %in% cols_avail)
+    traj_show_list[["$\\Delta$ LOO (EB)"]] <- round(traj$mean_delta_loo_tract_eb, 4)
+  if ("mean_orig_loo_tract_raw" %in% cols_avail)
+    traj_show_list[["Orig LOO (raw)"]] <- round(traj$mean_orig_loo_tract_raw, 4)
+  if ("mean_dest_loo_tract_raw" %in% cols_avail)
+    traj_show_list[["Dest LOO (raw)"]] <- round(traj$mean_dest_loo_tract_raw, 4)
+  if ("mean_delta_loo_tract_raw" %in% cols_avail)
+    traj_show_list[["$\\Delta$ LOO (raw)"]] <- round(traj$mean_delta_loo_tract_raw, 4)
+  traj_show <- as.data.table(traj_show_list)
   kable(traj_show, booktabs = TRUE, escape = FALSE,
         caption = "Three-move trajectories by middle building eviction intensity") |>
-    kable_styling(latex_options = c("hold_position", "scale_down"))
+    kable_styling(latex_options = c("hold_position", "scale_down"),
+                  full_width = FALSE, font_size = 9)
 } else {
   cat("Trajectory summary not found.")
 }
@@ -234,24 +337,177 @@ if (file.exists(traj_path)) {
 
 ## Trajectory Regressions
 
-Three specifications test whether the middle building's eviction intensity predicts the origin-to-destination change in neighborhood eviction environment:
+For each outcome family, the script estimates delta and destination-level models separately, with progressively richer origin conditioning. Filing-outcome models are estimated using both:
 
-| Spec | LHS | RHS | Fixed Effects | Clustering |
-|------|-----|-----|---------------|------------|
-| (A) | $\Delta$ LOO tract | `i(mid_evict_bin)` | None | Origin BG |
-| (B) | $\Delta$ LOO tract | `i(mid_evict_bin)` | Origin tract | Origin BG |
-| (C) | Dest LOO tract (level) | `i(mid_evict_bin)` | Origin tract | Origin BG |
+- middle-building filing bins (`[0,1)`, `[1,5)`, `[5,10)`, `[10,20)`, `[20,inf)`)
+- a high-filing dummy (`\ge 15\%`)
 
-Reference category: (0--5\%].
+**Delta specs:**
 
-```{r trajectory-regs, results='asis'}
-include_tex_table(file.path(tab_dir, "trajectory_regressions.tex"))
+**(A) Unconditional delta:**
+$$
+\Delta Y_i = \sum_{b} \beta_b \cdot \mathbf{1}[\text{mid\_bin}_i = b] + \varepsilon_i
+$$
+
+**(B) Delta + origin tract FE:**
+$$
+\Delta Y_i = \sum_{b} \beta_b \cdot \mathbf{1}[\text{mid\_bin}_i = b] + \alpha_{\text{tract,orig}} + \varepsilon_i
+$$
+
+**(C) Delta + origin filing rate + origin parcel controls:**
+$$
+\Delta Y_i = \sum_{b} \beta_b \cdot \mathbf{1}[\text{mid\_bin}_i = b]
+ + \theta Y_{\text{orig},i}
+ + \gamma' X_{\text{orig},i}
+ + \alpha_{\text{tract,orig}} + \varepsilon_i
+$$
+
+**(D) Delta + origin-tract-by-origin-filing-bin FE:**
+$$
+\Delta Y_i = \sum_{b} \beta_b \cdot \mathbf{1}[\text{mid\_bin}_i = b]
+ + \gamma' X_{\text{orig},i}
+ + \alpha_{\text{tract,orig} \times \text{orig\_filing\_bin}} + \varepsilon_i
+$$
+
+**Destination-level specs:**
+
+**(A) Destination level + origin tract FE:**
+$$
+Y_{\text{dest},i} = \sum_{b} \beta_b \cdot \mathbf{1}[\text{mid\_bin}_i = b] + \alpha_{\text{tract,orig}} + \varepsilon_i
+$$
+
+**(B) + origin outcome level:**
+$$
+Y_{\text{dest},i} = \sum_{b} \beta_b \cdot \mathbf{1}[\text{mid\_bin}_i = b] + \theta Y_{\text{orig},i} + \alpha_{\text{tract,orig}} + \varepsilon_i
+$$
+
+**(C) + origin parcel controls:**
+$$
+Y_{\text{dest},i} = \sum_{b} \beta_b \cdot \mathbf{1}[\text{mid\_bin}_i = b]
+ + \theta Y_{\text{orig},i}
+ + \gamma' X_{\text{orig},i}
+ + \alpha_{\text{tract,orig}} + \varepsilon_i
+$$
+
+**(D) + origin-tract-by-origin-filing-bin FE:**
+$$
+Y_{\text{dest},i} = \sum_{b} \beta_b \cdot \mathbf{1}[\text{mid\_bin}_i = b]
+ + \gamma' X_{\text{orig},i}
+ + \alpha_{\text{tract,orig} \times \text{orig\_filing\_bin}} + \varepsilon_i
+$$
+
+where $Y$ is one of: building-level filing rate, severe complaints per unit, total violations per unit, severe violations per unit, or LOO tract filing rate (EB or raw). Origin parcel controls $X_{\text{orig},i}$ include `log(total_area)`, `log(market_value)`, `year_blt_decade`, `num_units_bin`, `building_type`, `quality_grade_standard`, and `num_stories_bin`. Reference category for bin models: [0,1). Standard errors are clustered by origin block group.
+
+### Filing Outcomes: Delta Specs (Primary)
+
+```{r trajectory-regs-filing-delta, results='asis'}
+include_tex_table(file.path(tab_dir, "trajectory_regressions_delta.tex"))
+```
+
+### Filing Outcomes: Destination-Level Specs (Primary)
+
+```{r trajectory-regs-filing-dest, results='asis'}
+include_tex_table(file.path(tab_dir, "trajectory_regressions_dest.tex"))
+```
+
+### Filing Outcomes: Destination-Level Specs (High-Filing Dummy, Primary)
+
+```{r trajectory-regs-filing-dest-high-dummy, results='asis'}
+include_tex_table(file.path(tab_dir, "trajectory_regressions_dest_high_dummy.tex"))
+```
+
+### Severe Complaints per Unit: Delta Specs (Additional Outcome)
+
+```{r trajectory-regs-severe-delta, results='asis'}
+include_tex_table(file.path(tab_dir, "trajectory_regressions_severe_delta.tex"))
+```
+
+### Severe Complaints per Unit: Destination-Level Specs (Additional Outcome)
+
+```{r trajectory-regs-severe-dest, results='asis'}
+include_tex_table(file.path(tab_dir, "trajectory_regressions_severe_dest.tex"))
+```
+
+### Total Violations per Unit: Delta Specs (Additional Outcome)
+
+```{r trajectory-regs-violations-delta, results='asis'}
+include_tex_table(file.path(tab_dir, "trajectory_regressions_violations_delta.tex"))
+```
+
+### Total Violations per Unit: Destination-Level Specs (Additional Outcome)
+
+```{r trajectory-regs-violations-dest, results='asis'}
+include_tex_table(file.path(tab_dir, "trajectory_regressions_violations_dest.tex"))
+```
+
+### Severe Violations per Unit: Delta Specs (Additional Outcome)
+
+```{r trajectory-regs-severe-violations-delta, results='asis'}
+include_tex_table(file.path(tab_dir, "trajectory_regressions_severe_violations_delta.tex"))
+```
+
+### Severe Violations per Unit: Destination-Level Specs (Additional Outcome)
+
+```{r trajectory-regs-severe-violations-dest, results='asis'}
+include_tex_table(file.path(tab_dir, "trajectory_regressions_severe_violations_dest.tex"))
+```
+
+### LOO Tract Filing Rate Outcomes (EB, Secondary Main)
+
+```{r trajectory-regs-loo-eb-bins, results='asis'}
+include_tex_table(file.path(tab_dir, "trajectory_regressions_loo.tex"))
+```
+
+### LOO Tract Filing Rate Outcomes (EB High-Filing Dummy, Secondary Main)
+
+```{r trajectory-regs-loo-eb-high-dummy, results='asis'}
+include_tex_table(file.path(tab_dir, "trajectory_regressions_loo_high_dummy.tex"))
 ```
 
 # Interpretation
 
-**Eviction persistence:** The positive coefficient on previous filing rate indicates that tenants who leave high-eviction buildings tend to end up in other high-eviction buildings, even after controlling for block group and building size. This is not simply a neighborhood effect --- it persists within block groups.
+**Eviction persistence:** The positive coefficient on previous filing rate indicates that tenants who leave high-eviction buildings tend to end up in other high-eviction buildings, even after controlling for tract and building size. This is not simply a neighborhood effect, and persists within origin-tract conditioning. EB is the main measure shown; raw long-run robustness is in the appendix.
+
+**Hedonic rent deflation:** Using hedonic-deflated real rents (rather than nominal) ensures that rent persistence results are not confounded by aggregate rent inflation over the panel period. The year fixed effects from the hedonic regression capture common rent trends, so `log_med_rent_real` isolates cross-sectional and within-building rent variation.
 
 **Inflow/Outflow:** High-eviction buildings draw tenants from neighborhoods that are already higher-eviction, and their departing tenants move to similar or worse neighborhoods. The LOO tract eviction rate captures the neighborhood environment excluding the focal building.
 
-**Trajectories:** The key finding from the trajectory regressions is specification (B): after conditioning on origin tract, passing through a high-eviction middle building predicts a larger increase in neighborhood eviction rate from origin to destination. This suggests that high-eviction buildings act as a *channeling mechanism*, directing tenants toward worse eviction environments relative to their starting point.
+**Trajectories:** The trajectory design reports delta and destination-level outcomes separately, and adds richer origin conditioning (origin filing rate, origin parcel controls, and origin-tract-by-origin-filing-bin FE). This clarifies whether sorting patterns persist after conditioning on baseline origin-building risk and building characteristics. We also add severe complaints per unit as an additional long-run building-level outcome. Unlike the LOO measure, building-level outcomes capture within-neighborhood sorting, so tenants may systematically sort into worse buildings even within the same tract.
+
+# Appendix: Raw Filing Robustness
+
+## Persistence (Raw Long-Run Filing Rate)
+
+```{r persist-table-raw-appendix, results='asis'}
+include_tex_table(file.path(tab_dir, "evict_persist_raw.tex"))
+```
+
+## High-Filer and Rent (Raw Long-Run Filing Rate)
+
+```{r persist-hf-table-raw-appendix, results='asis'}
+include_tex_table(file.path(tab_dir, "evict_persist_hf_rent_raw.tex"))
+```
+
+## Trajectory Filing Outcomes (Raw Long-Run Filing Rate)
+
+```{r trajectory-regs-filing-delta-raw-appendix, results='asis'}
+include_tex_table(file.path(tab_dir, "trajectory_regressions_delta_raw.tex"))
+```
+
+```{r trajectory-regs-filing-dest-raw-appendix, results='asis'}
+include_tex_table(file.path(tab_dir, "trajectory_regressions_dest_raw.tex"))
+```
+
+```{r trajectory-regs-filing-dest-high-dummy-raw-appendix, results='asis'}
+include_tex_table(file.path(tab_dir, "trajectory_regressions_dest_high_dummy_raw.tex"))
+```
+
+## LOO Tract Filing Rate Outcomes (Raw Appendix Robustness)
+
+```{r trajectory-regs-loo-raw-bins-appendix, results='asis'}
+include_tex_table(file.path(tab_dir, "trajectory_regressions_loo_raw.tex"))
+```
+
+```{r trajectory-regs-loo-raw-high-dummy-appendix, results='asis'}
+include_tex_table(file.path(tab_dir, "trajectory_regressions_loo_high_dummy_raw.tex"))
+```

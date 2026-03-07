@@ -1,0 +1,197 @@
+---
+title: "Severe Complaint-Maintenance Diagnostics"
+author: "Philly Evictions Project"
+date: today
+format:
+  pdf:
+    pdf-engine: xelatex
+    documentclass: article
+    geometry: margin=1in
+    fontsize: 11pt
+    keep-tex: true
+    number-sections: true
+    toc: true
+    include-in-header:
+      text: |
+        \usepackage{booktabs}
+        \usepackage{longtable}
+        \usepackage{adjustbox}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 10,
+  fig.height = 6,
+  dpi = 300
+)
+```
+
+# Overview
+
+This writeup isolates the maintenance-complaint relationship using **severe complaints only**, before returning to demographic regressions.
+
+The underlying script is `r/severe-maintenance-diagnostics.R`.
+
+Design choices in this version:
+
+- Outcome: `total_severe_complaints` (quarterly count)
+- Panel + controls source: quarterly rental panel (`building_data_rental_quarter`) with annual controls merged from `bldg_panel_blp` (`PID x year`)
+- Maintenance flow baseline: repair-ish permit counts only (`electrical`, `plumbing`, `mechanical`, `fire_suppression`); a broad flow variant adds `building_permit_count` for robustness
+- Maintenance scaling: per-unit rates using annual `total_units` (`maint_rate_* = permit_flow / total_units_ann`, with `total_units_ann` floored at 1)
+- Lag/lead maintenance variables: `t-1` flow, `t-1:t-4` average lagged flow, and leads (`t+1`, `t+2`) for falsification
+- Rolling maintenance stock: EWMA of **lagged** repair flow (`maint_stock_lag`) within `PID`, then scaled by units (`maint_stock_lag_rate`); default decay parameter is `lambda = 0.9` (CLI-overridable)
+- Unit controls: nonlinear spline in `log(1 + total_units)` (`df = 4`) plus deterministic fine unit bins (`1`, `2`, ..., `10`, `11-12`, `13-15`, ..., `151-200`, `201+`, `Unknown`) used in the stock-focused specifications
+- Quality controls: coarsened `A/B/C/D/E/Other` grades (dropping `+/-`) throughout the diagnostics
+- Estimation: `fepois` with cluster-robust SEs by `PID`, weighted by annual units
+- Diagnostics added: lead falsification, PID+period FE (within-building) regressions, support tables for quality x fine-unit-bin cells
+- Parcel-controls diagnostics: the default fast-mode stock table includes a parcel-controls stock spec with `log(total_area)` (no market-value control)
+- Runtime note: `r/severe-maintenance-diagnostics.R` defaults to `--fast_mode=TRUE`, which fits and writes tables in batches, skips the slowest stock-quality interaction variants / rich-interaction or rent variants / PID FE variants, and omits the partial-correlation figure; use `--fast_mode=FALSE` for the full suite
+
+```{r load-helpers}
+suppressPackageStartupMessages({
+  library(data.table)
+  library(knitr)
+  library(kableExtra)
+})
+qmd_path <- knitr::current_input(dir = TRUE)
+proj_root <- normalizePath(file.path(dirname(qmd_path), ".."), winslash = "/", mustWork = FALSE)
+source(file.path(proj_root, "r", "config.R"))
+old_wd <- getwd()
+setwd(proj_root)
+on.exit(setwd(old_wd), add = TRUE)
+cfg <- read_config(file.path(proj_root, "config.yml"))
+tab_dir <- normalizePath(file.path(proj_root, "output", "tables"), winslash = "/", mustWork = FALSE)
+fig_dir <- normalizePath(file.path(proj_root, "output", "figs"), winslash = "/", mustWork = FALSE)
+
+include_tex_table <- function(path, max_width = "\\textwidth") {
+  if (!file.exists(path)) { cat("Table not found:", path); return(invisible(NULL)) }
+  lines <- readLines(path)
+  txt <- paste(lines, collapse = "\n")
+  has_float <- grepl("\\\\begin\\{table\\}", txt)
+  if (has_float) {
+    is_float <- grepl("^\\s*\\\\begin\\{table\\}|^\\s*\\\\end\\{table\\}", lines)
+    is_meta <- grepl("^\\s*\\\\caption|^\\s*\\\\label|^\\s*\\\\centering", lines)
+    cap_lines <- trimws(lines[is_meta])
+    inner <- lines[!is_float & !is_meta]
+    cat("\\begin{table}[htbp]\n\\centering\n")
+    cat(cap_lines, sep = "\n")
+    cat("\n\\begin{adjustbox}{max width=", max_width, "}\n", sep = "")
+    cat(inner, sep = "\n")
+    cat("\n\\end{adjustbox}\n\\end{table}\n")
+  } else {
+    cat("\\begin{adjustbox}{max width=", max_width, "}\n", sep = "")
+    cat(lines, sep = "\n")
+    cat("\n\\end{adjustbox}\n")
+  }
+}
+
+include_fig_if_exists <- function(path, missing_msg = "Figure not found.") {
+  if (file.exists(path)) knitr::include_graphics(path) else cat(missing_msg)
+}
+```
+
+# Sample Diagnostics
+
+```{r sample-diag}
+sample_path <- file.path(tab_dir, "severe_maint_diag_sample.csv")
+if (file.exists(sample_path)) {
+  dd <- fread(sample_path)
+  dd[, `:=`(
+    share_nonzero_severe = round(share_nonzero_severe, 4),
+    share_zero_curr_maint = round(share_zero_curr_maint, 4),
+    share_zero_l1_maint = round(share_zero_l1_maint, 4)
+  )]
+  kable(dd, booktabs = TRUE, caption = "Severe-maintenance diagnostic sample summary") |>
+    kable_styling(latex_options = c("hold_position", "scale_down"))
+} else {
+  cat("Run `r/severe-maintenance-diagnostics.R` first.")
+}
+```
+
+## Support By Quality And Unit Bin
+
+These diagnostics are included to assess whether stock-by-quality interactions are identified on meaningful support (especially after restricting those interaction specs to the controls-matched subset).
+
+```{r support-quality}
+path_q <- file.path(tab_dir, "severe_maint_diag_support_by_quality.csv")
+if (file.exists(path_q)) {
+  x <- fread(path_q)
+  num_cols <- setdiff(names(x), "quality_grade_abcde")
+  for (cc in num_cols) if (is.numeric(x[[cc]])) x[, (cc) := round(get(cc), 4)]
+  kable(x, booktabs = TRUE, caption = "Support diagnostics by coarsened quality grade (full severe-diagnostic sample)") |>
+    kable_styling(latex_options = c("hold_position", "scale_down"), font_size = 8)
+} else {
+  cat("Run `r/severe-maintenance-diagnostics.R` first.")
+}
+```
+
+```{r support-thin-cells}
+path_thin <- file.path(tab_dir, "severe_maint_diag_support_thin_cells.csv")
+if (file.exists(path_thin)) {
+  x <- fread(path_thin)
+  kable(x, booktabs = TRUE, caption = "Thin-cell summary for quality-grade x fine-unit-bin cells (controls-matched subset used in stock-quality interaction specs)") |>
+    kable_styling(latex_options = c("hold_position", "scale_down"), font_size = 8)
+} else {
+  cat("Run `r/severe-maintenance-diagnostics.R` first.")
+}
+```
+
+# Main Severe-Maintenance Diagnostics
+
+This is the default **stock-focused** table from fast mode. It reports three rolling-stock specifications:
+
+- baseline stock spec with nonlinear unit controls + period and coarse quality-grade FE
+- stock spec with fine unit-bin FE
+- parcel-controls stock spec with `log(total_area)` plus `year_blt_decade`, coarse quality-grade FE, fine unit-bin FE, and period FE
+
+In full mode (`--fast_mode=FALSE`), this table expands to include stock-by-quality interaction and richer-control variants.
+
+```{r main-models, results='asis'}
+include_tex_table(file.path(tab_dir, "severe_maint_diag_models.tex"))
+```
+
+# Auxiliary Flow Diagnostics
+
+This section holds the **auxiliary flow-based diagnostics** (current and lagged flows, plus broad-permit proxy), which are useful for reverse-causality checks but are not the primary stock-based specifications.
+
+- contemporaneous maintenance flow
+- lagged flow (`t-1`) and rolling lagged flow average (`t-1` to `t-4`)
+- joint current + stock specification
+- broad permit proxy comparison
+
+```{r stock-quality-models, results='asis'}
+include_tex_table(file.path(tab_dir, "severe_maint_diag_stock_quality_models.tex"))
+```
+
+# Falsification And Within-Building Diagnostics
+
+This section reports:
+
+- lead maintenance (`t+1`, `t+2`) falsification regressions
+- PID+period FE (within-building) regressions using lagged and lead maintenance signals
+
+In default fast mode, this section is a placeholder table (the expensive falsification / PID FE regressions are skipped).
+
+```{r fals-pid-models, results='asis'}
+include_tex_table(file.path(tab_dir, "severe_maint_diag_falsification_pidfe_models.tex"))
+```
+
+# Partial-Correlation Plot
+
+This figure is omitted in default fast mode and appears only in full mode (`--fast_mode=FALSE`).
+
+```{r partial-corr-fig, fig.cap="Partial-correlation diagnostics for severe complaints vs current, lagged, and cumulative lagged repair permits per unit. Both axes are residualized on nonlinear unit controls with period and quality-grade fixed effects, then summarized in weighted bins.", out.width="95%", fig.align="center"}
+include_fig_if_exists(
+  file.path(fig_dir, "severe_maint_diag_partial_corr.png"),
+  "Partial-correlation figure not found. Run `r/severe-maintenance-diagnostics.R` first."
+)
+```
+
+# Notes
+
+- Category-specific complaint counts exist in the quarterly product, but category-specific **severe** complaint counts are not available in the current product, so this writeup remains severe-total only.
+- Stock-by-quality interaction specs are estimated on the controls-matched subset with non-`Unknown` fine unit bins, to avoid collapsing identification onto the missing-controls mass.
+- This is a diagnostics workflow intended to decide which maintenance specifications are worth carrying into later complaint or demographic analyses.

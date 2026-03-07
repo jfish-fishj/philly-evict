@@ -1,5 +1,5 @@
 ---
-title: "Hedonic Rent Regressions: Long-Run Filing Rate"
+title: "Hedonic Rent Regressions: Raw Long-Run Filing Rate"
 author: "Philly Evictions Project"
 date: today
 format:
@@ -32,7 +32,7 @@ knitr::opts_chunk$set(
 
 # Overview
 
-This document summarizes the hedonic rent regressions from `r/price-regs.R`. The script estimates the relationship between eviction filing intensity (raw long-run pre-COVID filing rate) and rent levels, controlling for building and neighborhood characteristics.
+This document summarizes the hedonic rent regressions from `r/price-regs.R`. The script estimates the relationship between eviction filing intensity (raw long-run filing rate, pre-2019) and rent levels, controlling for building and neighborhood characteristics.
 
 **Unit of analysis:** Building (PID) $\times$ year panel, 2014--2019.
 
@@ -43,8 +43,10 @@ This document summarizes the hedonic rent regressions from `r/price-regs.R`. The
 **Sample restrictions:**
 
 - Years 2014--2019 (pre-COVID hedonic)
-- Non-missing long-run pre-COVID filing rate
+- Non-missing raw filing rate (pre-2019)
 - Filing rate $\leq 0.75$ (excludes extreme outliers)
+
+**Key measure:** `filing_rate_longrun_pre2019` = total pre-2019 filings / total units / years observed pre-2019. This is the unshrunk filing rate (contrast with the Empirical Bayes version in `price-regs-eb.R`).
 
 ```{r load-data}
 suppressPackageStartupMessages({
@@ -59,8 +61,6 @@ old_wd <- getwd()
 setwd(proj_root)
 on.exit(setwd(old_wd), add = TRUE)
 cfg <- read_config(file.path(proj_root, "config.yml"))
-# Resolve directly from the writeup's project root; this avoids dependency on
-# the caller's working directory when rendering the QMD.
 tab_dir <- normalizePath(file.path(proj_root, "output", "price-regs", "tables"), winslash = "/", mustWork = FALSE)
 fig_dir <- normalizePath(file.path(proj_root, "output", "price-regs", "figs"), winslash = "/", mustWork = FALSE)
 include_tex_table <- function(path, max_width = "\\textwidth") {
@@ -97,8 +97,8 @@ include_fig_if_exists <- function(path, missing_msg, out_width = "95%") {
 
 Two representations of eviction filing intensity are used:
 
-- **Binned:** Long-run pre-COVID filing rate cut at 0, 5\%, 10\%, 20\%, with reference category (5--10\%]
-- **Continuous:** Raw long-run filing rate (pre-COVID), entering linearly
+- **Binned:** Pre-2019 raw filing rate cut at 0, 5\%, 10\%, 20\%, with reference category (5--10\%]
+- **Continuous:** Raw filing rate (pre-2019), entering linearly
 
 # Empirical Strategy
 
@@ -122,7 +122,7 @@ Regressions are weighted by total units and clustered by PID.
 ## Model 1: Binned Filing Rate (Baseline)
 
 $$
-\log(\text{rent}_{it}) = \sum_{b} \beta_b \cdot \mathbb{1}[\text{filing rate bin}_i = b] + \gamma_1 \cdot \text{ViolFlag}_i + \gamma_2 \cdot \text{ComplaintFlag}_i + \delta' X_i + \alpha_{\text{tract}} + \phi_t + \varepsilon_{it}
+\log(\text{rent}_{it}) = \sum_{b} \beta_b \cdot \mathbb{1}[\text{rate bin}_i = b] + \gamma_1 \cdot \text{ViolFlag}_i + \gamma_2 \cdot \text{ComplaintFlag}_i + \delta' X_i + \alpha_{\text{tract}} + \phi_t + \varepsilon_{it}
 $$
 
 where $\text{ViolFlag}_i$ indicates any unsafe/dangerous/hazardous violation and $\text{ComplaintFlag}_i$ indicates any heat/fire/drainage/plumbing complaint. Reference bin: (5--10\%].
@@ -130,7 +130,7 @@ where $\text{ViolFlag}_i$ indicates any unsafe/dangerous/hazardous violation and
 ## Model 2: Continuous Filing Rate
 
 $$
-\log(\text{rent}_{it}) = \beta \cdot \overline{\text{filing rate}}_i + \delta' X_i + \alpha_{\text{tract}} + \phi_t + \varepsilon_{it}
+\log(\text{rent}_{it}) = \beta \cdot \text{rate}_i + \delta' X_i + \alpha_{\text{tract}} + \phi_t + \varepsilon_{it}
 $$
 
 ## Models 3--4: Tenant Composition Controls
@@ -149,7 +149,7 @@ $$
 \log(\text{rent}_{it}) = \beta_1 \cdot \text{ComplaintFlag}_i + \beta_2 \cdot \text{HighEvict}_i + \beta_3 \cdot \text{ComplaintFlag}_i \times \text{HighEvict}_i + \delta' X_i + \alpha_{\text{tract}} + \phi_t + \varepsilon_{it}
 $$
 
-where $\text{HighEvict}_i = \mathbb{1}[\text{filing rate}_i > 0.20]$. Uses a sparser FE set (year + GEOID + unit count bin).
+where $\text{HighEvict}_i = \mathbb{1}[\text{rate}_i > 0.20]$. Uses a sparser FE set (year + GEOID + unit count bin).
 
 # Results
 
@@ -165,7 +165,7 @@ include_tex_table(file.path(tab_dir, "hedonic_filing_rate_longrun.tex"))
 include_tex_table(file.path(tab_dir, "hedonic_filing_rate_longrun_with_tenant_composition.tex"))
 ```
 
-## Coefficient Comparison: Eviction Intensity Across Specifications
+## Coefficient Comparison: Filing Rate Across Specifications
 
 ```{r coef-compare}
 cc_path <- file.path(tab_dir, "hedonic_filing_rate_longrun_tenant_composition_coef_compare.csv")
@@ -174,13 +174,13 @@ if (file.exists(cc_path)) {
   if (nrow(cc)) {
     cc_show <- cc[, .(
       Model = model,
-      Term = gsub("filing_rate_bin", "", term),
+      Term = gsub("filing_rate_longrun_pre2019_cuts::", "", term),
       Estimate = round(estimate, 4),
       SE = round(std_error, 4),
       `$p$` = round(p_value, 3)
     )]
     kable(cc_show, booktabs = TRUE, escape = FALSE,
-          caption = "Eviction intensity coefficients: baseline vs tenant-composition controlled") |>
+          caption = "Filing rate coefficients: baseline vs tenant-composition controlled") |>
       kable_styling(latex_options = c("hold_position", "scale_down"), font_size = 9)
   }
 }
@@ -188,7 +188,7 @@ if (file.exists(cc_path)) {
 
 ## Coefficient Plot: Binned Model
 
-```{r coefplot, fig.cap="Hedonic rent penalty by filing intensity bin (baseline specification). Reference category: 5-10 percent long-run filing rate bin. Tract and year FE with building controls.", out.width="95%", fig.align="center"}
+```{r coefplot, fig.cap="Hedonic rent penalty by raw filing rate bin (baseline specification). Reference category: 5-10 percent filing rate bin. Tract and year FE with building controls.", out.width="95%", fig.align="center"}
 plot_path <- file.path(fig_dir, "coefplot_hedonic_filing_rate_longrun.png")
 if (file.exists(plot_path)) {
   knitr::include_graphics(plot_path)
@@ -201,27 +201,57 @@ if (file.exists(plot_path)) {
 
 # Exploratory Diagnostics
 
-These plots residualize both rent and eviction intensity on the same controls and fixed effects used in the hedonic regressions, then examine the remaining relationship.
+These plots residualize both rent and filing rate on the same controls and fixed effects used in the hedonic regressions, then examine the remaining relationship.
 
-## Residual Variation in Filing Rate
+## Residual Variation in Raw Filing Rate
 
-```{r resid-hist, fig.cap="Distribution of residualized long-run filing rate (pre-2019). Residualized on year + tract + building controls; weighted by total units.", out.width="95%", fig.align="center"}
+```{r resid-hist, fig.cap="Distribution of residualized raw filing rate (pre-2019). Residualized on year + tract + building controls; weighted by total units.", out.width="95%", fig.align="center"}
 resid_hist_path <- file.path(fig_dir, "resid_filing_rate_longrun_pre2019_hist.png")
 include_fig_if_exists(resid_hist_path, "Residual histogram not found. Run price-regs.R first.")
 ```
 
-## Residualized Rent vs Eviction Intensity: Bin Scatter
+## Residualized Rent vs Filing Rate: Bin Scatter
 
-```{r binscatter, fig.cap="Binned scatter of residualized log rent vs residualized long-run filing rate. Both residualized on the same controls/FE; weighted by total units.", out.width="95%", fig.align="center"}
+```{r binscatter, fig.cap="Binned scatter of residualized log rent vs residualized raw filing rate. Both residualized on the same controls/FE; weighted by total units.", out.width="95%", fig.align="center"}
 bs_path <- file.path(fig_dir, "binscatter_resid_rent_vs_filing_rate_longrun.png")
 include_fig_if_exists(bs_path, "Bin scatter not found. Run price-regs.R first.")
 ```
 
-## Spline-Implied Stigma Curve
+## Spline-Implied Filing Rate Curve (Cubic)
 
-```{r spline-curve, fig.cap="Spline-implied stigma curve: linear, quadratic, and cubic B-spline specifications overlaid. All three use hurdle=FALSE (spline through zero); knots at 1\\%, 2.5\\%, 5\\%, 8\\%, 12\\%, 20\\%. The similarity across degrees indicates robustness of the shape to spline flexibility.", out.width="100%", fig.align="center"}
-spline_path <- file.path(fig_dir, "spline_stigma_curve_comparison.png")
-include_fig_if_exists(spline_path, "Spline comparison plot not found. Run price-regs.R first.")
+```{r spline-curve, fig.cap="Spline-implied Filing Rate curve with partial-residual binned means. The curve shows the fitted cubic natural spline component of log rent as a function of raw filing rate (relative to never-filers), with 95\\% confidence band. Points are binned means of partial residuals.", out.width="100%", fig.align="center"}
+spline_path <- file.path(fig_dir, "spline_Filing Rate_curve_raw.png")
+include_fig_if_exists(spline_path, "Spline Filing Rate curve not found. Run price-regs.R first.")
+```
+
+## Spline Robustness: Linear vs Quadratic vs Cubic
+
+To assess sensitivity of the Filing Rate curve shape to the smoothness assumption, we estimate three spline specifications with identical knot placement (concentrated at low filing rates: 1\%, 2.5\%, 5\%, 8\%, 12\%, 20\%):
+
+- **Linear (degree 1):** Piecewise-linear with kinks at each knot. Imposes no curvature within segments; slope changes occur only at knots.
+- **Quadratic (degree 2):** Piecewise-quadratic; allows smooth curvature but constrains the second derivative to be piecewise-constant.
+- **Cubic (degree 3, natural spline):** Piecewise-cubic with natural boundary constraints (linear beyond boundary knots). Most flexible within the interior.
+
+```{r spline-comparison, fig.cap="Comparison of Filing Rate curves across spline degrees. All three specifications use the same knots concentrated at low filing rates. Shaded regions are 95\\% confidence bands (delta method). Points are binned partial residuals from the cubic model.", out.width="100%", fig.align="center"}
+compare_path <- file.path(fig_dir, "spline_Filing Rate_curve_comparison.png")
+include_fig_if_exists(compare_path, "Spline comparison plot not found. Run price-regs.R first.")
+```
+
+## Hump Diagnostic: Never-Filer Composition
+
+The spline curves show a hump near zero filing rate: buildings with very low positive rates appear to have *higher* rents than never-filers. This reflects composition differences --- never-filers are 100\% Altos-sourced (since eviction court records mechanically require a filing), include 25\% single-family homes, and have a median of 1 unit. The barely-ever-filers ((0, 1\%] bin) are large, high-quality apartment complexes (median 46 units, 26\% quality-A).
+
+To test whether the hump is a composition artifact, we re-estimate the cubic spline under progressively richer controls:
+
+1. **Baseline** (no source FE --- as in the main spline)
+2. **+ Source FE** (absorbs Altos vs eviction-court rent level differences)
+3. **+ Source FE + panel tenure** (controls for years observed pre-2019)
+4. **Multi-family only** (drops SFH, which are 25\% of never-filers)
+5. **Multi-family + source + tenure** (all three adjustments)
+
+```{r hump-diagnostic, fig.cap="Hump diagnostic: cubic spline under alternative controls and sample restrictions. Hump attenuates with source FE and disappears when restricting to multi-family buildings.", out.width="100%", fig.align="center"}
+hump_path <- file.path(fig_dir, "spline_hump_diagnostic.png")
+include_fig_if_exists(hump_path, "Hump diagnostic plot not found. Run price-regs.R first.")
 ```
 
 \newpage
@@ -231,6 +261,15 @@ include_fig_if_exists(spline_path, "Spline comparison plot not found. Run price-
 The hedonic regressions estimate the **rent penalty** (or premium) associated with eviction filing intensity, conditional on neighborhood (tract FE) and building observables. Key quantities:
 
 - **Binned model (Model 1):** The coefficient on the 20\%+ bin relative to (5--10\%] gives the rent differential for the highest-evicting buildings vs moderate-evicting buildings *within the same tract and building type*.
-- **Continuous model (Model 2):** A one-unit increase in the long-run filing rate (e.g., from 0 to 1, which spans the entire range) is associated with a $\beta$-log-point change in rent. For typical variation (0 to 0.20), multiply by 0.20.
+- **Continuous model (Model 2):** A one-unit increase in raw filing rate (e.g., from 0 to 1, which spans the entire range) is associated with a $\beta$-log-point change in rent. For typical variation (0 to 0.20), multiply by 0.20.
 - **Tenant composition stability:** If adding tenant composition controls (Models 3--4) substantially attenuates the eviction intensity coefficients, it suggests the rent--eviction relationship partly reflects sorting by demographics. If coefficients are stable, the relationship is robust to observable tenant composition.
-- **Complaint $\times$ high-eviction interaction (Model 5):** Tests whether buildings with both habitability complaints and high eviction rates have differentially lower rents, consistent with a "stigma" or quality channel.
+- **Complaint $\times$ high-eviction interaction (Model 5):** Tests whether buildings with both habitability complaints and high eviction rates have differentially lower rents, consistent with a "Filing Rate" or quality channel.
+
+## Comparison with EB Estimates
+
+The raw long-run filing rate differs from the Empirical Bayes version in `price-regs-eb.R`:
+
+- **Raw rate:** Simple ratio of total filings to total units to years observed. Noisier for small buildings (few units, few years).
+- **EB rate:** Shrinks extreme raw rates toward a prior (city- or ZIP-level mean). More stable for buildings with thin data.
+
+Both should produce qualitatively similar results for large, well-observed buildings. Differences for small buildings reflect the EB shrinkage pulling extreme rates toward the mean.

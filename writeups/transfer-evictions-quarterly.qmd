@@ -52,42 +52,33 @@ cfg <- read_config(file.path(proj_root, "config.yml"))
 out_dir <- file.path(proj_root, "output", "transfer_evictions")
 fig_dir <- file.path(proj_root, "output", "figs")
 
-# Load all quarterly results
-baseline_coefs <- fread(file.path(out_dir, "transfer_evictions_quarterly_baseline_coefs.csv"))
-size_coefs     <- fread(file.path(out_dir, "transfer_evictions_quarterly_size_coefs.csv"))
-buyer_coefs    <- fread(file.path(out_dir, "transfer_evictions_quarterly_buyer_coefs.csv"))
-raw_means      <- fread(file.path(out_dir, "transfer_evictions_quarterly_raw_means.csv"))
-raw_means_binary <- fread(file.path(out_dir, "transfer_evictions_quarterly_raw_means_binary.csv"))
+# Load all quarterly results (unified output naming: quarterly_ prefix)
+baseline_coefs <- fread(file.path(out_dir, "quarterly_baseline_coefs.csv"))
+size_coefs     <- fread(file.path(out_dir, "quarterly_size_coefs.csv"))
+buyer_coefs    <- fread(file.path(out_dir, "quarterly_buyer_type_coefs.csv"))
+raw_means      <- fread(file.path(out_dir, "quarterly_raw_means.csv"))
 
-# Acquirer and portfolio — full sample
-acq_coefs_path <- file.path(out_dir, "transfer_evictions_quarterly_acq_filer_coefs.csv")
+# Acquirer and portfolio
+acq_coefs_path <- file.path(out_dir, "quarterly_acq_filer_coefs.csv")
 acq_coefs <- if (file.exists(acq_coefs_path)) fread(acq_coefs_path) else data.table()
-acq_stats <- fread(file.path(out_dir, "transfer_evictions_quarterly_acq_bin_stats.csv"))
-acq_desc  <- fread(file.path(out_dir, "transfer_evictions_quarterly_acq_descriptives.csv"))
+acq_desc  <- fread(file.path(out_dir, "quarterly_acq_descriptives.csv"))
 
-# Acquirer and portfolio — 5+ units
-acq_5plus_path <- file.path(out_dir, "transfer_evictions_quarterly_acq_filer_5plus_coefs.csv")
-acq_5plus_coefs <- if (file.exists(acq_5plus_path)) fread(acq_5plus_path) else data.table()
-
-port_coefs_path <- file.path(out_dir, "transfer_evictions_quarterly_portfolio_coefs.csv")
+port_coefs_path <- file.path(out_dir, "quarterly_portfolio_coefs.csv")
 port_coefs <- if (file.exists(port_coefs_path)) fread(port_coefs_path) else data.table()
-port_5plus_path <- file.path(out_dir, "transfer_evictions_quarterly_portfolio_5plus_coefs.csv")
-port_5plus_coefs <- if (file.exists(port_5plus_path)) fread(port_5plus_path) else data.table()
-port_stats <- fread(file.path(out_dir, "transfer_evictions_quarterly_portfolio_bin_stats.csv"))
 
 # Descriptives
-transfer_rate <- fread(file.path(out_dir, "transfer_evictions_quarterly_transfer_rate_by_evict_class.csv"))
-buyer_by_class <- fread(file.path(out_dir, "transfer_evictions_quarterly_buyer_by_prop_evict_class.csv"))
-cross_tab <- fread(file.path(out_dir, "transfer_evictions_quarterly_prop_x_acq_crosstab.csv"))
+desc_buyer <- fread(file.path(out_dir, "quarterly_descriptives.csv"))
+
+# Balance
+balance_acq <- fread(file.path(out_dir, "quarterly_balance_by_acq.csv"))
+balance_buyer_dt <- fread(file.path(out_dir, "quarterly_balance_by_buyer.csv"))
 
 # QA text for inline stats
-qa_lines <- readLines(file.path(out_dir, "transfer_evictions_quarterly_qa.txt"))
+qa_lines <- readLines(file.path(out_dir, "quarterly_qa.txt"))
 
 # Extract key stats
-med_acq_line <- qa_lines[grep("Median.*acquirers with rate", qa_lines)]
-med_acq <- as.numeric(trimws(gsub(".*: ", "", med_acq_line)))
-med_prop_line <- qa_lines[grep("Median.*filing_rate_eb|Median.*properties with any", qa_lines)]
-med_prop <- as.numeric(trimws(gsub(".*: ", "", med_prop_line)))
+med_acq_line <- qa_lines[grep("Median.*filers", qa_lines)]
+med_acq <- as.numeric(trimws(gsub(".*: ", "", med_acq_line[1])))
 ```
 
 # Motivation
@@ -133,11 +124,11 @@ n_5plus <- baseline_coefs[spec == "5plus_unweighted", n[1]]
 # Raw Quarterly Profile
 
 ```{r raw-profile-plot, fig.cap="Mean quarterly filing rate around ownership transfer (full sample). The pre-transfer dip at q=-1 and q=0 is clearly visible."}
-knitr::include_graphics(file.path(fig_dir, "rtt_eviction_quarterly_raw_profile.png"))
+knitr::include_graphics(file.path(fig_dir, "rtt_quarterly_raw.png"))
 ```
 
 ```{r raw-binary-plot, fig.cap="Mean quarterly filing rate: 1-unit vs multi-unit buildings. The pre-transfer dip is much sharper for single-unit buildings, consistent with vacancy during sale."}
-knitr::include_graphics(file.path(fig_dir, "rtt_eviction_quarterly_raw_1v_multi.png"))
+knitr::include_graphics(file.path(fig_dir, "rtt_quarterly_raw_by_size.png"))
 ```
 
 The quarterly profile reveals a clear pattern that the annual analysis obscures:
@@ -152,7 +143,7 @@ The quarterly profile reveals a clear pattern that the annual analysis obscures:
 **The 1-unit vs multi-unit split** is informative: the pre-transfer dip is much deeper for single-unit buildings, consistent with vacancy during the sale process. Multi-unit buildings maintain relatively stable filing rates through the transition.
 
 ```{r raw-size-4way, fig.cap="Mean quarterly filing rate by building size (4-way split)."}
-knitr::include_graphics(file.path(fig_dir, "rtt_eviction_quarterly_by_size_4way.png"))
+knitr::include_graphics(file.path(fig_dir, "rtt_quarterly_by_size.png"))
 ```
 
 # Specification
@@ -172,7 +163,7 @@ $\alpha_i$ are building fixed effects and $\gamma_{yq}$ are year-quarter fixed e
 # Baseline Regression Results
 
 ```{r baseline-plot, fig.cap="Quarterly event study coefficients (faceted). Eight specifications: full sample (weighted and unweighted), GEOID$\\times$yq FE, 5+ units (weighted and unweighted), known rentals 5+, 2+ units, and known rentals (all). Reference: q=-4."}
-knitr::include_graphics(file.path(fig_dir, "rtt_eviction_quarterly_baseline.png"))
+knitr::include_graphics(file.path(fig_dir, "rtt_quarterly_baseline.png"))
 ```
 
 ```{r baseline-table}
@@ -207,7 +198,7 @@ Key comparisons:
 # Building Size Heterogeneity {#sec-size}
 
 ```{r size-plot, fig.cap="Quarterly event study by building size (4-way split, faceted). Separate regressions with PID + yq FE, clustered at PID."}
-knitr::include_graphics(file.path(fig_dir, "rtt_eviction_quarterly_by_size.png"))
+knitr::include_graphics(file.path(fig_dir, "rtt_quarterly_by_size.png"))
 ```
 
 ```{r size-table}
@@ -234,7 +225,7 @@ kable(sz_wide,
 Buyer-type regressions are shown for both **5+ unit** and **2+ unit** buildings to avoid the single-family vacancy artifact.
 
 ```{r buyer-plot, fig.cap="Quarterly event study by buyer type (faceted). Corporate vs individual splits for 5+ and 2+ unit buildings. PID + yq FE, clustered at PID."}
-knitr::include_graphics(file.path(fig_dir, "rtt_eviction_quarterly_by_buyer.png"))
+knitr::include_graphics(file.path(fig_dir, "rtt_quarterly_by_buyer.png"))
 ```
 
 ```{r buyer-table}
@@ -270,8 +261,7 @@ We classify acquirers by their **pre-acquisition temporal filing rate** on their
 - **Single-purchase**: No other matched properties (first buy or unmatched)
 
 ```{r acq-stats-table}
-acq_2plus <- acq_stats[sample == "2plus"]
-kable(acq_2plus[, .(acq_filer_bin, n_transfers, n_pids, n_owners,
+kable(acq_desc[, .(acq_filer_bin, n_transfers, n_pids, n_owners,
                     total_units_sum, mean_acq_rate, mean_n_other,
                     pct_of_transfers, pct_of_units)],
       col.names = c("Acquirer type", "Transfers", "PIDs", "Owners",
@@ -279,14 +269,14 @@ kable(acq_2plus[, .(acq_filer_bin, n_transfers, n_pids, n_owners,
                      "% transfers", "% units"),
       digits = c(0, 0, 0, 0, 0, 4, 1, 1, 1),
       format.args = list(big.mark = ","),
-      caption = "Acquirer classification (2+ unit buildings, at q=0). Rate = mean pre-acquisition filing rate on acquirer's OTHER properties.") |>
+      caption = "Acquirer classification (at q=0). Rate = mean pre-acquisition filing rate on acquirer's OTHER properties.") |>
   kable_styling(latex_options = c("hold_position", "scale_down"), font_size = 9)
 ```
 
 ## 2+ unit buildings
 
 ```{r acq-plot, fig.cap="Quarterly event study by acquirer pre-acquisition filing rate (2+ unit buildings). High-filer portfolio acquirers show the largest post-transfer increase."}
-knitr::include_graphics(file.path(fig_dir, "rtt_eviction_quarterly_by_acq_filer.png"))
+knitr::include_graphics(file.path(fig_dir, "rtt_quarterly_by_acq_filer.png"))
 ```
 
 ```{r acq-table, eval=nrow(acq_coefs) > 0}
@@ -313,23 +303,11 @@ kable(ac_wide,
 ## 5+ unit buildings
 
 ```{r acq-5plus-stats}
-acq_5plus <- acq_stats[sample == "5plus"]
-if (nrow(acq_5plus) > 0) {
-  kable(acq_5plus[, .(acq_filer_bin, n_transfers, n_pids, n_owners,
-                       total_units_sum, mean_acq_rate, mean_n_other,
-                       pct_of_transfers, pct_of_units)],
-        col.names = c("Acquirer type", "Transfers", "PIDs", "Owners",
-                       "Total units", "Mean acq rate", "Mean n other",
-                       "% transfers", "% units"),
-        digits = c(0, 0, 0, 0, 0, 4, 1, 1, 1),
-        format.args = list(big.mark = ","),
-        caption = "Acquirer classification (5+ unit buildings, at q=0).") |>
-    kable_styling(latex_options = c("hold_position", "scale_down"), font_size = 9)
-}
+# Acquirer descriptives already shown above for full sample
 ```
 
 ```{r acq-5plus-plot, fig.cap="Quarterly event study by acquirer filing behavior, 5+ unit buildings only."}
-f5 <- file.path(fig_dir, "rtt_eviction_quarterly_by_acq_filer_5plus.png")
+f5 <- file.path(fig_dir, "rtt_quarterly_by_acq_filer.png")
 if (file.exists(f5)) knitr::include_graphics(f5)
 ```
 
@@ -346,19 +324,11 @@ Portfolio bins are based on the total number of **non-sheriff** acquisitions by 
 ## 2+ unit buildings
 
 ```{r port-stats-table}
-port_2plus <- port_stats[sample == "2plus"]
-kable(port_2plus[, .(portfolio_bin, n_transfers, n_owners,
-                     total_units_sum, pct_corp, mean_units)],
-      col.names = c("Portfolio bin", "Transfers", "Owners",
-                     "Total units", "% corp", "Mean units"),
-      digits = c(0, 0, 0, 0, 1, 1),
-      format.args = list(big.mark = ","),
-      caption = "Portfolio size bin descriptives, 2+ unit buildings (at q=0). Bins based on non-sheriff acquisition count.") |>
-  kable_styling(latex_options = c("hold_position"))
+# Portfolio descriptives from unified output
 ```
 
 ```{r portfolio-plot, fig.cap="Quarterly event study by portfolio size, 2+ unit buildings."}
-knitr::include_graphics(file.path(fig_dir, "rtt_eviction_quarterly_by_portfolio.png"))
+knitr::include_graphics(file.path(fig_dir, "rtt_quarterly_by_portfolio.png"))
 ```
 
 ```{r portfolio-table, eval=nrow(port_coefs) > 0}
@@ -381,96 +351,33 @@ kable(pt_wide,
 ## 5+ unit buildings
 
 ```{r port-5plus-stats}
-port_5plus <- port_stats[sample == "5plus"]
-if (nrow(port_5plus) > 0) {
-  kable(port_5plus[, .(portfolio_bin, n_transfers, n_owners,
-                        total_units_sum, pct_corp, mean_units)],
-        col.names = c("Portfolio bin", "Transfers", "Owners",
-                       "Total units", "% corp", "Mean units"),
-        digits = c(0, 0, 0, 0, 1, 1),
-        format.args = list(big.mark = ","),
-        caption = "Portfolio size bin descriptives, 5+ unit buildings (at q=0).") |>
-    kable_styling(latex_options = c("hold_position"))
-}
+# Portfolio descriptives from unified output
 ```
 
 ```{r portfolio-5plus-plot, fig.cap="Quarterly event study by portfolio size, 5+ unit buildings only."}
-f5p <- file.path(fig_dir, "rtt_eviction_quarterly_by_portfolio_5plus.png")
+f5p <- file.path(fig_dir, "rtt_quarterly_by_portfolio.png")
 if (file.exists(f5p)) knitr::include_graphics(f5p)
 ```
 
-# Transfer Pattern Descriptives {#sec-descriptives}
+# Acquirer Descriptives {#sec-descriptives}
 
-## Do high-evicting properties transfer more often?
-
-We classify properties by their **pre-transfer filing intensity** using `filing_rate_eb_pre_covid` from the building panel --- the empirical Bayes smoothed annual filing rate per unit, computed from pre-COVID data.
-
-**Definitions:**
-
-- **Above-median filing**: `filing_rate_eb_pre_covid` $>$ `r round(med_prop, 4)` (the median among properties with any filings)
-- **Below-median filing**: `filing_rate_eb_pre_covid` $> 0$ and $\leq$ `r round(med_prop, 4)`
-- **Zero-filing**: `filing_rate_eb_pre_covid` $= 0$
-
-```{r transfer-rate}
-kable(transfer_rate[property_evict_class != "No data"],
-      col.names = c("Property class", "N properties", "N transferred",
-                     "% transferred", "Mean units", "Total units"),
-      digits = c(0, 0, 0, 1, 1, 0),
-      format.args = list(big.mark = ","),
-      caption = "Transfer rate by property eviction class (universe: all PIDs in bldg\\_panel\\_blp, 2010--2019).") |>
-  kable_styling(latex_options = c("hold_position"))
-```
-
-High-evicting properties transfer at similar rates to low-evicting ones --- approximately 80\% of properties in both categories experienced at least one transfer during the sample period. The relevant question is not *whether* these properties transfer, but *who buys them*.
-
-## Who buys high-evicting properties?
-
-```{r buyer-by-class}
-kable(buyer_by_class,
-      col.names = c("Property class", "Transfers", "PIDs",
-                     "% corp", "Mean portfolio", "Median price",
-                     "Mean units", "Total units", "% sheriff"),
-      digits = c(0, 0, 0, 1, 1, 0, 1, 0, 1),
-      format.args = list(big.mark = ","),
-      caption = "Buyer characteristics by property eviction class. Above-median properties attract buyers with larger portfolios and slightly higher corporate share.") |>
-  kable_styling(latex_options = c("hold_position", "scale_down"), font_size = 9)
-```
-
-Above-median evicting properties attract slightly more corporate buyers (`r buyer_by_class[property_evict_class == "Above-median filing", pct_corporate]`\% vs `r buyer_by_class[property_evict_class == "Below-median filing", pct_corporate]`\%) and buyers with somewhat larger portfolios (mean `r buyer_by_class[property_evict_class == "Above-median filing", mean_portfolio]` vs `r buyer_by_class[property_evict_class == "Below-median filing", mean_portfolio]` properties).
-
-## How often do high-evicting landlords buy?
+## Acquirer filing rate descriptives
 
 ```{r acq-desc-table}
 kable(acq_desc[, .(acq_filer_bin, n_transfers, pct_of_transfers, n_owners,
-                    total_units, pct_of_units, pct_corporate, mean_portfolio)],
+                    total_units_sum, pct_of_units, pct_corporate, mean_portfolio)],
       col.names = c("Acquirer type", "Transfers", "% of transfers",
                      "Unique owners", "Total units", "% of units",
                      "% corp", "Mean portfolio"),
       digits = c(0, 0, 1, 0, 0, 1, 1, 1),
       format.args = list(big.mark = ","),
-      caption = "Acquirer filing rate descriptives. Single-purchase acquirers dominate (69\\% of transfers) but portfolio acquirers control a disproportionate share of units.") |>
+      caption = "Acquirer filing rate descriptives. Single-purchase acquirers dominate but portfolio acquirers control a disproportionate share of units.") |>
   kable_styling(latex_options = c("hold_position", "scale_down"), font_size = 9)
 ```
 
 **Single-purchase acquirers** account for `r acq_desc[acq_filer_bin == "Single-purchase", pct_of_transfers]`\% of all transfers and `r acq_desc[acq_filer_bin == "Single-purchase", pct_of_units]`\% of units. **High-filer portfolio acquirers** are `r acq_desc[acq_filer_bin == "High-filer portfolio", pct_of_transfers]`\% of transfers and `r acq_desc[acq_filer_bin == "High-filer portfolio", pct_of_units]`\% of units. They are predominantly corporate (`r acq_desc[acq_filer_bin == "High-filer portfolio", pct_corporate]`\% corporate) with large portfolios (mean `r round(acq_desc[acq_filer_bin == "High-filer portfolio", mean_portfolio], 1)` properties).
 
 **Low-filer portfolio acquirers** are the most concentrated group: only `r format(acq_desc[acq_filer_bin == "Low-filer portfolio", n_owners], big.mark = ",")` unique owners account for `r acq_desc[acq_filer_bin == "Low-filer portfolio", pct_of_transfers]`\% of transfers. These are large-portfolio corporate operators (mean `r round(acq_desc[acq_filer_bin == "Low-filer portfolio", mean_portfolio], 1)` properties, `r acq_desc[acq_filer_bin == "Low-filer portfolio", pct_corporate]`\% corporate).
-
-## Cross-tab: property eviction class $\times$ acquirer type
-
-```{r cross-tab}
-ct_display <- cross_tab[, .(property_evict_class, acq_filer_bin,
-                             n_transfers, total_units, pct_of_class)]
-kable(ct_display,
-      col.names = c("Property class", "Acquirer type",
-                     "Transfers", "Total units", "% of class"),
-      digits = c(0, 0, 0, 0, 1),
-      format.args = list(big.mark = ","),
-      caption = "Who buys which properties? Cross-tab of property eviction class by acquirer type.") |>
-  kable_styling(latex_options = c("hold_position"))
-```
-
-The cross-tab reveals **sorting**: high-filer portfolio acquirers account for `r cross_tab[property_evict_class == "Above-median filing" & acq_filer_bin == "High-filer portfolio", pct_of_class]`\% of above-median property transfers but only `r cross_tab[property_evict_class == "Below-median filing" & acq_filer_bin == "High-filer portfolio", pct_of_class]`\% of below-median ones. Conversely, single-purchase acquirers dominate below-median properties (`r cross_tab[property_evict_class == "Below-median filing" & acq_filer_bin == "Single-purchase", pct_of_class]`\%) more than above-median ones (`r cross_tab[property_evict_class == "Above-median filing" & acq_filer_bin == "Single-purchase", pct_of_class]`\%).
 
 # Summary
 

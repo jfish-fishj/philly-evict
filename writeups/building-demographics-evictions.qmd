@@ -60,8 +60,8 @@ suppressPackageStartupMessages({
 })
 source("r/config.R")
 cfg <- read_config()
-tab_dir <- p_out(cfg, "tables")
-fig_dir <- p_out(cfg, "figs")
+tab_dir <- p_out(cfg, "building-demographics-evictions", "tables")
+fig_dir <- p_out(cfg, "building-demographics-evictions", "figs")
 # Helper: absolute path for include_graphics (which ignores root.dir)
 proj_root <- here::here()
 # Helper: read a .tex table and wrap in adjustbox so it fits page width

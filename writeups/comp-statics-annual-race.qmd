@@ -1,0 +1,238 @@
+---
+title: "Annual Comparative Statics: Racial Composition and Complaint Filing"
+author: "Philly Evictions Project"
+date: today
+format:
+  pdf:
+    pdf-engine: xelatex
+    documentclass: article
+    geometry: margin=0.75in
+    fontsize: 10pt
+    keep-tex: true
+    number-sections: true
+    toc: true
+    include-in-header:
+      text: |
+        \usepackage{booktabs}
+        \usepackage{longtable}
+        \usepackage{adjustbox}
+        \usepackage{pdflscape}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 10,
+  fig.height = 6,
+  dpi = 300
+)
+```
+
+# Overview
+
+This writeup presents annual-frequency complaint regressions using `infousa_pct_black` as a proxy for building racial composition.
+It addresses limitations of the quarterly analysis: InfoUSA demographics are annual, so quarterly/monthly repetition inflates apparent precision.
+All models use **Poisson fixed-effects** (`fepois`) with `offset = log(total_units)` to model complaint **rates** per unit.
+As of the retaliatory refactor, this is the canonical location for complaint-suppression evidence; those blocks were removed from `writeups/retaliatory-evictions.qmd`.
+
+**Inputs:**
+
+- `bldg_panel_blp` (PID $\times$ year): demographics, building observables, rent, filing rates
+- `building_data` (annual): complaints, permits, violations
+
+**Key design choices:**
+
+- **Pre-COVID sample:** year range 2007--2019
+- **Lagged race:** all specs use `pct_black_l1` (one-year lag) to address simultaneity
+- Sample filter: `!is.na(infousa_pct_black)` only (not the stricter `tenant_comp_missing == 0`)
+- Maintenance controls: L1--L3 lagged repair-permit flow rates per unit
+- Severe violation controls: L1--L3 lagged hazardous + unsafe violation rates per unit
+- Clustering: PID level throughout
+
+```{r load-helpers}
+suppressPackageStartupMessages({
+  library(data.table)
+  library(knitr)
+  library(kableExtra)
+})
+qmd_path <- knitr::current_input(dir = TRUE)
+proj_root <- normalizePath(file.path(dirname(qmd_path), ".."), winslash = "/", mustWork = FALSE)
+source(file.path(proj_root, "r", "config.R"))
+old_wd <- getwd()
+setwd(proj_root)
+on.exit(setwd(old_wd), add = TRUE)
+cfg <- read_config(file.path(proj_root, "config.yml"))
+tab_dir <- normalizePath(file.path(proj_root, "output", "comp-statics-annual-race", "tables"), winslash = "/", mustWork = FALSE)
+fig_dir <- normalizePath(file.path(proj_root, "output", "comp-statics-annual-race", "figs"), winslash = "/", mustWork = FALSE)
+
+include_tex_table <- function(path, landscape = FALSE) {
+  if (!file.exists(path)) { cat("Table not found:", path); return(invisible(NULL)) }
+  lines <- readLines(path)
+  txt <- paste(lines, collapse = "\n")
+  has_float <- grepl("\\\\begin\\{table\\}", txt)
+  if (landscape) cat("\\begin{landscape}\n")
+  if (has_float) {
+    is_float <- grepl("^\\s*\\\\begin\\{table\\}|^\\s*\\\\end\\{table\\}", lines)
+    is_meta <- grepl("^\\s*\\\\caption|^\\s*\\\\label|^\\s*\\\\centering", lines)
+    cap_lines <- trimws(lines[is_meta])
+    inner <- lines[!is_float & !is_meta]
+    cat("\\begin{table}[htbp]\n\\centering\n")
+    cat(cap_lines, sep = "\n")
+    cat("\n{\\footnotesize\n\\begin{adjustbox}{max width=\\linewidth}\n")
+    cat(inner, sep = "\n")
+    cat("\n\\end{adjustbox}\n}\n\\end{table}\n")
+  } else {
+    cat("{\\footnotesize\n\\begin{adjustbox}{max width=\\linewidth}\n")
+    cat(lines, sep = "\n")
+    cat("\n\\end{adjustbox}\n}\n")
+  }
+  if (landscape) cat("\\end{landscape}\n")
+}
+
+read_csv_safe <- function(path) {
+  if (!file.exists(path)) return(data.table())
+  fread(path)
+}
+```
+
+# Variance Decomposition
+
+How much of the variation in `pct_black` is between-building versus within-building over time?
+If PID FE absorb nearly all variation, then within-building specs will have little identifying power.
+
+```{r vardecomp-table}
+vd <- read_csv_safe(file.path(tab_dir, "compstats_annual_variance_decomposition.csv"))
+if (nrow(vd)) {
+  vd_show <- vd[, .(
+    Variable = variable,
+    N = n_obs,
+    PIDs = n_pid,
+    `Overall SD` = round(overall_sd, 4),
+    `Between-PID SD` = round(between_pid_sd, 4),
+    `Within-PID SD` = round(within_pid_sd, 4),
+    `R2 (PID FE)` = round(r2_pid, 4),
+    `R2 (GEOID x Year)` = round(r2_geoid_year, 4),
+    `R2 (PID + GEOID x Year)` = round(r2_pid_geoid_year, 4)
+  )]
+  kable(vd_show, booktabs = TRUE,
+        caption = "Variance decomposition of demographic composition variables") |>
+    kable_styling(latex_options = c("hold_position", "scale_down"), font_size = 9)
+} else {
+  cat("Variance decomposition table not available.")
+}
+```
+
+**Interpretation:** If `R2 (PID FE)` is very high (e.g., $> 0.90$), then racial composition is essentially a building-level fixed characteristic, and within-building variation is limited.
+The within-PID SD relative to overall SD indicates how much time-series variation is available for identification under PID FE.
+
+# Complaint Regression Ladder
+
+Nine specs in a single table, progressing from cross-sectional to within-building identification. All use `pct_black_l1` (lagged race). Maintenance and severe-violation controls use L1--L3 lagged flow rates per unit.
+
+**Cross-sectional (full sample):**
+
+- **Spec 1:** `pct_black_l1 | year + unit_bin_fine` --- raw association
+- **Spec 2:** `pct_black_l1 + log_total_area | year + tract + bldg obs` --- building + neighborhood, no maint/severity
+- **Spec 3:** Spec 2 + `maint L1--L3 + severity L1--L3` --- adds maintenance/severity lags
+
+**Rent subsample:**
+
+- **Spec 4:** `pct_black_l1 + log_total_area + filing_rate + log_med_rent | ...` --- rent + filing only
+- **Spec 5:** Spec 3 RHS + `filing_rate + log_med_rent` --- all controls
+
+**Within-building (PID + year FE):**
+
+- **Spec 6:** `pct_black_l1 | PID + year` --- raw within-building
+- **Spec 7:** `pct_black_l1 + maint L1--L3 + severity L1--L3 | PID + year` --- within-building + lags
+
+**Within-building (PID + census_tract $\times$ year FE):**
+
+- **Spec 8:** `pct_black_l1 | PID + tract^year` --- within-building + market-year shocks
+- **Spec 9:** `pct_black_l1 + maint L1--L3 + severity L1--L3 | PID + tract^year` --- within-building + market-year + lags
+
+`log_total_area` is dropped from PID FE specs (collinear with building FE). The key diagnostic: does the `pct_black_l1` coefficient survive PID FE and tract$\times$year absorbers?
+
+```{r ladder-tex, results='asis'}
+fe_tex <- file.path(tab_dir, "compstats_annual_fe_ladder_etable.tex")
+if (file.exists(fe_tex)) {
+  include_tex_table(fe_tex, landscape = TRUE)
+} else {
+  cat("Regression ladder TeX table not available.")
+}
+```
+
+```{r ladder-coefs}
+fe_coefs <- read_csv_safe(file.path(tab_dir, "compstats_annual_fe_ladder_coefficients.csv"))
+if (nrow(fe_coefs)) {
+  fe_key <- fe_coefs[term == "pct_black_l1", .(
+    Model = model, Term = term,
+    Estimate = round(estimate, 4),
+    SE = round(std_error, 4),
+    `p-value` = signif(p_value, 3)
+  )]
+  kable(fe_key, booktabs = TRUE,
+        caption = "pct\\_black\\_l1 coefficient across specifications") |>
+    kable_styling(latex_options = "hold_position")
+}
+```
+
+# Coverage Diagnostics
+
+```{r coverage-table}
+cov <- read_csv_safe(file.path(tab_dir, "compstats_annual_coverage_diagnostics.csv"))
+if (nrow(cov)) {
+  cov_show <- cov[, .(
+    Year = year,
+    `N obs` = n_obs,
+    `N PIDs` = n_pid,
+    `pct_black` = round(share_pct_black_nonmiss, 3),
+    `pct_female` = round(share_pct_female_nonmiss, 3),
+    `log rent` = round(share_log_med_rent_nonmiss, 3),
+    `log area` = round(share_log_total_area_nonmiss, 3),
+    `Mean sev. comp.` = round(mean_total_severe_complaints, 4),
+    `Mean units` = round(mean_total_units, 2)
+  )]
+  kable(cov_show, booktabs = TRUE,
+        caption = "Year-by-year coverage: share of PID-years with non-missing values") |>
+    kable_styling(latex_options = c("hold_position", "scale_down"), font_size = 9)
+}
+```
+
+# Sample Balance
+
+Are buildings with missing demographics systematically different from those with observed demographics?
+
+```{r balance-table}
+bal <- read_csv_safe(file.path(tab_dir, "compstats_annual_sample_balance.csv"))
+if (nrow(bal)) {
+  bal_show <- bal[, .(
+    `Has demog` = fifelse(has_demog == 1L, "Yes", "No"),
+    `N obs` = n_obs,
+    `N PIDs` = n_pid,
+    `Mean units` = round(mean_total_units, 2),
+    `Mean complaints` = round(mean_total_complaints, 4),
+    `Mean severe` = round(mean_total_severe_complaints, 4),
+    `Mean filing rate` = round(mean_filing_rate_annual, 4),
+    `Share apartment` = round(share_apartment, 3)
+  )]
+  kable(bal_show, booktabs = TRUE,
+        caption = "Sample balance: buildings with vs.~without InfoUSA demographics") |>
+    kable_styling(latex_options = "hold_position")
+}
+```
+
+# QA Summary
+
+```{r qa-txt, results='asis'}
+qa_path <- file.path(tab_dir, "compstats_annual_qa.txt")
+if (file.exists(qa_path)) {
+  qa <- readLines(qa_path)
+  cat("\\begin{verbatim}\n")
+  cat(qa, sep = "\n")
+  cat("\n\\end{verbatim}\n")
+} else {
+  cat("QA file not available.")
+}
+```

@@ -1,0 +1,490 @@
+% Options for packages loaded elsewhere
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\PassOptionsToPackage{dvipsnames,svgnames,x11names}{xcolor}
+%
+\documentclass[
+  11pt,
+]{article}
+\usepackage{xcolor}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\setcounter{secnumdepth}{5}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+% Make \paragraph and \subparagraph free-standing
+\makeatletter
+\ifx\paragraph\undefined\else
+  \let\oldparagraph\paragraph
+  \renewcommand{\paragraph}{
+    \@ifstar
+      \xxxParagraphStar
+      \xxxParagraphNoStar
+  }
+  \newcommand{\xxxParagraphStar}[1]{\oldparagraph*{#1}\mbox{}}
+  \newcommand{\xxxParagraphNoStar}[1]{\oldparagraph{#1}\mbox{}}
+\fi
+\ifx\subparagraph\undefined\else
+  \let\oldsubparagraph\subparagraph
+  \renewcommand{\subparagraph}{
+    \@ifstar
+      \xxxSubParagraphStar
+      \xxxSubParagraphNoStar
+  }
+  \newcommand{\xxxSubParagraphStar}[1]{\oldsubparagraph*{#1}\mbox{}}
+  \newcommand{\xxxSubParagraphNoStar}[1]{\oldsubparagraph{#1}\mbox{}}
+\fi
+\makeatother
+
+
+\usepackage{longtable,booktabs,array}
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
+\usepackage{graphicx}
+\makeatletter
+\newsavebox\pandoc@box
+\newcommand*\pandocbounded[1]{% scales image to fit in text height/width
+  \sbox\pandoc@box{#1}%
+  \Gscale@div\@tempa{\textheight}{\dimexpr\ht\pandoc@box+\dp\pandoc@box\relax}%
+  \Gscale@div\@tempb{\linewidth}{\wd\pandoc@box}%
+  \ifdim\@tempb\p@<\@tempa\p@\let\@tempa\@tempb\fi% select the smaller of both
+  \ifdim\@tempa\p@<\p@\scalebox{\@tempa}{\usebox\pandoc@box}%
+  \else\usebox{\pandoc@box}%
+  \fi%
+}
+% Set default figure placement to htbp
+\def\fps@figure{htbp}
+\makeatother
+
+
+
+
+
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+
+
+ 
+
+
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{wrapfig}
+\usepackage{float}
+\usepackage{colortbl}
+\usepackage{pdflscape}
+\usepackage{tabu}
+\usepackage{threeparttable}
+\usepackage{threeparttablex}
+\usepackage[normalem]{ulem}
+\usepackage{makecell}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{adjustbox}
+\makeatletter
+\@ifpackageloaded{caption}{}{\usepackage{caption}}
+\AtBeginDocument{%
+\ifdefined\contentsname
+  \renewcommand*\contentsname{Table of contents}
+\else
+  \newcommand\contentsname{Table of contents}
+\fi
+\ifdefined\listfigurename
+  \renewcommand*\listfigurename{List of Figures}
+\else
+  \newcommand\listfigurename{List of Figures}
+\fi
+\ifdefined\listtablename
+  \renewcommand*\listtablename{List of Tables}
+\else
+  \newcommand\listtablename{List of Tables}
+\fi
+\ifdefined\figurename
+  \renewcommand*\figurename{Figure}
+\else
+  \newcommand\figurename{Figure}
+\fi
+\ifdefined\tablename
+  \renewcommand*\tablename{Table}
+\else
+  \newcommand\tablename{Table}
+\fi
+}
+\@ifpackageloaded{float}{}{\usepackage{float}}
+\floatstyle{ruled}
+\@ifundefined{c@chapter}{\newfloat{codelisting}{h}{lop}}{\newfloat{codelisting}{h}{lop}[chapter]}
+\floatname{codelisting}{Listing}
+\newcommand*\listoflistings{\listof{codelisting}{List of Listings}}
+\makeatother
+\makeatletter
+\makeatother
+\makeatletter
+\@ifpackageloaded{caption}{}{\usepackage{caption}}
+\@ifpackageloaded{subcaption}{}{\usepackage{subcaption}}
+\makeatother
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  pdftitle={Severe Complaint-Maintenance Diagnostics},
+  pdfauthor={Philly Evictions Project},
+  colorlinks=true,
+  linkcolor={blue},
+  filecolor={Maroon},
+  citecolor={Blue},
+  urlcolor={Blue},
+  pdfcreator={LaTeX via pandoc}}
+
+
+\title{Severe Complaint-Maintenance Diagnostics}
+\author{Philly Evictions Project}
+\date{2026-02-26}
+\begin{document}
+\maketitle
+
+\renewcommand*\contentsname{Table of contents}
+{
+\hypersetup{linkcolor=}
+\setcounter{tocdepth}{3}
+\tableofcontents
+}
+
+\section{Overview}\label{overview}
+
+This writeup isolates the maintenance-complaint relationship using
+\textbf{severe complaints only}, before returning to demographic
+regressions.
+
+The underlying script is \texttt{r/severe-maintenance-diagnostics.R}.
+
+Design choices in this version:
+
+\begin{itemize}
+\tightlist
+\item
+  Outcome: \texttt{total\_severe\_complaints} (quarterly count)
+\item
+  Panel + controls source: quarterly rental panel
+  (\texttt{building\_data\_rental\_quarter}) with annual controls merged
+  from \texttt{bldg\_panel\_blp} (\texttt{PID\ x\ year})
+\item
+  Maintenance flow baseline: repair-ish permit counts only
+  (\texttt{electrical}, \texttt{plumbing}, \texttt{mechanical},
+  \texttt{fire\_suppression}); a broad flow variant adds
+  \texttt{building\_permit\_count} for robustness
+\item
+  Maintenance scaling: per-unit rates using annual \texttt{total\_units}
+  (\texttt{maint\_rate\_*\ =\ permit\_flow\ /\ total\_units\_ann}, with
+  \texttt{total\_units\_ann} floored at 1)
+\item
+  Lag/lead maintenance variables: \texttt{t-1} flow, \texttt{t-1:t-4}
+  average lagged flow, and leads (\texttt{t+1}, \texttt{t+2}) for
+  falsification
+\item
+  Rolling maintenance stock: EWMA of \textbf{lagged} repair flow
+  (\texttt{maint\_stock\_lag}) within \texttt{PID}, then scaled by units
+  (\texttt{maint\_stock\_lag\_rate}); default decay parameter is
+  \texttt{lambda\ =\ 0.9} (CLI-overridable)
+\item
+  Unit controls: nonlinear spline in \texttt{log(1\ +\ total\_units)}
+  (\texttt{df\ =\ 4}) plus deterministic fine unit bins (\texttt{1},
+  \texttt{2}, \ldots, \texttt{10}, \texttt{11-12}, \texttt{13-15},
+  \ldots, \texttt{151-200}, \texttt{201+}, \texttt{Unknown}) used in the
+  stock-focused specifications
+\item
+  Quality controls: coarsened \texttt{A/B/C/D/E/Other} grades (dropping
+  \texttt{+/-}) throughout the diagnostics
+\item
+  Estimation: \texttt{fepois} with cluster-robust SEs by \texttt{PID},
+  weighted by annual units
+\item
+  Diagnostics added: lead falsification, PID+period FE (within-building)
+  regressions, support tables for quality x fine-unit-bin cells
+\item
+  Parcel-controls diagnostics: the default fast-mode stock table
+  includes a parcel-controls stock spec with \texttt{log(total\_area)}
+  (no market-value control)
+\item
+  Runtime note: \texttt{r/severe-maintenance-diagnostics.R} defaults to
+  \texttt{-\/-fast\_mode=TRUE}, which fits and writes tables in batches,
+  skips the slowest stock-quality interaction variants /
+  rich-interaction or rent variants / PID FE variants, and omits the
+  partial-correlation figure; use \texttt{-\/-fast\_mode=FALSE} for the
+  full suite
+\end{itemize}
+
+\section{Sample Diagnostics}\label{sample-diagnostics}
+
+\begin{longtable}[t]{rrrrrrrrrrrr}
+\caption{\label{tab:sample-diag}Severe-maintenance diagnostic sample summary}\\
+\toprule
+n\_obs & n\_pid & n\_obs\_controls\_matched & n\_pid\_controls\_matched & n\_obs\_controls\_matched\_rent & n\_pid\_controls\_matched\_rent & share\_nonzero\_severe & share\_zero\_curr\_maint & share\_zero\_l1\_maint & share\_nonmiss\_log\_total\_area\_match & share\_nonmiss\_log\_market\_value\_match & share\_nonmiss\_log\_med\_rent\_match\\
+\midrule
+4654032 & 193918 & 4570092 & 192043 & 0 & 0 & 0.016 & 0.9901 & 0.9906 & 0.9634878 & 0.8225191 & 0\\
+\bottomrule
+\end{longtable}
+
+\subsection{Support By Quality And Unit
+Bin}\label{support-by-quality-and-unit-bin}
+
+These diagnostics are included to assess whether stock-by-quality
+interactions are identified on meaningful support (especially after
+restricting those interaction specs to the controls-matched subset).
+
+\begingroup\fontsize{8}{10}\selectfont
+
+\begin{longtable}[t]{lrrrrrrrr}
+\caption{\label{tab:support-quality}Support diagnostics by coarsened quality grade (full severe-diagnostic sample)}\\
+\toprule
+quality\_grade\_abcde & n\_obs & n\_pid & controls\_match\_share & severe\_pos\_share & stock\_pos\_share & stock\_p90 & stock\_p99 & units\_weight\_sum\\
+\midrule
+A & 23308 & 1118 & 1.000 & 0.0381 & 0.3609 & 0.8968 & 3.3935 & 590256\\
+B & 442668 & 19091 & 1.000 & 0.0160 & 0.0982 & 0.0000 & 2.1397 & 2089792\\
+C & 3965788 & 165697 & 1.000 & 0.0163 & 0.0666 & 0.0000 & 1.6111 & 6254828\\
+D & 41128 & 1714 & 1.000 & 0.0131 & 0.0548 & 0.0000 & 1.5390 & 46184\\
+E & 4060 & 170 & 1.000 & 0.0219 & 0.0204 & 0.0000 & 0.8488 & 5524\\
+\addlinespace
+Other & 177080 & 8869 & 0.526 & 0.0069 & 0.0578 & 0.0000 & 3.2400 & 381780\\
+\bottomrule
+\end{longtable}
+\endgroup{}
+
+\begingroup\fontsize{8}{10}\selectfont
+
+\begin{longtable}[t]{lrrrrrrr}
+\caption{\label{tab:support-thin-cells}Thin-cell summary for quality-grade x fine-unit-bin cells (controls-matched subset used in stock-quality interaction specs)}\\
+\toprule
+quality\_grade\_abcde & n\_cells & cells\_lt50 & cells\_lt200 & cells\_zero\_stock & median\_n & min\_n & max\_n\\
+\midrule
+A & 21 & 0 & 3 & 0 & 604 & 84 & 4968\\
+B & 21 & 0 & 0 & 0 & 4576 & 336 & 155576\\
+C & 21 & 0 & 0 & 0 & 3436 & 352 & 3139912\\
+D & 11 & 7 & 9 & 7 & 48 & 24 & 40200\\
+E & 5 & 2 & 3 & 2 & 192 & 24 & 3364\\
+\addlinespace
+Other & 21 & 1 & 6 & 1 & 376 & 48 & 68900\\
+\bottomrule
+\end{longtable}
+\endgroup{}
+
+\section{Main Severe-Maintenance
+Diagnostics}\label{main-severe-maintenance-diagnostics}
+
+This is the default \textbf{stock-focused} table from fast mode. It
+reports three rolling-stock specifications:
+
+\begin{itemize}
+\tightlist
+\item
+  baseline stock spec with nonlinear unit controls + period and coarse
+  quality-grade FE
+\item
+  stock spec with fine unit-bin FE
+\item
+  parcel-controls stock spec with \texttt{log(total\_area)} plus
+  \texttt{year\_blt\_decade}, coarse quality-grade FE, fine unit-bin FE,
+  and period FE
+\end{itemize}
+
+In full mode (\texttt{-\/-fast\_mode=FALSE}), this table expands to
+include stock-by-quality interaction and richer-control variants.
+
+\begin{adjustbox}{max width=\textwidth}
+
+\begingroup
+\centering
+\begin{tabular}{lccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{3}{c}{total\_severe\_complaints}\\
+   Model:                     & (1)            & (2)            & (3)\\  
+   \midrule
+   \emph{Variables}\\
+   maint\_stock\_lag\_rate    & -0.0115        & -0.0369        & -0.1919$^{**}$\\   
+                              & (0.0551)       & (0.0638)       & (0.0791)\\   
+   units\_ns\_1               & 0.2671$^{***}$ & 0.7319$^{***}$ &   \\   
+                              & (0.0180)       & (0.2836)       &   \\   
+   log\_total\_area\_raw      &                &                & 0.2337$^{***}$\\   
+                              &                &                & (0.0463)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe                 & Yes            & Yes            & Yes\\  
+   quality\_grade\_abcde      & Yes            & Yes            & Yes\\  
+   unit\_bin\_fine            &                & Yes            & Yes\\  
+   year\_blt\_decade          &                &                & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations               & 4,654,032      & 4,654,032      & 4,403,228\\  
+   \midrule \midrule
+   \multicolumn{4}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{4}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+
+
+\end{adjustbox}
+
+\section{Auxiliary Flow Diagnostics}\label{auxiliary-flow-diagnostics}
+
+This section holds the \textbf{auxiliary flow-based diagnostics}
+(current and lagged flows, plus broad-permit proxy), which are useful
+for reverse-causality checks but are not the primary stock-based
+specifications.
+
+\begin{itemize}
+\tightlist
+\item
+  contemporaneous maintenance flow
+\item
+  lagged flow (\texttt{t-1}) and rolling lagged flow average
+  (\texttt{t-1} to \texttt{t-4})
+\item
+  joint current + stock specification
+\item
+  broad permit proxy comparison
+\end{itemize}
+
+\begin{adjustbox}{max width=\textwidth}
+
+\begingroup
+\centering
+\begin{tabular}{lcccccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{6}{c}{total\_severe\_complaints}\\
+   Model:                       & (1)            & (2)            & (3)            & (4)            & (5)            & (6)\\  
+   \midrule
+   \emph{Variables}\\
+   maint\_rate\_curr            & 0.0624$^{***}$ & 0.0687$^{***}$ &                &                & 0.0718$^{***}$ &   \\   
+                                & (0.0097)       & (0.0107)       &                &                & (0.0111)       &   \\   
+   units\_ns\_1                 & 0.2659$^{***}$ & 0.2673$^{***}$ & 0.2672$^{***}$ & 0.2672$^{***}$ & 0.2671$^{***}$ & 0.2673$^{***}$\\   
+                                & (0.0216)       & (0.0180)       & (0.0180)       & (0.0180)       & (0.0180)       & (0.0180)\\   
+   maint\_rate\_l1              &                &                & 0.0428$^{*}$   &                &                &   \\   
+                                &                &                & (0.0258)       &                &                &   \\   
+   maint\_rate\_l1\_4\_mean     &                &                &                & 0.0410         &                &   \\   
+                                &                &                &                & (0.1566)       &                &   \\   
+   maint\_stock\_lag\_rate      &                &                &                &                & -0.0212        &   \\   
+                                &                &                &                &                & (0.0534)       &   \\   
+   maint\_rate\_curr\_broad     &                &                &                &                &                & 0.0729$^{***}$\\   
+                                &                &                &                &                &                & (0.0104)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe                   & Yes            & Yes            & Yes            & Yes            & Yes            & Yes\\  
+   quality\_grade\_abcde        &                & Yes            & Yes            & Yes            & Yes            & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                 & 4,654,032      & 4,654,032      & 4,654,032      & 4,654,032      & 4,654,032      & 4,654,032\\  
+   \midrule \midrule
+   \multicolumn{7}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{7}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+
+
+\end{adjustbox}
+
+\section{Falsification And Within-Building
+Diagnostics}\label{falsification-and-within-building-diagnostics}
+
+This section reports:
+
+\begin{itemize}
+\tightlist
+\item
+  lead maintenance (\texttt{t+1}, \texttt{t+2}) falsification
+  regressions
+\item
+  PID+period FE (within-building) regressions using lagged and lead
+  maintenance signals
+\end{itemize}
+
+In default fast mode, this section is a placeholder table (the expensive
+falsification / PID FE regressions are skipped).
+
+\begin{adjustbox}{max width=\textwidth}
+\begingroup
+\centering
+\begin{tabular}{p{0.9\textwidth}}
+\toprule
+\textbf{Falsification and within-building diagnostics (fast mode)}\\
+\midrule
+Fast mode omits the falsification and PID fixed-effect table. Use full mode to render these diagnostics.\\
+\bottomrule
+\end{tabular}
+\par\endgroup
+
+\end{adjustbox}
+
+\section{Partial-Correlation Plot}\label{partial-correlation-plot}
+
+This figure is omitted in default fast mode and appears only in full
+mode (\texttt{-\/-fast\_mode=FALSE}).
+
+\begin{verbatim}
+Partial-correlation figure not found. Run `r/severe-maintenance-diagnostics.R` first.
+\end{verbatim}
+
+\section{Notes}\label{notes}
+
+\begin{itemize}
+\tightlist
+\item
+  Category-specific complaint counts exist in the quarterly product, but
+  category-specific \textbf{severe} complaint counts are not available
+  in the current product, so this writeup remains severe-total only.
+\item
+  Stock-by-quality interaction specs are estimated on the
+  controls-matched subset with non-\texttt{Unknown} fine unit bins, to
+  avoid collapsing identification onto the missing-controls mass.
+\item
+  This is a diagnostics workflow intended to decide which maintenance
+  specifications are worth carrying into later complaint or demographic
+  analyses.
+\end{itemize}
+
+
+
+
+\end{document}

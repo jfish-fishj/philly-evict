@@ -124,6 +124,7 @@
 \usepackage{dcolumn}
 \usepackage{longtable}
 \usepackage{adjustbox}
+\usepackage{amsmath}
 \makeatletter
 \@ifpackageloaded{caption}{}{\usepackage{caption}}
 \AtBeginDocument{%
@@ -182,7 +183,7 @@
 \title{Address History Analysis: Eviction Persistence and Mover
 Trajectories}
 \author{Philly Evictions Project}
-\date{2026-02-20}
+\date{2026-03-04}
 \begin{document}
 \maketitle
 
@@ -242,6 +243,87 @@ with building-level (PID) characteristics merged in.
   \texttt{infousa\_gender\_imputed\_person} --- demographic imputations
 \end{itemize}
 
+\section{Empirical Bayes Filing-Rate
+Memo}\label{empirical-bayes-filing-rate-memo}
+
+Main filing-intensity regressions in this writeup use
+\texttt{filing\_rate\_eb\_pre\_covid} as the default building-level
+eviction measure.
+
+In the production pipeline (\texttt{r/make-analytic-sample.R}, section
+\texttt{6b}), this is built as a Gamma-Poisson Empirical Bayes posterior
+mean:
+
+\[
+y_{it} \mid \lambda_i \sim \text{Poisson}(E_{it}\lambda_i), \qquad
+\lambda_i \sim \text{Gamma}(\alpha,\beta),
+\]
+
+with pooled pre-2019 sufficient statistics:
+
+\[
+Y_i = \sum_{t \le 2019} y_{it}, \qquad
+E_i = \sum_{t \le 2019} E_{it},
+\]
+
+and posterior mean:
+
+\[
+\mathbb{E}[\lambda_i \mid Y_i, E_i] = \frac{\alpha + Y_i}{\beta + E_i}.
+\]
+
+City and ZIP priors are estimated by method-of-moments; ZIP priors fall
+back to city prior when support is thin. Raw long-run filing-rate
+results are kept as appendix robustness tables only.
+
+\section{Data Construction}\label{data-construction}
+
+\subsection{Rent Variables}\label{rent-variables}
+
+The rent variable \texttt{med\_rent} is the coalesced value of Altos
+median listing rent and eviction ongoing rent. The nominal log rent
+\texttt{log\_med\_rent} is used for descriptive purposes.
+
+For regression analysis, we construct a \textbf{hedonic-deflated real
+rent} (\texttt{log\_med\_rent\_real}) by estimating a hedonic price
+index. We estimate a weighted regression of log rent on year, building
+type, and census tract fixed effects:
+
+\[
+\log(\text{rent}_{it}) = \alpha_t + \eta_k + \gamma_g + \varepsilon_{it}
+\]
+
+where \(\alpha_t\) are year fixed effects, \(\eta_k\) building type, and
+\(\gamma_g\) census tract. The year FE \(\hat\alpha_t\) capture
+aggregate rent inflation. Real rent is: \[
+\log(\text{rent}^{\text{real}}_{it}) = \log(\text{rent}_{it}) - (\hat\alpha_t - \hat\alpha_{t_0})
+\] where \(t_0\) is the earliest year in the sample.
+
+\subsection{Filing Rate Variables}\label{filing-rate-variables}
+
+Three filing rate measures are available:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{\texttt{filing\_rate\_raw}}: Annual filings / occupied units.
+  Year-varying, volatile, subject to small-denominator noise.
+\item
+  \textbf{\texttt{filing\_rate\_longrun\_pre2019}}: Total pre-2019
+  filings / (total units \(\times\) years observed pre-2019).
+  Time-invariant building-level average. Noisier for buildings with
+  short panels.
+\item
+  \textbf{\texttt{filing\_rate\_eb\_pre\_covid}}: Empirical Bayes
+  shrinkage estimator (Gamma-Poisson model), pre-2019, city-wide prior.
+  Time-invariant. Shrinks noisy short-panel rates toward the city mean.
+\end{itemize}
+
+Main-text filing regressions use \texttt{filing\_rate\_eb\_pre\_covid}.
+Raw long-run filing-rate regressions
+(\texttt{filing\_rate\_longrun\_pre2019}) are reported in the appendix
+for robustness.
+
 \section{Tracking Descriptives}\label{tracking-descriptives}
 
 \subsection{Movers vs.~Stayers}\label{movers-vs.-stayers}
@@ -261,18 +343,18 @@ address). Summary statistics are computed for each group.
 \toprule
  & All Rental HHs & Stayers (1 address) & Movers (2+ addresses) \\
 \midrule
-N HH-Years & 6,563,638 & 5,253,915 & 1,309,723 \\
-N Unique HHs & 1,641,033 & 1,515,419 &   125,614 \\
-Mean Addresses per HH & 1.2 & 1 & 3.66 \\
-Mean Years Observed & 3.69 & 3.47 & 6.34 \\
-\% Black (mean posterior) & 36.7 & 36.6 & 37.2 \\
-\% White (mean posterior) & 54 & 53.7 & 55.9 \\
-\% Hispanic (mean posterior) & 6.4 & 6.6 & 5.3 \\
-\% Female HoH & 55.1 & 54.1 & 61.1 \\
-Mean Filing Rate & 0.0646 & 0.0673 & 0.0537 \\
-Mean Building Size (units) & 29.9 & 30.3 & 28.3 \\
-Mean Log Rent & 7.083 & 7.064 & 7.153 \\
-N Unique Tracts & 379 & 379 & 372 \\
+N HH-Years & 4,527,988 & 3,627,712 &   900,276 \\
+N Unique HHs & 1,180,429 & 1,102,507 &    77,922 \\
+Mean Addresses per HH & 1.21 & 1 & 4.12 \\
+Mean Years Observed & 3.47 & 3.29 & 5.97 \\
+\% Black (mean posterior) & 34.3 & 34.2 & 34.9 \\
+\% White (mean posterior) & 57.1 & 56.9 & 58.6 \\
+\% Hispanic (mean posterior) & 5.7 & 5.8 & 5 \\
+\% Female HoH & 55 & 54.2 & 61.5 \\
+Mean Filing Rate & 0.0692 & 0.0742 & 0.0492 \\
+Mean Building Size (units) & 22.8 & 22.5 & 24 \\
+Mean Log Rent & 7.159 & 7.139 & 7.231 \\
+N Unique Tracts & 418 & 415 & 402 \\
 \bottomrule
 \end{tabular}
 
@@ -289,77 +371,122 @@ The core persistence analysis asks: conditional on a household
 building predict the filing rate at their \textbf{current} building?
 
 \textbf{Sample:} Rental-to-rental movers (both origin and current
-address are rental buildings). Filing rates are capped at reasonable
-bounds to exclude outliers.
+address are rental buildings). Filing rates are pre-COVID,
+time-invariant building characteristics (not annual rates).
 
 \subsection{Regression Specifications}\label{regression-specifications}
 
-\begin{longtable}[]{@{}
-  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.1373}}
-  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.0980}}
-  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.0980}}
-  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.2941}}
-  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.3725}}@{}}
-\toprule\noalign{}
-\begin{minipage}[b]{\linewidth}\raggedright
-Model
-\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
-LHS
-\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
-RHS
-\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
-Fixed Effects
-\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
-Sample restriction
-\end{minipage} \\
-\midrule\noalign{}
-\endhead
-\bottomrule\noalign{}
-\endlastfoot
-m1 & Filing rate & Prev. filing rate & None & Rate \(\leq 1\) \\
-m2 & Filing rate & Prev. filing rate & Unit bins + BG (current \& prev)
-& Rate \(\leq 1\) \\
-m3 & Filing rate & Prev. filing rate + imputed rent & Unit bins + BG &
-Rate \(\leq 0.5\) \\
-m4 & Filing rate & Prev. filing rate + actual rent & Unit bins + BG &
-Rate \(\leq 1\) \\
-m5\_no\_rent & High-filer (\$\textgreater\$10\%) & Prev. high-filer &
-Unit bins + BG & Rate \(\leq 0.5\) \\
-m5 & High-filer & Prev. high-filer + rent & Unit bins + BG & Rate
-\(\leq 0.5\), multi-unit \\
-m\_rent & Log rent & Prev. filing rate + prev. rent + filing rate & Unit
-bins + BG & Rate \(\leq 0.5\) \\
-\end{longtable}
+The persistence regressions estimate: \[
+\text{FilingRate}^{EB}_{i,\text{dest}} = \beta \cdot \text{FilingRate}^{EB}_{i,\text{origin}} + \gamma' X_i + \alpha_{\text{tract,dest}} + \alpha_{\text{tract,orig}} + \varepsilon_i
+\] where \(\text{FilingRate}^{EB}\) is the EB shrinkage filing rate,
+\(X_i\) includes hedonic-deflated real rent at origin and destination,
+and \(\alpha_{\text{tract}}\) are census tract fixed effects (used
+instead of block group to avoid over-absorption with building-level
+time-invariant rates). Standard errors are clustered by destination PID.
 
-All models cluster standard errors by PID.
+\textbf{Specifications:}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{m1} (bivariate): Filing rate at destination \(\sim\) filing
+  rate at origin
+\item
+  \textbf{m2} (+ FE): Add unit bin and census tract fixed effects
+  (current and previous)
+\item
+  \textbf{m3} (+ real rent): Add hedonic-deflated log rent at origin and
+  destination
+\end{itemize}
+
+Raw long-run versions of these same specs are shown in the appendix.
 
 \begin{table}[htbp]
 \centering
-\caption{\label{tab:evict_persist} Effect of Previous Eviction Filing Rate on Current Filing Rate}
+\caption{\label{tab:evict_persist} Eviction Persistence: EB Shrinkage Filing Rates (Main)}
 \centering
 
 \begin{adjustbox}{max width=\textwidth}
    \begin{tabular}{lccc}
       \tabularnewline \midrule \midrule
-      Dependent Variable: & \multicolumn{3}{c}{filing\_rate\_raw}\\
-      Model:                        & (1)            & (2)            & (3)\\  
+      Dependent Variable: & \multicolumn{3}{c}{Filing rate (destination, EB)}\\
+                                           & m1             & m2             & m3 \\   
+      Model:                               & (1)            & (2)            & (3)\\  
       \midrule
       \emph{Variables}\\
-      Previous Eviction Filing Rate & 0.0992$^{***}$ & 0.0795$^{***}$ & 0.1950$^{***}$\\   
-                                    & (0.0040)       & (0.0042)       & (0.0144)\\   
-      Rent (current)                &                &                & -0.0914$^{***}$\\   
-                                    &                &                & (0.0073)\\   
-      Rent (previous)               &                &                & -0.0234$^{***}$\\   
-                                    &                &                & (0.0063)\\   
+      Filing rate (origin, EB)             & 0.1063$^{***}$ & 0.0486$^{***}$ & 0.0442$^{***}$\\   
+                                           & (0.0137)       & (0.0086)       & (0.0101)\\   
+      Avg real rent (destination building) &                &                & -0.0594$^{***}$\\   
+                                           &                &                & (0.0029)\\   
+      Avg real rent (origin building)      &                &                & 0.0006\\   
+                                           &                &                & (0.0029)\\   
       \midrule
       \emph{Fixed-effects}\\
-      Units (current)               &                & Yes            & Yes\\  
-      Units (previous)              &                & Yes            & Yes\\  
-      Block Group (current)         &                & Yes            & Yes\\  
-      Block Group (previous)        &                & Yes            & Yes\\  
+      Units bin (destination)              &                & Yes            & Yes\\  
+      Units bin (origin)                   &                & Yes            & Yes\\  
+      Destination tract FE                 &                & Yes            & Yes\\  
+      Origin tract FE                      &                & Yes            & Yes\\  
       \midrule
       \emph{Fit statistics}\\
-      Observations                  & 144,254        & 120,232        & 15,716\\  
+      Observations                         & 87,910         & 87,897         & 56,361\\  
+      \midrule \midrule
+      \multicolumn{4}{l}{\emph{Clustered (pid) standard-errors in parentheses}}\\
+      \multicolumn{4}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+   \end{tabular}
+
+\end{adjustbox}
+\end{table}
+
+\subsection{High-Filer and Rent
+Regressions}\label{high-filer-and-rent-regressions}
+
+The high-filer regressions use a binary indicator (\(\ge 15\%\) EB
+filing rate) in place of the continuous rate:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{m4}: High-filer (dest) \(\sim\) high-filer (origin) + FE
+\item
+  \textbf{m5}: Add hedonic-deflated rent controls, restrict to
+  multi-unit buildings
+\item
+  \textbf{m\_rent}: Real rent (dest) \(\sim\) filing rate (origin) +
+  real rent (origin) + filing rate (dest) + FE
+\end{itemize}
+
+\begin{table}[htbp]
+\centering
+\caption{\label{tab:evict_persist_hf_rent} High-Filer Persistence and Rent Regressions (EB Main)}
+\centering
+
+\begin{adjustbox}{max width=\textwidth}
+   \begin{tabular}{lccc}
+      \tabularnewline \midrule \midrule
+      Dependent Variables: & \multicolumn{2}{c}{high\_filing\_dest} & Avg real rent (destination building)\\
+                                           & m4             & m5              & m\_rent \\    
+      Model:                               & (1)            & (2)             & (3)\\  
+      \midrule
+      \emph{Variables}\\
+      high\_filing\_origTRUE               & 0.0566$^{***}$ & 0.0690$^{***}$  &   \\   
+                                           & (0.0049)       & (0.0114)        &   \\   
+      Avg real rent (destination building) &                & -0.0677$^{***}$ &   \\   
+                                           &                & (0.0170)        &   \\   
+      Avg real rent (origin building)      &                & -0.0021         & 0.2186$^{***}$\\   
+                                           &                & (0.0062)        & (0.0071)\\   
+      Filing rate (origin, EB)             &                &                 & -0.0182$^{**}$\\   
+                                           &                &                 & (0.0075)\\   
+      Filing rate (destination, EB)        &                &                 & -0.2619$^{***}$\\   
+                                           &                &                 & (0.0353)\\   
+      \midrule
+      \emph{Fixed-effects}\\
+      Units bin (destination)              & Yes            & Yes             & Yes\\  
+      Units bin (origin)                   & Yes            & Yes             & Yes\\  
+      Destination tract FE                 & Yes            & Yes             & Yes\\  
+      Origin tract FE                      & Yes            & Yes             & Yes\\  
+      \midrule
+      \emph{Fit statistics}\\
+      Observations                         & 87,897         & 20,186          & 56,361\\  
       \midrule \midrule
       \multicolumn{4}{l}{\emph{Clustered (pid) standard-errors in parentheses}}\\
       \multicolumn{4}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
@@ -376,7 +503,7 @@ Rate}\label{leave-one-out-tract-eviction-rate}
 For each building, the LOO tract eviction rate is:
 
 \[
-\text{LOO}_{i} = \frac{\sum_{j \in \text{tract}(i), j \neq i} \text{filings}_{j}}{\sum_{j \in \text{tract}(i), j \neq i} \text{units}_{j}}
+\text{LOO}_{i} = \frac{\sum_{j \in \text{tract}(i), j \neq i} \text{filings}_{j}}{\sum_{j \in \text{tract}(i), j \neq i} \text{unit-years}_{j}}
 \]
 
 This measures the eviction environment of the building's neighborhood,
@@ -385,8 +512,7 @@ excluding the building's own contribution.
 \subsection{Eviction Intensity Bins}\label{eviction-intensity-bins}
 
 Buildings are classified using the empirical Bayes eviction filing rate
-(pre-COVID), with true never-filers (zero pre-2019 filings) separated
-from the low-rate category:
+(pre-COVID):
 
 \begin{longtable}[]{@{}ll@{}}
 \toprule\noalign{}
@@ -395,44 +521,50 @@ Bin & Definition \\
 \endhead
 \bottomrule\noalign{}
 \endlastfoot
-No filings & \texttt{total\_filings\_pre2019\ ==\ 0} \\
-(0--5\%{]} & EB rate \(\leq 0.05\), at least 1 filing \\
-(5--10\%{]} & EB rate \(\in (0.05, 0.10]\) \\
-(10--20\%{]} & EB rate \(\in (0.10, 0.20]\) \\
-20\%+ & EB rate \(> 0.20\) \\
+{[}0,1) & EB rate \(\in [0, 0.01)\) \\
+{[}1,5) & EB rate \(\in [0.01, 0.05)\) \\
+{[}5,10) & EB rate \(\in [0.05, 0.10)\) \\
+{[}10,20) & EB rate \(\in [0.10, 0.20)\) \\
+{[}20,inf) & EB rate \(\ge 0.20\) \\
 \end{longtable}
 
 \subsection{Inflow: Where Do Tenants at High-Eviction Buildings Come
 From?}\label{inflow-where-do-tenants-at-high-eviction-buildings-come-from}
+
+\begingroup\fontsize{9}{11}\selectfont
 
 \begin{longtable}[t]{llrrrrrr}
 \caption{\label{tab:inflow-table}Origin characteristics of movers, by destination eviction intensity}\\
 \toprule
 Destination bin & N moves & Origin \% Black & Dest \% Black & Origin LOO evict & Dest LOO evict & Mover \% Black & Mover \% Female\\
 \midrule
-No filings & 63,790 & 0.358 & 0.368 & 0.0346 & 0.0346 & 0.290 & 0.590\\
-(0-5\%] & 15,813 & 0.289 & 0.260 & 0.0305 & 0.0287 & 0.189 & 0.588\\
-(5-10\%] & 18,113 & 0.484 & 0.489 & 0.0462 & 0.0487 & 0.450 & 0.626\\
-(10-20\%] & 14,633 & 0.511 & 0.513 & 0.0496 & 0.0521 & 0.481 & 0.643\\
-20\%+ & 10,578 & 0.565 & 0.571 & 0.0557 & 0.0612 & 0.529 & 0.656\\
+{}[0,1) & 51,525 & 0.327 & 0.331 & 0.0390 & 0.0388 & 0.247 & 0.588\\
+{}[1,5) & 8,215 & 0.280 & 0.276 & 0.0356 & 0.0377 & 0.176 & 0.571\\
+{}[5,10) & 12,252 & 0.480 & 0.497 & 0.0526 & 0.0549 & 0.448 & 0.630\\
+{}[10,20) & 10,109 & 0.505 & 0.523 & 0.0563 & 0.0587 & 0.480 & 0.645\\
+{}[20,inf) & 5,879 & 0.578 & 0.569 & 0.0643 & 0.0732 & 0.547 & 0.663\\
 \bottomrule
 \end{longtable}
+\endgroup{}
 
 \subsection{Outflow: Where Do Tenants From High-Eviction Buildings
 Go?}\label{outflow-where-do-tenants-from-high-eviction-buildings-go}
+
+\begingroup\fontsize{9}{11}\selectfont
 
 \begin{longtable}[t]{llrrrrr}
 \caption{\label{tab:outflow-table}Destination characteristics of movers, by origin eviction intensity}\\
 \toprule
 Origin bin & N moves & Origin LOO evict & Dest LOO evict & \$\textbackslash{}Delta\$ LOO tract & Mover \% Black & Mover \% Female\\
 \midrule
-No filings & 59,788 & 0.0341 & 0.0368 & 0.0026 & 0.299 & 0.588\\
-(0-5\%] & 16,473 & 0.0248 & 0.0267 & 0.0019 & 0.177 & 0.578\\
-(5-10\%] & 19,336 & 0.0465 & 0.0459 & -0.0006 & 0.422 & 0.631\\
-(10-20\%] & 15,838 & 0.0508 & 0.0497 & -0.0011 & 0.465 & 0.644\\
-20\%+ & 11,295 & 0.0604 & 0.0557 & -0.0048 & 0.527 & 0.662\\
+{}[0,1) & 49,277 & 0.0376 & 0.0405 & 0.0029 & 0.255 & 0.583\\
+{}[1,5) & 8,759 & 0.0337 & 0.0333 & -0.0004 & 0.157 & 0.572\\
+{}[5,10) & 13,103 & 0.0519 & 0.0533 & 0.0014 & 0.416 & 0.636\\
+{}[10,20) & 10,813 & 0.0573 & 0.0568 & -0.0005 & 0.468 & 0.646\\
+{}[20,inf) & 6,191 & 0.0725 & 0.0658 & -0.0067 & 0.547 & 0.664\\
 \bottomrule
 \end{longtable}
+\endgroup{}
 
 \section{Three-Move Trajectory
 Analysis}\label{three-move-trajectory-analysis}
@@ -447,98 +579,639 @@ residential spells:
 \]
 
 The key question: conditional on origin neighborhood, does the eviction
-intensity of the \textbf{middle} building predict worse neighborhood
-outcomes at the \textbf{destination}?
+intensity of the \textbf{middle} building predict worse outcomes at the
+\textbf{destination} building?
 
-The outcome is the change in LOO tract eviction rate from origin to
-destination: \[
+\textbf{Primary filing outcomes} use building-level EB filing rates
+directly, capturing within-neighborhood sorting:
+
+\begin{itemize}
+\tightlist
+\item
+  \(\Delta\text{FR}^{\text{EB}} = \text{FR}^{\text{EB}}_{\text{dest}} - \text{FR}^{\text{EB}}_{\text{origin}}\)
+  (change in EB filing rate)
+\end{itemize}
+
+Raw long-run filing-rate versions are reported in the appendix as
+robustness checks.
+
+\textbf{Secondary outcome} uses the LOO tract eviction rate
+(neighborhood-level, excluding the focal building): \[
 \Delta\text{LOO} = \text{LOO}_{\text{dest}} - \text{LOO}_{\text{origin}}
 \]
 
+The LOO rate averages over all buildings in the tract and thus misses
+within-tract sorting --- a tenant moving between two high-eviction
+buildings in the same tract shows zero change in LOO. Building-level
+rates capture this directly.
+
 \subsection{Descriptive Summary}\label{descriptive-summary}
 
-\begin{longtable}[t]{llrrrrr}
+\begingroup\fontsize{9}{11}\selectfont
+
+\begin{longtable}[t]{llrrrrrrrrr}
 \caption{\label{tab:trajectory-table}Three-move trajectories by middle building eviction intensity}\\
 \toprule
-Middle bin & N trajectories & Origin LOO & Dest LOO & \$\textbackslash{}Delta\$ LOO & Origin EB rate & Dest EB rate\\
+Middle bin & N traj. & Orig EB & Dest EB & \$\textbackslash{}Delta\$ EB & Orig LOO (EB) & Dest LOO (EB) & \$\textbackslash{}Delta\$ LOO (EB) & Orig LOO (raw) & Dest LOO (raw) & \$\textbackslash{}Delta\$ LOO (raw)\\
 \midrule
-No filings & 100,463 & 0.0408 & 0.0410 & 2e-04 & 0.0396 & 0.0430\\
-(0-5\%] & 6,561 & 0.0358 & 0.0359 & 2e-04 & 0.0491 & 0.0501\\
-(5-10\%] & 19,254 & 0.0494 & 0.0498 & 5e-04 & 0.0575 & 0.0625\\
-(10-20\%] & 13,959 & 0.0524 & 0.0527 & 3e-04 & 0.0685 & 0.0766\\
-20\%+ & 6,632 & 0.0570 & 0.0573 & 2e-04 & 0.0991 & 0.1163\\
+{}[0,1) & 104,812 & 0.0381 & 0.0398 & 0.0017 & 0.0491 & 0.0492 & 2e-04 & 0.0436 & 0.0435 & -1e-04\\
+{}[1,5) & 9,196 & 0.0417 & 0.0406 & -0.0011 & 0.0451 & 0.0453 & 2e-04 & 0.0422 & 0.0416 & -5e-04\\
+{}[5,10) & 23,030 & 0.0544 & 0.0552 & 0.0008 & 0.0578 & 0.0582 & 4e-04 & 0.0510 & 0.0509 & -1e-04\\
+{}[10,20) & 16,075 & 0.0643 & 0.0672 & 0.0029 & 0.0604 & 0.0609 & 5e-04 & 0.0533 & 0.0533 & 0e+00\\
+{}[20,inf) & 7,037 & 0.0930 & 0.0991 & 0.0061 & 0.0652 & 0.0656 & 4e-04 & 0.0580 & 0.0578 & -2e-04\\
 \bottomrule
 \end{longtable}
+\endgroup{}
 
 \subsection{Trajectory Regressions}\label{trajectory-regressions}
 
-Three specifications test whether the middle building's eviction
-intensity predicts the origin-to-destination change in neighborhood
-eviction environment:
+For each outcome family, the script estimates delta and
+destination-level models separately, with progressively richer origin
+conditioning. Filing-outcome models are estimated using both:
 
-\begin{longtable}[]{@{}
-  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.1395}}
-  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.1163}}
-  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.1163}}
-  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.3488}}
-  >{\raggedright\arraybackslash}p{(\linewidth - 8\tabcolsep) * \real{0.2791}}@{}}
-\toprule\noalign{}
-\begin{minipage}[b]{\linewidth}\raggedright
-Spec
-\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
-LHS
-\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
-RHS
-\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
-Fixed Effects
-\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
-Clustering
-\end{minipage} \\
-\midrule\noalign{}
-\endhead
-\bottomrule\noalign{}
-\endlastfoot
-(A) & \(\Delta\) LOO tract & \texttt{i(mid\_evict\_bin)} & None & Origin
-BG \\
-(B) & \(\Delta\) LOO tract & \texttt{i(mid\_evict\_bin)} & Origin tract
-& Origin BG \\
-(C) & Dest LOO tract (level) & \texttt{i(mid\_evict\_bin)} & Origin
-tract & Origin BG \\
-\end{longtable}
+\begin{itemize}
+\tightlist
+\item
+  middle-building filing bins (\texttt{{[}0,1)}, \texttt{{[}1,5)},
+  \texttt{{[}5,10)}, \texttt{{[}10,20)}, \texttt{{[}20,inf)})
+\item
+  a high-filing dummy
+  (\texttt{\textbackslash{}ge\ 15\textbackslash{}\%})
+\end{itemize}
 
-Reference category: (0--5\%{]}.
+\textbf{Delta specs:}
+
+\textbf{(A) Unconditional delta:} \[
+\Delta Y_i = \sum_{b} \beta_b \cdot \mathbf{1}[\text{mid\_bin}_i = b] + \varepsilon_i
+\]
+
+\textbf{(B) Delta + origin tract FE:} \[
+\Delta Y_i = \sum_{b} \beta_b \cdot \mathbf{1}[\text{mid\_bin}_i = b] + \alpha_{\text{tract,orig}} + \varepsilon_i
+\]
+
+\textbf{(C) Delta + origin filing rate + origin parcel controls:} \[
+\Delta Y_i = \sum_{b} \beta_b \cdot \mathbf{1}[\text{mid\_bin}_i = b]
+ + \theta Y_{\text{orig},i}
+ + \gamma' X_{\text{orig},i}
+ + \alpha_{\text{tract,orig}} + \varepsilon_i
+\]
+
+\textbf{(D) Delta + origin-tract-by-origin-filing-bin FE:} \[
+\Delta Y_i = \sum_{b} \beta_b \cdot \mathbf{1}[\text{mid\_bin}_i = b]
+ + \gamma' X_{\text{orig},i}
+ + \alpha_{\text{tract,orig} \times \text{orig\_filing\_bin}} + \varepsilon_i
+\]
+
+\textbf{Destination-level specs:}
+
+\textbf{(A) Destination level + origin tract FE:} \[
+Y_{\text{dest},i} = \sum_{b} \beta_b \cdot \mathbf{1}[\text{mid\_bin}_i = b] + \alpha_{\text{tract,orig}} + \varepsilon_i
+\]
+
+\textbf{(B) + origin outcome level:} \[
+Y_{\text{dest},i} = \sum_{b} \beta_b \cdot \mathbf{1}[\text{mid\_bin}_i = b] + \theta Y_{\text{orig},i} + \alpha_{\text{tract,orig}} + \varepsilon_i
+\]
+
+\textbf{(C) + origin parcel controls:} \[
+Y_{\text{dest},i} = \sum_{b} \beta_b \cdot \mathbf{1}[\text{mid\_bin}_i = b]
+ + \theta Y_{\text{orig},i}
+ + \gamma' X_{\text{orig},i}
+ + \alpha_{\text{tract,orig}} + \varepsilon_i
+\]
+
+\textbf{(D) + origin-tract-by-origin-filing-bin FE:} \[
+Y_{\text{dest},i} = \sum_{b} \beta_b \cdot \mathbf{1}[\text{mid\_bin}_i = b]
+ + \gamma' X_{\text{orig},i}
+ + \alpha_{\text{tract,orig} \times \text{orig\_filing\_bin}} + \varepsilon_i
+\]
+
+where \(Y\) is one of: building-level filing rate, severe complaints per
+unit, total violations per unit, severe violations per unit, or LOO
+tract filing rate (EB or raw). Origin parcel controls
+\(X_{\text{orig},i}\) include \texttt{log(total\_area)},
+\texttt{log(market\_value)}, \texttt{year\_blt\_decade},
+\texttt{num\_units\_bin}, \texttt{building\_type},
+\texttt{quality\_grade\_standard}, and \texttt{num\_stories\_bin}.
+Reference category for bin models: {[}0,1). Standard errors are
+clustered by origin block group.
+
+\subsubsection{Filing Outcomes: Delta Specs
+(Primary)}\label{filing-outcomes-delta-specs-primary}
 
 \begin{adjustbox}{max width=\textwidth}
 \begingroup
 \centering
-\begin{tabular}{lccc}
+\begin{tabular}{lcccc}
    \tabularnewline \midrule \midrule
-   Dependent Variables: & \multicolumn{2}{c}{delta\_loo\_tract} & dest\_loo\_tract\\
-                                             & Delta LOO Tract       & Delta + Orig FE       & Dest Level + Orig FE \\   
-   Model:                                    & (1)                   & (2)                   & (3)\\  
+   Dependent Variable: & \multicolumn{4}{c}{Change in filing rate (destination - origin, EB)}\\
+                                                  & Delta A        & Delta B       & Delta C         & Delta D \\   
+   Model:                                         & (1)            & (2)           & (3)             & (4)\\  
    \midrule
    \emph{Variables}\\
-   Constant                                  & 0.0001                &                       &   \\   
-                                             & (0.0004)              &                       &   \\   
-   mid\_evict\_bin $=$ Nofilings0-5\%]")     & $8.46\times 10^{-5}$  & $7.33\times 10^{-5}$  & 0.0003\\   
-                                             & (0.0003)              & (0.0003)              & (0.0003)\\   
-   mid\_evict\_bin $=$ (5-10\%]0-5\%]")      & 0.0003                & 0.0010$^{***}$        & 0.0011$^{***}$\\   
-                                             & (0.0003)              & (0.0003)              & (0.0003)\\   
-   mid\_evict\_bin $=$ (10-20\%]0-5\%]")     & 0.0002                & 0.0012$^{***}$        & 0.0013$^{***}$\\   
-                                             & (0.0004)              & (0.0003)              & (0.0003)\\   
-   mid\_evict\_bin $=$ 20\%+0-5\%]")         & $3.31\times 10^{-5}$  & 0.0020$^{***}$        & 0.0015$^{***}$\\   
-                                             & (0.0005)              & (0.0004)              & (0.0004)\\   
+   Constant                                       & 0.0017$^{***}$ &               &                 &   \\   
+                                                  & (0.0003)       &               &                 &   \\   
+   Middle building filing-rate bin $=$ [1,5)")    & -0.0028$^{*}$  & -0.0030$^{*}$ & 0.0017          & 0.0022$^{*}$\\   
+                                                  & (0.0017)       & (0.0017)      & (0.0011)        & (0.0012)\\   
+   Middle building filing-rate bin $=$ [5,10)")   & -0.0009        & -0.0004       & 0.0048$^{***}$  & 0.0043$^{***}$\\   
+                                                  & (0.0010)       & (0.0010)      & (0.0007)        & (0.0008)\\   
+   Middle building filing-rate bin $=$ [10,20)")  & 0.0012         & 0.0018        & 0.0135$^{***}$  & 0.0121$^{***}$\\   
+                                                  & (0.0013)       & (0.0013)      & (0.0010)        & (0.0012)\\   
+   Middle building filing-rate bin $=$ [20,inf)") & 0.0044$^{*}$   & 0.0053$^{**}$ & 0.0364$^{***}$  & 0.0297$^{***}$\\   
+                                                  & (0.0026)       & (0.0026)      & (0.0022)        & (0.0025)\\   
+   Origin filing rate (EB)                        &                &               & -0.9401$^{***}$ &   \\   
+                                                  &                &               & (0.0079)        &   \\   
+   Log(origin total area)                         &                &               & 0.0030$^{***}$  & -0.0003\\   
+                                                  &                &               & (0.0007)        & (0.0009)\\   
+   Log(origin market value)                       &                &               & -0.0071$^{***}$ & -0.0098$^{***}$\\   
+                                                  &                &               & (0.0015)        & (0.0019)\\   
    \midrule
    \emph{Fixed-effects}\\
-   orig\_tract                               &                       & Yes                   & Yes\\  
+   Origin tract FE                                &                & Yes           & Yes             & \\  
+   Origin year-built decade FE                    &                &               & Yes             & Yes\\  
+   Origin unit-bin FE                             &                &               & Yes             & Yes\\  
+   Origin building-type FE                        &                &               & Yes             & Yes\\  
+   Origin quality-grade FE                        &                &               & Yes             & Yes\\  
+   Origin stories-bin FE                          &                &               & Yes             & Yes\\  
+   Origin tract x origin filing-bin FE            &                &               &                 & Yes\\  
    \midrule
    \emph{Fit statistics}\\
-   Observations                              & 146,636               & 146,634               & 146,634\\  
-   R$^2$                                     & $2.61\times 10^{-5}$  & 0.11608               & 0.73635\\  
-   Within R$^2$                              &                       & 0.00116               & 0.00074\\  
+   Observations                                   & 160,137        & 160,132       & 157,330         & 157,262\\  
    \midrule \midrule
-   \multicolumn{4}{l}{\emph{Clustered (orig\_GEOID) standard-errors in parentheses}}\\
-   \multicolumn{4}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+   \multicolumn{5}{l}{\emph{Clustered (Origin block group) standard-errors in parentheses}}\\
+   \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+\end{adjustbox}
+
+\subsubsection{Filing Outcomes: Destination-Level Specs
+(Primary)}\label{filing-outcomes-destination-level-specs-primary}
+
+\begin{adjustbox}{max width=\textwidth}
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{4}{c}{Destination filing rate (EB)}\\
+                                                  & Dest A         & Dest B         & Dest C          & Dest D \\   
+   Model:                                         & (1)            & (2)            & (3)             & (4)\\  
+   \midrule
+   \emph{Variables}\\
+   Middle building filing-rate bin $=$ [1,5)")    & 0.0055$^{***}$ & 0.0049$^{***}$ & 0.0017          & 0.0024$^{**}$\\   
+                                                  & (0.0011)       & (0.0011)       & (0.0011)        & (0.0011)\\   
+   Middle building filing-rate bin $=$ [5,10)")   & 0.0068$^{***}$ & 0.0063$^{***}$ & 0.0048$^{***}$  & 0.0048$^{***}$\\   
+                                                  & (0.0009)       & (0.0008)       & (0.0007)        & (0.0008)\\   
+   Middle building filing-rate bin $=$ [10,20)")  & 0.0163$^{***}$ & 0.0153$^{***}$ & 0.0135$^{***}$  & 0.0129$^{***}$\\   
+                                                  & (0.0011)       & (0.0010)       & (0.0010)        & (0.0010)\\   
+   Middle building filing-rate bin $=$ [20,inf)") & 0.0442$^{***}$ & 0.0416$^{***}$ & 0.0364$^{***}$  & 0.0341$^{***}$\\   
+                                                  & (0.0026)       & (0.0024)       & (0.0022)        & (0.0021)\\   
+   Origin filing rate (EB)                        &                & 0.0688$^{***}$ & 0.0599$^{***}$  &   \\   
+                                                  &                & (0.0089)       & (0.0079)        &   \\   
+   Log(origin total area)                         &                &                & 0.0030$^{***}$  & 0.0026$^{***}$\\   
+                                                  &                &                & (0.0007)        & (0.0007)\\   
+   Log(origin market value)                       &                &                & -0.0071$^{***}$ & -0.0063$^{***}$\\   
+                                                  &                &                & (0.0015)        & (0.0014)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   Origin tract FE                                & Yes            & Yes            & Yes             & \\  
+   Origin year-built decade FE                    &                &                & Yes             & Yes\\  
+   Origin unit-bin FE                             &                &                & Yes             & Yes\\  
+   Origin building-type FE                        &                &                & Yes             & Yes\\  
+   Origin quality-grade FE                        &                &                & Yes             & Yes\\  
+   Origin stories-bin FE                          &                &                & Yes             & Yes\\  
+   Origin tract x origin filing-bin FE            &                &                &                 & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                   & 160,132        & 160,132        & 157,330         & 157,262\\  
+   \midrule \midrule
+   \multicolumn{5}{l}{\emph{Clustered (Origin block group) standard-errors in parentheses}}\\
+   \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+\end{adjustbox}
+
+\subsubsection{Filing Outcomes: Destination-Level Specs (High-Filing
+Dummy,
+Primary)}\label{filing-outcomes-destination-level-specs-high-filing-dummy-primary}
+
+\begin{adjustbox}{max width=\textwidth}
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{4}{c}{Destination filing rate (EB)}\\
+                                                   & Dest A         & Dest B         & Dest C          & Dest D \\   
+   Model:                                          & (1)            & (2)            & (3)             & (4)\\  
+   \midrule
+   \emph{Variables}\\
+   Middle building high-filing indicator (>=15\%)  & 0.0312$^{***}$ & 0.0292$^{***}$ & 0.0258$^{***}$  & 0.0242$^{***}$\\   
+                                                   & (0.0018)       & (0.0017)       & (0.0015)        & (0.0014)\\   
+   Origin filing rate (EB)                         &                & 0.0711$^{***}$ & 0.0615$^{***}$  &   \\   
+                                                   &                & (0.0091)       & (0.0080)        &   \\   
+   Log(origin total area)                          &                &                & 0.0030$^{***}$  & 0.0027$^{***}$\\   
+                                                   &                &                & (0.0007)        & (0.0007)\\   
+   Log(origin market value)                        &                &                & -0.0073$^{***}$ & -0.0065$^{***}$\\   
+                                                   &                &                & (0.0015)        & (0.0015)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   Origin tract FE                                 & Yes            & Yes            & Yes             & \\  
+   Origin year-built decade FE                     &                &                & Yes             & Yes\\  
+   Origin unit-bin FE                              &                &                & Yes             & Yes\\  
+   Origin building-type FE                         &                &                & Yes             & Yes\\  
+   Origin quality-grade FE                         &                &                & Yes             & Yes\\  
+   Origin stories-bin FE                           &                &                & Yes             & Yes\\  
+   Origin tract x origin filing-bin FE             &                &                &                 & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                    & 160,132        & 160,132        & 157,330         & 157,262\\  
+   \midrule \midrule
+   \multicolumn{5}{l}{\emph{Clustered (Origin block group) standard-errors in parentheses}}\\
+   \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+\end{adjustbox}
+
+\subsubsection{Severe Complaints per Unit: Delta Specs (Additional
+Outcome)}\label{severe-complaints-per-unit-delta-specs-additional-outcome}
+
+\begin{adjustbox}{max width=\textwidth}
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{4}{c}{Change in severe complaints per unit}\\
+                                                  & Delta A               & Delta B       & Delta C         & Delta D \\   
+   Model:                                         & (1)                   & (2)           & (3)             & (4)\\  
+   \midrule
+   \emph{Variables}\\
+   Constant                                       & $8.02\times 10^{-5}$  &               &                 &   \\   
+                                                  & (0.0034)              &               &                 &   \\   
+   Middle building filing-rate bin $=$ [1,5)")    & -0.0041               & -0.0078       & -0.0105         & -0.0272\\   
+                                                  & (0.0162)              & (0.0166)      & (0.0121)        & (0.0176)\\   
+   Middle building filing-rate bin $=$ [5,10)")   & -0.0169               & -0.0128       & 0.0158$^{*}$    & 0.0047\\   
+                                                  & (0.0116)              & (0.0120)      & (0.0092)        & (0.0121)\\   
+   Middle building filing-rate bin $=$ [10,20)")  & -0.0132               & -0.0080       & 0.0492$^{***}$  & 0.0247$^{*}$\\   
+                                                  & (0.0139)              & (0.0142)      & (0.0110)        & (0.0143)\\   
+   Middle building filing-rate bin $=$ [20,inf)") & -0.0433$^{*}$         & -0.0382$^{*}$ & 0.0558$^{***}$  & 0.0302\\   
+                                                  & (0.0225)              & (0.0228)      & (0.0166)        & (0.0237)\\   
+   Origin severe complaints per unit              &                       &               & -0.9584$^{***}$ &   \\   
+                                                  &                       &               & (0.0040)        &   \\   
+   Log(origin total area)                         &                       &               & 0.0144$^{*}$    & -0.0504$^{***}$\\   
+                                                  &                       &               & (0.0082)        & (0.0117)\\   
+   Log(origin market value)                       &                       &               & 0.0043          & -0.0196$^{*}$\\   
+                                                  &                       &               & (0.0094)        & (0.0115)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   Origin tract FE                                &                       & Yes           & Yes             & \\  
+   Origin year-built decade FE                    &                       &               & Yes             & Yes\\  
+   Origin unit-bin FE                             &                       &               & Yes             & Yes\\  
+   Origin building-type FE                        &                       &               & Yes             & Yes\\  
+   Origin quality-grade FE                        &                       &               & Yes             & Yes\\  
+   Origin stories-bin FE                          &                       &               & Yes             & Yes\\  
+   Origin tract x origin filing-bin FE            &                       &               &                 & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                   & 160,284               & 160,279       & 157,468         & 157,338\\  
+   \midrule \midrule
+   \multicolumn{5}{l}{\emph{Clustered (Origin block group) standard-errors in parentheses}}\\
+   \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+\end{adjustbox}
+
+\subsubsection{Severe Complaints per Unit: Destination-Level Specs
+(Additional
+Outcome)}\label{severe-complaints-per-unit-destination-level-specs-additional-outcome}
+
+\begin{adjustbox}{max width=\textwidth}
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{4}{c}{Destination severe complaints per unit}\\
+                                                  & Dest A         & Dest B         & Dest C         & Dest D \\   
+   Model:                                         & (1)            & (2)            & (3)            & (4)\\  
+   \midrule
+   \emph{Variables}\\
+   Middle building filing-rate bin $=$ [1,5)")    & -0.0154        & -0.0150        & -0.0105        & -0.0054\\   
+                                                  & (0.0119)       & (0.0119)       & (0.0121)       & (0.0122)\\   
+   Middle building filing-rate bin $=$ [5,10)")   & 0.0197$^{**}$  & 0.0182$^{**}$  & 0.0158$^{*}$   & 0.0148\\   
+                                                  & (0.0091)       & (0.0091)       & (0.0092)       & (0.0093)\\   
+   Middle building filing-rate bin $=$ [10,20)")  & 0.0527$^{***}$ & 0.0500$^{***}$ & 0.0492$^{***}$ & 0.0494$^{***}$\\   
+                                                  & (0.0110)       & (0.0109)       & (0.0110)       & (0.0111)\\   
+   Middle building filing-rate bin $=$ [20,inf)") & 0.0648$^{***}$ & 0.0603$^{***}$ & 0.0558$^{***}$ & 0.0553$^{***}$\\   
+                                                  & (0.0168)       & (0.0167)       & (0.0166)       & (0.0167)\\   
+   Origin severe complaints per unit              &                & 0.0439$^{***}$ & 0.0416$^{***}$ &   \\   
+                                                  &                & (0.0039)       & (0.0040)       &   \\   
+   Log(origin total area)                         &                &                & 0.0144$^{*}$   & 0.0175$^{**}$\\   
+                                                  &                &                & (0.0082)       & (0.0084)\\   
+   Log(origin market value)                       &                &                & 0.0043         & 0.0044\\   
+                                                  &                &                & (0.0094)       & (0.0098)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   Origin tract FE                                & Yes            & Yes            & Yes            & \\  
+   Origin year-built decade FE                    &                &                & Yes            & Yes\\  
+   Origin unit-bin FE                             &                &                & Yes            & Yes\\  
+   Origin building-type FE                        &                &                & Yes            & Yes\\  
+   Origin quality-grade FE                        &                &                & Yes            & Yes\\  
+   Origin stories-bin FE                          &                &                & Yes            & Yes\\  
+   Origin tract x origin filing-bin FE            &                &                &                & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                   & 160,279        & 160,279        & 157,468        & 157,338\\  
+   \midrule \midrule
+   \multicolumn{5}{l}{\emph{Clustered (Origin block group) standard-errors in parentheses}}\\
+   \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+\end{adjustbox}
+
+\subsubsection{Total Violations per Unit: Delta Specs (Additional
+Outcome)}\label{total-violations-per-unit-delta-specs-additional-outcome}
+
+\begin{adjustbox}{max width=\textwidth}
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{4}{c}{Change in total violations per unit}\\
+                                                  & Delta A  & Delta B  & Delta C         & Delta D \\   
+   Model:                                         & (1)      & (2)      & (3)             & (4)\\  
+   \midrule
+   \emph{Variables}\\
+   Constant                                       & 0.0104   &          &                 &   \\   
+                                                  & (0.0154) &          &                 &   \\   
+   Middle building filing-rate bin $=$ [1,5)")    & -0.0237  & -0.0366  & -0.0505         & -0.1696$^{**}$\\   
+                                                  & (0.0674) & (0.0688) & (0.0538)        & (0.0747)\\   
+   Middle building filing-rate bin $=$ [5,10)")   & -0.0787  & -0.0654  & 0.0673          & 0.0045\\   
+                                                  & (0.0546) & (0.0559) & (0.0413)        & (0.0562)\\   
+   Middle building filing-rate bin $=$ [10,20)")  & -0.0100  & 0.0101   & 0.2734$^{***}$  & 0.1270$^{*}$\\   
+                                                  & (0.0666) & (0.0677) & (0.0530)        & (0.0680)\\   
+   Middle building filing-rate bin $=$ [20,inf)") & -0.0644  & -0.0479  & 0.2546$^{***}$  & 0.1695$^{*}$\\   
+                                                  & (0.0935) & (0.0950) & (0.0768)        & (0.0987)\\   
+   Origin total violations per unit               &          &          & -0.9445$^{***}$ &   \\   
+                                                  &          &          & (0.0040)        &   \\   
+   Log(origin total area)                         &          &          & -0.0871$^{**}$  & -0.3360$^{***}$\\   
+                                                  &          &          & (0.0342)        & (0.0520)\\   
+   Log(origin market value)                       &          &          & 0.0685          & 0.1933$^{***}$\\   
+                                                  &          &          & (0.0421)        & (0.0584)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   Origin tract FE                                &          & Yes      & Yes             & \\  
+   Origin year-built decade FE                    &          &          & Yes             & Yes\\  
+   Origin unit-bin FE                             &          &          & Yes             & Yes\\  
+   Origin building-type FE                        &          &          & Yes             & Yes\\  
+   Origin quality-grade FE                        &          &          & Yes             & Yes\\  
+   Origin stories-bin FE                          &          &          & Yes             & Yes\\  
+   Origin tract x origin filing-bin FE            &          &          &                 & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                   & 160,284  & 160,279  & 157,468         & 157,338\\  
+   \midrule \midrule
+   \multicolumn{5}{l}{\emph{Clustered (Origin block group) standard-errors in parentheses}}\\
+   \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+\end{adjustbox}
+
+\subsubsection{Total Violations per Unit: Destination-Level Specs
+(Additional
+Outcome)}\label{total-violations-per-unit-destination-level-specs-additional-outcome}
+
+\begin{adjustbox}{max width=\textwidth}
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{4}{c}{Destination total violations per unit}\\
+                                                  & Dest A         & Dest B         & Dest C         & Dest D \\   
+   Model:                                         & (1)            & (2)            & (3)            & (4)\\  
+   \midrule
+   \emph{Variables}\\
+   Middle building filing-rate bin $=$ [1,5)")    & -0.0809        & -0.0783        & -0.0505        & -0.0388\\   
+                                                  & (0.0530)       & (0.0525)       & (0.0538)       & (0.0541)\\   
+   Middle building filing-rate bin $=$ [5,10)")   & 0.0873$^{**}$  & 0.0781$^{*}$   & 0.0673         & 0.0680\\   
+                                                  & (0.0417)       & (0.0415)       & (0.0413)       & (0.0416)\\   
+   Middle building filing-rate bin $=$ [10,20)")  & 0.2879$^{***}$ & 0.2711$^{***}$ & 0.2734$^{***}$ & 0.2785$^{***}$\\   
+                                                  & (0.0532)       & (0.0527)       & (0.0530)       & (0.0540)\\   
+   Middle building filing-rate bin $=$ [20,inf)") & 0.2606$^{***}$ & 0.2420$^{***}$ & 0.2546$^{***}$ & 0.2513$^{***}$\\   
+                                                  & (0.0771)       & (0.0761)       & (0.0768)       & (0.0777)\\   
+   Origin total violations per unit               &                & 0.0604$^{***}$ & 0.0555$^{***}$ &   \\   
+                                                  &                & (0.0039)       & (0.0040)       &   \\   
+   Log(origin total area)                         &                &                & -0.0871$^{**}$ & -0.0676$^{*}$\\   
+                                                  &                &                & (0.0342)       & (0.0351)\\   
+   Log(origin market value)                       &                &                & 0.0685         & 0.0507\\   
+                                                  &                &                & (0.0421)       & (0.0443)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   Origin tract FE                                & Yes            & Yes            & Yes            & \\  
+   Origin year-built decade FE                    &                &                & Yes            & Yes\\  
+   Origin unit-bin FE                             &                &                & Yes            & Yes\\  
+   Origin building-type FE                        &                &                & Yes            & Yes\\  
+   Origin quality-grade FE                        &                &                & Yes            & Yes\\  
+   Origin stories-bin FE                          &                &                & Yes            & Yes\\  
+   Origin tract x origin filing-bin FE            &                &                &                & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                   & 160,279        & 160,279        & 157,468        & 157,338\\  
+   \midrule \midrule
+   \multicolumn{5}{l}{\emph{Clustered (Origin block group) standard-errors in parentheses}}\\
+   \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+\end{adjustbox}
+
+\subsubsection{Severe Violations per Unit: Delta Specs (Additional
+Outcome)}\label{severe-violations-per-unit-delta-specs-additional-outcome}
+
+\begin{adjustbox}{max width=\textwidth}
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{4}{c}{Change in severe violations per unit}\\
+                                                  & Delta A  & Delta B  & Delta C         & Delta D \\   
+   Model:                                         & (1)      & (2)      & (3)             & (4)\\  
+   \midrule
+   \emph{Variables}\\
+   Constant                                       & -0.0013  &          &                 &   \\   
+                                                  & (0.0048) &          &                 &   \\   
+   Middle building filing-rate bin $=$ [1,5)")    & 0.0014   & -0.0039  & 0.0049          & -0.0159\\   
+                                                  & (0.0190) & (0.0195) & (0.0163)        & (0.0213)\\   
+   Middle building filing-rate bin $=$ [5,10)")   & -0.0188  & -0.0121  & 0.0134          & 0.0009\\   
+                                                  & (0.0173) & (0.0176) & (0.0118)        & (0.0177)\\   
+   Middle building filing-rate bin $=$ [10,20)")  & 0.0066   & 0.0132   & 0.0401$^{***}$  & 0.0373$^{*}$\\   
+                                                  & (0.0189) & (0.0195) & (0.0144)        & (0.0198)\\   
+   Middle building filing-rate bin $=$ [20,inf)") & 0.0209   & 0.0289   & 0.0668$^{***}$  & 0.0787$^{**}$\\   
+                                                  & (0.0306) & (0.0312) & (0.0253)        & (0.0321)\\   
+   Origin severe violations per unit              &          &          & -0.9867$^{***}$ &   \\   
+                                                  &          &          & (0.0038)        &   \\   
+   Log(origin total area)                         &          &          & -0.0100         & -0.0270$^{**}$\\   
+                                                  &          &          & (0.0089)        & (0.0119)\\   
+   Log(origin market value)                       &          &          & 0.0164          & 0.0042\\   
+                                                  &          &          & (0.0118)        & (0.0168)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   Origin tract FE                                &          & Yes      & Yes             & \\  
+   Origin year-built decade FE                    &          &          & Yes             & Yes\\  
+   Origin unit-bin FE                             &          &          & Yes             & Yes\\  
+   Origin building-type FE                        &          &          & Yes             & Yes\\  
+   Origin quality-grade FE                        &          &          & Yes             & Yes\\  
+   Origin stories-bin FE                          &          &          & Yes             & Yes\\  
+   Origin tract x origin filing-bin FE            &          &          &                 & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                   & 160,284  & 160,279  & 157,468         & 157,338\\  
+   \midrule \midrule
+   \multicolumn{5}{l}{\emph{Clustered (Origin block group) standard-errors in parentheses}}\\
+   \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+\end{adjustbox}
+
+\subsubsection{Severe Violations per Unit: Destination-Level Specs
+(Additional
+Outcome)}\label{severe-violations-per-unit-destination-level-specs-additional-outcome}
+
+\begin{adjustbox}{max width=\textwidth}
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{4}{c}{Destination severe violations per unit}\\
+                                                  & Dest A         & Dest B         & Dest C         & Dest D \\   
+   Model:                                         & (1)            & (2)            & (3)            & (4)\\  
+   \midrule
+   \emph{Variables}\\
+   Middle building filing-rate bin $=$ [1,5)")    & 0.0112         & 0.0110         & 0.0049         & 0.0072\\   
+                                                  & (0.0155)       & (0.0155)       & (0.0163)       & (0.0165)\\   
+   Middle building filing-rate bin $=$ [5,10)")   & 0.0162         & 0.0157         & 0.0134         & 0.0132\\   
+                                                  & (0.0117)       & (0.0117)       & (0.0118)       & (0.0118)\\   
+   Middle building filing-rate bin $=$ [10,20)")  & 0.0433$^{***}$ & 0.0428$^{***}$ & 0.0401$^{***}$ & 0.0406$^{***}$\\   
+                                                  & (0.0143)       & (0.0143)       & (0.0144)       & (0.0146)\\   
+   Middle building filing-rate bin $=$ [20,inf)") & 0.0728$^{***}$ & 0.0722$^{***}$ & 0.0668$^{***}$ & 0.0662$^{***}$\\   
+                                                  & (0.0253)       & (0.0252)       & (0.0253)       & (0.0256)\\   
+   Origin severe violations per unit              &                & 0.0152$^{***}$ & 0.0133$^{***}$ &   \\   
+                                                  &                & (0.0038)       & (0.0038)       &   \\   
+   Log(origin total area)                         &                &                & -0.0100        & -0.0099\\   
+                                                  &                &                & (0.0089)       & (0.0091)\\   
+   Log(origin market value)                       &                &                & 0.0164         & 0.0148\\   
+                                                  &                &                & (0.0118)       & (0.0124)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   Origin tract FE                                & Yes            & Yes            & Yes            & \\  
+   Origin year-built decade FE                    &                &                & Yes            & Yes\\  
+   Origin unit-bin FE                             &                &                & Yes            & Yes\\  
+   Origin building-type FE                        &                &                & Yes            & Yes\\  
+   Origin quality-grade FE                        &                &                & Yes            & Yes\\  
+   Origin stories-bin FE                          &                &                & Yes            & Yes\\  
+   Origin tract x origin filing-bin FE            &                &                &                & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                   & 160,279        & 160,279        & 157,468        & 157,338\\  
+   \midrule \midrule
+   \multicolumn{5}{l}{\emph{Clustered (Origin block group) standard-errors in parentheses}}\\
+   \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+\end{adjustbox}
+
+\subsubsection{LOO Tract Filing Rate Outcomes (EB, Secondary
+Main)}\label{loo-tract-filing-rate-outcomes-eb-secondary-main}
+
+\begin{adjustbox}{max width=\textwidth}
+\begingroup
+\centering
+\begin{tabular}{lcccccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variables: & \multicolumn{2}{c}{Change in LOO tract filing rate (EB)} & \multicolumn{4}{c}{Destination LOO tract filing rate (EB)}\\
+                                                  & Delta A                & Delta B        & Dest A         & Dest B         & Dest C                & Dest D \\   
+   Model:                                         & (1)                    & (2)            & (3)            & (4)            & (5)                   & (6)\\  
+   \midrule
+   \emph{Variables}\\
+   Constant                                       & 0.0002                 &                &                &                &                       &   \\   
+                                                  & (0.0002)               &                &                &                &                       &   \\   
+   Middle building filing-rate bin $=$ [1,5)")    & $-1.31\times 10^{-5}$  & 0.0002         & 0.0002         & 0.0002         & 0.0002                & 0.0002\\   
+                                                  & (0.0003)               & (0.0003)       & (0.0003)       & (0.0003)       & (0.0003)              & (0.0002)\\   
+   Middle building filing-rate bin $=$ [5,10)")   & 0.0002                 & 0.0008$^{***}$ & 0.0007$^{***}$ & 0.0007$^{***}$ & 0.0007$^{***}$        & 0.0007$^{***}$\\   
+                                                  & (0.0002)               & (0.0001)       & (0.0001)       & (0.0001)       & (0.0001)              & (0.0001)\\   
+   Middle building filing-rate bin $=$ [10,20)")  & 0.0003                 & 0.0011$^{***}$ & 0.0010$^{***}$ & 0.0010$^{***}$ & 0.0010$^{***}$        & 0.0010$^{***}$\\   
+                                                  & (0.0002)               & (0.0002)       & (0.0002)       & (0.0002)       & (0.0002)              & (0.0002)\\   
+   Middle building filing-rate bin $=$ [20,inf)") & 0.0002                 & 0.0016$^{***}$ & 0.0011$^{***}$ & 0.0013$^{***}$ & 0.0013$^{***}$        & 0.0014$^{***}$\\   
+                                                  & (0.0004)               & (0.0003)       & (0.0003)       & (0.0003)       & (0.0003)              & (0.0003)\\   
+   Origin LOO tract filing rate (EB)              &                        &                &                & 0.3713$^{**}$  & 0.3631$^{**}$         &   \\   
+                                                  &                        &                &                & (0.1508)       & (0.1619)              &   \\   
+   Log(origin total area)                         &                        &                &                &                & $3.81\times 10^{-5}$  & $4.12\times 10^{-5}$\\    
+                                                  &                        &                &                &                & (0.0002)              & (0.0002)\\   
+   Log(origin market value)                       &                        &                &                &                & -0.0007$^{***}$       & -0.0007$^{***}$\\   
+                                                  &                        &                &                &                & (0.0002)              & (0.0002)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   Origin tract FE                                &                        & Yes            & Yes            & Yes            & Yes                   & \\  
+   Origin year-built decade FE                    &                        &                &                &                & Yes                   & Yes\\  
+   Origin unit-bin FE                             &                        &                &                &                & Yes                   & Yes\\  
+   Origin building-type FE                        &                        &                &                &                & Yes                   & Yes\\  
+   Origin quality-grade FE                        &                        &                &                &                & Yes                   & Yes\\  
+   Origin stories-bin FE                          &                        &                &                &                & Yes                   & Yes\\  
+   Origin tract x origin filing-bin FE            &                        &                &                &                &                       & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                   & 160,667                & 160,658        & 160,658        & 160,658        & 157,691               & 157,563\\  
+   \midrule \midrule
+   \multicolumn{7}{l}{\emph{Clustered (Origin block group) standard-errors in parentheses}}\\
+   \multicolumn{7}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+\end{adjustbox}
+
+\subsubsection{LOO Tract Filing Rate Outcomes (EB High-Filing Dummy,
+Secondary
+Main)}\label{loo-tract-filing-rate-outcomes-eb-high-filing-dummy-secondary-main}
+
+\begin{adjustbox}{max width=\textwidth}
+\begingroup
+\centering
+\begin{tabular}{lcccccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variables: & \multicolumn{2}{c}{Change in LOO tract filing rate (EB)} & \multicolumn{4}{c}{Destination LOO tract filing rate (EB)}\\
+                                                   & Delta A  & Delta B        & Dest A         & Dest B         & Dest C                & Dest D \\   
+   Model:                                          & (1)      & (2)            & (3)            & (4)            & (5)                   & (6)\\  
+   \midrule
+   \emph{Variables}\\
+   Constant                                        & 0.0002   &                &                &                &                       &   \\   
+                                                   & (0.0002) &                &                &                &                       &   \\   
+   Middle building high-filing indicator (>=15\%)  & 0.0002   & 0.0012$^{***}$ & 0.0009$^{***}$ & 0.0010$^{***}$ & 0.0010$^{***}$        & 0.0011$^{***}$\\   
+                                                   & (0.0003) & (0.0002)       & (0.0002)       & (0.0002)       & (0.0002)              & (0.0002)\\   
+   Origin LOO tract filing rate (EB)               &          &                &                & 0.3694$^{**}$  & 0.3615$^{**}$         &   \\   
+                                                   &          &                &                & (0.1508)       & (0.1619)              &   \\   
+   Log(origin total area)                          &          &                &                &                & $4.22\times 10^{-5}$  & $4.34\times 10^{-5}$\\    
+                                                   &          &                &                &                & (0.0002)              & (0.0002)\\   
+   Log(origin market value)                        &          &                &                &                & -0.0007$^{***}$       & -0.0008$^{***}$\\   
+                                                   &          &                &                &                & (0.0002)              & (0.0002)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   Origin tract FE                                 &          & Yes            & Yes            & Yes            & Yes                   & \\  
+   Origin year-built decade FE                     &          &                &                &                & Yes                   & Yes\\  
+   Origin unit-bin FE                              &          &                &                &                & Yes                   & Yes\\  
+   Origin building-type FE                         &          &                &                &                & Yes                   & Yes\\  
+   Origin quality-grade FE                         &          &                &                &                & Yes                   & Yes\\  
+   Origin stories-bin FE                           &          &                &                &                & Yes                   & Yes\\  
+   Origin tract x origin filing-bin FE             &          &                &                &                &                       & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                    & 160,667  & 160,658        & 160,658        & 160,658        & 157,691               & 157,563\\  
+   \midrule \midrule
+   \multicolumn{7}{l}{\emph{Clustered (Origin block group) standard-errors in parentheses}}\\
+   \multicolumn{7}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
 \end{tabular}
 \par\endgroup
 
@@ -549,21 +1222,336 @@ Reference category: (0--5\%{]}.
 \textbf{Eviction persistence:} The positive coefficient on previous
 filing rate indicates that tenants who leave high-eviction buildings
 tend to end up in other high-eviction buildings, even after controlling
-for block group and building size. This is not simply a neighborhood
-effect --- it persists within block groups.
+for tract and building size. This is not simply a neighborhood effect,
+and persists within origin-tract conditioning. EB is the main measure
+shown; raw long-run robustness is in the appendix.
+
+\textbf{Hedonic rent deflation:} Using hedonic-deflated real rents
+(rather than nominal) ensures that rent persistence results are not
+confounded by aggregate rent inflation over the panel period. The year
+fixed effects from the hedonic regression capture common rent trends, so
+\texttt{log\_med\_rent\_real} isolates cross-sectional and
+within-building rent variation.
 
 \textbf{Inflow/Outflow:} High-eviction buildings draw tenants from
 neighborhoods that are already higher-eviction, and their departing
 tenants move to similar or worse neighborhoods. The LOO tract eviction
 rate captures the neighborhood environment excluding the focal building.
 
-\textbf{Trajectories:} The key finding from the trajectory regressions
-is specification (B): after conditioning on origin tract, passing
-through a high-eviction middle building predicts a larger increase in
-neighborhood eviction rate from origin to destination. This suggests
-that high-eviction buildings act as a \emph{channeling mechanism},
-directing tenants toward worse eviction environments relative to their
-starting point.
+\textbf{Trajectories:} The trajectory design reports delta and
+destination-level outcomes separately, and adds richer origin
+conditioning (origin filing rate, origin parcel controls, and
+origin-tract-by-origin-filing-bin FE). This clarifies whether sorting
+patterns persist after conditioning on baseline origin-building risk and
+building characteristics. We also add severe complaints per unit as an
+additional long-run building-level outcome. Unlike the LOO measure,
+building-level outcomes capture within-neighborhood sorting, so tenants
+may systematically sort into worse buildings even within the same tract.
+
+\section{Appendix: Raw Filing
+Robustness}\label{appendix-raw-filing-robustness}
+
+\subsection{Persistence (Raw Long-Run Filing
+Rate)}\label{persistence-raw-long-run-filing-rate}
+
+\begin{table}[htbp]
+\centering
+\caption{\label{tab:evict_persist_raw} Eviction Persistence: Raw Long-Run Filing Rates (Appendix Robustness)}
+\centering
+
+\begin{adjustbox}{max width=\textwidth}
+   \begin{tabular}{lccc}
+      \tabularnewline \midrule \midrule
+      Dependent Variable: & \multicolumn{3}{c}{Filing rate (destination, raw long-run)}\\
+                                           & m1             & m2             & m3 \\   
+      Model:                               & (1)            & (2)            & (3)\\  
+      \midrule
+      \emph{Variables}\\
+      Filing rate (origin, raw long-run)   & 0.1069$^{***}$ & 0.0466$^{***}$ & 0.0447$^{***}$\\   
+                                           & (0.0162)       & (0.0092)       & (0.0114)\\   
+      Avg real rent (destination building) &                &                & -0.0599$^{***}$\\   
+                                           &                &                & (0.0028)\\   
+      Avg real rent (origin building)      &                &                & 0.0016\\   
+                                           &                &                & (0.0029)\\   
+      \midrule
+      \emph{Fixed-effects}\\
+      Units bin (destination)              &                & Yes            & Yes\\  
+      Units bin (origin)                   &                & Yes            & Yes\\  
+      Destination tract FE                 &                & Yes            & Yes\\  
+      Origin tract FE                      &                & Yes            & Yes\\  
+      \midrule
+      \emph{Fit statistics}\\
+      Observations                         & 87,989         & 87,976         & 56,412\\  
+      \midrule \midrule
+      \multicolumn{4}{l}{\emph{Clustered (pid) standard-errors in parentheses}}\\
+      \multicolumn{4}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+   \end{tabular}
+
+\end{adjustbox}
+\end{table}
+
+\subsection{High-Filer and Rent (Raw Long-Run Filing
+Rate)}\label{high-filer-and-rent-raw-long-run-filing-rate}
+
+\begin{table}[htbp]
+\centering
+\caption{\label{tab:evict_persist_hf_rent_raw} High-Filer Persistence and Rent Regressions (Raw Long-Run Appendix Robustness)}
+\centering
+
+\begin{adjustbox}{max width=\textwidth}
+   \begin{tabular}{lccc}
+      \tabularnewline \midrule \midrule
+      Dependent Variables: & \multicolumn{2}{c}{high\_filing\_dest} & Avg real rent (destination building)\\
+                                              & m4             & m5              & m\_rent \\    
+      Model:                                  & (1)            & (2)             & (3)\\  
+      \midrule
+      \emph{Variables}\\
+      high\_filing\_origTRUE                  & 0.0571$^{***}$ & 0.0698$^{***}$  &   \\   
+                                              & (0.0052)       & (0.0140)        &   \\   
+      Avg real rent (destination building)    &                & -0.0180$^{***}$ &   \\   
+                                              &                & (0.0063)        &   \\   
+      Avg real rent (origin building)         &                & -0.0033         & 0.2192$^{***}$\\   
+                                              &                & (0.0044)        & (0.0072)\\   
+      Filing rate (origin, raw long-run)      &                &                 & -0.0130$^{*}$\\   
+                                              &                &                 & (0.0068)\\   
+      Filing rate (destination, raw long-run) &                &                 & -0.2731$^{***}$\\   
+                                              &                &                 & (0.0399)\\   
+      \midrule
+      \emph{Fixed-effects}\\
+      Units bin (destination)                 & Yes            & Yes             & Yes\\  
+      Units bin (origin)                      & Yes            & Yes             & Yes\\  
+      Destination tract FE                    & Yes            & Yes             & Yes\\  
+      Origin tract FE                         & Yes            & Yes             & Yes\\  
+      \midrule
+      \emph{Fit statistics}\\
+      Observations                            & 87,976         & 20,209          & 56,412\\  
+      \midrule \midrule
+      \multicolumn{4}{l}{\emph{Clustered (pid) standard-errors in parentheses}}\\
+      \multicolumn{4}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+   \end{tabular}
+
+\end{adjustbox}
+\end{table}
+
+\subsection{Trajectory Filing Outcomes (Raw Long-Run Filing
+Rate)}\label{trajectory-filing-outcomes-raw-long-run-filing-rate}
+
+\begin{adjustbox}{max width=\textwidth}
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{4}{c}{Change in filing rate (destination - origin, raw long-run)}\\
+                                                  & Delta A        & Delta B      & Delta C         & Delta D \\   
+   Model:                                         & (1)            & (2)          & (3)             & (4)\\  
+   \midrule
+   \emph{Variables}\\
+   Constant                                       & 0.0027$^{***}$ &              &                 &   \\   
+                                                  & (0.0005)       &              &                 &   \\   
+   Middle building filing-rate bin $=$ [1,5)")    & -0.0039        & -0.0053      & 0.0006          & 0.0018\\   
+                                                  & (0.0057)       & (0.0052)     & (0.0028)        & (0.0031)\\   
+   Middle building filing-rate bin $=$ [5,10)")   & -0.0005        & 0.0009       & 0.0080$^{***}$  & 0.0067$^{***}$\\   
+                                                  & (0.0017)       & (0.0019)     & (0.0017)        & (0.0015)\\   
+   Middle building filing-rate bin $=$ [10,20)")  & 0.0008         & 0.0025       & 0.0164$^{***}$  & 0.0145$^{***}$\\   
+                                                  & (0.0017)       & (0.0018)     & (0.0021)        & (0.0021)\\   
+   Middle building filing-rate bin $=$ [20,inf)") & 0.0027         & 0.0048$^{*}$ & 0.0398$^{***}$  & 0.0309$^{***}$\\   
+                                                  & (0.0029)       & (0.0028)     & (0.0044)        & (0.0031)\\   
+   Origin filing rate (raw long-run)              &                &              & -0.9800$^{***}$ &   \\   
+                                                  &                &              & (0.0158)        &   \\   
+   Log(origin total area)                         &                &              & 0.0025$^{*}$    & -0.0011\\   
+                                                  &                &              & (0.0013)        & (0.0020)\\   
+   Log(origin market value)                       &                &              & -0.0040         & -0.0070$^{***}$\\   
+                                                  &                &              & (0.0026)        & (0.0026)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   Origin tract FE                                &                & Yes          & Yes             & \\  
+   Origin year-built decade FE                    &                &              & Yes             & Yes\\  
+   Origin unit-bin FE                             &                &              & Yes             & Yes\\  
+   Origin building-type FE                        &                &              & Yes             & Yes\\  
+   Origin quality-grade FE                        &                &              & Yes             & Yes\\  
+   Origin stories-bin FE                          &                &              & Yes             & Yes\\  
+   Origin tract x origin filing-bin FE            &                &              &                 & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                   & 160,284        & 160,279      & 157,468         & 157,338\\  
+   \midrule \midrule
+   \multicolumn{5}{l}{\emph{Clustered (Origin block group) standard-errors in parentheses}}\\
+   \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+\end{adjustbox}
+
+\begin{adjustbox}{max width=\textwidth}
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{4}{c}{Destination filing rate (raw long-run)}\\
+                                                  & Dest A         & Dest B         & Dest C         & Dest D \\   
+   Model:                                         & (1)            & (2)            & (3)            & (4)\\  
+   \midrule
+   \emph{Variables}\\
+   Middle building filing-rate bin $=$ [1,5)")    & 0.0039         & 0.0037         & 0.0006         & 0.0022\\   
+                                                  & (0.0025)       & (0.0025)       & (0.0028)       & (0.0029)\\   
+   Middle building filing-rate bin $=$ [5,10)")   & 0.0098$^{***}$ & 0.0096$^{***}$ & 0.0080$^{***}$ & 0.0076$^{***}$\\   
+                                                  & (0.0018)       & (0.0019)       & (0.0017)       & (0.0015)\\   
+   Middle building filing-rate bin $=$ [10,20)")  & 0.0188$^{***}$ & 0.0184$^{***}$ & 0.0164$^{***}$ & 0.0153$^{***}$\\   
+                                                  & (0.0022)       & (0.0024)       & (0.0021)       & (0.0019)\\   
+   Middle building filing-rate bin $=$ [20,inf)") & 0.0463$^{***}$ & 0.0452$^{***}$ & 0.0398$^{***}$ & 0.0365$^{***}$\\   
+                                                  & (0.0049)       & (0.0054)       & (0.0044)       & (0.0038)\\   
+   Origin filing rate (raw long-run)              &                & 0.0250         & 0.0200         &   \\   
+                                                  &                & (0.0177)       & (0.0158)       &   \\   
+   Log(origin total area)                         &                &                & 0.0025$^{*}$   & 0.0015\\   
+                                                  &                &                & (0.0013)       & (0.0012)\\   
+   Log(origin market value)                       &                &                & -0.0040        & -0.0038$^{*}$\\   
+                                                  &                &                & (0.0026)       & (0.0022)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   Origin tract FE                                & Yes            & Yes            & Yes            & \\  
+   Origin year-built decade FE                    &                &                & Yes            & Yes\\  
+   Origin unit-bin FE                             &                &                & Yes            & Yes\\  
+   Origin building-type FE                        &                &                & Yes            & Yes\\  
+   Origin quality-grade FE                        &                &                & Yes            & Yes\\  
+   Origin stories-bin FE                          &                &                & Yes            & Yes\\  
+   Origin tract x origin filing-bin FE            &                &                &                & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                   & 160,279        & 160,279        & 157,468        & 157,338\\  
+   \midrule \midrule
+   \multicolumn{5}{l}{\emph{Clustered (Origin block group) standard-errors in parentheses}}\\
+   \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+\end{adjustbox}
+
+\begin{adjustbox}{max width=\textwidth}
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{4}{c}{Destination filing rate (raw long-run)}\\
+                                                   & Dest A         & Dest B         & Dest C         & Dest D \\   
+   Model:                                          & (1)            & (2)            & (3)            & (4)\\  
+   \midrule
+   \emph{Variables}\\
+   Middle building high-filing indicator (>=15\%)  & 0.0349$^{***}$ & 0.0341$^{***}$ & 0.0305$^{***}$ & 0.0277$^{***}$\\   
+                                                   & (0.0038)       & (0.0042)       & (0.0035)       & (0.0030)\\   
+   Origin filing rate (raw long-run)               &                & 0.0262         & 0.0208         &   \\   
+                                                   &                & (0.0180)       & (0.0161)       &   \\   
+   Log(origin total area)                          &                &                & 0.0026$^{*}$   & 0.0016\\   
+                                                   &                &                & (0.0013)       & (0.0012)\\   
+   Log(origin market value)                        &                &                & -0.0043        & -0.0040$^{*}$\\   
+                                                   &                &                & (0.0026)       & (0.0022)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   Origin tract FE                                 & Yes            & Yes            & Yes            & \\  
+   Origin year-built decade FE                     &                &                & Yes            & Yes\\  
+   Origin unit-bin FE                              &                &                & Yes            & Yes\\  
+   Origin building-type FE                         &                &                & Yes            & Yes\\  
+   Origin quality-grade FE                         &                &                & Yes            & Yes\\  
+   Origin stories-bin FE                           &                &                & Yes            & Yes\\  
+   Origin tract x origin filing-bin FE             &                &                &                & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                    & 160,279        & 160,279        & 157,468        & 157,338\\  
+   \midrule \midrule
+   \multicolumn{5}{l}{\emph{Clustered (Origin block group) standard-errors in parentheses}}\\
+   \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+\end{adjustbox}
+
+\subsection{LOO Tract Filing Rate Outcomes (Raw Appendix
+Robustness)}\label{loo-tract-filing-rate-outcomes-raw-appendix-robustness}
+
+\begin{adjustbox}{max width=\textwidth}
+\begingroup
+\centering
+\begin{tabular}{lcccccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variables: & \multicolumn{2}{c}{Change in LOO tract filing rate (raw)} & \multicolumn{4}{c}{Destination LOO tract filing rate (raw)}\\
+                                                  & Delta A                & Delta B        & Dest A                & Dest B         & Dest C         & Dest D \\   
+   Model:                                         & (1)                    & (2)            & (3)                   & (4)            & (5)            & (6)\\  
+   \midrule
+   \emph{Variables}\\
+   Constant                                       & $-5.33\times 10^{-5}$  &                &                       &                &                &   \\   
+                                                  & (0.0006)               &                &                       &                &                &   \\   
+   Middle building filing-rate bin $=$ [1,5)")    & -0.0004                & 0.0002         & $2.54\times 10^{-5}$  & 0.0001         & 0.0003         & 0.0004\\   
+                                                  & (0.0016)               & (0.0008)       & (0.0009)              & (0.0008)       & (0.0005)       & (0.0005)\\   
+   Middle building filing-rate bin $=$ [5,10)")   & $-3.01\times 10^{-5}$  & 0.0003         & 0.0002                & 0.0003         & 0.0004         & 0.0004\\   
+                                                  & (0.0002)               & (0.0003)       & (0.0003)              & (0.0003)       & (0.0002)       & (0.0002)\\   
+   Middle building filing-rate bin $=$ [10,20)")  & $2.42\times 10^{-5}$   & 0.0006         & 0.0005                & 0.0006         & 0.0006         & 0.0006$^{*}$\\   
+                                                  & (0.0003)               & (0.0004)       & (0.0005)              & (0.0004)       & (0.0004)       & (0.0004)\\   
+   Middle building filing-rate bin $=$ [20,inf)") & $-9.52\times 10^{-5}$  & 0.0011$^{***}$ & 0.0006                & 0.0009$^{**}$  & 0.0011$^{***}$ & 0.0009$^{***}$\\   
+                                                  & (0.0004)               & (0.0004)       & (0.0005)              & (0.0004)       & (0.0003)       & (0.0003)\\   
+   Origin LOO tract filing rate (raw)             &                        &                &                       & 0.7790$^{***}$ & 0.8058$^{***}$ &   \\   
+                                                  &                        &                &                       & (0.1025)       & (0.1230)       &   \\   
+   Log(origin total area)                         &                        &                &                       &                & -0.0004        & -0.0005\\   
+                                                  &                        &                &                       &                & (0.0005)       & (0.0004)\\   
+   Log(origin market value)                       &                        &                &                       &                & -0.0004        & -0.0004\\   
+                                                  &                        &                &                       &                & (0.0004)       & (0.0003)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   Origin tract FE                                &                        & Yes            & Yes                   & Yes            & Yes            & \\  
+   Origin year-built decade FE                    &                        &                &                       &                & Yes            & Yes\\  
+   Origin unit-bin FE                             &                        &                &                       &                & Yes            & Yes\\  
+   Origin building-type FE                        &                        &                &                       &                & Yes            & Yes\\  
+   Origin quality-grade FE                        &                        &                &                       &                & Yes            & Yes\\  
+   Origin stories-bin FE                          &                        &                &                       &                & Yes            & Yes\\  
+   Origin tract x origin filing-bin FE            &                        &                &                       &                &                & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                   & 160,667                & 160,658        & 160,658               & 160,658        & 157,691        & 157,563\\  
+   \midrule \midrule
+   \multicolumn{7}{l}{\emph{Clustered (Origin block group) standard-errors in parentheses}}\\
+   \multicolumn{7}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+\end{adjustbox}
+
+\begin{adjustbox}{max width=\textwidth}
+\begingroup
+\centering
+\begin{tabular}{lcccccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variables: & \multicolumn{2}{c}{Change in LOO tract filing rate (raw)} & \multicolumn{4}{c}{Destination LOO tract filing rate (raw)}\\
+                                                   & Delta A                & Delta B  & Dest A   & Dest B         & Dest C         & Dest D \\   
+   Model:                                          & (1)                    & (2)      & (3)      & (4)            & (5)            & (6)\\  
+   \midrule
+   \emph{Variables}\\
+   Constant                                        & $-6.88\times 10^{-5}$  &          &          &                &                &   \\   
+                                                   & (0.0006)               &          &          &                &                &   \\   
+   Middle building high-filing indicator (>=15\%)  & -0.0002                & 0.0006   & 0.0003   & 0.0006         & 0.0007$^{**}$  & 0.0006$^{*}$\\   
+                                                   & (0.0003)               & (0.0004) & (0.0005) & (0.0004)       & (0.0003)       & (0.0003)\\   
+   Origin LOO tract filing rate (raw)              &                        &          &          & 0.7780$^{***}$ & 0.8049$^{***}$ &   \\   
+                                                   &                        &          &          & (0.1033)       & (0.1233)       &   \\   
+   Log(origin total area)                          &                        &          &          &                & -0.0004        & -0.0005\\   
+                                                   &                        &          &          &                & (0.0005)       & (0.0004)\\   
+   Log(origin market value)                        &                        &          &          &                & -0.0004        & -0.0004\\   
+                                                   &                        &          &          &                & (0.0004)       & (0.0003)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   Origin tract FE                                 &                        & Yes      & Yes      & Yes            & Yes            & \\  
+   Origin year-built decade FE                     &                        &          &          &                & Yes            & Yes\\  
+   Origin unit-bin FE                              &                        &          &          &                & Yes            & Yes\\  
+   Origin building-type FE                         &                        &          &          &                & Yes            & Yes\\  
+   Origin quality-grade FE                         &                        &          &          &                & Yes            & Yes\\  
+   Origin stories-bin FE                           &                        &          &          &                & Yes            & Yes\\  
+   Origin tract x origin filing-bin FE             &                        &          &          &                &                & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                    & 160,667                & 160,658  & 160,658  & 160,658        & 157,691        & 157,563\\  
+   \midrule \midrule
+   \multicolumn{7}{l}{\emph{Clustered (Origin block group) standard-errors in parentheses}}\\
+   \multicolumn{7}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+
+\end{adjustbox}
 
 
 

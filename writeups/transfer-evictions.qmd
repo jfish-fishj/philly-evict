@@ -1,0 +1,488 @@
+---
+title: "Ownership Transfers and Eviction Filing Rates: Event Study"
+author: "Philly Evictions Project"
+date: today
+format:
+  pdf:
+    pdf-engine: xelatex
+    documentclass: article
+    geometry: margin=1in
+    fontsize: 11pt
+    keep-tex: true
+    number-sections: true
+    toc: true
+    include-in-header:
+      text: |
+        \usepackage{booktabs}
+        \usepackage{dcolumn}
+        \usepackage{longtable}
+        \usepackage{adjustbox}
+        \usepackage{amsmath}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 10,
+  fig.height = 7,
+  dpi = 300
+)
+```
+
+```{r load-data}
+suppressPackageStartupMessages({
+  library(data.table)
+  library(knitr)
+  library(kableExtra)
+})
+qmd_path <- knitr::current_input(dir = TRUE)
+proj_root <- normalizePath(file.path(dirname(qmd_path), ".."), winslash = "/", mustWork = FALSE)
+source(file.path(proj_root, "r", "config.R"))
+old_wd <- getwd()
+setwd(proj_root)
+on.exit(setwd(old_wd), add = TRUE)
+cfg <- read_config(file.path(proj_root, "config.yml"))
+
+out_dir <- file.path(proj_root, "output", "transfer_evictions")
+fig_dir <- file.path(proj_root, "output", "figs")
+qa_dir  <- file.path(proj_root, "output", "qa")
+
+include_tex_table <- function(path, max_width = "\\textwidth") {
+  if (!file.exists(path)) { cat("Table not found:", path); return(invisible(NULL)) }
+  lines <- readLines(path)
+  txt <- paste(lines, collapse = "\n")
+  has_float <- grepl("\\\\begin\\{table\\}", txt)
+  if (has_float) {
+    is_float <- grepl("^\\s*\\\\begin\\{table\\}|^\\s*\\\\end\\{table\\}", lines)
+    is_meta  <- grepl("^\\s*\\\\caption|^\\s*\\\\label|^\\s*\\\\centering", lines)
+    cap_lines <- trimws(lines[is_meta])
+    inner <- lines[!is_float & !is_meta]
+    cat("\\begin{table}[htbp]\n\\centering\n")
+    cat(cap_lines, sep = "\n")
+    cat("\n\\begin{adjustbox}{max width=", max_width, "}\n", sep = "")
+    cat(inner, sep = "\n")
+    cat("\n\\end{adjustbox}\n\\end{table}\n")
+  } else {
+    cat("\\begin{adjustbox}{max width=", max_width, "}\n", sep = "")
+    cat(lines, sep = "\n")
+    cat("\n\\end{adjustbox}\n")
+  }
+}
+
+# Load results (unified output naming: annual_ prefix)
+baseline_coefs  <- fread(file.path(out_dir, "annual_baseline_coefs.csv"))
+buyer_coefs     <- fread(file.path(out_dir, "annual_buyer_type_coefs.csv"))
+size_coefs      <- fread(file.path(out_dir, "annual_size_coefs.csv"))
+corp_size_coefs <- fread(file.path(out_dir, "annual_corp_x_size_coefs.csv"))
+portfolio_coefs <- fread(file.path(out_dir, "annual_portfolio_coefs.csv"))
+robust_coefs    <- fread(file.path(out_dir, "annual_robustness_coefs.csv"))
+entry_coefs     <- fread(file.path(out_dir, "annual_rental_entry_coefs.csv"))
+acq_coefs       <- fread(file.path(out_dir, "annual_acq_filer_coefs.csv"))
+descriptives    <- fread(file.path(out_dir, "annual_descriptives.csv"))
+balance         <- fread(file.path(out_dir, "annual_balance_by_buyer.csv"))
+raw_means       <- fread(file.path(out_dir, "annual_pretrend_means.csv"))
+composition     <- fread(file.path(out_dir, "annual_composition_by_et.csv"))
+pooled_coefs    <- fread(file.path(out_dir, "annual_pooled_window_coefs.csv"))
+post_pre        <- fread(file.path(out_dir, "annual_post_minus_pre_summary.csv"))
+```
+
+# Overview
+
+This document reports an event study of eviction filing rates around ownership transfers in Philadelphia rental properties. The central question: **do eviction rates change when a property changes hands, and does it depend on who buys it?**
+
+We construct a panel centered on each transfer event, tracking filing rates from 3 years before to 5 years after the sale. We estimate building fixed effects models that identify the effect from within-building variation over time, controlling for year shocks.
+
+**Key findings:**
+
+1. Eviction filing rates increase sharply after ownership transfers, rising by approximately 0.8 percentage points (relative to a baseline of ~3%) within two years of sale.
+2. The effect is driven entirely by **corporate buyers** --- individual-to-individual transfers show no increase or a slight decline in filings.
+3. The effect is **not limited to small properties** --- it appears across all building sizes, with the largest point estimates for 10--19 and 20+ unit buildings.
+4. Larger portfolio buyers (10+ properties) show the steepest increases.
+5. **Selection concern**: Corporate transfers substantially increase the probability that a property obtains a rental license (+9 pp at $t+1$) or appears in rental listings (+8 pp at $t+0$). This suggests corporate buyers are bringing formerly owner-occupied properties onto the rental market, mechanically expanding the population at risk for eviction.
+6. **Acquirer filing history matters**: Using pre-acquisition filing rates on the acquirer's other properties (years before the transfer), high-filer portfolio acquirers show the largest post-transfer increase; low-filer portfolio acquirers show a moderate increase; non-filers and single-purchase acquirers show little change or a decline.
+
+# Data Construction
+
+## Transfer events
+
+Transfer events come from the Philadelphia Real Estate Transfer Tax (RTT) records (`rtt_clean`), which log every deed transfer with buyer (grantee), seller (grantor), sale price, and document type.
+
+**Processing steps:**
+
+- Multiple transfers of the same PID in the same year are collapsed to one observation, keeping the transfer with the highest `total_consideration`.
+- **Sheriff's deeds** (foreclosures) are flagged via `document_type`. Approximately 10\% of all RTT records are sheriff's deeds. These are predominantly received by banks, servicers, and government-sponsored enterprises (Fannie Mae, Freddie Mac, HUD) --- entities that temporarily hold title after foreclosure, not active landlords.
+
+## Owner linkage
+
+Buyer names are standardized and linked via `r/build-owner-linkage.R`:
+
+- **Corporate entities** are classified using `business_regex` (matching LLC, INC, CORP, TRUST, BANK, and ~40 other business keywords). Legal entity suffixes (LLC, INC, CORP, LP, LTD, CO, COMPANY) are stripped to group variants (e.g., "EMC MORTGAGE CORPORATION" and "EMC MORTGAGE LLC" map to the same owner group).
+- **Individual names** are *not* grouped across transfers --- matching "SMITH ROBERT" across properties without address verification would create false merges. For 10+ unit buildings, 97\% of top-evicting transfers are corporate, so this primarily affects small single-family properties where portfolio analysis is less relevant.
+- **Portfolio size** is computed from non-sheriff acquisitions only, so that Fannie Mae's 1,200 foreclosure takeovers do not inflate its portfolio bin. Bins: Single-purchase, 2--4, 5--9, 10+, and Sheriff-only.
+
+## Event panel
+
+For each transfer, we construct an event-time window $t \in \{-3, \ldots, +5\}$ years relative to the sale year. We merge building-level outcomes from `bldg_panel_blp`:
+
+- **Filing rate**: $\text{num\_filings} / \text{total\_units}$ (contemporaneous, not the EB-smoothed pre-COVID rate)
+- **Violations**, **complaints**, **rent** as secondary outcomes
+- **Rental flags**: `rental_from_license`, `rental_from_altos`, `rental_from_evict`, `ever_rental_any_year_ever`
+
+```{r sample-stats}
+desc_buyer <- descriptives
+```
+
+**Sample:** `r format(baseline_coefs[spec == "full", n[1]], big.mark = ",")` building $\times$ event-time observations in the full baseline regression (after singleton removal). Coverage increases from 27\% at $t = -3$ to 38\% at $t = +5$, reflecting the panel's forward expansion. All regressions restrict to pre-COVID observations (calendar year $\leq$ 2019).
+
+## Sample descriptives
+
+```{r desc-buyer}
+kable(desc_buyer[, .(buyer_type, n_transfers, mean_units, mean_filing_rate,
+                     mean_violations, median_price, pct_sheriff)],
+      col.names = c("Buyer Type", "N transfers", "Mean units", "Mean filing rate",
+                     "Mean violations", "Median price", "% Sheriff"),
+      digits = c(0, 0, 1, 4, 2, 0, 1),
+      format.args = list(big.mark = ","),
+      caption = "Transfer sample descriptives by buyer type (at t=0)") |>
+  kable_styling(latex_options = c("hold_position"))
+```
+
+```{r desc-portfolio}
+# Portfolio descriptives available in annual_acq_descriptives.csv
+```
+
+Corporate buyers acquire buildings with higher filing rates and more violations, pay lower median prices, and are much more likely to acquire via sheriff's deed (25\% vs.\ 4\% for individuals).
+
+# Specification
+
+The baseline event study estimates:
+
+$$
+\text{FilingRate}_{it} = \sum_{k \neq -1} \beta_k \cdot \mathbf{1}[\text{EventTime}_{it} = k] + \alpha_i + \gamma_t + \varepsilon_{it}
+$$
+
+where $i$ indexes buildings (PIDs), $t$ indexes calendar years, and EventTime $k \in \{-3, -2, 0, 1, 2, 3, 4, 5\}$ relative to the transfer year (with $k = -1$ as the omitted reference period). $\alpha_i$ are building fixed effects and $\gamma_t$ are year fixed effects. Standard errors are clustered at the PID level.
+
+**Specifications:**
+
+| Spec | Sample | Fixed Effects |
+|------|--------|---------------|
+| (1) Full | All buildings | PID + Year |
+| (2) 2+ units | Buildings with 2+ units | PID + Year |
+| (3) 5+ units | Buildings with 5+ units | PID + Year |
+| (4) 2+ units, pre-transfer rental | 2+ units with pre-transfer rental evidence | PID + Year |
+| (5) 5+ units, pre-transfer rental | 5+ units with pre-transfer rental evidence | PID + Year |
+
+The building FE absorb time-invariant building characteristics (size, location, quality). The progressive sample restrictions address key identification concerns: **2+ units** excludes single-family homes where a single filing produces a mechanically large filing rate; **pre-transfer rental** restricts to buildings that had rental evidence (rental license, Altos/Apartments.com listing, or eviction filing) in any year *before* the transfer. This is critical: 21\% of transfer-events involve properties that first appear as rentals only *after* the sale (potential owner-occupied-to-rental conversions). Using "ever rental" (pre or post) would contaminate the sample with these conversions, where filing rate increases may be mechanical rather than behavioral. The pre-transfer restriction ensures we study properties that were already operating as rentals.
+
+For **overlapping event windows** (49\% of PIDs have multiple transfers), we stack all transfer events. Single-transfer-only is a robustness check.
+
+# Baseline Results
+
+## Raw means
+
+```{r raw-means-table}
+kable(raw_means,
+      digits = c(0, 5, 3, 2, 0),
+      format.args = list(big.mark = ","),
+      caption = "Raw outcome means by event time") |>
+  kable_styling(latex_options = c("hold_position"))
+```
+
+```{r raw-means-plot, fig.cap="Mean filing rate by event time (full sample). Shaded ribbon shows 95\\% CI."}
+knitr::include_graphics(file.path(fig_dir, "rtt_annual_raw.png"))
+```
+
+The raw means show filing rates at approximately 3.2\% in the pre-period ($t = -3, -2$), rising to 3.8\% at $t = -1$, dipping to 2.9\% at $t = 0$ (year of sale), and then jumping to 4.0--4.6\% in the post-period. The dip at $t = 0$ likely reflects a brief transition period where the building is changing hands.
+
+**Pre-trend concern**: The jump from $t=-2$ (3.2\%) to $t=-1$ (3.8\%) is notable. Filing rates are *rising* into the transfer year. This could reflect sellers filing more evictions to clear out tenants before sale, or buildings with rising eviction pressure being selected into transfer. The regression's building FE control for the level of each building's filing rate, but the *trend* remains a concern for causal interpretation.
+
+## Regression estimates
+
+```{r baseline-coefplot, fig.cap="Event study coefficients: filing rate around ownership transfer. Reference period is t=-1."}
+knitr::include_graphics(file.path(fig_dir, "rtt_annual_baseline.png"))
+```
+
+```{r baseline-table, results='asis'}
+include_tex_table(file.path(out_dir, "annual_baseline_etable.tex"))
+```
+
+**Full sample** (Spec 1): Filing rates increase post-transfer, sustained through $t + 5$. Pre-period coefficients at $t - 3$ and $t - 2$ are negative (relative to $t = -1$), consistent with an upward pre-trend as discussed above.
+
+**2+ units** (Spec 2): Excluding single-unit properties (predominantly owner-occupied) produces a cleaner sample where filing rate changes are more interpretable as landlord behavior rather than rental market entry.
+
+**5+ units** (Spec 3): Point estimates are larger but less precisely estimated given the smaller sample. Pre-trends are flatter, which is reassuring.
+
+**Pre-transfer rentals** (Specs 4--5): Restricting to buildings with rental evidence *before* the transfer addresses the key selection concern: corporate transfers may bring formerly owner-occupied properties onto the rental market, mechanically increasing filing rates. The pre-transfer restriction excludes the 21\% of transfer-events where the property first appears as a rental only after the sale. The **5+ unit, pre-transfer rental** subsample is our most defensible specification --- established rentals where filing rate increases cannot be explained by rental market entry.
+
+# Selection Concern: Rental Market Entry
+
+A central concern is that corporate transfers may bring formerly owner-occupied properties onto the rental market, mechanically increasing the population at risk for eviction filings. We test this directly by using rental license and Altos listing indicators as outcomes. **All rental entry regressions restrict to 2+ unit buildings and pre-COVID years.**
+
+```{r entry-license, fig.cap="P(rental license) around transfer, by buyer type. Corporate buyers show a massive jump in rental licensing probability."}
+knitr::include_graphics(file.path(fig_dir, "rtt_annual_rental_license_entry.png"))
+```
+
+```{r entry-any, fig.cap="P(any rental evidence) around transfer, by buyer type."}
+knitr::include_graphics(file.path(fig_dir, "rtt_annual_any_rental_entry.png"))
+```
+
+```{r entry-table}
+entry_summary <- entry_coefs[grepl("event_time::", term)]
+entry_summary[, et := as.integer(stringr::str_extract(term, "-?\\d+"))]
+entry_key <- entry_summary[et %in% c(-2, 0, 1, 3),
+                           .(spec, et, estimate = round(estimate, 3),
+                             std_error = round(std_error, 3))]
+entry_wide <- dcast(entry_key, spec ~ et, value.var = "estimate")
+setnames(entry_wide, c("Specification", "t-2", "t=0", "t+1", "t+3"))
+kable(entry_wide,
+      caption = "Rental market entry coefficients at key event times (relative to t=-1)") |>
+  kable_styling(latex_options = c("hold_position", "scale_down"))
+```
+
+**Key findings:**
+
+- **Corporate buyers** increase P(rental license) by +8.9 pp at $t=0$ and +16.8 pp at $t+1$ (relative to $t=-1$). P(Altos listing) jumps by +7.7 pp at $t=0$.
+- **Individual buyers** show a slight *decline* in rental licensing at $t=0$ ($-3.3$ pp), recovering by $t+3$.
+- The rental entry effect is large and highly significant. This is strong evidence that corporate transfers are converting owner-occupied properties to rentals.
+
+**Implication**: The full-sample eviction increase after corporate transfers partly reflects the mechanical effect of new rentals entering the market. The **known rental 5+ unit** specification (Section 4) addresses this by restricting to properties already in the rental market.
+
+Note: rental license coverage begins around 2013 in the Philadelphia data. All rental entry regressions are restricted to year $\geq$ 2011. Altos (Apartments.com) listing data is available from 2006.
+
+# Heterogeneity by Buyer Type
+
+All heterogeneity and robustness analyses restrict the sample to **buildings with 2+ units**, excluding single-family homes where a single eviction filing produces a mechanically large filing rate and where most properties are owner-occupied (not at risk for landlord-tenant filings). All regressions use pre-COVID observations only (calendar year $\leq$ 2019).
+
+```{r buyer-coefplot, fig.cap="Event study by buyer type (split-sample, 2+ units). Corporate buyers show a sharp post-transfer increase; individual buyers show a slight decline."}
+knitr::include_graphics(file.path(fig_dir, "rtt_annual_by_buyer.png"))
+```
+
+The buyer type split reveals the central finding:
+
+- **Corporate buyers**: Filing rates jump sharply post-transfer, with sustained increases through the post period. Pre-trends are essentially flat.
+- **Individual buyers**: Filing rates show no post-transfer increase or a slight decline.
+
+The contrast is stark. The aggregate post-transfer increase in evictions is entirely driven by corporate acquisitions.
+
+```{r buyer-table, results='asis'}
+include_tex_table(file.path(out_dir, "annual_buyer_type_etable.tex"))
+```
+
+## Pre-transfer balance
+
+```{r balance-table}
+bal_cols <- intersect(c("buyer_type", "mean_filing_rate", "mean_violations", "mean_units", "n"),
+                      names(balance))
+kable(balance[, ..bal_cols],
+      caption = "Pre-transfer balance by buyer type") |>
+  kable_styling(latex_options = c("hold_position"))
+```
+
+Buildings acquired by corporate buyers have slightly higher pre-transfer filing rates (0.038 vs.\ 0.034), more violations, lower rents, and more units. The event study's building FE absorb these level differences, identifying the effect from within-building changes.
+
+# Heterogeneity by Acquirer Filing Rate
+
+We classify acquirers by their **pre-acquisition temporal filing rate** on the acquirer's *other* properties in years before the transfer. For each transfer of building $i$ by owner $j$ in year $Y$, we compute the mean filing rate ($\text{num\_filings} / \text{total\_units}$) across all other PIDs acquired by owner $j$, using only years strictly before $Y$. This avoids look-ahead bias --- the classification uses no post-transfer data.
+
+Acquirers are classified into four bins:
+
+- **High-filer portfolio**: Above-median pre-acquisition filing rate (among those with positive rates and a portfolio)
+- **Low-filer portfolio**: At or below median pre-acquisition filing rate
+- **Non-filer (has portfolio)**: Zero filing rate but owns multiple properties
+- **Single-purchase**: No other properties in the data (cannot compute a portfolio filing rate)
+
+```{r acq-filer-plot, fig.cap="Event study by acquirer pre-acquisition filing rate. High-filer portfolio acquirers show the largest post-transfer increase."}
+knitr::include_graphics(file.path(fig_dir, "rtt_annual_by_acq_filer.png"))
+```
+
+```{r acq-filer-table, results='asis'}
+include_tex_table(file.path(out_dir, "annual_acq_filer_etable.tex"))
+```
+
+```{r acq-filer-summary}
+acq_summary <- acq_coefs[grepl("event_time::", term)]
+acq_summary[, et := as.integer(stringr::str_extract(term, "-?\\d+"))]
+acq_key <- acq_summary[et %in% c(-2, 1, 3, 5),
+                        .(spec, et, estimate = round(estimate, 4))]
+acq_wide <- dcast(acq_key, spec ~ et, value.var = "estimate")
+if (ncol(acq_wide) == 5) {
+  setnames(acq_wide, c("Acquirer Type", "t-2", "t+1", "t+3", "t+5"))
+}
+kable(acq_wide,
+      caption = "Event study coefficients at key periods by acquirer pre-acquisition filing rate") |>
+  kable_styling(latex_options = c("hold_position"))
+```
+
+The key findings:
+
+- **High-filer portfolio** acquirers show the largest post-transfer increase in filing rates. These are serial acquirers whose pre-existing filing behavior on other properties predicts aggressive eviction filing on newly acquired buildings.
+- **Low-filer portfolio** acquirers show a moderate increase, substantially smaller than high-filers.
+- **Non-filer (has portfolio)** acquirers own multiple properties but had zero filing rates before this acquisition. They show little change post-transfer.
+- **Single-purchase** acquirers (the majority) have no portfolio filing history. They show no meaningful post-transfer increase.
+
+This decomposition --- using only pre-acquisition behavior --- confirms that the aggregate effect is driven by a specific subset of acquirers who are systematic high-filers. The classification is not contaminated by post-transfer outcomes.
+
+# Heterogeneity by Building Size
+
+We estimate the event study separately by building size bin (all 2+ units, pre-COVID only).
+
+```{r size-coefplot, fig.cap="Event study by building size bin (2+ units). The effect appears across all size categories."}
+knitr::include_graphics(file.path(fig_dir, "rtt_annual_by_size.png"))
+```
+
+```{r size-table, results='asis'}
+include_tex_table(file.path(out_dir, "annual_size_etable.tex"))
+```
+
+The post-transfer increase appears across all multi-family building sizes:
+
+- **2--4 units**: Moderate post-transfer increase, flat pre-trends.
+- **5--19 units**: Larger increase, relatively flat pre-trends.
+- **20+ units**: Large increase, with a noisier pre-period given the smaller sample.
+
+If anything, the effect is *larger* for bigger buildings, where each additional filing is a smaller share of units and thus harder to detect. We pool 5--19 units into a single bin given similar effect magnitudes and to improve statistical power.
+
+## Corporate buyer effect by building size
+
+To confirm the corporate buyer effect isn't driven solely by small properties, we cross the buyer type and building size splits:
+
+```{r corp-size-table}
+# Summarize post-transfer effect (avg of t+1 to t+3) by corp x size
+cs <- corp_size_coefs[grepl("event_time::", term)]
+cs[, et := as.integer(stringr::str_extract(term, "-?\\d+"))]
+cs[, c("buyer", "size") := tstrsplit(spec, "_", fixed = TRUE, keep = 1:2)]
+cs[, size := gsub("^(corp|indiv)_", "", spec)]
+cs[, buyer := fifelse(grepl("^corp_", spec), "Corporate", "Individual")]
+cs[, size := gsub("^corp_|^indiv_", "", spec)]
+
+post_summary <- cs[et %in% 1:3, .(
+  mean_coef = round(mean(estimate), 4),
+  mean_se = round(mean(std_error), 4)
+), by = .(buyer, size)]
+setorder(post_summary, size, buyer)
+
+kable(post_summary,
+      col.names = c("Buyer type", "Size bin", "Mean coef (t+1 to t+3)", "Mean SE"),
+      caption = "Average post-transfer effect (t+1 to t+3) by buyer type and building size") |>
+  kable_styling(latex_options = c("hold_position"))
+```
+
+The corporate buyer effect is positive across all building sizes. Individual buyers show near-zero or negative effects in every size category.
+
+# Heterogeneity by Portfolio Size
+
+```{r portfolio-coefplot, fig.cap="Event study by portfolio size (non-sheriff acquisitions)."}
+knitr::include_graphics(file.path(fig_dir, "rtt_annual_by_portfolio.png"))
+```
+
+Larger portfolio buyers (10+ non-sheriff properties) show the steepest post-transfer increase in filing rates. Single-purchase buyers show a more modest effect. The portfolio bin accounts for the total non-sheriff acquisitions by the buyer entity, so this captures whether serial acquirers are systematically more aggressive filers.
+
+```{r portfolio-table, results='asis'}
+include_tex_table(file.path(out_dir, "annual_portfolio_etable.tex"))
+```
+
+# Robustness
+
+All robustness checks use a **full-panel design**: the full building panel is merged with transfer timing, and explicit event-time dummies are constructed for $k \in \{-3, \ldots, +5\}$ (omitting $k = -1$). Years outside the event window have all dummies set to zero, providing natural within-PID control periods. This approach avoids the problem of counting every observation as "treated" that would arise from a stacked event panel. All robustness specs restrict to 2+ unit buildings, pre-COVID (year $\leq$ 2019).
+
+```{r robustness-plot, fig.cap="Robustness checks: alternative samples and outcomes (full-panel design, 2+ units, pre-COVID)."}
+knitr::include_graphics(file.path(fig_dir, "rtt_annual_robustness.png"))
+```
+
+```{r robustness-table, results='asis'}
+include_tex_table(file.path(out_dir, "annual_robustness_etable.tex"))
+```
+
+## No sheriff's deeds
+
+Sheriff's deed transfers are foreclosures, where the "buyer" is typically a bank or GSE (Fannie Mae, Freddie Mac) that temporarily holds title. These entities do not operate as landlords and are unlikely to file evictions. Excluding sheriff's deeds removes approximately 10\% of transfers.
+
+## Single-transfer PIDs
+
+The baseline allows overlapping event windows for PIDs with multiple transfers. As a robustness check, we restrict to PIDs with only one transfer during the sample period.
+
+## No nearby re-transfer
+
+We exclude transfers where the same PID has another transfer within 2 years, avoiding contamination from overlapping ownership spells.
+
+## Count outcome
+
+Using the raw count of eviction filings (`num_filings`) instead of the rate (per unit) confirms the direction of the effect. This addresses the concern that rate-based measures might be sensitive to changes in `total_units` around transfers.
+
+## Any-filing indicator
+
+A binary indicator for whether any eviction filings occurred in a given year tests whether the effect operates on the extensive margin (more buildings filing) rather than only the intensive margin (more filings per building).
+
+## Violations outcome
+
+Building code violations are examined as a secondary outcome. **Note:** Philadelphia L\&I violations data begins in 2007, so the violations regressions are additionally restricted to calendar years $\geq$ 2007 to avoid spurious zeros in the pre-period.
+
+```{r violations-buyer, fig.cap="Violations around transfer by buyer type (year $\\geq$ 2007, 2+ units, full-panel design)."}
+knitr::include_graphics(file.path(fig_dir, "rtt_annual_violations_by_buyer.png"))
+```
+
+# Pooled Window Estimates
+
+We pool event-time periods into four windows to summarize the magnitude and significance of the transfer effect:
+
+- **Pre** ($t \in \{-3, -2\}$): Baseline period before transfer
+- **Transition** ($t \in \{-1, 0\}$): Transfer year and immediate lead
+- **Early post** ($t \in \{1, 2\}$): First two post-transfer years
+- **Late post** ($t \in \{3, 4, 5\}$): Three to five years after transfer
+
+```{r pooled-plot, fig.cap="Pooled window estimates: filing rate change relative to pre-transfer period."}
+knitr::include_graphics(file.path(fig_dir, "rtt_annual_pooled_windows.png"))
+```
+
+```{r post-pre-plot, fig.cap="Post-minus-pre filing rate change by subgroup. Average of early and late post windows, relative to pre-transfer."}
+knitr::include_graphics(file.path(fig_dir, "rtt_annual_post_minus_pre.png"))
+```
+
+```{r post-pre-table}
+if (nrow(post_pre) > 0) {
+  kable(post_pre[, .(subgroup, post_minus_pre, se, ci_lower, ci_upper, n)],
+        col.names = c("Subgroup", "Post-Pre", "SE", "CI Lower", "CI Upper", "N"),
+        digits = c(0, 5, 5, 5, 5, 0),
+        format.args = list(big.mark = ","),
+        caption = "Post-minus-pre filing rate change by subgroup") |>
+    kable_styling(latex_options = c("hold_position"))
+}
+```
+
+# Composition Diagnostics
+
+```{r composition-table}
+if (nrow(composition) > 0) {
+  kable(composition,
+        col.names = c("Event Time", "N obs", "N PIDs", "% Units Obs",
+                       "Mean Units", "% Pre-Rental", "% Post-Only Rental",
+                       "% Corporate", "% Large"),
+        digits = c(0, 0, 0, 1, 1, 1, 1, 1, 1),
+        format.args = list(big.mark = ","),
+        caption = "Sample composition by event time (pre-COVID)") |>
+    kable_styling(latex_options = c("hold_position", "scale_down"))
+}
+```
+
+This table verifies that sample composition does not change dramatically across event time, which would confound the event study estimates.
+
+# Appendix: Data Pipeline
+
+**Scripts:**
+
+1. `r/build-owner-linkage.R` --- Owner name standardization, entity grouping, portfolio construction
+2. `r/analyze-transfer-evictions-unified.R` --- Event panel construction and all regressions (supports annual and quarterly frequency via config)
+
+**Key data products:**
+
+| Product | Key | Description |
+|---------|-----|-------------|
+| `owner_linkage_xwalk.csv` | `grantee_upper` | Maps raw grantee names to standardized `owner_std` and `owner_group_id` |
+| `owner_portfolio.csv` | `owner_group_id` | Portfolio sizes, acquisition years, sheriff deed counts |
+
+**Config keys added:** `owner_linkage_xwalk`, `owner_portfolio` (under `products:` in `config.yml`).
+
+**Rental license coverage note:** Philadelphia's Open Data business license records begin substantive rental license coverage around 2013. All rental market entry regressions are restricted to year $\geq$ 2011. Altos (Apartments.com) listing data begins in 2006.
