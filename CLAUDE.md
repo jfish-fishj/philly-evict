@@ -29,6 +29,10 @@ Make the pipeline **portable, reproducible, and data-product oriented**:
    - Avoid mixing unless there’s a strong reason.
 5) **Analysis scripts must not write to processed products.**
    - analysis reads from `processed/` and writes to `output/` only.
+6) **Fail fast on missing required columns.**
+   - If a script expects a column, missing columns should raise `stop(...)`.
+   - Do not add optional-column fallback branches for required schema fields.
+   - Specifically avoid `intersect(required_cols, names(dt))` + `if (length(...)) ... else ...` when columns are required.
 
 ## 3) Required safety checks for any meaningful refactor
 If you change anything in cleaning, make, or merge steps:

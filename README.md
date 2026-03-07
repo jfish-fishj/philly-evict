@@ -4,10 +4,12 @@ This repository contains the data processing and analysis pipeline for Philadelp
 
 Additional documentation:
 - **Data products codebook**: [`docs/data-products.md`](docs/data-products.md) — column-level reference for all major data products
+- Outer sorting DGP spec: [`latex/sorting_model_outer_dgp.tex`](latex/sorting_model_outer_dgp.tex)
 - Eviction-InfoUSA linkage: [`docs/evict-infousa-linkage.md`](docs/evict-infousa-linkage.md)
 - Race imputation: [`docs/race-imputation.md`](docs/race-imputation.md)
 - Gender imputation: [`docs/gender-imputation.md`](docs/gender-imputation.md)
 - Occupancy and shares: [`docs/occupancy-and-shares.md`](docs/occupancy-and-shares.md)
+- Altos aggregation and standardization: [`docs/altos-aggregation.md`](docs/altos-aggregation.md)
 - BLP estimation: [`docs/blp-estimation.md`](docs/blp-estimation.md)
 
 ---
@@ -148,6 +150,8 @@ Run regressions, generate figures, produce tables.
 
 **Key rule:** Analysis scripts read from `processed/` and write only to `output/`.
 
+**Schema rule:** If a required input column is missing, scripts should fail fast with an explicit error. Do not silently create fallback columns in analysis scripts.
+
 ---
 
 ## Execution Dependency Graph
@@ -255,7 +259,22 @@ Rscript r/race-imputation-diagnostics.R
 Rscript r/retaliatory-evictions.r
 Rscript r/price-regs.R
 
-# 7. BLP demand estimation
+# 7. Run outer sorting simulation (baseline DGP)
+Rscript r/run-outer-sorting-sim.R
+
+# 8. Run outer sorting calibration
+Rscript r/run-calibrate-outer-sorting.R
+
+# 9. Build renter poverty geography products for empirical outer sorting targets
+Rscript r/make-renter-poverty-geo.R
+
+# 10. Build empirical outer sorting target moments from bldg_panel_blp
+Rscript r/make-outer-sorting-empirical-moments.R
+
+# 11. Run outer sorting recovery / Monte Carlo
+Rscript r/run-outer-sorting-recovery.R
+
+# 9. BLP demand estimation
 /opt/anaconda3/envs/pyblp-env/bin/python python/pyblp_estimation.py
 /opt/anaconda3/envs/pyblp-env/bin/python python/pyblp_estimation.py --iv full
 /opt/anaconda3/envs/pyblp-env/bin/python python/pyblp_estimation.py --iv pid_year

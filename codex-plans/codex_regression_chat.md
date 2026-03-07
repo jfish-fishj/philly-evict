@@ -166,3 +166,308 @@ Immediate next step (before interpreting demographic coefficients further):
   - cap years at `<= 2022`
   - treat `2020` as a sensitivity exclusion
   - sample on `!is.na(infousa_pct_black)` (rather than full `tenant_comp_missing == 0`) for `% Black`-only regressions
+
+---
+
+## Condo / Common-Address Follow-up (2026-02-26)
+
+- New plan note: `codex-plans/condo_common_address_linking_plan_2026-02-26.md`
+- New issue note: `issues/infousa-condo-common-address-linking-and-unit-imputation.md`
+- Summary:
+  - Distinguish `ambiguous_match_condo_groupable` vs `unmatched_address` across `infousa`, `altos`, and `evictions`
+  - Keep parcel `PID` immutable
+  - Add condo/property-level `link_id` + `anchor_pid` + provenance / ownership-unsafe flags
+  - Use flags to exclude condo-group-linked rows from ownership/transfer analyses while preserving coverage for tenant composition analyses
+
+---
+
+## Implementation Checklist (2026-02-27)
+
+- Added standalone implementation checklist note:
+  - `docs/notes/comparative-statics-implementation-checklist-2026-02-27.md`
+- Purpose:
+  - Converts `codex-chats/comparative-statics-and-codex-recap.txt` into script-level phases,
+    QA gates, run order, and decision points.
+  - Keeps EB filing intensity unchanged as the active path.
+  - Updated per user direction: removed the `no_filings_pre_covid` implementation track from the checklist.
+
+---
+
+## Crosswalk QC Iteration (2026-03-03)
+
+- Standalone note: `docs/notes/crosswalk-qc-2026-03-03.md`
+- Focused writeup: `docs/notes/crosswalk-qc-mean-pct-black-2026-03-03.md`
+- Script: `r/cross-walk-qc.R`
+- Outputs: `output/qa/crosswalk_qc_*` and `output/logs/cross-walk-qc.log`
+- Purpose: quantify 2006-2019 eviction coverage dropoff from unique parcel match to InfoUSA-linked PID, and test whether dropped cases are more concentrated in higher-Black tracts.
+
+---
+
+## Retaliatory EB Memo + Filing-Bin Update (2026-03-04)
+
+- New memo note: `docs/notes/eb-filing-rate-memo-2026-03-04.md`
+- Script updates:
+  - `r/retaliatory-evictions.r` now uses EB pre-COVID filing rate as default for maintenance models.
+  - Added EB filing bins: `[0,1)`, `[1,5)`, `[5,10)`, `[10,20)`, `[20,inf)`.
+  - High-filing dummy cutoff set to `>= 15%`.
+  - Raw filing-rate maintenance regressions exported separately for appendix output.
+- Writeup updates:
+  - `writeups/retaliatory-evictions.qmd` includes an EB construction memo near the top.
+  - Raw filing-rate maintenance table moved to an appendix section.
+
+---
+
+## Address-History EB-First + Appendix Raw Update (2026-03-04)
+
+- Shared memo note updated:
+  - `docs/notes/eb-filing-rate-memo-2026-03-04.md`
+- Script updates:
+  - `r/address-history-analysis.R` now treats EB (`filing_rate_eb_pre_covid`) as main filing measure in persistence and trajectory filing regressions.
+  - Filing bins standardized to `[0,1)`, `[1,5)`, `[5,10)`, `[10,20)`, `[20,inf)` (removed "No filings" split).
+  - High-filing cutoff set to `>= 15%`.
+  - Raw filing-rate persistence/trajectory tables exported separately for appendix robustness.
+- Writeup updates:
+  - `writeups/address-history-analysis.qmd` includes EB construction memo near the top.
+  - Main text now reports EB filing regressions; raw filing regressions moved to appendix section.
+
+---
+
+## Address-History High-Dummy + LOO Split + Violations Outcomes (2026-03-04)
+
+- Script updates (`r/address-history-analysis.R`):
+  - Added destination-level filing specs replacing middle-bin regressors with a high-filing dummy (`>= 15%`), for EB (main) and raw (appendix).
+  - Added LOO tract filing-rate splits:
+    - EB LOO outcomes in main tables
+    - raw LOO outcomes in appendix
+    - each with both bin and high-filing-dummy variants.
+  - Added complaints-analog outcome families:
+    - total violations per unit (delta + destination tables)
+    - severe violations per unit (delta + destination tables).
+  - Expanded fixest dictionary labels so FE/control rows print human-readable names.
+- Writeup updates (`writeups/address-history-analysis.qmd`):
+  - Added sections/tables for filing high-dummy destination specs.
+  - Added EB LOO main + raw LOO appendix tables (bins + high-dummy).
+  - Added total/severe violations outcome tables.
+
+---
+
+## Outer Sorting Baseline Simulation Wiring (2026-03-06)
+
+- Added runnable outer sorting simulation modules:
+  - `r/build-outer-sorting-params.R`
+  - `r/simulate-outer-sorting.R`
+  - `r/outer-sorting-moments.R`
+  - `r/run-outer-sorting-sim.R`
+- Wired config contracts:
+  - `products.outer_sorting_sim_panel`
+  - `products.outer_sorting_sim_moments`
+  - `products.outer_sorting_sim_diagnostics`
+  - `run.outer_sorting.*` parameter block in both `config.yml` and `config.example.yml`
+- Updated canonical docs:
+  - `docs/data-products.md` entries for all three simulation products
+  - `README.md` manual run command and DGP-spec pointer
+- Iteration note:
+  - `docs/notes/outer-sorting-sim-baseline-2026-03-06.md`
+
+---
+
+## Outer Sorting Baseline Calibration Wiring + Run (2026-03-06)
+
+- Added calibration module and runner:
+  - `r/calibrate-outer-sorting.R`
+  - `r/run-calibrate-outer-sorting.R`
+- Added calibration config block:
+  - `run.outer_sorting.calibration.*` in `config.yml` and `config.example.yml`
+- Added README manual command:
+  - `Rscript r/run-calibrate-outer-sorting.R`
+- Executed calibration:
+  - convergence code `0` (fast-exit: starting objective below tolerance)
+  - outputs written to `output/outer_sorting/`
+- Iteration note:
+  - `docs/notes/outer-sorting-calibration-baseline-2026-03-06.md`
+
+---
+
+## Outer Sorting Review Fixes (2026-03-06)
+
+- Fixed reported bugs/issues:
+  - maintenance moment now uses observed `c_rate` (not latent `cbar`)
+  - high-filing indicator uses fixed absolute threshold (no longer simulated percentile)
+  - explicit non-convergence handling/warning
+  - recompute expected rates after final citywide-mass projection
+- Calibration robustness updates:
+  - default `maxit` increased to 300
+  - self-target warning when using `outer_sorting_sim_moments`
+  - non-converged objective evaluations now receive penalty
+- Config/docs updates:
+  - added `run.outer_sorting.high_filing_threshold`
+  - added `run.outer_sorting.calibration.high_filing_threshold`
+  - updated product contract docs for fixed threshold + `c_rate` maintenance moment
+- Iteration note:
+  - `docs/notes/outer-sorting-review-fixes-2026-03-06.md`
+
+---
+
+## Outer Sorting First-Pass Calibration Design Reset (2026-03-06)
+
+- Anchored tenant-side parameters:
+  - `mu = 0.30`
+  - `delta_L = 0.01`
+  - `delta_H = 0.50`
+- Kept `b_Fs_hard` fixed in the first pass.
+- Expanded default calibration parameter list to:
+  - `Dalph`
+  - `p_bad_shape1`, `p_bad_shape2`
+  - `aF`, `bF_theta`
+  - `aC`, `bC_theta`, `bC_s`, `bC_M`
+  - `aM`, `bM_theta`, `bM_C`
+- Replaced the prior compact moment set with the requested 12-moment first-pass target set:
+  - three mean rates
+  - three zero shares
+  - two sorting moments
+  - two complaint-gradient moments
+  - one maintenance-discipline moment
+  - one filing-dispersion moment
+- Note:
+  - `comp-statics-annual-race` does not currently export a direct filing-on-composition slope, so `b_Fs_hard` remains a fixed placeholder config value.
+- Iteration note:
+  - `docs/notes/outer-sorting-first-pass-calibration-design-2026-03-06.md`
+
+---
+
+## Outer Sorting Baseline Memo (2026-03-07)
+
+- Added a Quarto writeup:
+  - `writeups/outer-sorting-baseline.qmd`
+- The memo summarizes:
+  - equilibrium setup and parameterization
+  - baseline fixed and calibrated parameters
+  - convergence diagnostics from the current simulation run
+  - resulting equilibrium moments, type-level summaries, and figures
+- Render fixes included:
+  - explicit project-root path resolution from `writeups/`
+  - deterministic figure sampling
+  - removal of duplicated raw-LaTeX table labels
+- Produced rendered artifact:
+  - `writeups/outer-sorting-baseline.pdf`
+- Iteration note:
+  - `docs/notes/outer-sorting-baseline-memo-2026-03-07.md`
+
+---
+
+## Outer Sorting Default-Risk Filing Baseline (2026-03-07)
+
+- Replaced direct filing-on-composition with:
+  - `delta_bar_b = s_b * delta_H + (1 - s_b) * delta_L`
+  - `log fbar_b = aF + bF_theta * 1{theta_b=B} + bF_delta * delta_bar_b`
+- Removed `bF_s_hard` from the active baseline config and added calibrated `bF_delta`.
+- Updated:
+  - simulator/config/calibration code
+  - `latex/sorting_model_outer_dgp.tex`
+  - `codex-plans/codex_outer_sorting_dgp_spec.txt`
+  - `writeups/outer-sorting-baseline.qmd`
+- Presentation updates in the memo:
+  - parameter table shrunk with `\tiny`
+  - old scatter replaced with by-type histograms
+- Verified with:
+  - `Rscript r/run-outer-sorting-sim.R`
+  - `Rscript r/run-calibrate-outer-sorting.R`
+  - `quarto render writeups/outer-sorting-baseline.qmd`
+- Iteration note:
+  - `docs/notes/outer-sorting-default-risk-filing-baseline-2026-03-07.md`
+
+---
+
+## Outer Sorting Empirical Target Scaffolding (2026-03-07)
+
+- Added renter-poverty geography builders:
+  - `r/build-renter-poverty-geo.R`
+  - `r/make-renter-poverty-geo.R`
+- Added empirical target builder:
+  - `r/build-outer-sorting-empirical-moments.R`
+  - `r/make-outer-sorting-empirical-moments.R`
+- Added recovery runner:
+  - `r/outer-sorting-recovery.R`
+  - `r/run-outer-sorting-recovery.R`
+- New processed products:
+  - `bg_renter_poverty_share`
+  - `tract_renter_poverty_share`
+  - `outer_sorting_empirical_moments`
+- Empirical design:
+  - base panel = `bldg_panel_blp`
+  - composition proxy = block-group renter poverty share
+  - neighborhood FE = tract
+  - default pooled target window = `2017-2019`
+- Verification:
+  - toy smoke tests passed for poverty build, empirical moments, and a small recovery run
+  - real ACS fetch failed in this environment because Census API access is blocked
+- Local command to run:
+  - `Rscript r/make-renter-poverty-geo.R`
+- Iteration note:
+  - `docs/notes/outer-sorting-empirical-target-scaffolding-2026-03-07.md`
+
+---
+
+## Outer Sorting Empirical Collapse Window (2026-03-07)
+
+- Updated the empirical target collapse in `r/build-outer-sorting-empirical-moments.R`.
+- Default empirical window is now `2011-2019`.
+- PID-level empirical rows now:
+  - drop buildings with `year_built > year_to`
+  - use observed active years within the window for annualization
+  - compute per-unit-year rates from total counts over total unit-years
+- Config updated with `run.outer_sorting.empirical.year_built_col = "year_built"`.
+- Iteration note:
+  - `docs/notes/outer-sorting-empirical-collapse-window-2026-03-07.md`
+
+---
+
+## Outer Sorting Memo Empirical Calibration Section (2026-03-07)
+
+- Updated `writeups/outer-sorting-baseline.qmd` to report the current empirical calibration run.
+- Added memo tables for:
+  - calibration run summary
+  - baseline vs calibrated parameters
+  - largest calibration moment misses
+- Updated memo interpretation text so it no longer describes the current calibration as a self-calibration check.
+- Verified with:
+  - `quarto render writeups/outer-sorting-baseline.qmd`
+- Iteration note:
+  - `docs/notes/outer-sorting-memo-empirical-calibration-section-2026-03-07.md`
+
+---
+
+## Outer Sorting Empirical Unit Draws (2026-03-07)
+
+- Replaced the default simulated unit draw with empirical resampling from PID-level average annual `total_units` in `bldg_panel_blp`.
+- Added config controls:
+  - `units_draw_mode`
+  - `units_empirical_product_key`
+  - `units_empirical_year_from`
+  - `units_empirical_year_to`
+  - `units_empirical_year_built_col`
+- Kept the old discrete-bin unit draw as a fallback mode only.
+- Updated memo language to state that mean rates are unit-weighted and zero shares are building shares.
+- Verified the new unit distribution:
+  - empirical mean units `2.065`
+  - simulated mean units `2.082`
+- Verified with:
+  - `Rscript r/run-outer-sorting-sim.R`
+- Iteration note:
+  - `docs/notes/outer-sorting-empirical-unit-draws-2026-03-07.md`
+
+---
+
+## Outer Sorting Memo Empirical Neighborhood Comparisons (2026-03-07)
+
+- Updated `writeups/outer-sorting-baseline.qmd` to add empirical vs simulated neighborhood comparisons.
+- Added memo artifacts for:
+  - empirical filing-rate check
+  - empirical vs simulated neighborhood distribution summary
+  - neighborhood filing-rate distribution comparison
+  - neighborhood poverty-share distribution comparison
+- Confirmed the current empirical filing-rate target is about `0.039` unit-weighted and `0.041` unweighted under the present per-unit-year definition.
+- Verified with:
+  - `quarto render writeups/outer-sorting-baseline.qmd`
+- Iteration note:
+  - `docs/notes/outer-sorting-memo-empirical-neighborhood-comparisons-2026-03-07.md`

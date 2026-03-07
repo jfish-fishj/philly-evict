@@ -22,6 +22,9 @@ Reference for all major data products in the pipeline. Each entry documents the 
 12. [evictions_clean](#evictions_clean) — Cleaned eviction case data
 13. [evict_address_xwalk / evict_address_xwalk_case](#evict_address_xwalk) — Eviction-to-parcel crosswalks
 14. [evict_infousa_hh_matches / evict_infousa_hh_unmatched / evict_infousa_candidate_stats](#evict_infousa_household_linkage) — Eviction case-to-InfoUSA household linkage products
+15. [bg_renter_poverty_share / tract_renter_poverty_share](#renter_poverty_geography_products) — Geography-level renter poverty products
+16. [outer_sorting_empirical_moments](#outer_sorting_empirical_moments) — Empirical outer-sorting calibration target moments
+17. [outer_sorting_sim_panel / outer_sorting_sim_moments / outer_sorting_sim_diagnostics](#outer_sorting_simulation_products) — Simulated outer-sorting baseline products
 
 ---
 
@@ -777,6 +780,170 @@ Case-level diagnostics on candidate volume and match coverage.
 - `output/qa/evict_infousa_name_link/review_grayzone.csv`
 - `output/qa/evict_infousa_name_link/evict_infousa_*.csv`
 - `data/processed/xwalks/evict_infousa_sample_manifest.csv`
+
+---
+
+## renter_poverty_geography_products
+
+| Field | Value |
+|-------|-------|
+| **Config keys** | `products.bg_renter_poverty_share`, `products.tract_renter_poverty_share` |
+| **Paths** | `data/processed/xwalks/bg_renter_poverty_share.csv`, `data/processed/xwalks/tract_renter_poverty_share.csv` |
+| **Producing script** | `r/make-renter-poverty-geo.R` |
+| **Primary keys** | BG product: `bg_geoid`; tract product: `tract_geoid` |
+| **Rows** | One per block group / tract in the build geography |
+
+Geography-level poverty products for outer-sorting empirical targets. If a raw input with explicit renter household counts is supplied, the script uses those counts directly. If no input is supplied, the script first tries ACS `B17019` renter-family counts; if that route returns structurally empty counts, it falls back to ACS `C17002` overall poverty counts and computes an overall poverty share. The product records the path taken in `measure_source`.
+
+### bg_renter_poverty_share
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `bg_geoid` | character | Census block-group GEOID. |
+| `renter_hh_total` | numeric | Total renter households or renter families in the source measure. `NA` when the fallback is a direct share-only ACS measure. |
+| `renter_hh_poverty` | numeric | Renter households or renter families below poverty in the source measure. `NA` when the fallback is a direct share-only ACS measure. |
+| `renter_poverty_share` | numeric | `renter_hh_poverty / renter_hh_total` when renter counts are available; otherwise an overall ACS poverty-share proxy from `C17002`. |
+| `acs_year` | integer | ACS year used for the source build. |
+| `measure_source` | character | Source flag, e.g. `input_explicit_household_counts`, `acs_b17019_renter_family_proxy`, or `acs_c17002_overall_poverty_share`. |
+
+### tract_renter_poverty_share
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `tract_geoid` | character | Census tract GEOID. |
+| `renter_hh_total` | numeric | Tract-level sum of renter households/families from BG counts. `NA` when the fallback is a direct share-only ACS measure. |
+| `renter_hh_poverty` | numeric | Tract-level sum of renter households/families below poverty from BG counts. `NA` when the fallback is a direct share-only ACS measure. |
+| `renter_poverty_share` | numeric | `renter_hh_poverty / renter_hh_total` when renter counts are available; otherwise an overall ACS poverty-share proxy from `C17002`. |
+| `acs_year` | integer | ACS year used for the source build. |
+| `measure_source` | character | Source flag inherited from the BG build. |
+
+---
+
+## outer_sorting_empirical_moments
+
+| Field | Value |
+|-------|-------|
+| **Config key** | `products.outer_sorting_empirical_moments` |
+| **Path** | `data/processed/targets/outer_sorting_empirical_moments.csv` |
+| **Producing script** | `r/make-outer-sorting-empirical-moments.R` |
+| **Primary key** | Single-row product |
+| **Rows** | 1 |
+
+Empirical calibration moment vector for the outer-sorting model, built from `bldg_panel_blp` plus the block-group renter poverty product. The script collapses `bldg_panel_blp` over the configured year window to one row per PID, uses tract FE (`substr(GEOID, 1, 11)`) as the neighborhood definition, and uses block-group renter poverty share as the building composition proxy. Counts are annualized over each building's active years in the window, with rate construction based on total unit-years. Buildings with `year_built > year_to` are dropped; buildings built after `year_from` start exposure at `year_built`. If a building's BG poverty share is missing, the script falls back to tract poverty share; rows with both BG and tract poverty share missing are dropped from the empirical target sample.
+
+Additional metadata columns beyond the simulated moment schema:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `year_from` | integer | First year included in the pooled empirical target window. |
+| `year_to` | integer | Last year included in the pooled empirical target window. |
+| `poverty_bg_product_key` | character | Config product key used for the block-group poverty input. |
+| `poverty_tract_product_key` | character | Config product key used for the tract poverty fallback input. |
+| `poverty_measure_source` | character | Source flag from the poverty product. |
+
+Outcome mapping in the default empirical build:
+
+| Simulator concept | Empirical default |
+|-------------------|-------------------|
+| Filings | `num_filings` |
+| Complaints | `total_complaints` |
+| Maintenance | `total_permits` |
+| Units exposure | `total_units`, aggregated to PID-level unit-years and annualized back to average annual units |
+| Composition share `s` | block-group `renter_poverty_share` |
+| Neighborhood FE | tract `substr(GEOID, 1, 11)` |
+
+Poverty merge fallback:
+
+| Stage | Source |
+|-------|--------|
+| Primary composition proxy | block-group `renter_poverty_share` |
+| Fallback if BG share missing | tract `renter_poverty_share` |
+| Residual missing | dropped from empirical target sample |
+
+Empirical collapse semantics in the default build:
+
+| PID-level quantity | Construction |
+|--------------------|--------------|
+| Active years | observed PID-years within `year_from:year_to`, after dropping rows with `year_built > year_to` |
+| Unit-years | `sum(total_units)` across active years |
+| Annualized counts | `sum(outcome_count) / active_years` |
+| Per-unit-year rates | `sum(outcome_count) / sum(total_units)` |
+
+---
+
+## outer_sorting_simulation_products
+
+| Field | Value |
+|-------|-------|
+| **Config keys** | `products.outer_sorting_sim_panel`, `products.outer_sorting_sim_moments`, `products.outer_sorting_sim_diagnostics` |
+| **Paths** | `data/processed/sim/outer_sorting_sim_panel.csv`, `data/processed/sim/outer_sorting_sim_moments.csv`, `data/processed/sim/outer_sorting_sim_diagnostics.csv` |
+| **Producing script** | `r/run-outer-sorting-sim.R` |
+| **Primary keys** | panel: `b`; moments: single-row product; diagnostics: single-row product |
+| **Rows** | panel: `B` from `run.outer_sorting.B`; moments: 1; diagnostics: 1 |
+
+Simulation outputs from the stationary baseline outer sorting DGP in `latex/sorting_model_outer_dgp.tex` (baseline normalization with signal `x_b = fbar_b`, where filings depend on average tenant default risk `\bar\delta_b = s_b \delta_H + (1 - s_b)\delta_L`). By default, simulated building units are drawn by resampling the empirical PID-level average annual `total_units` distribution from `bldg_panel_blp` over the configured unit-draw window; the older discrete-bin unit draw remains available only as an explicit fallback mode.
+
+### outer_sorting_sim_panel
+
+One row per simulated building.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `b` | integer | Simulated building ID. Primary key. |
+| `nhood` | integer | Simulated neighborhood index. |
+| `theta` | character | Landlord/building type label (`G` or `B`). |
+| `theta_bad` | integer | Type indicator (`1` for bad type, `0` for good type). |
+| `units` | numeric | Simulated building units. Default build draws by empirical resampling from PID-level average annual `total_units`; legacy discrete-bin draws are only used if explicitly configured. |
+| `s` | numeric | Equilibrium share of group-1 tenants in the building. |
+| `mbar`, `cbar`, `fbar` | numeric | Expected maintenance/complaint/filing rates per unit. |
+| `x` | numeric | Sorting signal index. Baseline: `x = fbar`. |
+| `M`, `C`, `F` | integer | One-shot Poisson count draws after fixed-point convergence. |
+| `m_rate`, `c_rate`, `f_rate` | numeric | Realized per-unit rates (`count / units`). |
+
+### outer_sorting_sim_moments
+
+Single-row calibration moment summary.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `n_buildings` | integer | Number of simulated buildings used to compute moments. |
+| `s_weighted_mean` | numeric | Unit-weighted mean of `s`; target should align with configured `mu`. |
+| `mean_f_rate` | numeric | Unit-weighted mean realized filing rate. |
+| `mean_m_rate` | numeric | Unit-weighted mean realized maintenance rate. |
+| `mean_c_rate` | numeric | Unit-weighted mean realized complaint rate. |
+| `zero_share_f` | numeric | Share of buildings with zero filings (`F = 0`). |
+| `zero_share_m` | numeric | Share of buildings with zero maintenance counts (`M = 0`). |
+| `zero_share_c` | numeric | Share of buildings with zero complaints (`C = 0`). |
+| `share_high_filing` | numeric | Share of buildings above the fixed high-filing threshold (`f_rate >= high_filing_threshold`). |
+| `high_filing_threshold` | numeric | Fixed absolute filing-rate cutoff used to construct `high_filing` moments (set in config). |
+| `filing_p85` | numeric | Backward-compatible alias for `high_filing_threshold` in the current baseline implementation. |
+| `sorting_coef_high_filing_nhood` | numeric | Weighted within-neighborhood OLS slope from `s ~ high_filing | nhood`. |
+| `sorting_coef_high_bin_nhood` | numeric | Weighted within-neighborhood OLS coefficient on the top filing bin relative to the low filing bin. |
+| `sorting_gap_high_minus_low` | numeric | Backward-compatible alias of `sorting_coef_high_filing_nhood`. |
+| `beta_ppml_s` | numeric | PPML coefficient on continuous composition share `s` in the complaint regression with neighborhood FE and unit offset. |
+| `beta_ppml_high_filing` | numeric | PPML coefficient on `high_filing`. |
+| `beta_ppml_s_x_high_filing` | numeric | PPML coefficient on `s × high_filing`. |
+| `beta_ppml_above_mean_s` | numeric | Backward-compatible alias of `beta_ppml_s`. |
+| `beta_ppml_interaction` | numeric | Backward-compatible alias of `beta_ppml_s_x_high_filing`. |
+| `filing_resid_sd_nhood_fe` | numeric | SD of filing-rate residuals after neighborhood demeaning. |
+| `beta_maint_on_log1p_c_rate` | numeric | Maintenance-discipline PPML coefficient on `log(1 + c_rate)` with neighborhood FE and unit offset. |
+| `beta_maint_on_log1p_cbar` | numeric | Backward-compatible alias of `beta_maint_on_log1p_c_rate`. |
+
+### outer_sorting_sim_diagnostics
+
+Single-row fixed-point convergence diagnostics.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `converged` | logical | TRUE when tolerance conditions were met before `max_iter`. |
+| `iters` | integer | Iteration count at stop. |
+| `max_diff` | numeric | Final `max_b |s^{k+1} - s^k|`. |
+| `mass_resid_before_final_proj` | numeric | Citywide mass residual before final exact projection step. |
+| `mass_resid_final` | numeric | Citywide mass residual after final projection. |
+| `xi_last_iter` | numeric | Last intercept value from iterative updates. |
+| `xi_final` | numeric | Final intercept used in exact mass-constrained projection. |
+| `mu_target` | numeric | Configured citywide target share (`mu`). |
+| `s_weighted_mean` | numeric | Unit-weighted mean `s` in final panel. |
 
 ---
 

@@ -1,0 +1,103 @@
+Outer Sorting Model (Stationary, Simulatable DGP) — Baseline Normalization
+Date: March 06, 2026
+
+Baseline normalization (IDENTIFICATION)
+- Tenants sort on a single observable equilibrium outcome: the expected filing rate.
+    x_b ≡ fbar_b
+  This sets w_F = 1 and w_C = w_M = 0 in the earlier composite index.
+- Sorting equation uses a + sign so that higher badness (higher filing rate) implies higher group-1 share:
+    s_b*(xi) = Lambda( xi + Dalph * x_b )
+  This captures the idea that group-1 is over-represented in worse buildings because group-0 avoids them more.
+
+Why this normalization is needed
+- Only the product Dalph * x_b is identified from sorting moments.
+  If x_b is scaled up/down, Dalph can be scaled down/up with no change in s_b.
+- Therefore we fix x_b to a specific observable scale (filing rate) in the baseline model.
+
+Model objects
+- Buildings b = 1..B with discrete units draw from the blp file
+- Neighborhoods n(b) = 1..N. Neighborhoods differ in prevalence of bad landlords.
+- Landlord/building type theta_b ∈ {G,B}, with B = bad/high-filing environment.
+- Tenants: group-1 share is fixed at the city level mu ∈ (0,1). No neighborhood variation in mu; segregation emerges endogenously.
+- Endogenous building composition share: s_b ∈ (0,1) = share group-1 in building b.
+
+Primitives (built environment)
+1) Draw neighborhood bad-type shares p_n (e.g., Beta), then theta_b | n(b)=n ~ Bernoulli(p_n).
+2) Draw discrete building sizes U_b from an empirical unit-bin distribution.
+
+Outcome block (EXPECTED RATES; Poisson counts drawn after convergence)
+Define expected per-unit rates:
+  mbar_b = E[M_b]/U_b   (maintenance rate)
+  cbar_b = E[C_b]/U_b   (complaint rate)
+  fbar_b = E[F_b]/U_b   (filing rate)
+
+Maintenance (permits/repairs)
+- log mbar_b = aM + bM_theta*1{theta_b=B} + bM_C*log(1 + cbar_b)
+  Note: we drop the direct composition term bM_s*s_b in the baseline to keep the main channel:
+        s_b -> cbar_b -> mbar_b (complaint discipline).
+
+Complaints
+- log cbar_b = aC + bC_theta*1{theta_b=B} + bC_s*s_b + bC_M*log(1 + mbar_b)
+  with bC_M < 0.
+
+Filings
+- delta_bar_b = s_b*delta_H + (1-s_b)*delta_L
+- log fbar_b = aF + bF_theta*1{theta_b=B} + bF_delta*delta_bar_b
+  (Optionally add + bF_C*log(1 + cbar_b) later; baseline sets bF_C = 0 to reduce circularity.)
+  The filing block maps composition into filings through average tenant default risk rather than through a direct reduced-form composition slope.
+
+Signal for sorting (baseline)
+- x_b ≡ fbar_b
+
+Sorting update (stationary, CITYWIDE mu constraint)
+Given x_b = fbar_b, define candidate share:
+  s_b*(xi) = Lambda( xi + Dalph * x_b )
+where Lambda(z)=1/(1+exp(-z)) and Dalph > 0 indexes sorting strength (steeper segregation by filing environment).
+
+Choose xi each iteration so the citywide mass constraint holds exactly:
+  sum_b U_b s_b*(xi) = mu sum_b U_b
+This is a 1D root-find in xi (use uniroot).
+
+Damped update:
+  s_b^(k+1) = (1-lam) s_b^k + lam s_b*(xi^k),  lam ∈ (0,1].
+
+Stationary equilibrium (fixed point)
+A stationary equilibrium is a vector {s_b} such that:
+- Given (theta_b, s_b), the expected-rate block returns (mbar_b, cbar_b, fbar_b).
+- Given x_b = fbar_b, the sorting update returns the same {s_b} (up to tolerance) while satisfying sum U_b s_b = mu sum U_b.
+
+Deterministic computation algorithm
+1) Initialize s_b^(0) = mu for all b.
+2) Initialize cbar_b^(0) = exp(aC) (or small positive constant).
+3) Iterate k = 0,1,2,...:
+   a) mbar_b^(k)   = exp( aM + bM_theta*1{theta_b=B} + bM_C*log(1 + cbar_b^(k)) )
+   b) cbar_b^(k+1) = exp( aC + bC_theta*1{theta_b=B} + bC_s*s_b^(k) + bC_M*log(1 + mbar_b^(k)) )
+   c) delta_bar_b^(k) = s_b^(k)*delta_H + (1-s_b^(k))*delta_L
+   d) fbar_b^(k+1) = exp( aF + bF_theta*1{theta_b=B} + bF_delta*delta_bar_b^(k) )
+   e) x_b^(k+1)    = fbar_b^(k+1)
+   f) solve xi^(k+1) s.t. sum_b U_b Lambda( xi + Dalph x_b^(k+1) ) = mu sum_b U_b
+   g) s_b^(k+1)    = (1-lam) s_b^(k) + lam Lambda( xi^(k+1) + Dalph x_b^(k+1) )
+   h) stop when max_b |s_b^(k+1) - s_b^(k)| < tol and mass residual is small.
+
+After convergence (generate counts ONCE)
+- M_b ~ Poisson(U_b * mbar_b)
+- C_b ~ Poisson(U_b * cbar_b)
+- F_b ~ Poisson(U_b * fbar_b)
+
+Parameters to calibrate (baseline)
+- Sorting: Dalph (and damping lam for numerics, not a structural parameter)
+- Landlord-type dispersion: distribution of p_n and bF_theta (controls filing dispersion)
+- Filing sensitivity to default risk: bF_delta
+- Complaint/maintenance: aM, bM_theta, bM_C, aC, bC_theta, bC_s, bC_M
+- Fixed inputs: mu, delta_L, and delta_H
+
+Moments to match
+- Sorting: slope/gradient of s_b across filing bins (esp. high-filing vs low-filing), within neighborhood FE in data.
+- Filing dispersion: distribution of f_b (and residual dispersion within neighborhoods).
+- Complaints: PPML moments for C_b on composition x high_filing (offset log U_b).
+- Maintenance discipline: relationship between M_b and complaint intensity (bins/regressions).
+
+Extensions (add only if needed)
+- Composite signal x_b = w_F fbar_b + w_C cbar_b - w_M mbar_b (with a normalization).
+- Neighborhood shifters eta_n or building fixed effects nu_b to fit within-neighborhood dispersion.
+- Add bF_C*log(1+cbar_b) if filings respond to complaints in the DGP.
