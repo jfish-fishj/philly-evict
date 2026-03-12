@@ -1,0 +1,129 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\setlist[itemize]{noitemsep,topsep=2pt}
+\setlist[enumerate]{noitemsep,topsep=2pt}
+
+\title{Outer Sorting Model: Stationary Simulatable DGP (Baseline Normalization)}
+\author{}
+\date{March 07, 2026}
+
+\begin{document}
+\maketitle
+
+\section{Goal}
+This section specifies a \emph{stationary}, \emph{simulatable} outer sorting model on top of \texttt{equilibrium\_two\_types\_stochastic\_issues.tex}. The model generates building-level composition, maintenance, complaints, and filings, and is designed for calibration via moment matching.
+
+\section{Baseline normalization (identification)}
+Sorting depends on $\Delta\alpha\cdot x_b$ only, so $(\Delta\alpha,x_b)$ are not separately identified without a normalization. In the baseline model, tenants sort on a single observable equilibrium outcome: the expected filing rate,
+\[
+x_b \equiv \bar f_b,
+\]
+equivalently $\omega_F=1$ and $\omega_C=\omega_M=0$ in the composite index. The sorting update uses a plus sign so that higher badness (higher filing rate) implies higher group-1 share:
+\[
+s_b^\star(\xi)=\Lambda\!\left(\xi + \Delta\alpha\cdot x_b + \eta_{n(b)}\right),\qquad \Delta\alpha>0.
+\]
+
+\section{Primitives and notation}
+Tenants have risk type $i\in\{L,H\}$ and citywide high-risk share $\mu\in(0,1)$ (no neighborhood variation in $\mu$). Buildings $b$ belong to neighborhoods $n(b)\in\{1,\dots,N\}$, have discrete units $U_b$, empirically drawn year-built observables summarized by indicators $(\mathrm{old}_b,\mathrm{new}_b)$, and unobserved type $\theta_b\in\{G,B\}$ where $B$ denotes a bad/high-filing environment. Neighborhoods differ in the prevalence of bad types:
+\[
+p_n \equiv \Pr(\theta_b=B\mid n(b)=n).
+\]
+The endogenous composition share is $s_b\in(0,1)$, interpreted as the share of group-1 tenants in building $b$.
+Building units $U_b$ and year-built observables are drawn jointly by empirical resampling from the PID-level average annual BLP distribution. The simulated panel averages annual outcomes over a configured window $\{t_0,\dots,t_1\}$, with building-specific active years
+\[
+T_b \equiv t_1 - \max(t_0,\mathrm{year\_built}_b) + 1.
+\]
+
+\section{Outcome block in expected rates}
+Define expected per-unit rates
+\[
+\bar m_b \equiv \mathbb{E}[M_b]/U_b,\qquad
+\bar c_b \equiv \mathbb{E}[C_b]/U_b,\qquad
+\bar f_b \equiv \mathbb{E}[F_b]/U_b.
+\]
+
+\subsection{Maintenance}
+\[
+\bar m_b = m_0\exp\!\left(b_{M\theta}\mathbf 1\{\theta_b=B\} + b_{M,old}\mathrm{old}_b + b_{M,new}\mathrm{new}_b + b_{MC}\bar c_b\right).
+\]
+We drop a direct composition term in the baseline to keep the primary channel $s_b\rightarrow \bar c_b \rightarrow \bar m_b$.
+
+\subsection{Complaints}
+\[
+\log \bar c_b = a_C + b_{C\theta}\mathbf 1\{\theta_b=B\} + b_{Cs}^{bad}s_b\mathbf 1\{\theta_b=B\} + b_{C,old}\mathrm{old}_b + b_{C,new}\mathrm{new}_b + b_{CM}\log(1+\bar m_b),
+\qquad b_{CM}<0.
+\]
+
+\subsection{Filings}
+\[
+\bar\delta_b = s_b\delta_H + (1-s_b)\delta_L
+\]
+\[
+\log \bar f_b = a_F + b_{F\theta}\mathbf 1\{\theta_b=B\} + b_{F\delta}\bar\delta_b.
+\]
+The filing block maps composition into expected filings through average tenant default risk rather than through a direct reduced-form composition slope.
+
+\section{Sorting update with citywide mass constraint}
+Given $x_b\equiv \bar f_b$, define the candidate share:
+\[
+s_b^\star(\xi)=\Lambda\!\left(\xi + \Delta\alpha\cdot x_b + \eta_{n(b)}\right),\qquad \Lambda(z)=\frac{1}{1+e^{-z}}.
+\]
+Choose $\xi$ to satisfy the citywide mass constraint:
+\[
+\sum_b U_b s_b^\star(\xi) = \mu \sum_b U_b.
+\]
+Update with damping:
+\[
+s_b^{k+1} = (1-\lambda)s_b^{k} + \lambda s_b^\star(\xi^k),
+\qquad \lambda\in(0,1].
+\]
+
+\section{Stationary equilibrium and computation}
+A stationary equilibrium is a fixed point in $\{s_b\}$ such that: (i) the expected-rate block implies $(\bar m_b,\bar c_b,\bar f_b)$; and (ii) the sorting update returns the same $\{s_b\}$ (up to tolerance), while satisfying $\sum_b U_b s_b=\mu\sum_b U_b$.
+
+\paragraph{Deterministic algorithm.}
+Initialize $s_b^{(0)}=\mu$ and a small positive $\bar c_b^{(0)}$. Iterate:
+\begin{enumerate}
+  \item Compute $\bar m_b^{(k)}$ from $\bar c_b^{(k)}$ and $\theta_b$.
+  \item Compute $\bar c_b^{(k+1)}$ from $\bar m_b^{(k)}$, $s_b^{(k)}$, and $\theta_b$.
+  \item Compute $\bar\delta_b^{(k)} = s_b^{(k)}\delta_H + (1-s_b^{(k)})\delta_L$, then $\bar f_b^{(k+1)}$ from the filing log-rate equation.
+  \item Set $x_b^{(k+1)}=\bar f_b^{(k+1)}$.
+  \item Solve for $\xi^{(k+1)}$ so $\sum_b U_b \Lambda(\xi+\Delta\alpha x_b+\eta_{n(b)})=\mu\sum_b U_b$.
+  \item Update $s_b^{(k+1)}$ with damping and stop when $\max_b|s_b^{(k+1)}-s_b^{(k)}|<\text{tol}$.
+\end{enumerate}
+
+\paragraph{Generating counts.}
+After convergence, draw total counts over each building's active years:
+\[
+M_b^{tot}\sim \text{Poisson}(T_bU_b\bar m_b),\quad
+C_b^{tot}\sim \text{Poisson}(T_bU_b\bar c_b),
+\quad
+F_b^{tot}\sim \text{Poisson}(T_bU_b\bar f_b).
+\]
+The stored simulation panel annualizes back to average annual counts and per-unit-year rates:
+\[
+M_b \equiv M_b^{tot}/T_b,\qquad
+C_b \equiv C_b^{tot}/T_b,\qquad
+F_b \equiv F_b^{tot}/T_b,
+\]
+\[
+m_b \equiv M_b^{tot}/(T_bU_b),\qquad
+c_b \equiv C_b^{tot}/(T_bU_b),\qquad
+f_b \equiv F_b^{tot}/(T_bU_b).
+\]
+
+\section{Calibration targets}
+Baseline parameters to calibrate include $\Delta\alpha$, the neighborhood sorting-shifter dispersion, the distribution of $p_n$, $(a_F,b_{F\theta},b_{F\delta})$, and $(m_0,b_{M\theta},b_{M,old},b_{M,new},b_{MC},a_C,b_{C\theta},b_{Cs}^{bad},b_{C,old},b_{C,new},b_{CM})$. In the current implementation, the first-pass objective matches a 16-moment target set: three unit-weighted mean rates (filings, maintenance, complaints), three maintenance-intensity moments (the positive-part mean and the 50th and 90th percentiles of maintenance rates among buildings with $M_b>0$), four neighborhood-dispersion moments (the standard deviation and 90--10 spread of neighborhood mean group-1 share and neighborhood mean filing rate), two within-neighborhood sorting moments (high-filing slope and top-bin vs.\ low-bin slope), two complaint PPML moments (composition and composition $\times$ high filing), one maintenance-discipline moment based on a PPML count regression of maintenance on the raw complaint rate $c_b=C_b/U_b$ with neighborhood fixed effects and a unit offset, and one residual filing-dispersion moment after neighborhood fixed effects. Zero-filing, zero-complaint, and zero-maintenance shares are still reported as diagnostics, but they are not targeted directly once the empirical and simulated panels are both annualized over multiple years. In the current first-pass calibration, the maintenance-response coefficient is also constrained to satisfy $b_{MC}\ge 0$ so the model cannot rationalize fit by making higher complaint intensity mechanically reduce expected maintenance.
+The empirical analogue of building composition is currently a PID-year InfoUSA low-income-share proxy based on the share of linked primary households with \texttt{find\_div\_1000} at or below a fixed threshold.
+
+\section{Remarks for implementation}
+Two practical extensions are natural if the baseline underfits the data:
+\begin{itemize}
+    \item Add persistent building shocks $\nu_b^M,\nu_b^C,\nu_b^F$ to improve within-neighborhood dispersion.
+    \item Replace the single-signal baseline $x_b=\bar f_b$ with a composite signal only after imposing an additional normalization.
+\end{itemize}
+In the baseline specification, the simplest computational approach is to keep the fixed-point loop in deterministic expected rates and draw total maintenance/complaint/filing Poisson counts only after convergence, then annualize them over each building's active years. The current implementation also keeps a small computational shortcut after the final exact citywide-mass projection of $s_b$: it refreshes $(\bar m_b,\bar c_b,\bar f_b)$ once at the projected composition rather than fully re-solving the maintenance/complaint subsystem conditional on that final $s_b$. Under tight tolerances this should be numerically small, but the shortcut should be interpreted as an approximation rather than an exact post-projection fixed-point solve.
+\end{document}

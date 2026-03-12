@@ -1,0 +1,459 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{graphicx}
+
+\title{Allan and Pat Writeup}
+\author{}
+\date{February 24, 2026}
+
+\begin{document}
+\maketitle
+
+\section{Motivation}
+
+Rent is the largest expense for most low income tenants. Despite this importance, little is known about how low income rental markets function. Within the literature, much attention has been paid to prices; how much tenants are paying for rent, how this compares to incomes, etc. Comparatively little has been done about what happens after a tenant has signed their lease. Going further, economists have generally understood eviction to be primarily about removing delinquent tenants from rental units, however, this neglects that eviction can also serve as a way to discipline tenants who complain about their units.\\
+
+The goal of this section of the model is to show that landlords can exploit tenant precarity to extract within-lease surplus, specifically by enabling landlords to shirk on maintenance. As I will argue, within-lease conduct is important for understanding landlord profits and has implications for designing landlord-tenant policy. \\
+
+The within-lease model revolves around 4 institutional details:
+
+\begin{enumerate}
+  \item landlord maintenance is costly
+  \item tenant default is likely
+  \item landlord retaliation is more effective when tenants default because tenants are afforded less legal protection when they are in arrears
+  \item landlords can commit to retaliating against tenants
+\end{enumerate}
+
+In equilibrium, predatory landlords are able to suppress tenant complaints, which will extract surplus and distort ex-post quality. Empirically, this will show up as the following comparative statics:
+
+\begin{enumerate}
+  \item Retaliatory buildings perform less maintenance and this will hold conditional on rent prices
+  \item Worse maintained buildings see more complaints, but conditional on building quality:
+      \begin{itemize}
+        \item retaliatory buildings see fewer complaints
+        \item buildings with higher shares of ``precarious'' tenants see fewer complaints
+        \item laws that make retaliation less harmful to tenants increase complaints
+      \end{itemize}
+\end{enumerate}
+
+\section{Empirical Setting}
+
+The empirical setting for this project will be Philadelphia, Pennsylvania. Philadelphia is an ideal city for a number of reasons. On the demographic side, Philadelphia is the largest poor city in America, with a high eviction rate, high segregation, and a large Black population, making it a very useful case study for understanding America's low income housing market. On the data side, Philadelphia is unique in that it has a rental registry, meaning I can see exactly which properties are rental units in each year. Other studies have had to rely on owner occupancy exemptions to identify rental properties, which is problematic because it conflates rental units with Airbnbs and vacation homes. \\
+
+Additionally, Philadelphia has very good historical eviction data, and, importantly, the eviction data contain contract rents, which let me see normally hard to observe rent prices for low income units. 
+
+\section{Maintenance, Complaints, and Retaliation}
+
+\subsection{Maintenance}
+
+The City of Philadelphia requires permits for certain kinds of plumbing, HVAC, electrical, and building maintenance jobs. While I don't expect these to fully encapsulate all the possible maintenance a landlord could perform, I argue they serve as a representative sample of the more costly kinds of maintenance activities a landlord could be involved in. As it pertains to my model, the reason a landlord would want to skimp on maintenance is that certain kinds of issues may not be fully observable when a tenant signs a lease (faulty pipes, bad electrical wiring, heating that breaks, rat infestations, etc.). In this case, it would be cheaper for the landlord to do a patchwork job in between tenants than it would be to fully fix something while the existing tenant is there.
+
+\subsection{Complaints}
+
+I operationalize complaints as 3-1-1 complaints made to the city of Philadelphia. These complaints, which can range in severity from trash to buildings being structurally uninhabitable, are the most observable way of seeing whether a tenant has made a complaint about a building (another option are google reviews). These complaints can trigger investigations, which can trigger violations, landlord fines, and possible condemnation. As I show, landlord maintenance is responsive to complaints, suggesting that this is a tool tenants can use to force landlords to perform maintenance.\\
+
+I define a ``severe'' complaint to be one made about plumbing, heating, or general building safety; a non-severe complaint is any other kind. I do not observe who made a complaint, so I will run any analysis at the building level.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.75\textwidth]{../output/retaliatory-evictions/figs/retaliatory_quarterly_landlord_response_plot.png}
+\caption{Maintenance permits as a function of leads and lags of severe 3-11 complaints. Estimates from a regression of quarterly permit counts on leads and lags of severe complaint indicators, plus building and year-quarter fixed effects.}
+\label{fig:landlord_response}
+\end{figure}
+
+\clearpage
+
+\subsection{Retaliation}
+
+In reality, landlords can retaliate against tenants in any number of ways (shut off utilities, harassment, unannounced visits, etc.). For this paper, I choose to focus on a very specific kind of retaliation: eviction following a 3-11 complaint made with the city. I focus on this retaliation for two reasons. First, it is one of the only forms that is observable, and second, it's generally legal, provided that the tenant is in arrears. As I'll show, the key leverage that the landlord has is that they can choose to not provide the tenant with any grace following a default. The typical allowed back rent is about two months. For cases that happen following a complaint, the landlord is substantially more likely to not allow any grace.
+
+\paragraph{Retaliatory Evictions}
+
+Here I establish two facts that are consistent with "retaliatory" evictions. First, the probability of eviction occurring at a building spikes in the same quarter in which a complaint is made. Second, evictions that occur in the same quarter as a complaint are substantially more likely to be for 1 month back rent (as opposed to the typical two months), which I take as evidence that landlords are less lenient.
+\\
+
+For the first regression, I regress the count of evictions made in a building year-quarter as a function of the leads and lags of complaints made in that building, plus building and year-quarter fixed effects. As I show, the probability of an eviction occurring in a building spikes dramatically in the quarter in which a complaint was filed. Next, I stratify the complaint data by whether the complaint was ``severe'' -- defined as being for heating, plumbing, or building safety reasons. The effects that I find are driven almost entirely by ``severe'' complaints.
+
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.75\textwidth]{../output/retaliatory-evictions/figs/retaliatory_quarterly_distlag_coefficients.png}
+\caption{Evictions as a function of leads and lags of severe 3-1-1 complaints. Estimates from a fixed-effects Poisson regression regression of quarterly eviction filing counts on leads and lags of severe complaint indicators, plus building and year-quarter fixed effects.}
+\label{fig:distlag_evictions}
+\end{figure}
+
+\paragraph{Effects on Back Rent}
+
+Next, I show that retaliatory evictions, meaning evictions that occur in the same quarter as a complaint was filed, are substantially more likely to be for one month of back rent. To assess this, I regress an indicator for a case being filed for one month back rent on indicators for whether the case was filed in the same quarter as a complaint, one quarter before or after a complaint, or more than one quarter before or after a complaint, and building plus time fixed effects.
+
+\begin{table}[htbp]
+\small
+\caption{Retaliatory Evictions and One-Month Back Rent}
+\label{tab:one_month_backrent}
+\input{../output/retaliatory-evictions/retaliatory_quarterly_case_one_month_retaliatory_model_table.tex}
+\end{table}
+
+\paragraph{Defining ``retaliatory'' landlords in the data.}
+In the model, retaliation is a latent landlord type. In the data, I do not directly observe retaliatory intent, so I use building-level eviction filing intensity as a proxy for exposure to retaliatory landlord behavior. This proxy is imperfect: filing rates reflect both landlord behavior and tenant composition/shocks. In a world where tenants are sorting randomly into buildings, this is equivalent to measuring whether a landlord is retaliatory, however, this does not hold if tenants are sorting into specific buildings (which they are). In the future, I will change this to be something that isn't an equilibrium object. 
+
+\clearpage
+\section{Model Setup}
+
+\subsection{Agents}
+A landlord rents a unit to a tenant. The landlord is of \emph{retaliatory type} $l \in \{G,B\}$. B-types commit ex ante to retaliate conditional on complaint + trigger state (e.g., arrears). G-types do not. For ease of notation, the model is only relevant for the "bad" landlord, since the "good" landlord's problem does not involve retaliation. 
+
+Tenants are of two \emph{risk types} $i\in\{L,H\}$ with
+\[
+0<\delta_L<\delta_H<1,
+\]
+where $\delta_i$ is the probability of entering arrears. Let $\mu\in(0,1)$ denote the share of high-risk tenants in the relevant building/market.
+
+\subsection{Timing}
+\begin{enumerate}
+  \item A bad landlord posts rent $X$ and tenant signs lease.
+  \item A bad landlord chooses maintenance $m\in\{0,1\}$. If $m=1$, pays cost $k>0$.
+  \item \textbf{Issue severity draw:} $z\ge 0$ is drawn from a distribution depending on $m$:
+  \[
+  z\sim F_m(\cdot),
+  \qquad
+  F_1 \text{ first-order stochastically dominates } F_0.
+  \]
+  \item Tenant observes $z$ and chooses complaint $c\in\{0,1\}$.
+  \item Tenant enters arrears with probability $\delta_i$.
+  \item If in arrears, outcomes are worse if the tenant previously complained.
+  \item Model is then solved via backwards induction. Given maintenance, tenant finds the marginal issue for which they would complain. Given this marginal issue and tenant's complaint decision, the landlord decides whether to invest.
+\end{enumerate}
+
+\subsection{Payoffs}
+
+\paragraph{Tenant.}
+Severity $z$ is ``bad'' because baseline utility includes $-z$. If the tenant does not complain:
+\[
+U_T(0\mid z,i)= -z - \delta_i\sigma_N,
+\]
+where $\sigma_N>0$ is the arrears cost absent a complaint history.
+
+If the tenant complains, they obtain a benefit $b(z)\ge 0$, which is increasing in $z$, but face a larger arrears cost:
+\[
+U_T(1\mid z,i)= -z + b(z) - \delta_i\sigma_{C,i}.
+\]
+Define the retaliation wedge
+\[
+\Delta\sigma_i \equiv \sigma_{C,i}-\sigma_N>0,
+\qquad \text{and allow}\qquad \Delta\sigma_H\ge \Delta\sigma_L,
+\]
+so high-risk tenants can be (weakly) more harmed by retaliation. The wedge is a function of how likely a tenant is to default and how costly default would be to them.
+
+\paragraph{Landlord.}
+A complaint triggers cost $R>0$. Arrears imposes expected loss $D_N>0$ if no complaint history, and $D_C>D_N$ if the tenant previously complained. For now, $D_N$ and $D_C$ are not central to the complaint-suppression mechanism; I include them because they may be useful in a later extension that relaxes the need for ex ante commitment.\\
+Expected profit (given tenant type $i$) is:
+\[
+\Pi(m\mid i)
+= X - k\mathbf 1\{m=1\}
+- R\Pr(c=1\mid m,i)
+- \delta_i\Big(D_N + \Pr(c=1\mid m,i)(D_C-D_N)\Big).
+\]
+Aggregate over tenant types:
+\[
+\Pi(m)= (1-\mu)\Pi(m\mid L) + \mu\Pi(m\mid H).
+\]
+
+\section{Tenant problem: complaint policy}
+
+A type-$i$ tenant complains iff $U_T(1\mid z,i)\ge U_T(0\mid z,i)$, i.e.
+\[
+(1-\delta_i)b(z)\ge \delta_i(\sigma_{C,i}-\sigma_N)=\delta_i\Delta\sigma_i.
+\]
+Assume $b(\cdot)$ is strictly increasing. Define the \emph{type-specific complaint threshold} $z_i^\star$ by
+\[
+b(z_i^\star)=\frac{\delta_i}{1-\delta_i}\Delta\sigma_i.
+\]
+Then the complaint policy is:
+\[
+c^\star(z,i)=\mathbf 1\{z\ge z_i^\star\}.
+\]
+
+\paragraph{Comparative statics}
+Because the RHS increases in $\delta_i$ and $\Delta\sigma_i$:
+\begin{itemize}
+\item Higher arrears risk $\delta_i$ increases the complaint threshold $z_i^\star$ (complain only for more severe issues).
+\item Higher retaliation wedge $\Delta\sigma_i$ increases $z_i^\star$ (complain less).
+\item With $\delta_H>\delta_L$ and/or $\Delta\sigma_H>\Delta\sigma_L$, we have $z_H^\star>z_L^\star$, so high-risk tenants complain less, holding the issue environment fixed.
+\end{itemize}
+
+\section{Complaint probabilities (given maintenance)}
+
+Given $z\sim F_m$,
+\[
+\Pr(c=1\mid m,i)=\Pr(z\ge z_i^\star\mid m)=1-F_m(z_i^\star).
+\]
+Aggregate across types:
+\[
+\Pr(c=1\mid m,\mu)
+=
+(1-\mu)\big(1-F_m(z_L^\star)\big)
++\mu\big(1-F_m(z_H^\star)\big).
+\]
+
+Holding maintenance fixed,
+\[
+\frac{\partial}{\partial \mu}\Pr(c=1\mid m,\mu)
+=
+\big(1-F_m(z_H^\star)\big)-\big(1-F_m(z_L^\star)\big) <0,
+\]
+since $z_H^\star>z_L^\star\Rightarrow 1-F_m(z_H^\star)<1-F_m(z_L^\star)$.
+Thus, \textbf{conditional on the latent issue severity distribution $F_m$}, buildings with higher risky share complain less.
+
+\paragraph{Maintenance reduces complaints.}
+Since $F_1$ FOSD $F_0$, for any threshold $a$,
+\[
+\Pr(z\ge a\mid m=1)\le \Pr(z\ge a\mid m=0),
+\]
+so $\Pr(c=1\mid 1,i)\le \Pr(c=1\mid 0,i)$ for each $i$, and therefore $\Pr(c=1\mid 1,\mu)\le \Pr(c=1\mid 0,\mu)$.
+
+\section{Landlord problem: maintenance choice}
+
+The landlord chooses $m=1$ iff $\Pi(1)\ge \Pi(0)$. Define the gain from maintaining:
+\[
+\Delta \Pi \equiv \Pi(1)-\Pi(0)
+=
+-k
++ R\Big(\Pr(c=1\mid 0,\mu)-\Pr(c=1\mid 1,\mu)\Big)
++ (D_C-D_N)\Big(G(0)-G(1)\Big),
+\]
+where
+\[
+G(m)\equiv \mathbb E[\delta_i c^\star(z,i)\mid m]
+=
+(1-\mu)\delta_L\Pr(c=1\mid m,L)+\mu\delta_H\Pr(c=1\mid m,H).
+\]
+The equilibrium maintenance choice is:
+\[
+m^\star(\mu)=\mathbf 1\{\Delta\Pi(\mu)\ge 0\}.
+\]
+
+\paragraph{Selected comparative statics (maintenance).}\\
+\\
+All else equal:
+\begin{itemize}
+\item Higher $R$ increases maintenance incentives.
+\item Higher $k$ decreases maintenance incentives.
+\item Increasing retaliation wedges $\Delta\sigma_i$ (especially $\Delta\sigma_H$) increases $z_i^\star$, reduces complaint incidence, weakens the benefit of maintenance, and therefore decreases maintenance incentives.
+  \begin{itemize}
+    \item Conditional on the issue environment, buildings with riskier tenants generate fewer complaints.
+    \item Conditional on the issue environment, buildings with retaliatory landlords generate fewer complaints.
+  \end{itemize}
+\end{itemize}
+
+\section{Why unconditional complaints vs risky share are ambiguous}
+
+Unconditional complaint probability is evaluated at the equilibrium maintenance choice:
+\[
+\Pr(c=1\mid \mu)=\Pr(c=1\mid m^\star(\mu),\mu),
+\qquad
+m^\star(\mu)=\mathbf 1\{\Delta\Pi(\mu)\ge 0\}.
+\]
+
+Define
+\[
+\Phi(m,\mu)\equiv \Pr(c=1\mid m,\mu).
+\]
+Then for any $\mu_2>\mu_1$,
+\[
+\Phi(m^\star(\mu_2),\mu_2)-\Phi(m^\star(\mu_1),\mu_1)
+=
+\underbrace{\Big[\Phi(m^\star(\mu_1),\mu_2)-\Phi(m^\star(\mu_1),\mu_1)\Big]}_{\text{composition channel (holding maintenance fixed)}}
++
+\underbrace{\Big[\Phi(m^\star(\mu_2),\mu_2)-\Phi(m^\star(\mu_1),\mu_2)\Big]}_{\text{maintenance-response channel}}.
+\]
+
+The first term is weakly negative (and strictly negative under threshold separation plus support), because a higher risky-share $\mu$ lowers complaint propensity \emph{holding the issue environment fixed}. The second term captures the indirect effect operating through equilibrium maintenance. If higher risky-share reduces maintenance (i.e., $m^\star(\mu_2)<m^\star(\mu_1)$), then the maintenance-response channel is positive because worse maintenance increases issue severity and therefore complaint opportunities.
+\\
+
+Hence the unconditional relationship between complaints and risky-share is, in general, \textbf{ambiguous}: composition pushes complaints down, while any induced reduction in maintenance pushes complaints up.
+\\
+
+The same argument holds for retaliatory vs non-retaliatory buildings.
+\clearpage
+\section{Regression mapping to comparative statics}
+
+Let $C_{bt}$ be complaints, $I_{bt}$ be the underlying latent issue severity distribution ,$V_{bt}$ be a credible proxy for the latent issue severity distribution (lagged violations/investigations), $M_{bt}$ be maintenance proxy (permits), $X_{b}$ be building characteristics, and $\varepsilon_t$ be time fixed effects. \\
+
+I can't observe tenant precarity directly (neither default rates, nor the type-speficic retaliation scaler are observable), so I proxy for it by using the building-level share of Black tenants ($\mu_{bt}$) given prior research that Black tenants are more likely to default on rent and likely face higher costs of retaliation because of worse outside options. Another way to do this would be to look at average credit rating of people in the building, or some function of where people moved from. The nice part about race, however, is that it doesn't rely on me having to match residents to anything else, including past addresses. \\ 
+
+Likewise, I haven't defined what a "retaliatory" landlord is yet. I chose "high-filing" as a proxy for retaliatory, with the understanding that this is going to conflate both tenant-side and landlord-side characteristics. Nonetheless, let $H_b$ be whether the building is ``retaliatory'', which I define as have an above 15\% filing rate (about 85th percentile amongst all buildings, and twice the average rate). This is a time-invarient characteristic. I'm looking at extensions that look at what happens when a landlord buys another property, but for now, I justify this by saying that filing rates are very sticky.
+
+\clearpage
+\paragraph{Conditional-on-issue environment:}
+
+Were I able to fully condition on the underlying latent issue severity distribution, $I_{bt}$, buildings with higher shares of precarious tenants, as well as buildings with retaliatory landlords would see fewer complaints. Specifically:
+
+\[
+C_{bt}=\beta_0 + \beta_\mu \mu_{bt}+ \beta_H H_{b} + I_{bt}+\varepsilon_{t},
+\qquad \beta_\mu<0, \beta_H<0
+\]
+
+In practice, I can't fully condition on the underlying latent issue severity distribution. Instead, I define an interaction test: the complaint response to issue signals is weaker when precarious share is higher and when the building is retaliatory.
+
+\[
+C_{bt}=\beta_1 f(V_{bt})+\beta_2 \mu_{bt}+ \beta_3 H_{b} + \beta_4 \mu_{bt}\cdot f(V_{bt}) +\beta_5 H_{b}\cdot f(V_{bt}) + X_{b} +  \varepsilon_{t},
+\qquad \beta_4 < 0, \beta_5 < 0
+\]
+
+As the model predicts, these coefficients are negative
+
+\begin{table}[htbp]
+\small
+\caption{Complaint Suppression: Total Severe Complaints as a Function of Tenant Composition and Issue History (PPML)}
+\label{tab:complaint_suppression}
+\input{../output/comp-statics-annual-race/tables/compstats_annual_ppml_ladder.tex}
+\end{table}
+\clearpage
+\paragraph{Equilibrium maintenance}
+
+High evicting buildings do less maintenance. Importantly, this holds \emph{Conditional on rent prices and building observables}
+\begin{table}[htbp]
+\small
+\caption{Maintenance Permits in High-Eviction vs.\ Low-Eviction Buildings (PPML)}
+\label{tab:maintenance}
+\input{../output/retaliatory-evictions/retaliatory_quarterly_maintenance_model_table.tex}
+\end{table}
+
+\clearpage
+\subsection{Recap}
+
+To recap, I hope that the above has demonstrated:
+
+\begin{enumerate}
+  \item Evidence of landlord retaliation against tenants
+  \item Evidence landlords do respond to complaints by increasing maintenance
+  \item Evidence high-evicting landlords do less maintenance
+  \item Evidence that threat of retaliation can deter complaints, and that this threat is more powerful against more marginal tenant populations
+\end{enumerate}
+
+The next section will embed this within-lease game into a larger model of tenant sorting. I will begin, however, with a few stylized facts about tenant sorting. 
+
+\clearpage
+\section{Sorting}
+
+\subsection{Stylized Facts about Tenant Sorting}
+\paragraph{Within Block Groups, Black tenants are more likely to live in high evicting buildings}
+
+Let $\text{share\_black}_{bt}$ denote the building-level share of Black tenants in building $b$ at time $t$, and let $\{\text{bin}_j\}$ denote mutually exclusive bins of eviction intensity (average pre-COVID filing rate), with the 5--10\% bin as the reference category. The regression is:
+\[
+\text{share\_black}_{bt}
+= \sum_{j \neq \text{ref}} \beta_j \,\mathbf{1}[\text{evict intensity}_b \in \text{bin}_j]
++ \alpha_g + X_b'\gamma + \varepsilon_{bt},
+\]
+where $\alpha_g$ are block group fixed effects and $X_b$ includes building size, type, age decade, quality grade, and stories bins. I note that this might be mechanical, in that, if Black tenants have systematically higher default rates, it would then be the case that buildings with higher shares of Black tenants would have higher eviction rates, regardless of landlord type. If sorting were random, however, it would be hard to explain how persistent these patterns are.
+
+\begin{table}[htbp]
+\small
+\caption{Tenant Racial Composition by Eviction Intensity Bin}
+\label{tab:demog_eviction}
+\resizebox{\textwidth}{!}{%
+\input{../output/building-demographics-evictions/tables/building_demog_by_eviction_intensity_longrun.tex}%
+}
+\end{table}
+\clearpage
+\paragraph{Filing rates are not well capitalized into prices}
+
+Let $\overline{\text{filing rate}}_b$ denote the average pre-COVID eviction filing rate for building $b$ (defined as average filings per unit per year). The hedonic regression is:
+\[
+\log \text{rent}_{bt}
+= \beta \cdot \overline{\text{filing rate}}_b
++ \alpha_g + \alpha_t + X_b'\gamma + \varepsilon_{bt},
+\]
+where $\alpha_g$ are block group fixed effects, $\alpha_t$ are year fixed effects, and $X_b$ includes building size, type, age decade, quality grade, stories bins, and data source indicators. As the plot shows, units with some evictions rent for substantially less than units with no or very few evictions; however, there is effectively no price difference for a unit with a 7\% filing rate (city average) and a 15\% filing rate.
+
+
+\begin{figure}[htbp]
+\small
+\centering
+\includegraphics[width=0.75\textwidth]{../output/price-regs/figs/spline_stigma_curve_comparison.png}
+\caption{Flexible spline estimate of the rent-filing rate relationship. Estimates from a penalized spline regression of log rent on the pre-COVID filing rate, conditional on block group, year, and building characteristic fixed effects.}
+\label{fig:spline_stigma}
+\end{figure}
+
+\clearpage
+\paragraph{There is meaningful within-neighborhood variation in filing rates}
+\begin{figure}[htbp]
+\small
+\centering
+\includegraphics[width=0.75\textwidth]{../output/price-regs-eb/figs/resid_eviction_intensity_eb_pre_covid_hist.png}
+\caption{Within-block-group variation in eviction intensity. The histogram shows the distribution of building-level pre-COVID filing rates after partialing out block group means, demonstrating substantial within-neighborhood variation in landlord behavior.}
+\label{fig:resid_filing}
+\end{figure}
+
+\clearpage
+\subsection{Sorting Model}
+
+Previously, I had been closing the models by making tenants completely unaware about landlord quality. That let me get the result that filing rates were effectively unpriced past a certain point. It's very challenging to rationalize that with the fact that I also see significant within-neighborhood across-building sorting. One possible reason is that filing rates are not actually a good proxy for predatory landlord behavior and are instead mostly about tenant sorting. I'm looking into alternative ways to define "predatory" which aren't equilibrium objects.
+\\
+
+Instead, I'll focus on a simple assignment mechanism where tenants trade off distaste of bad landlords with an 'availability' paramater, which is a reduced form way to capture the tenant screening policies that happen in this part of the market.
+\\
+
+The goal of the model is to rationalize two empirical patterns: (i) substantial sorting across buildings within narrow neighborhoods, and (ii) weak or flat reduced-form rent gradients with respect to eviction filing intensity.
+\\
+
+I focus on sorting \emph{within} narrow neighborhoods (e.g., block groups). Accordingly, I treat rents as \emph{quality-adjusted and neighborhood-adjusted}, so that standard housing characteristics and neighborhood fixed effects are absorbed into the rent term.
+\\
+
+Each building $b$ has a discrete landlord/environment type
+\[
+T_b \in \{G,B\},
+\]
+where $G$ denotes a non-retaliatory (``good'') landlord environment and $B$ denotes a retaliatory / predatory (``bad'') landlord environment. This preserves the same $G/B$ distinction used in the within-lease model above. 
+\\
+
+In addition to type, each building has a nonprice \emph{availability/access} attribute $A_b \ge 0$, which captures how easy it is for tenants to obtain housing in that building (e.g., lower screening intensity, lower upfront requirements, faster lease-up, or other nonprice margins).
+\\
+
+In this setup, there is full information about each landlord / building. I think it can be the case that there is incomplete information (e.g., people have, possibly wrong, beliefs about buildings). I do not have a good idea for how to disentangle preferences from constraints from information frictions. 
+\\
+
+\paragraph{Tenant utility.}
+Tenant type is $i \in \{L,H\}$, where $H$ denotes a more precarious tenant type and $L$ a less precarious type. Let $\tilde r_b$ denote quality-adjusted and neighborhood-adjusted rent. Utility from building $b$ is
+\begin{equation}
+U_{ib} = - \tilde r_b + s_i A_b - a_i \mathbf{1}\{T_b = B\} + \varepsilon_{ib},
+\label{eq:sorting_utility_discrete}
+\end{equation}
+where $\varepsilon_{ib}$ is an idiosyncratic taste shock, $a_i \ge 0$ measures tenant vulnerability to the bad-landlord environment, and $s_i \ge 0$ measures the value the tenant places on availability/access. I assume $a_H > a_L$, so that bad landlord environments are more costly for more precarious tenants. To allow for sorting into bad-type buildings despite this disamenity, I also allow the availability margin to differ by type, e.g.\ $s_H \ge s_L$.
+\\
+
+The term $a_i \mathbf{1}\{T_b=B\}$ captures the idea that bad landlords generate a worse within-lease environment (e.g., greater expected retaliation risk and weaker complaint responsiveness), and that this disamenity is larger for more precarious tenants.
+\\
+
+\paragraph{Interpretation of the access margin.}
+The access term $s_i A_b$ captures why tenants may sort into bad-type buildings. A bad-type building may be easier to access ex ante (high $A_b$) while delivering a worse within-lease environment ex post. In this case, tenants may accept a worse landlord environment in order to secure housing. Another way to view this is that one might expect retaliation to be more prevelent in more concentrated markets where outside options are worse. 
+
+\paragraph{Within-neighborhood sorting.}
+Equation \eqref{eq:sorting_utility_discrete} implies sorting across buildings within neighborhood whenever buildings differ in $(T_b, A_b)$ and tenants differ in $(a_i,s_i)$, even conditional on neighborhood and quality-adjusted rent. Comparing two buildings $b$ and $b'$, tenant type $i$ prefers $b$ when
+\begin{equation}
+(\tilde r_{b'}-\tilde r_b) + s_i(A_b-A_{b'}) - a_i\left(\mathbf{1}\{T_b=B\} - \mathbf{1}\{T_{b'}=B\}\right) + (\varepsilon_{ib}-\varepsilon_{ib'}) > 0.
+\end{equation}
+Thus, a tenant may choose a bad-type building if the access advantage (and/or rent difference) is sufficiently large to offset the bad-type disamenity. In particular, for the more precarious type $H$, the sorting direction depends on a ``race'' between the larger bad-type disamenity ($a_H > a_L$) and the potentially larger value of access ($s_H \ge s_L$).
+
+\paragraph{Equilibrium Implications}
+
+This is closing the model by making tenants indifferent between predatory and non-predatory landlords, with the indifference coming from this "access" paramater. There's some notion that predatory landlords are providing "housing of last resort", however, they also tend to be the kinds of landlords that exploit their tenants.
+\\
+
+As of now, the sorting model doesn't add much in terms of testable implications. It does have some nice social planner implications, however. I haven't formally proved it yet, but you should get the result that it would be welfare improving to assign lower risk tenants to bad landlords (and vice-versa).
+\\
+
+Turning to policy, the model will say that it'd be optimal to regulate landlord conduct more than it would be to regulate landlord's ability to evict in general. There's no reason to regulate non-predatory landlords, but you might want to fine predatory ones who underprovide maintenance.
+
+\section{Recap and Next Steps}
+
+My immediate next steps are to find a better measure of "retaliatory". One that might work is to use my distributed lag results to show rank landlords by how likely they are to evict after a tenant complains, although this also conflates retaliation with building composition, since I only observe successful retaliation. Another would be something to do with substantiated complaints. 
+\\
+
+Once I have a better measure of retaliation, I'd like to further improve the sorting model. 
+
+
+\end{document}
