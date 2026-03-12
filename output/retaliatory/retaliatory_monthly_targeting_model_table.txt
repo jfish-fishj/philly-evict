@@ -2,99 +2,99 @@
                             Tract FE            BG FE
 Dependent Var.:     retaliatory_same retaliatory_same
                                                      
-tc_black_c                  -0.0025          -0.0032 
-                            (0.0043)         (0.0042)
-tc_female_c                  0.0007           3.88e-5
-                            (0.0033)         (0.0033)
-tc_black_female_c           -0.0059          -0.0046 
-                            (0.0044)         (0.0046)
-tc_cov_c                    -0.0070*         -0.0079*
-                            (0.0034)         (0.0033)
-tenant_comp_missing          0.0032           0.0018 
-                            (0.0022)         (0.0020)
+tc_black_c                   0.0076          -0.0121 
+                            (0.0172)         (0.0187)
+tc_female_c                 -0.0156          -0.0201 
+                            (0.0164)         (0.0170)
+tc_black_female_c            0.0301           0.0365 
+                            (0.0212)         (0.0233)
+tc_cov_c                     0.0172           0.0136 
+                            (0.0134)         (0.0158)
+tenant_comp_missing          0.0146           0.0059 
+                            (0.0088)         (0.0089)
 Fixed-Effects:      ---------------- ----------------
 period_fe                        Yes              Yes
 census_tract                     Yes               No
 GEOID                             No              Yes
 ___________________ ________________ ________________
 S.E.: Clustered     by: census_tract        by: GEOID
-Observations                 211,622          211,618
-R2                           0.01847          0.03179
-Within R2                    0.00014          0.00010
+Observations                   9,634            9,490
+R2                           0.07346          0.12870
+Within R2                    0.00095          0.00038
 ---
 Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
                              m_tract             m_bg
                             Tract FE            BG FE
 Dependent Var.:     retaliatory_same retaliatory_same
                                                      
-tc_black_c                  -0.0045          -0.0061 
-                            (0.0045)         (0.0046)
-tc_female_c                  0.0008           0.0002 
-                            (0.0037)         (0.0036)
-tc_black_female_c           -0.0076          -0.0059 
-                            (0.0049)         (0.0051)
-tc_cov_c                    -0.0042          -0.0052 
-                            (0.0038)         (0.0036)
-tenant_comp_missing          0.0037           0.0029 
-                            (0.0023)         (0.0021)
+tc_black_c                   0.0048          -0.0196 
+                            (0.0191)         (0.0219)
+tc_female_c                 -0.0165          -0.0165 
+                            (0.0183)         (0.0189)
+tc_black_female_c            0.0261           0.0324 
+                            (0.0242)         (0.0264)
+tc_cov_c                     0.0197           0.0090 
+                            (0.0151)         (0.0186)
+tenant_comp_missing          0.0174           0.0023 
+                            (0.0094)         (0.0099)
 Fixed-Effects:      ---------------- ----------------
 period_fe                        Yes              Yes
 census_tract                     Yes               No
 GEOID                             No              Yes
 ___________________ ________________ ________________
 S.E.: Clustered     by: census_tract        by: GEOID
-Observations                 175,049          175,044
-R2                           0.01521          0.02677
-Within R2                    0.00021          0.00017
+Observations                   7,893            7,739
+R2                           0.07260          0.14075
+Within R2                    0.00092          0.00024
 ---
 Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
                            m_tract           m_bg
                           Tract FE          BG FE
 Dependent Var.:     retaliatory_bw retaliatory_bw
                                                  
-tc_black_c                -0.0166       -0.0193  
-                          (0.0125)      (0.0111) 
-tc_female_c                0.0073        0.0039  
-                          (0.0088)      (0.0086) 
-tc_black_female_c         -0.0046        5.33e-5 
-                          (0.0114)      (0.0108) 
-tc_cov_c                  -0.0243*      -0.0260**
-                          (0.0096)      (0.0085) 
-tenant_comp_missing        0.0104        0.0060  
-                          (0.0084)      (0.0064) 
+tc_black_c                 0.0262        -0.0090 
+                          (0.0481)       (0.0441)
+tc_female_c               -0.0464        -0.0486 
+                          (0.0394)       (0.0397)
+tc_black_female_c          0.0513         0.0691 
+                          (0.0496)       (0.0523)
+tc_cov_c                   0.0603         0.0431 
+                          (0.0410)       (0.0339)
+tenant_comp_missing        0.0426         0.0218 
+                          (0.0295)       (0.0219)
 Fixed-Effects:      -------------- --------------
 period_fe                      Yes            Yes
 census_tract                   Yes             No
 GEOID                           No            Yes
 ___________________ ______________ ______________
 S.E.: Clustered     by: census_t..      by: GEOID
-Observations               211,622        211,618
-R2                         0.06936        0.10722
-Within R2                  0.00039        0.00028
+Observations                 9,634          9,490
+R2                         0.21388        0.31681
+Within R2                  0.00198        0.00082
 ---
 Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
                            m_tract           m_bg
                           Tract FE          BG FE
 Dependent Var.:     retaliatory_bw retaliatory_bw
                                                  
-tc_black_c                -0.0165       -0.0238* 
-                          (0.0131)      (0.0118) 
-tc_female_c                0.0071        0.0033  
-                          (0.0091)      (0.0094) 
-tc_black_female_c         -0.0090       -0.0026  
-                          (0.0116)      (0.0116) 
-tc_cov_c                  -0.0215*      -0.0258**
-                          (0.0106)      (0.0095) 
-tenant_comp_missing        0.0131        0.0077  
-                          (0.0089)      (0.0069) 
+tc_black_c                 0.0314         0.0097 
+                          (0.0512)       (0.0475)
+tc_female_c               -0.0383        -0.0357 
+                          (0.0422)       (0.0411)
+tc_black_female_c          0.0402         0.0664 
+                          (0.0548)       (0.0558)
+tc_cov_c                   0.0524         0.0199 
+                          (0.0439)       (0.0365)
+tenant_comp_missing        0.0425         0.0177 
+                          (0.0311)       (0.0237)
 Fixed-Effects:      -------------- --------------
 period_fe                      Yes            Yes
 census_tract                   Yes             No
 GEOID                           No            Yes
 ___________________ ______________ ______________
 S.E.: Clustered     by: census_t..      by: GEOID
-Observations               175,049        175,044
-R2                         0.06762        0.10556
-Within R2                  0.00052        0.00041
+Observations                 7,893          7,739
+R2                         0.22302        0.33617
+Within R2                  0.00181        0.00076
 ---
 Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

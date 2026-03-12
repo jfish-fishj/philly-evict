@@ -1,0 +1,26 @@
+     sample outcome     fe slope_label   building_type ref_building_type
+     <char>  <char> <char>      <char>          <char>            <char>
+  1:   full      bw     bg   pct_black      COMMERCIAL               ROW
+  2:   full      bw     bg   pct_black        DETACHED               ROW
+  3:   full      bw     bg   pct_black  HIGHRISE_MULTI               ROW
+  4:   full      bw     bg   pct_black   LOWRISE_MULTI               ROW
+  5:   full      bw     bg   pct_black   MIDRISE_MULTI               ROW
+ ---                                                                    
+140:    pre    same  tract   pct_women   MIDRISE_MULTI               ROW
+141:    pre    same  tract   pct_women           OTHER               ROW
+142:    pre    same  tract   pct_women             ROW               ROW
+143:    pre    same  tract   pct_women SMALL_MULTI_2_4               ROW
+144:    pre    same  tract   pct_women            TWIN               ROW
+         estimate   std_error    p_value estimable
+            <num>       <num>      <num>    <lgcl>
+  1: -0.074835510 0.101131827 0.45931225      TRUE
+  2: -0.028288605 0.043680427 0.51722651      TRUE
+  3:  0.120712690 0.070636755 0.08746544      TRUE
+  4:  0.068684030 0.034498447 0.04648846      TRUE
+  5:  0.040384198 0.063005205 0.52154474      TRUE
+ ---                                              
+140: -0.037213459 0.038674513 0.33593821      TRUE
+141: -0.025686810 0.066752353 0.70038000      TRUE
+142: -0.004427300 0.005790622 0.44453127      TRUE
+143: -0.019506989 0.008777866 0.02626352      TRUE
+144: -0.008545836 0.012086174 0.47951963      TRUE

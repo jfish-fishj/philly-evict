@@ -1,0 +1,2 @@
+converged,iters,max_diff,mass_resid_before_final_proj,mass_resid_final,xi_last_iter,xi_final,mu_target,s_weighted_mean,sim_year_from,sim_year_to,sim_n_years
+TRUE,26,8.62346261065738e-07,-5.49152900930494e-09,-5.39603206561878e-09,-2.52214868265392,-2.52214870184827,0.3,0.299999999999735,2011,2019,9

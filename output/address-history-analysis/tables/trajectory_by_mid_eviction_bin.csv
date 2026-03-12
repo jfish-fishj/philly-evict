@@ -1,0 +1,6 @@
+mid_evict_bin,n_traj,mean_orig_evict_eb,mean_dest_evict_eb,mean_delta_evict_eb,mean_orig_evict_raw,mean_dest_evict_raw,mean_delta_evict_raw,mean_orig_severe_pu,mean_dest_severe_pu,mean_delta_severe_pu,mean_orig_violations_pu,mean_dest_violations_pu,mean_delta_violations_pu,mean_orig_severe_violations_pu,mean_dest_severe_violations_pu,mean_delta_severe_violations_pu,mean_orig_loo_tract_eb,mean_dest_loo_tract_eb,mean_delta_loo_tract_eb,mean_orig_loo_tract_raw,mean_dest_loo_tract_raw,mean_delta_loo_tract_raw
+"[0,1)",104812,0.0381,0.0398,0.0017,0.0351,0.0378,0.0027,0.546,0.546,0,2.6232,2.6339,0.0107,0.3036,0.3024,-0.0012,0.0491,0.0492,2e-04,0.0436,0.0435,-1e-04
+"[1,5)",9196,0.0417,0.0406,-0.0011,0.0392,0.0381,-0.0011,0.4675,0.4631,-0.0044,2.1569,2.1429,-0.014,0.2743,0.2739,-4e-04,0.0451,0.0453,2e-04,0.0422,0.0416,-5e-04
+"[5,10)",23030,0.0544,0.0552,8e-04,0.0535,0.0558,0.0022,0.6854,0.6689,-0.0165,3.2657,3.199,-0.0667,0.4052,0.3853,-0.0199,0.0578,0.0582,4e-04,0.051,0.0509,-1e-04
+"[10,20)",16075,0.0643,0.0672,0.0029,0.0636,0.067,0.0034,0.7349,0.7212,-0.0137,3.5958,3.5954,-4e-04,0.4213,0.426,0.0047,0.0604,0.0609,5e-04,0.0533,0.0533,0
+"[20,inf)",7037,0.093,0.0991,0.0061,0.0931,0.0983,0.0052,0.8284,0.7854,-0.043,3.6531,3.6011,-0.052,0.466,0.4856,0.0196,0.0652,0.0656,4e-04,0.058,0.0578,-2e-04

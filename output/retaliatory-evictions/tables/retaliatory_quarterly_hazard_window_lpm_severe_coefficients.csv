@@ -1,0 +1,3 @@
+spec,outcome,term,estimate,std_error,t_value,p_value,conf_low,conf_high,n_obs
+filed_eviction_on_severe_window_lpm,filed_eviction,severe_window_status::near_q_severe_not_same,0.0246922585085195,0.00054321923198154,45.4554203069133,0,0.0236275488138357,0.0257569682032034,6981480
+filed_eviction_on_severe_window_lpm,filed_eviction,severe_window_status::same_q_severe,0.0795612399388034,0.00102261734544905,77.8015748440752,0,0.0775569099417232,0.0815655699358835,6981480

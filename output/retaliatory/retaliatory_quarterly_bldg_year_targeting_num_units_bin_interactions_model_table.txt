@@ -1,0 +1,292 @@
+                                             m_tract_btint
+                                                  Tract FE
+Dependent Var.:                     share_retaliatory_same
+                                                          
+tc_black_c                                      -0.0167   
+                                                (0.0096)  
+tc_female_c                                      0.0036   
+                                                (0.0087)  
+tc_black_female_c                               -0.0113   
+                                                (0.0106)  
+tc_cov_c                                        -0.0059   
+                                                (0.0084)  
+tenant_comp_missing                              0.0003   
+                                                (0.0044)  
+tc_black_c x num_units_bin = 2-5                 0.0300*  
+                                                (0.0122)  
+tc_black_c x num_units_bin = 21-50               0.0734*  
+                                                (0.0369)  
+tc_black_c x num_units_bin = 51+                 0.1403** 
+                                                (0.0481)  
+tc_black_c x num_units_bin = 6-20                0.0878** 
+                                                (0.0272)  
+tc_female_c x num_units_bin = 2-5               -0.0362** 
+                                                (0.0118)  
+tc_female_c x num_units_bin = 21-50              0.0640   
+                                                (0.0617)  
+tc_female_c x num_units_bin = 51+               -0.0298   
+                                                (0.1064)  
+tc_female_c x num_units_bin = 6-20               0.0445   
+                                                (0.0396)  
+log_total_area                                   0.0086*  
+                                                (0.0035)  
+log_market_value                                 0.0186***
+                                                (0.0040)  
+Fixed-Effects:                      ----------------------
+year                                                   Yes
+census_tract                                           Yes
+num_units_bin                                          Yes
+building_type                                          Yes
+year_blt_decade                                        Yes
+num_stories_bin                                        Yes
+GEOID                                                   No
+___________________________________ ______________________
+S.E.: Clustered                           by: census_tract
+Observations                                        50,437
+R2                                                 0.02677
+Within R2                                          0.00227
+
+                                                m_bg_btint
+                                                     BG FE
+Dependent Var.:                     share_retaliatory_same
+                                                          
+tc_black_c                                      -0.0168   
+                                                (0.0105)  
+tc_female_c                                      0.0026   
+                                                (0.0099)  
+tc_black_female_c                               -0.0103   
+                                                (0.0117)  
+tc_cov_c                                        -0.0077   
+                                                (0.0087)  
+tenant_comp_missing                             -0.0011   
+                                                (0.0045)  
+tc_black_c x num_units_bin = 2-5                 0.0283*  
+                                                (0.0117)  
+tc_black_c x num_units_bin = 21-50               0.0801*  
+                                                (0.0370)  
+tc_black_c x num_units_bin = 51+                 0.1257** 
+                                                (0.0452)  
+tc_black_c x num_units_bin = 6-20                0.0742** 
+                                                (0.0287)  
+tc_female_c x num_units_bin = 2-5               -0.0384** 
+                                                (0.0120)  
+tc_female_c x num_units_bin = 21-50              0.0543   
+                                                (0.0656)  
+tc_female_c x num_units_bin = 51+               -0.0166   
+                                                (0.1014)  
+tc_female_c x num_units_bin = 6-20               0.0406   
+                                                (0.0376)  
+log_total_area                                   0.0086*  
+                                                (0.0038)  
+log_market_value                                 0.0202***
+                                                (0.0038)  
+Fixed-Effects:                      ----------------------
+year                                                   Yes
+census_tract                                            No
+num_units_bin                                          Yes
+building_type                                          Yes
+year_blt_decade                                        Yes
+num_stories_bin                                        Yes
+GEOID                                                  Yes
+___________________________________ ______________________
+S.E.: Clustered                                  by: GEOID
+Observations                                        50,418
+R2                                                 0.04994
+Within R2                                          0.00217
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                             m_tract_btint
+                                                  Tract FE
+Dependent Var.:                     share_retaliatory_same
+                                                          
+tc_black_c                                      -0.0167   
+                                                (0.0096)  
+tc_female_c                                      0.0036   
+                                                (0.0087)  
+tc_black_female_c                               -0.0113   
+                                                (0.0106)  
+tc_cov_c                                        -0.0059   
+                                                (0.0084)  
+tenant_comp_missing                              0.0003   
+                                                (0.0044)  
+tc_black_c x num_units_bin = 2-5                 0.0300*  
+                                                (0.0122)  
+tc_black_c x num_units_bin = 21-50               0.0734*  
+                                                (0.0369)  
+tc_black_c x num_units_bin = 51+                 0.1403** 
+                                                (0.0481)  
+tc_black_c x num_units_bin = 6-20                0.0878** 
+                                                (0.0272)  
+tc_female_c x num_units_bin = 2-5               -0.0362** 
+                                                (0.0118)  
+tc_female_c x num_units_bin = 21-50              0.0640   
+                                                (0.0617)  
+tc_female_c x num_units_bin = 51+               -0.0298   
+                                                (0.1064)  
+tc_female_c x num_units_bin = 6-20               0.0445   
+                                                (0.0396)  
+log_total_area                                   0.0086*  
+                                                (0.0035)  
+log_market_value                                 0.0186***
+                                                (0.0040)  
+Fixed-Effects:                      ----------------------
+year                                                   Yes
+census_tract                                           Yes
+num_units_bin                                          Yes
+building_type                                          Yes
+year_blt_decade                                        Yes
+num_stories_bin                                        Yes
+GEOID                                                   No
+___________________________________ ______________________
+S.E.: Clustered                           by: census_tract
+Observations                                        50,437
+R2                                                 0.02677
+Within R2                                          0.00227
+
+                                                m_bg_btint
+                                                     BG FE
+Dependent Var.:                     share_retaliatory_same
+                                                          
+tc_black_c                                      -0.0168   
+                                                (0.0105)  
+tc_female_c                                      0.0026   
+                                                (0.0099)  
+tc_black_female_c                               -0.0103   
+                                                (0.0117)  
+tc_cov_c                                        -0.0077   
+                                                (0.0087)  
+tenant_comp_missing                             -0.0011   
+                                                (0.0045)  
+tc_black_c x num_units_bin = 2-5                 0.0283*  
+                                                (0.0117)  
+tc_black_c x num_units_bin = 21-50               0.0801*  
+                                                (0.0370)  
+tc_black_c x num_units_bin = 51+                 0.1257** 
+                                                (0.0452)  
+tc_black_c x num_units_bin = 6-20                0.0742** 
+                                                (0.0287)  
+tc_female_c x num_units_bin = 2-5               -0.0384** 
+                                                (0.0120)  
+tc_female_c x num_units_bin = 21-50              0.0543   
+                                                (0.0656)  
+tc_female_c x num_units_bin = 51+               -0.0166   
+                                                (0.1014)  
+tc_female_c x num_units_bin = 6-20               0.0406   
+                                                (0.0376)  
+log_total_area                                   0.0086*  
+                                                (0.0038)  
+log_market_value                                 0.0202***
+                                                (0.0038)  
+Fixed-Effects:                      ----------------------
+year                                                   Yes
+census_tract                                            No
+num_units_bin                                          Yes
+building_type                                          Yes
+year_blt_decade                                        Yes
+num_stories_bin                                        Yes
+GEOID                                                  Yes
+___________________________________ ______________________
+S.E.: Clustered                                  by: GEOID
+Observations                                        50,418
+R2                                                 0.04994
+Within R2                                          0.00217
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                           m_tract_btint           m_bg_btint
+                                                Tract FE                BG FE
+Dependent Var.:                     share_retaliatory_bw share_retaliatory_bw
+                                                                             
+tc_black_c                                    -0.0380**            -0.0450***
+                                              (0.0133)             (0.0136)  
+tc_female_c                                    0.0120               0.0054   
+                                              (0.0122)             (0.0134)  
+tc_black_female_c                              0.0051               0.0143   
+                                              (0.0156)             (0.0165)  
+tc_cov_c                                      -0.0039              -0.0046   
+                                              (0.0113)             (0.0120)  
+tenant_comp_missing                            0.0045               0.0048   
+                                              (0.0064)             (0.0061)  
+tc_black_c x num_units_bin = 2-5               0.0355               0.0370*  
+                                              (0.0184)             (0.0169)  
+tc_black_c x num_units_bin = 21-50             0.1623**             0.1742** 
+                                              (0.0559)             (0.0603)  
+tc_black_c x num_units_bin = 51+               0.1843**             0.1591** 
+                                              (0.0603)             (0.0589)  
+tc_black_c x num_units_bin = 6-20              0.1241**             0.1311** 
+                                              (0.0427)             (0.0484)  
+tc_female_c x num_units_bin = 2-5             -0.0522**            -0.0561***
+                                              (0.0165)             (0.0169)  
+tc_female_c x num_units_bin = 21-50            0.0805               0.0561   
+                                              (0.0962)             (0.1032)  
+tc_female_c x num_units_bin = 51+             -0.1225              -0.1188   
+                                              (0.1708)             (0.1717)  
+tc_female_c x num_units_bin = 6-20             0.0342               0.0309   
+                                              (0.0512)             (0.0509)  
+log_total_area                                 0.0279***            0.0306***
+                                              (0.0056)             (0.0061)  
+log_market_value                               0.0304***            0.0296***
+                                              (0.0063)             (0.0059)  
+Fixed-Effects:                      -------------------- --------------------
+year                                                 Yes                  Yes
+census_tract                                         Yes                   No
+num_units_bin                                        Yes                  Yes
+building_type                                        Yes                  Yes
+year_blt_decade                                      Yes                  Yes
+num_stories_bin                                      Yes                  Yes
+GEOID                                                 No                  Yes
+___________________________________ ____________________ ____________________
+S.E.: Clustered                         by: census_tract            by: GEOID
+Observations                                      50,437               50,418
+R2                                               0.06046              0.08606
+Within R2                                        0.00381              0.00367
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                           m_tract_btint           m_bg_btint
+                                                Tract FE                BG FE
+Dependent Var.:                     share_retaliatory_bw share_retaliatory_bw
+                                                                             
+tc_black_c                                    -0.0380**            -0.0450***
+                                              (0.0133)             (0.0136)  
+tc_female_c                                    0.0120               0.0054   
+                                              (0.0122)             (0.0134)  
+tc_black_female_c                              0.0051               0.0143   
+                                              (0.0156)             (0.0165)  
+tc_cov_c                                      -0.0039              -0.0046   
+                                              (0.0113)             (0.0120)  
+tenant_comp_missing                            0.0045               0.0048   
+                                              (0.0064)             (0.0061)  
+tc_black_c x num_units_bin = 2-5               0.0355               0.0370*  
+                                              (0.0184)             (0.0169)  
+tc_black_c x num_units_bin = 21-50             0.1623**             0.1742** 
+                                              (0.0559)             (0.0603)  
+tc_black_c x num_units_bin = 51+               0.1843**             0.1591** 
+                                              (0.0603)             (0.0589)  
+tc_black_c x num_units_bin = 6-20              0.1241**             0.1311** 
+                                              (0.0427)             (0.0484)  
+tc_female_c x num_units_bin = 2-5             -0.0522**            -0.0561***
+                                              (0.0165)             (0.0169)  
+tc_female_c x num_units_bin = 21-50            0.0805               0.0561   
+                                              (0.0962)             (0.1032)  
+tc_female_c x num_units_bin = 51+             -0.1225              -0.1188   
+                                              (0.1708)             (0.1717)  
+tc_female_c x num_units_bin = 6-20             0.0342               0.0309   
+                                              (0.0512)             (0.0509)  
+log_total_area                                 0.0279***            0.0306***
+                                              (0.0056)             (0.0061)  
+log_market_value                               0.0304***            0.0296***
+                                              (0.0063)             (0.0059)  
+Fixed-Effects:                      -------------------- --------------------
+year                                                 Yes                  Yes
+census_tract                                         Yes                   No
+num_units_bin                                        Yes                  Yes
+building_type                                        Yes                  Yes
+year_blt_decade                                      Yes                  Yes
+num_stories_bin                                      Yes                  Yes
+GEOID                                                 No                  Yes
+___________________________________ ____________________ ____________________
+S.E.: Clustered                         by: census_tract            by: GEOID
+Observations                                      50,437               50,418
+R2                                               0.06046              0.08606
+Within R2                                        0.00381              0.00367
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

@@ -1,0 +1,34 @@
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{4}{c}{Share Black}\\
+                                                               & Unconditional   & Tract FE        & BG FE           & Spline \\   
+   Model:                                                      & (1)             & (2)             & (3)             & (4)\\  
+   \midrule
+   \emph{Variables}\\
+   Eviction intensity (EB, pre-COVID) $=$ Nofilings5-10\%]")   & -0.1200$^{***}$ & -0.0223$^{***}$ & -0.0202$^{***}$ &   \\   
+                                                               & (0.0146)        & (0.0026)        & (0.0018)        &   \\   
+   Eviction intensity (EB, pre-COVID) $=$ (0-5\%]5-10\%]")     & -0.2026$^{***}$ & -0.0149$^{***}$ & -0.0126$^{***}$ &   \\   
+                                                               & (0.0195)        & (0.0047)        & (0.0033)        &   \\   
+   Eviction intensity (EB, pre-COVID) $=$ (10-20\%]5-10\%]")   & 0.0347$^{**}$   & 0.0198$^{***}$  & 0.0144$^{***}$  &   \\   
+                                                               & (0.0153)        & (0.0038)        & (0.0026)        &   \\   
+   Eviction intensity (EB, pre-COVID) $=$ 20\%+5-10\%]")       & 0.0974$^{***}$  & 0.0312$^{***}$  & 0.0345$^{***}$  &   \\   
+                                                               & (0.0227)        & (0.0065)        & (0.0044)        &   \\   
+   \midrule
+   \emph{Fixed-effects}\\
+   census\_tract                                               &                 & Yes             &                 & \\  
+   num\_units\_bin                                             &                 & Yes             & Yes             & Yes\\  
+   building\_type                                              &                 & Yes             & Yes             & Yes\\  
+   year\_blt\_decade                                           &                 & Yes             & Yes             & Yes\\  
+   quality\_grade\_standard                                    &                 & Yes             & Yes             & Yes\\  
+   num\_stories\_bin                                           &                 & Yes             & Yes             & Yes\\  
+   GEOID                                                       &                 &                 & Yes             & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                                & 177,861         & 170,908         & 170,899         & 170,899\\  
+   R$^2$                                                       & 0.04922         & 0.80838         & 0.88470         & 0.88476\\  
+   \midrule \midrule
+   \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

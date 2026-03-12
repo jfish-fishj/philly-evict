@@ -1,0 +1,166 @@
+    sample outcome     fe     group_var slope_label group_level ref_group_level
+    <char>  <char> <char>        <char>      <char>      <char>          <char>
+ 1:   full      bw     bg num_units_bin   pct_black           1               1
+ 2:   full      bw     bg num_units_bin   pct_black         2-5               1
+ 3:   full      bw     bg num_units_bin   pct_black       21-50               1
+ 4:   full      bw     bg num_units_bin   pct_black         51+               1
+ 5:   full      bw     bg num_units_bin   pct_black        6-20               1
+ 6:   full      bw     bg num_units_bin   pct_women           1               1
+ 7:   full      bw     bg num_units_bin   pct_women         2-5               1
+ 8:   full      bw     bg num_units_bin   pct_women       21-50               1
+ 9:   full      bw     bg num_units_bin   pct_women         51+               1
+10:   full      bw     bg num_units_bin   pct_women        6-20               1
+11:   full      bw  tract num_units_bin   pct_black           1               1
+12:   full      bw  tract num_units_bin   pct_black         2-5               1
+13:   full      bw  tract num_units_bin   pct_black       21-50               1
+14:   full      bw  tract num_units_bin   pct_black         51+               1
+15:   full      bw  tract num_units_bin   pct_black        6-20               1
+16:   full      bw  tract num_units_bin   pct_women           1               1
+17:   full      bw  tract num_units_bin   pct_women         2-5               1
+18:   full      bw  tract num_units_bin   pct_women       21-50               1
+19:   full      bw  tract num_units_bin   pct_women         51+               1
+20:   full      bw  tract num_units_bin   pct_women        6-20               1
+21:   full    same     bg num_units_bin   pct_black           1               1
+22:   full    same     bg num_units_bin   pct_black         2-5               1
+23:   full    same     bg num_units_bin   pct_black       21-50               1
+24:   full    same     bg num_units_bin   pct_black         51+               1
+25:   full    same     bg num_units_bin   pct_black        6-20               1
+26:   full    same     bg num_units_bin   pct_women           1               1
+27:   full    same     bg num_units_bin   pct_women         2-5               1
+28:   full    same     bg num_units_bin   pct_women       21-50               1
+29:   full    same     bg num_units_bin   pct_women         51+               1
+30:   full    same     bg num_units_bin   pct_women        6-20               1
+31:   full    same  tract num_units_bin   pct_black           1               1
+32:   full    same  tract num_units_bin   pct_black         2-5               1
+33:   full    same  tract num_units_bin   pct_black       21-50               1
+34:   full    same  tract num_units_bin   pct_black         51+               1
+35:   full    same  tract num_units_bin   pct_black        6-20               1
+36:   full    same  tract num_units_bin   pct_women           1               1
+37:   full    same  tract num_units_bin   pct_women         2-5               1
+38:   full    same  tract num_units_bin   pct_women       21-50               1
+39:   full    same  tract num_units_bin   pct_women         51+               1
+40:   full    same  tract num_units_bin   pct_women        6-20               1
+41:    pre      bw     bg num_units_bin   pct_black           1               1
+42:    pre      bw     bg num_units_bin   pct_black         2-5               1
+43:    pre      bw     bg num_units_bin   pct_black       21-50               1
+44:    pre      bw     bg num_units_bin   pct_black         51+               1
+45:    pre      bw     bg num_units_bin   pct_black        6-20               1
+46:    pre      bw     bg num_units_bin   pct_women           1               1
+47:    pre      bw     bg num_units_bin   pct_women         2-5               1
+48:    pre      bw     bg num_units_bin   pct_women       21-50               1
+49:    pre      bw     bg num_units_bin   pct_women         51+               1
+50:    pre      bw     bg num_units_bin   pct_women        6-20               1
+51:    pre      bw  tract num_units_bin   pct_black           1               1
+52:    pre      bw  tract num_units_bin   pct_black         2-5               1
+53:    pre      bw  tract num_units_bin   pct_black       21-50               1
+54:    pre      bw  tract num_units_bin   pct_black         51+               1
+55:    pre      bw  tract num_units_bin   pct_black        6-20               1
+56:    pre      bw  tract num_units_bin   pct_women           1               1
+57:    pre      bw  tract num_units_bin   pct_women         2-5               1
+58:    pre      bw  tract num_units_bin   pct_women       21-50               1
+59:    pre      bw  tract num_units_bin   pct_women         51+               1
+60:    pre      bw  tract num_units_bin   pct_women        6-20               1
+61:    pre    same     bg num_units_bin   pct_black           1               1
+62:    pre    same     bg num_units_bin   pct_black         2-5               1
+63:    pre    same     bg num_units_bin   pct_black       21-50               1
+64:    pre    same     bg num_units_bin   pct_black         51+               1
+65:    pre    same     bg num_units_bin   pct_black        6-20               1
+66:    pre    same     bg num_units_bin   pct_women           1               1
+67:    pre    same     bg num_units_bin   pct_women         2-5               1
+68:    pre    same     bg num_units_bin   pct_women       21-50               1
+69:    pre    same     bg num_units_bin   pct_women         51+               1
+70:    pre    same     bg num_units_bin   pct_women        6-20               1
+71:    pre    same  tract num_units_bin   pct_black           1               1
+72:    pre    same  tract num_units_bin   pct_black         2-5               1
+73:    pre    same  tract num_units_bin   pct_black       21-50               1
+74:    pre    same  tract num_units_bin   pct_black         51+               1
+75:    pre    same  tract num_units_bin   pct_black        6-20               1
+76:    pre    same  tract num_units_bin   pct_women           1               1
+77:    pre    same  tract num_units_bin   pct_women         2-5               1
+78:    pre    same  tract num_units_bin   pct_women       21-50               1
+79:    pre    same  tract num_units_bin   pct_women         51+               1
+80:    pre    same  tract num_units_bin   pct_women        6-20               1
+    sample outcome     fe     group_var slope_label group_level ref_group_level
+        estimate   std_error      p_value estimable
+           <num>       <num>        <num>    <lgcl>
+ 1: -0.034950272 0.010434752 0.0008098362      TRUE
+ 2:  0.004740425 0.014764140 0.7481520890      TRUE
+ 3:  0.096417923 0.055103210 0.0801580750      TRUE
+ 4:  0.020776762 0.074972689 0.7816845754      TRUE
+ 5:  0.096596788 0.042281724 0.0223363474      TRUE
+ 6:  0.003819108 0.009363541 0.6833690955      TRUE
+ 7: -0.009285119 0.011738923 0.4289623463      TRUE
+ 8:  0.052288900 0.078395507 0.5047794972      TRUE
+ 9: -0.056759078 0.139474222 0.6840444809      TRUE
+10:  0.055979884 0.049492084 0.2580182158      TRUE
+11: -0.032914966 0.010078215 0.0010909678      TRUE
+12:  0.007281004 0.015568258 0.6400115681      TRUE
+13:  0.088665056 0.054686669 0.1049472032      TRUE
+14:  0.045290955 0.076180907 0.5521653997      TRUE
+15:  0.078350549 0.038352616 0.0410623638      TRUE
+16:  0.003896866 0.009431223 0.6794690698      TRUE
+17: -0.010785175 0.011923388 0.3657094243      TRUE
+18:  0.046545618 0.079727881 0.5593508170      TRUE
+19: -0.007718984 0.154662179 0.9601951679      TRUE
+20:  0.054447838 0.048595073 0.2625265365      TRUE
+21: -0.022540242 0.007237387 0.0018430873      TRUE
+22: -0.000650989 0.009458470 0.9451280981      TRUE
+23:  0.046672430 0.033930809 0.1689709809      TRUE
+24:  0.056228762 0.047290650 0.2344381781      TRUE
+25:  0.046944258 0.023642822 0.0470821254      TRUE
+26: -0.005036755 0.006297427 0.4238199926      TRUE
+27: -0.015221290 0.007448475 0.0409985645      TRUE
+28:  0.019904985 0.050853257 0.6954867724      TRUE
+29: -0.015744471 0.078590927 0.8412190142      TRUE
+30:  0.044236418 0.029134093 0.1289204192      TRUE
+31: -0.023678516 0.007012871 0.0007343126      TRUE
+32: -0.001412388 0.009853254 0.8860198534      TRUE
+33:  0.037020174 0.034331586 0.2808943770      TRUE
+34:  0.068991957 0.050093540 0.1684310885      TRUE
+35:  0.042765526 0.022307340 0.0552245184      TRUE
+36: -0.005730586 0.006310930 0.3638563394      TRUE
+37: -0.015891295 0.007587719 0.0362293475      TRUE
+38:  0.023571998 0.050507911 0.6407151529      TRUE
+39:  0.012805268 0.086121702 0.8817997918      TRUE
+40:  0.038917829 0.031132588 0.2112749788      TRUE
+41: -0.034950272 0.010434752 0.0008098362      TRUE
+42:  0.004740425 0.014764140 0.7481520890      TRUE
+43:  0.096417923 0.055103210 0.0801580750      TRUE
+44:  0.020776762 0.074972689 0.7816845754      TRUE
+45:  0.096596788 0.042281724 0.0223363474      TRUE
+46:  0.003819108 0.009363541 0.6833690955      TRUE
+47: -0.009285119 0.011738923 0.4289623463      TRUE
+48:  0.052288900 0.078395507 0.5047794972      TRUE
+49: -0.056759078 0.139474222 0.6840444809      TRUE
+50:  0.055979884 0.049492084 0.2580182158      TRUE
+51: -0.032914966 0.010078215 0.0010909678      TRUE
+52:  0.007281004 0.015568258 0.6400115681      TRUE
+53:  0.088665056 0.054686669 0.1049472032      TRUE
+54:  0.045290955 0.076180907 0.5521653997      TRUE
+55:  0.078350549 0.038352616 0.0410623638      TRUE
+56:  0.003896866 0.009431223 0.6794690698      TRUE
+57: -0.010785175 0.011923388 0.3657094243      TRUE
+58:  0.046545618 0.079727881 0.5593508170      TRUE
+59: -0.007718984 0.154662179 0.9601951679      TRUE
+60:  0.054447838 0.048595073 0.2625265365      TRUE
+61: -0.022540242 0.007237387 0.0018430873      TRUE
+62: -0.000650989 0.009458470 0.9451280981      TRUE
+63:  0.046672430 0.033930809 0.1689709809      TRUE
+64:  0.056228762 0.047290650 0.2344381781      TRUE
+65:  0.046944258 0.023642822 0.0470821254      TRUE
+66: -0.005036755 0.006297427 0.4238199926      TRUE
+67: -0.015221290 0.007448475 0.0409985645      TRUE
+68:  0.019904985 0.050853257 0.6954867724      TRUE
+69: -0.015744471 0.078590927 0.8412190142      TRUE
+70:  0.044236418 0.029134093 0.1289204192      TRUE
+71: -0.023678516 0.007012871 0.0007343126      TRUE
+72: -0.001412388 0.009853254 0.8860198534      TRUE
+73:  0.037020174 0.034331586 0.2808943770      TRUE
+74:  0.068991957 0.050093540 0.1684310885      TRUE
+75:  0.042765526 0.022307340 0.0552245184      TRUE
+76: -0.005730586 0.006310930 0.3638563394      TRUE
+77: -0.015891295 0.007587719 0.0362293475      TRUE
+78:  0.023571998 0.050507911 0.6407151529      TRUE
+79:  0.012805268 0.086121702 0.8817997918      TRUE
+80:  0.038917829 0.031132588 0.2112749788      TRUE
+        estimate   std_error      p_value estimable

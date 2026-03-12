@@ -7,26 +7,26 @@
    \midrule
    \emph{Variables}\\
    filed\_complaint                                    & 0.026$^{***}$ & 0.026$^{***}$\\   
-                                                       & (0.0004)      & (0.0004)\\   
-   tenant\_comp\_missing                               &               & -0.0009$^{***}$\\   
-                                                       &               & ($6.94\times 10^{-5}$)\\    
-   filed\_complaint $\times$ tc\_black\_c              &               & 0.018$^{***}$\\   
-                                                       &               & (0.002)\\   
-   filed\_complaint $\times$ tc\_female\_c             &               & 0.002\\   
-                                                       &               & (0.002)\\   
-   filed\_complaint $\times$ tc\_black\_female\_c      &               & -0.0003\\   
-                                                       &               & (0.003)\\   
-   filed\_complaint $\times$ tc\_cov\_c                &               & 0.017$^{***}$\\   
-                                                       &               & (0.002)\\   
+                                                       & (0.002)       & (0.002)\\   
+   tenant\_comp\_missing                               &               & -0.0010$^{***}$\\   
+                                                       &               & (0.0003)\\   
+   filed\_complaint $\times$ tc\_black\_c              &               & 0.015\\   
+                                                       &               & (0.011)\\   
+   filed\_complaint $\times$ tc\_female\_c             &               & -0.010\\   
+                                                       &               & (0.009)\\   
+   filed\_complaint $\times$ tc\_black\_female\_c      &               & 0.023\\   
+                                                       &               & (0.016)\\   
+   filed\_complaint $\times$ tc\_cov\_c                &               & 0.021$^{**}$\\   
+                                                       &               & (0.008)\\   
    \midrule
    \emph{Fixed-effects}\\
    period\_fe                                          & Yes           & Yes\\  
    PID                                                 & Yes           & Yes\\  
    \midrule
    \emph{Fit statistics}\\
-   Observations                                        & 24,526,152    & 24,526,152\\  
-   R$^2$                                               & 0.09306       & 0.09312\\  
-   Within R$^2$                                        & 0.00091       & 0.00097\\  
+   Observations                                        & 1,075,680     & 1,075,680\\  
+   R$^2$                                               & 0.10580       & 0.10592\\  
+   Within R$^2$                                        & 0.00088       & 0.00101\\  
    \midrule \midrule
    \multicolumn{3}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
    \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
@@ -40,27 +40,27 @@
    Model:                                           & (1)           & (2)\\  
    \midrule
    \emph{Variables}\\
-   filed\_severe                                    & 0.046$^{***}$ & 0.045$^{***}$\\   
-                                                    & (0.0008)      & (0.0008)\\   
-   tenant\_comp\_missing                            &               & -0.0008$^{***}$\\   
-                                                    &               & ($6.92\times 10^{-5}$)\\    
-   filed\_severe $\times$ tc\_black\_c              &               & 0.020$^{***}$\\   
-                                                    &               & (0.004)\\   
-   filed\_severe $\times$ tc\_female\_c             &               & 0.003\\   
-                                                    &               & (0.004)\\   
-   filed\_severe $\times$ tc\_black\_female\_c      &               & -0.008\\   
-                                                    &               & (0.006)\\   
-   filed\_severe $\times$ tc\_cov\_c                &               & 0.030$^{***}$\\   
-                                                    &               & (0.003)\\   
+   filed\_severe                                    & 0.047$^{***}$ & 0.045$^{***}$\\   
+                                                    & (0.004)       & (0.004)\\   
+   tenant\_comp\_missing                            &               & -0.0009$^{***}$\\   
+                                                    &               & (0.0003)\\   
+   filed\_severe $\times$ tc\_black\_c              &               & 0.024\\   
+                                                    &               & (0.018)\\   
+   filed\_severe $\times$ tc\_female\_c             &               & -0.013\\   
+                                                    &               & (0.017)\\   
+   filed\_severe $\times$ tc\_black\_female\_c      &               & 0.017\\   
+                                                    &               & (0.026)\\   
+   filed\_severe $\times$ tc\_cov\_c                &               & 0.037$^{***}$\\   
+                                                    &               & (0.014)\\   
    \midrule
    \emph{Fixed-effects}\\
    period\_fe                                       & Yes           & Yes\\  
    PID                                              & Yes           & Yes\\  
    \midrule
    \emph{Fit statistics}\\
-   Observations                                     & 24,526,152    & 24,526,152\\  
-   R$^2$                                            & 0.09363       & 0.09368\\  
-   Within R$^2$                                     & 0.00153       & 0.00159\\  
+   Observations                                     & 1,075,680     & 1,075,680\\  
+   R$^2$                                            & 0.10635       & 0.10647\\  
+   Within R$^2$                                     & 0.00149       & 0.00163\\  
    \midrule \midrule
    \multicolumn{3}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
    \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
@@ -71,30 +71,30 @@
 \begin{tabular}{lcc}
    \tabularnewline \midrule \midrule
    Dependent Variable: & \multicolumn{2}{c}{filed\_eviction}\\
-   Model:                                                 & (1)                   & (2)\\  
+   Model:                                                 & (1)                  & (2)\\  
    \midrule
    \emph{Variables}\\
-   filed\_non\_severe                                     & 0.004$^{***}$         & 0.004$^{***}$\\   
-                                                          & (0.0004)              & (0.0004)\\   
-   tenant\_comp\_missing                                  &                       & -0.0009$^{***}$\\   
-                                                          &                       & ($6.96\times 10^{-5}$)\\    
-   filed\_non\_severe $\times$ tc\_black\_c               &                       & -0.004$^{*}$\\   
-                                                          &                       & (0.002)\\   
-   filed\_non\_severe $\times$ tc\_female\_c              &                       & 0.0001\\   
-                                                          &                       & (0.002)\\   
-   filed\_non\_severe $\times$ tc\_black\_female\_c       &                       & 0.003\\   
-                                                          &                       & (0.003)\\   
-   filed\_non\_severe $\times$ tc\_cov\_c                 &                       & -0.0004\\   
-                                                          &                       & (0.002)\\   
+   filed\_non\_severe                                     & 0.005$^{***}$        & 0.005$^{***}$\\   
+                                                          & (0.002)              & (0.002)\\   
+   tenant\_comp\_missing                                  &                      & -0.0010$^{***}$\\   
+                                                          &                      & (0.0003)\\   
+   filed\_non\_severe $\times$ tc\_black\_c               &                      & -0.0010\\   
+                                                          &                      & (0.011)\\   
+   filed\_non\_severe $\times$ tc\_female\_c              &                      & -0.006\\   
+                                                          &                      & (0.009)\\   
+   filed\_non\_severe $\times$ tc\_black\_female\_c       &                      & 0.003\\   
+                                                          &                      & (0.017)\\   
+   filed\_non\_severe $\times$ tc\_cov\_c                 &                      & -0.004\\   
+                                                          &                      & (0.009)\\   
    \midrule
    \emph{Fixed-effects}\\
-   period\_fe                                             & Yes                   & Yes\\  
-   PID                                                    & Yes                   & Yes\\  
+   period\_fe                                             & Yes                  & Yes\\  
+   PID                                                    & Yes                  & Yes\\  
    \midrule
    \emph{Fit statistics}\\
-   Observations                                           & 24,526,152            & 24,526,152\\  
-   R$^2$                                                  & 0.09225               & 0.09226\\  
-   Within R$^2$                                           & $1.09\times 10^{-5}$  & $2.16\times 10^{-5}$\\   
+   Observations                                           & 1,075,680            & 1,075,680\\  
+   R$^2$                                                  & 0.10503              & 0.10504\\  
+   Within R$^2$                                           & $1.2\times 10^{-5}$  & $2.68\times 10^{-5}$\\   
    \midrule \midrule
    \multicolumn{3}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
    \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
@@ -109,26 +109,26 @@
    \midrule
    \emph{Variables}\\
    filed\_complaint                                    & 0.033$^{***}$ & 0.032$^{***}$\\   
-                                                       & (0.0005)      & (0.0005)\\   
+                                                       & (0.002)       & (0.002)\\   
    tenant\_comp\_missing                               &               & -0.001$^{***}$\\   
-                                                       &               & ($8.31\times 10^{-5}$)\\    
-   filed\_complaint $\times$ tc\_black\_c              &               & 0.023$^{***}$\\   
-                                                       &               & (0.003)\\   
-   filed\_complaint $\times$ tc\_female\_c             &               & 0.005$^{*}$\\   
-                                                       &               & (0.002)\\   
-   filed\_complaint $\times$ tc\_black\_female\_c      &               & -0.004\\   
-                                                       &               & (0.004)\\   
-   filed\_complaint $\times$ tc\_cov\_c                &               & -0.006$^{**}$\\   
-                                                       &               & (0.003)\\   
+                                                       &               & (0.0004)\\   
+   filed\_complaint $\times$ tc\_black\_c              &               & 0.028$^{**}$\\   
+                                                       &               & (0.014)\\   
+   filed\_complaint $\times$ tc\_female\_c             &               & -0.008\\   
+                                                       &               & (0.011)\\   
+   filed\_complaint $\times$ tc\_black\_female\_c      &               & 0.010\\   
+                                                       &               & (0.020)\\   
+   filed\_complaint $\times$ tc\_cov\_c                &               & 0.007\\   
+                                                       &               & (0.014)\\   
    \midrule
    \emph{Fixed-effects}\\
    period\_fe                                          & Yes           & Yes\\  
    PID                                                 & Yes           & Yes\\  
    \midrule
    \emph{Fit statistics}\\
-   Observations                                        & 17,713,332    & 17,713,332\\  
-   R$^2$                                               & 0.10546       & 0.10551\\  
-   Within R$^2$                                        & 0.00125       & 0.00131\\  
+   Observations                                        & 776,880       & 776,880\\  
+   R$^2$                                               & 0.11885       & 0.11897\\  
+   Within R$^2$                                        & 0.00122       & 0.00136\\  
    \midrule \midrule
    \multicolumn{3}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
    \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
@@ -142,27 +142,27 @@
    Model:                                           & (1)           & (2)\\  
    \midrule
    \emph{Variables}\\
-   filed\_severe                                    & 0.059$^{***}$ & 0.058$^{***}$\\   
-                                                    & (0.0009)      & (0.0010)\\   
-   tenant\_comp\_missing                            &               & -0.0010$^{***}$\\   
-                                                    &               & ($8.28\times 10^{-5}$)\\    
-   filed\_severe $\times$ tc\_black\_c              &               & 0.021$^{***}$\\   
-                                                    &               & (0.005)\\   
-   filed\_severe $\times$ tc\_female\_c             &               & 0.007\\   
-                                                    &               & (0.005)\\   
-   filed\_severe $\times$ tc\_black\_female\_c      &               & -0.012$^{*}$\\   
-                                                    &               & (0.007)\\   
-   filed\_severe $\times$ tc\_cov\_c                &               & -0.010$^{**}$\\   
-                                                    &               & (0.005)\\   
+   filed\_severe                                    & 0.060$^{***}$ & 0.058$^{***}$\\   
+                                                    & (0.004)       & (0.004)\\   
+   tenant\_comp\_missing                            &               & -0.001$^{***}$\\   
+                                                    &               & (0.0004)\\   
+   filed\_severe $\times$ tc\_black\_c              &               & 0.039\\   
+                                                    &               & (0.024)\\   
+   filed\_severe $\times$ tc\_female\_c             &               & -0.011\\   
+                                                    &               & (0.021)\\   
+   filed\_severe $\times$ tc\_black\_female\_c      &               & 0.001\\   
+                                                    &               & (0.033)\\   
+   filed\_severe $\times$ tc\_cov\_c                &               & 0.008\\   
+                                                    &               & (0.023)\\   
    \midrule
    \emph{Fixed-effects}\\
    period\_fe                                       & Yes           & Yes\\  
    PID                                              & Yes           & Yes\\  
    \midrule
    \emph{Fit statistics}\\
-   Observations                                     & 17,713,332    & 17,713,332\\  
-   R$^2$                                            & 0.10627       & 0.10630\\  
-   Within R$^2$                                     & 0.00216       & 0.00219\\  
+   Observations                                     & 776,880       & 776,880\\  
+   R$^2$                                            & 0.11968       & 0.11977\\  
+   Within R$^2$                                     & 0.00216       & 0.00227\\  
    \midrule \midrule
    \multicolumn{3}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
    \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
@@ -176,27 +176,27 @@
    Model:                                                 & (1)                   & (2)\\  
    \midrule
    \emph{Variables}\\
-   filed\_non\_severe                                     & 0.005$^{***}$         & 0.005$^{***}$\\   
-                                                          & (0.0004)              & (0.0004)\\   
+   filed\_non\_severe                                     & 0.005$^{**}$          & 0.005$^{**}$\\   
+                                                          & (0.002)               & (0.002)\\   
    tenant\_comp\_missing                                  &                       & -0.001$^{***}$\\   
-                                                          &                       & ($8.36\times 10^{-5}$)\\    
-   filed\_non\_severe $\times$ tc\_black\_c               &                       & -0.003\\   
-                                                          &                       & (0.002)\\   
-   filed\_non\_severe $\times$ tc\_female\_c              &                       & -0.0006\\   
-                                                          &                       & (0.002)\\   
-   filed\_non\_severe $\times$ tc\_black\_female\_c       &                       & 0.002\\   
-                                                          &                       & (0.004)\\   
-   filed\_non\_severe $\times$ tc\_cov\_c                 &                       & -0.003\\   
-                                                          &                       & (0.003)\\   
+                                                          &                       & (0.0004)\\   
+   filed\_non\_severe $\times$ tc\_black\_c               &                       & -0.002\\   
+                                                          &                       & (0.013)\\   
+   filed\_non\_severe $\times$ tc\_female\_c              &                       & -0.008\\   
+                                                          &                       & (0.010)\\   
+   filed\_non\_severe $\times$ tc\_black\_female\_c       &                       & -0.0008\\   
+                                                          &                       & (0.018)\\   
+   filed\_non\_severe $\times$ tc\_cov\_c                 &                       & 0.001\\   
+                                                          &                       & (0.010)\\   
    \midrule
    \emph{Fixed-effects}\\
    period\_fe                                             & Yes                   & Yes\\  
    PID                                                    & Yes                   & Yes\\  
    \midrule
    \emph{Fit statistics}\\
-   Observations                                           & 17,713,332            & 17,713,332\\  
-   R$^2$                                                  & 0.10435               & 0.10436\\  
-   Within R$^2$                                           & $1.39\times 10^{-5}$  & $2.55\times 10^{-5}$\\   
+   Observations                                           & 776,880               & 776,880\\  
+   R$^2$                                                  & 0.11778               & 0.11779\\  
+   Within R$^2$                                           & $1.41\times 10^{-5}$  & $3\times 10^{-5}$\\   
    \midrule \midrule
    \multicolumn{3}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
    \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\

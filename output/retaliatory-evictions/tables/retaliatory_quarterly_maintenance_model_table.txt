@@ -1,0 +1,65 @@
+                              EB >=15% du.. EB >=15% du...1 EB filing b..
+Dependent Var.:               total_permits   total_permits total_permits
+                                                                         
+above_mean_pct_black_btTRUE       -0.375***       -0.327***     -0.379***
+                                  (0.007)         (0.009)       (0.007)  
+high_filing_eb                    -0.153***       -0.101***              
+                                  (0.012)         (0.012)                
+mean_log_med_rent_inf_adj_PID                      0.376***              
+                                                  (0.010)                
+filing_bin_eb = [1,5)")                                          0.093***
+                                                                (0.008)  
+filing_bin_eb = [5,10)")                                        -0.154***
+                                                                (0.009)  
+filing_bin_eb = [10,20)")                                       -0.130***
+                                                                (0.011)  
+filing_bin_eb = [20,inf)")                                      -0.219***
+                                                                (0.015)  
+Fixed-Effects:                -------------   ------------- -------------
+building_type                           Yes             Yes           Yes
+year                                    Yes             Yes           Yes
+quality_grade                           Yes             Yes           Yes
+year_blt_decade                         Yes             Yes           Yes
+num_units_bin                           Yes             Yes           Yes
+GEOID                                   Yes             Yes           Yes
+has_rent_data                           Yes              No           Yes
+_____________________________ _____________   _____________ _____________
+S.E. type                               IID             IID           IID
+Observations                      1,703,026         750,270     1,683,789
+Squared Cor.                        0.31379         0.25057       0.32030
+Pseudo R2                           0.20782         0.26005       0.20954
+BIC                             1,144,296.2       615,091.5   1,121,025.3
+
+                              EB filing b...1
+Dependent Var.:                 total_permits
+                                             
+above_mean_pct_black_btTRUE         -0.335***
+                                    (0.009)  
+high_filing_eb                               
+                                             
+mean_log_med_rent_inf_adj_PID        0.383***
+                                    (0.010)  
+filing_bin_eb = [1,5)")             -0.003   
+                                    (0.010)  
+filing_bin_eb = [5,10)")            -0.130***
+                                    (0.011)  
+filing_bin_eb = [10,20)")           -0.090***
+                                    (0.012)  
+filing_bin_eb = [20,inf)")          -0.179***
+                                    (0.016)  
+Fixed-Effects:                  -------------
+building_type                             Yes
+year                                      Yes
+quality_grade                             Yes
+year_blt_decade                           Yes
+num_units_bin                             Yes
+GEOID                                     Yes
+has_rent_data                              No
+_____________________________   _____________
+S.E. type                                 IID
+Observations                          743,824
+Squared Cor.                          0.25933
+Pseudo R2                             0.26192
+BIC                                 602,300.0
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

@@ -2,20 +2,20 @@
                                   Tract FE                  BG FE
 Dependent Var.:     share_retaliatory_same share_retaliatory_same
                                                                  
-tc_black_c                       0.0045                 0.0027   
-                                (0.0057)               (0.0059)  
-tc_female_c                      0.0048                 0.0040   
-                                (0.0058)               (0.0057)  
-tc_black_female_c               -0.0169*               -0.0162*  
-                                (0.0073)               (0.0074)  
-tc_cov_c                        -0.0076                -0.0083   
-                                (0.0054)               (0.0056)  
-tenant_comp_missing              0.0004                -0.0007   
-                                (0.0023)               (0.0023)  
-log_total_area                   0.0055***              0.0053***
-                                (0.0014)               (0.0015)  
-log_market_value                 0.0123***              0.0117***
-                                (0.0016)               (0.0017)  
+tc_black_c                        -0.0010                -0.0160 
+                                  (0.0240)               (0.0311)
+tc_female_c                       -0.0167                -0.0240 
+                                  (0.0269)               (0.0316)
+tc_black_female_c                  0.0378                 0.0501 
+                                  (0.0341)               (0.0392)
+tc_cov_c                           5.39e-5                0.0114 
+                                  (0.0212)               (0.0251)
+tenant_comp_missing                0.0038                 0.0011 
+                                  (0.0109)               (0.0135)
+log_total_area                     0.0189                -0.0077 
+                                  (0.0116)               (0.0156)
+log_market_value                   0.0017                 0.0150 
+                                  (0.0121)               (0.0138)
 Fixed-Effects:      ---------------------- ----------------------
 year                                   Yes                    Yes
 census_tract                           Yes                     No
@@ -26,29 +26,29 @@ num_stories_bin                        Yes                    Yes
 GEOID                                   No                    Yes
 ___________________ ______________________ ______________________
 S.E.: Clustered           by: census_tract              by: GEOID
-Observations                        74,877                 74,869
-R2                                 0.01911                0.03558
-Within R2                          0.00378                0.00301
+Observations                         3,398                  3,216
+R2                                 0.12023                0.24099
+Within R2                          0.00212                0.00167
 ---
 Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
                                    m_tract                   m_bg
                                   Tract FE                  BG FE
 Dependent Var.:     share_retaliatory_same share_retaliatory_same
                                                                  
-tc_black_c                       0.0014                -0.0030   
-                                (0.0079)               (0.0082)  
-tc_female_c                      0.0056                 0.0040   
-                                (0.0073)               (0.0072)  
-tc_black_female_c               -0.0224*               -0.0204*  
-                                (0.0097)               (0.0098)  
-tc_cov_c                        -0.0068                -0.0092   
-                                (0.0077)               (0.0076)  
-tenant_comp_missing              0.0005                -0.0013   
-                                (0.0028)               (0.0029)  
-log_total_area                   0.0005                -0.0003   
-                                (0.0020)               (0.0023)  
-log_market_value                 0.0096***              0.0103***
-                                (0.0020)               (0.0023)  
+tc_black_c                         0.0104                -0.0260 
+                                  (0.0335)               (0.0493)
+tc_female_c                       -0.0116                -0.0232 
+                                  (0.0332)               (0.0438)
+tc_black_female_c                  0.0123                 0.0419 
+                                  (0.0408)               (0.0540)
+tc_cov_c                           0.0042                 0.0035 
+                                  (0.0305)               (0.0391)
+tenant_comp_missing                0.0006                -0.0179 
+                                  (0.0157)               (0.0205)
+log_total_area                     0.0028                -0.0210 
+                                  (0.0209)               (0.0279)
+log_market_value                  -0.0065                -0.0087 
+                                  (0.0210)               (0.0299)
 Fixed-Effects:      ---------------------- ----------------------
 year                                   Yes                    Yes
 census_tract                           Yes                     No
@@ -59,29 +59,29 @@ num_stories_bin                        Yes                    Yes
 GEOID                                   No                    Yes
 ___________________ ______________________ ______________________
 S.E.: Clustered           by: census_tract              by: GEOID
-Observations                        47,453                 47,434
-R2                                 0.01468                0.03673
-Within R2                          0.00139                0.00130
+Observations                         2,092                  1,894
+R2                                 0.15933                0.30204
+Within R2                          0.00048                0.00214
 ---
 Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
                                  m_tract                 m_bg
                                 Tract FE                BG FE
 Dependent Var.:     share_retaliatory_bw share_retaliatory_bw
                                                              
-tc_black_c                    -0.0088              -0.0111   
-                              (0.0118)             (0.0114)  
-tc_female_c                   -0.0016              -0.0058   
-                              (0.0116)             (0.0114)  
-tc_black_female_c              0.0071               0.0123   
-                              (0.0152)             (0.0148)  
-tc_cov_c                      -0.0172              -0.0163   
-                              (0.0110)             (0.0110)  
-tenant_comp_missing            0.0020               0.0023   
-                              (0.0049)             (0.0049)  
-log_total_area                 0.0415***            0.0421***
-                              (0.0039)             (0.0041)  
-log_market_value               0.0526***            0.0505***
-                              (0.0043)             (0.0041)  
+tc_black_c                      -0.0161              -0.0140 
+                                (0.0474)             (0.0615)
+tc_female_c                     -0.0336              -0.0399 
+                                (0.0513)             (0.0634)
+tc_black_female_c                0.0656               0.0550 
+                                (0.0674)             (0.0808)
+tc_cov_c                        -0.0135              -0.0225 
+                                (0.0535)             (0.0542)
+tenant_comp_missing              0.0138               0.0028 
+                                (0.0222)             (0.0263)
+log_total_area                   0.0529               0.0651*
+                                (0.0279)             (0.0331)
+log_market_value                 0.0422*              0.0366 
+                                (0.0195)             (0.0241)
 Fixed-Effects:      -------------------- --------------------
 year                                 Yes                  Yes
 census_tract                         Yes                   No
@@ -92,29 +92,29 @@ num_stories_bin                      Yes                  Yes
 GEOID                                 No                  Yes
 ___________________ ____________________ ____________________
 S.E.: Clustered         by: census_tract            by: GEOID
-Observations                      74,877               74,869
-R2                               0.06469              0.08378
-Within R2                        0.02464              0.02050
+Observations                       3,398                3,216
+R2                               0.18025              0.32767
+Within R2                        0.00584              0.00477
 ---
 Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
                                  m_tract                 m_bg
                                 Tract FE                BG FE
 Dependent Var.:     share_retaliatory_bw share_retaliatory_bw
                                                              
-tc_black_c                    -0.0207              -0.0289*  
-                              (0.0138)             (0.0141)  
-tc_female_c                   -0.0074              -0.0159   
-                              (0.0139)             (0.0143)  
-tc_black_female_c              0.0130               0.0221   
-                              (0.0186)             (0.0187)  
-tc_cov_c                      -0.0239              -0.0254   
-                              (0.0143)             (0.0141)  
-tenant_comp_missing           -0.0004              -0.0021   
-                              (0.0055)             (0.0058)  
-log_total_area                 0.0291***            0.0286***
-                              (0.0049)             (0.0055)  
-log_market_value               0.0522***            0.0524***
-                              (0.0055)             (0.0054)  
+tc_black_c                       0.0051               0.0371 
+                                (0.0659)             (0.0851)
+tc_female_c                     -0.0084              -0.0132 
+                                (0.0647)             (0.0783)
+tc_black_female_c                0.0015              -0.0013 
+                                (0.0869)             (0.1013)
+tc_cov_c                        -0.0260              -0.0595 
+                                (0.0638)             (0.0711)
+tenant_comp_missing              0.0085               0.0083 
+                                (0.0304)             (0.0380)
+log_total_area                   0.0352               0.0638 
+                                (0.0413)             (0.0557)
+log_market_value                 0.0446               0.0461 
+                                (0.0271)             (0.0372)
 Fixed-Effects:      -------------------- --------------------
 year                                 Yes                  Yes
 census_tract                         Yes                   No
@@ -125,8 +125,8 @@ num_stories_bin                      Yes                  Yes
 GEOID                                 No                  Yes
 ___________________ ____________________ ____________________
 S.E.: Clustered         by: census_tract            by: GEOID
-Observations                      47,453               47,434
-R2                               0.05158              0.07793
-Within R2                        0.01612              0.01384
+Observations                       2,092                1,894
+R2                               0.21878              0.39507
+Within R2                        0.00312              0.00434
 ---
 Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

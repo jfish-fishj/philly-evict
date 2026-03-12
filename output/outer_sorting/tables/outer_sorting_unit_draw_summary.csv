@@ -1,0 +1,3 @@
+sample,n,mean_units,p50_units,p90_units,p95_units,p99_units,max_units
+Empirical PID average annual units,192043,2.06497602140931,1,2,4,20,715
+Simulated buildings,10000,2.03279206349206,1,2,4,22,250

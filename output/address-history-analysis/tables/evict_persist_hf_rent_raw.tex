@@ -1,0 +1,34 @@
+\begin{table}[htbp]
+   \caption{\label{tab:evict_persist_hf_rent_raw} High-Filer Persistence and Rent Regressions (Raw Long-Run Appendix Robustness)}
+   \centering
+   \begin{tabular}{lccc}
+      \tabularnewline \midrule \midrule
+      Dependent Variables: & \multicolumn{2}{c}{high\_filing\_dest} & Avg real rent (destination building)\\
+                                              & m4             & m5              & m\_rent \\    
+      Model:                                  & (1)            & (2)             & (3)\\  
+      \midrule
+      \emph{Variables}\\
+      high\_filing\_origTRUE                  & 0.0571$^{***}$ & 0.0698$^{***}$  &   \\   
+                                              & (0.0052)       & (0.0140)        &   \\   
+      Avg real rent (destination building)    &                & -0.0180$^{***}$ &   \\   
+                                              &                & (0.0063)        &   \\   
+      Avg real rent (origin building)         &                & -0.0033         & 0.2192$^{***}$\\   
+                                              &                & (0.0044)        & (0.0072)\\   
+      Filing rate (origin, raw long-run)      &                &                 & -0.0130$^{*}$\\   
+                                              &                &                 & (0.0068)\\   
+      Filing rate (destination, raw long-run) &                &                 & -0.2731$^{***}$\\   
+                                              &                &                 & (0.0399)\\   
+      \midrule
+      \emph{Fixed-effects}\\
+      Units bin (destination)                 & Yes            & Yes             & Yes\\  
+      Units bin (origin)                      & Yes            & Yes             & Yes\\  
+      Destination tract FE                    & Yes            & Yes             & Yes\\  
+      Origin tract FE                         & Yes            & Yes             & Yes\\  
+      \midrule
+      \emph{Fit statistics}\\
+      Observations                            & 87,976         & 20,209          & 56,412\\  
+      \midrule \midrule
+      \multicolumn{4}{l}{\emph{Clustered (pid) standard-errors in parentheses}}\\
+      \multicolumn{4}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+   \end{tabular}
+\end{table}

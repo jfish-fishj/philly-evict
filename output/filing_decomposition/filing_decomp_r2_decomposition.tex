@@ -1,0 +1,19 @@
+\begin{table}[htbp]
+\centering
+\caption{Sequential R\textsuperscript{2} Decomposition of Building-Level Filing Rates}
+\label{tab:r2_decomp}
+\begin{tabular}{p{2.4cm}p{7.5cm}cccr}
+\hline
+Model & Description & $R^2$ & Adj.~$R^2$ & $\Delta R^2$ & N \\
+\hline
+M0 & Intercept only & NA & NA & 0.0000 & 188,611 \\
+M1 & Zip FE + building chars + rental share & 0.1584 & 0.1579 & 0.0000 & 188,602 \\
+M2 & Tract FE + building chars + rental share & 0.2216 & 0.2198 & 0.0632 & 188,608 \\
+M3 & Tract FE + building + pct_black + rental share & 0.2473 & 0.2454 & 0.0258 & 167,713 \\
+M4 & Tract FE + building + pct_black + rental share + landlord (entity portfolio) & 0.2587 & 0.2568 & 0.0114 & 167,713 \\
+M5 & Tract FE + building + pct_black + rental share + landlord (conglomerate portfolio) & 0.2587 & 0.2568 & 0.0114 & 167,713 \\
+\hline
+\multicolumn{6}{l}{\footnotesize Between-neighborhood raw variance share: 0.131} \\
+\multicolumn{6}{l}{\footnotesize Weighted by total units. Sample: ever-rental PIDs with $\geq$3 observed years, 2011--2019.} \\
+\end{tabular}
+\end{table}

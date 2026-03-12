@@ -1,0 +1,462 @@
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_complaint}\\
+                                                                       & Tract FE               & BG FE \\   
+   Model:                                                              & (1)                    & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c                                                        & $-1.06\times 10^{-5}$  & -0.0001\\   
+                                                                       & (0.0007)               & (0.0007)\\   
+   tc\_female\_c                                                       & -0.0006                & -0.0005\\   
+                                                                       & (0.0005)               & (0.0006)\\   
+   tc\_black\_female\_c                                                & 0.0022$^{***}$         & 0.0023$^{***}$\\   
+                                                                       & (0.0009)               & (0.0008)\\   
+   tc\_cov\_c                                                          & 0.0018$^{***}$         & 0.0019$^{***}$\\   
+                                                                       & (0.0006)               & (0.0006)\\   
+   tenant\_comp\_missing                                               & 0.0050$^{***}$         & 0.0051$^{***}$\\   
+                                                                       & (0.0004)               & (0.0004)\\   
+   tc\_black\_c $\times$ building\_type $=$ COMMERCIAL                 & 0.0184                 & 0.0165\\   
+                                                                       & (0.0118)               & (0.0113)\\   
+   tc\_black\_c $\times$ building\_type $=$ DETACHED                   & 0.0034                 & 0.0025\\   
+                                                                       & (0.0030)               & (0.0030)\\   
+   tc\_black\_c $\times$ building\_type $=$ HIGHRISE\_MULTI            & 0.1532$^{***}$         & 0.1487$^{***}$\\   
+                                                                       & (0.0381)               & (0.0355)\\   
+   tc\_black\_c $\times$ building\_type $=$ LOWRISE\_MULTI             & 0.0458$^{***}$         & 0.0436$^{***}$\\   
+                                                                       & (0.0058)               & (0.0055)\\   
+   tc\_black\_c $\times$ building\_type $=$ MIDRISE\_MULTI             & 0.0303$^{***}$         & 0.0300$^{***}$\\   
+                                                                       & (0.0098)               & (0.0096)\\   
+   tc\_black\_c $\times$ building\_type $=$ OTHER                      & 0.0086                 & 0.0087\\   
+                                                                       & (0.0091)               & (0.0088)\\   
+   tc\_black\_c $\times$ building\_type $=$ SMALL\_MULTI\_2\_4         & 0.0025$^{*}$           & 0.0024$^{*}$\\   
+                                                                       & (0.0014)               & (0.0013)\\   
+   tc\_black\_c $\times$ building\_type $=$ TWIN                       & $-1.96\times 10^{-5}$  & 0.0002\\   
+                                                                       & (0.0015)               & (0.0015)\\   
+   tc\_female\_c $\times$ building\_type $=$ COMMERCIAL                & -0.0045                & -0.0035\\   
+                                                                       & (0.0105)               & (0.0103)\\   
+   tc\_female\_c $\times$ building\_type $=$ DETACHED                  & -0.0005                & -0.0011\\   
+                                                                       & (0.0032)               & (0.0033)\\   
+   tc\_female\_c $\times$ building\_type $=$ HIGHRISE\_MULTI           & 0.0518                 & 0.0501\\   
+                                                                       & (0.0482)               & (0.0505)\\   
+   tc\_female\_c $\times$ building\_type $=$ LOWRISE\_MULTI            & 0.0012                 & 0.0008\\   
+                                                                       & (0.0047)               & (0.0047)\\   
+   tc\_female\_c $\times$ building\_type $=$ MIDRISE\_MULTI            & -0.0027                & -0.0037\\   
+                                                                       & (0.0059)               & (0.0058)\\   
+   tc\_female\_c $\times$ building\_type $=$ OTHER                     & 0.0120                 & 0.0122\\   
+                                                                       & (0.0096)               & (0.0095)\\   
+   tc\_female\_c $\times$ building\_type $=$ SMALL\_MULTI\_2\_4        & -0.0017                & -0.0018\\   
+                                                                       & (0.0013)               & (0.0012)\\   
+   tc\_female\_c $\times$ building\_type $=$ TWIN                      & $6.61\times 10^{-5}$   & $4.23\times 10^{-5}$\\    
+                                                                       & (0.0015)               & (0.0015)\\   
+   total\_permits                                                      & 0.0167$^{***}$         & 0.0170$^{***}$\\   
+                                                                       & (0.0026)               & (0.0024)\\   
+   total\_violations                                                   & 0.0897$^{***}$         & 0.0896$^{***}$\\   
+                                                                       & (0.0022)               & (0.0020)\\   
+   log\_total\_area                                                    & 0.0071$^{***}$         & 0.0071$^{***}$\\   
+                                                                       & (0.0006)               & (0.0005)\\   
+   log\_market\_value                                                  & 0.0009$^{*}$           & 0.0012$^{**}$\\   
+                                                                       & (0.0005)               & (0.0005)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe                                                          & Yes                    & Yes\\  
+   census\_tract                                                       & Yes                    & \\  
+   num\_units\_bin                                                     & Yes                    & Yes\\  
+   building\_type                                                      & Yes                    & Yes\\  
+   year\_blt\_decade                                                   & Yes                    & Yes\\  
+   num\_stories\_bin                                                   & Yes                    & Yes\\  
+   GEOID                                                               &                        & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                                        & 4,302,256              & 4,302,256\\  
+   R$^2$                                                               & 0.10839                & 0.10945\\  
+   Within R$^2$                                                        & 0.09206                & 0.09170\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_complaint}\\
+                                                                       & Tract FE               & BG FE \\   
+   Model:                                                              & (1)                    & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c                                                        & $-4.98\times 10^{-5}$  & -0.0004\\   
+                                                                       & (0.0011)               & (0.0010)\\   
+   tc\_female\_c                                                       & $-8.45\times 10^{-5}$  & $2.68\times 10^{-5}$\\    
+                                                                       & (0.0007)               & (0.0007)\\   
+   tc\_black\_female\_c                                                & 0.0014                 & 0.0015\\   
+                                                                       & (0.0012)               & (0.0012)\\   
+   tc\_cov\_c                                                          & -0.0012                & -0.0008\\   
+                                                                       & (0.0009)               & (0.0010)\\   
+   tenant\_comp\_missing                                               & 0.0052$^{***}$         & 0.0055$^{***}$\\   
+                                                                       & (0.0005)               & (0.0004)\\   
+   tc\_black\_c $\times$ building\_type $=$ COMMERCIAL                 & 0.0353$^{**}$          & 0.0310$^{**}$\\   
+                                                                       & (0.0136)               & (0.0125)\\   
+   tc\_black\_c $\times$ building\_type $=$ DETACHED                   & 0.0019                 & 0.0014\\   
+                                                                       & (0.0037)               & (0.0037)\\   
+   tc\_black\_c $\times$ building\_type $=$ HIGHRISE\_MULTI            & 0.1072$^{***}$         & 0.0999$^{***}$\\   
+                                                                       & (0.0363)               & (0.0387)\\   
+   tc\_black\_c $\times$ building\_type $=$ LOWRISE\_MULTI             & 0.0409$^{***}$         & 0.0391$^{***}$\\   
+                                                                       & (0.0062)               & (0.0061)\\   
+   tc\_black\_c $\times$ building\_type $=$ MIDRISE\_MULTI             & 0.0355$^{**}$          & 0.0343$^{**}$\\   
+                                                                       & (0.0140)               & (0.0141)\\   
+   tc\_black\_c $\times$ building\_type $=$ OTHER                      & 0.0040                 & 0.0044\\   
+                                                                       & (0.0134)               & (0.0132)\\   
+   tc\_black\_c $\times$ building\_type $=$ SMALL\_MULTI\_2\_4         & 0.0011                 & 0.0010\\   
+                                                                       & (0.0017)               & (0.0017)\\   
+   tc\_black\_c $\times$ building\_type $=$ TWIN                       & -0.0007                & -0.0011\\   
+                                                                       & (0.0019)               & (0.0019)\\   
+   tc\_female\_c $\times$ building\_type $=$ COMMERCIAL                & -0.0064                & -0.0052\\   
+                                                                       & (0.0104)               & (0.0105)\\   
+   tc\_female\_c $\times$ building\_type $=$ DETACHED                  & -0.0014                & -0.0025\\   
+                                                                       & (0.0044)               & (0.0045)\\   
+   tc\_female\_c $\times$ building\_type $=$ HIGHRISE\_MULTI           & 0.0596                 & 0.0569\\   
+                                                                       & (0.0636)               & (0.0711)\\   
+   tc\_female\_c $\times$ building\_type $=$ LOWRISE\_MULTI            & -0.0011                & -0.0017\\   
+                                                                       & (0.0054)               & (0.0056)\\   
+   tc\_female\_c $\times$ building\_type $=$ MIDRISE\_MULTI            & -0.0054                & -0.0062\\   
+                                                                       & (0.0078)               & (0.0073)\\   
+   tc\_female\_c $\times$ building\_type $=$ OTHER                     & 0.0059                 & 0.0072\\   
+                                                                       & (0.0130)               & (0.0132)\\   
+   tc\_female\_c $\times$ building\_type $=$ SMALL\_MULTI\_2\_4        & -0.0019                & -0.0021\\   
+                                                                       & (0.0016)               & (0.0015)\\   
+   tc\_female\_c $\times$ building\_type $=$ TWIN                      & -0.0024                & -0.0025\\   
+                                                                       & (0.0018)               & (0.0019)\\   
+   total\_permits                                                      & 0.0170$^{***}$         & 0.0176$^{***}$\\   
+                                                                       & (0.0033)               & (0.0030)\\   
+   total\_violations                                                   & 0.1078$^{***}$         & 0.1076$^{***}$\\   
+                                                                       & (0.0018)               & (0.0015)\\   
+   log\_total\_area                                                    & 0.0065$^{***}$         & 0.0065$^{***}$\\   
+                                                                       & (0.0006)               & (0.0006)\\   
+   log\_market\_value                                                  & -0.0014$^{**}$         & -0.0009\\   
+                                                                       & (0.0007)               & (0.0006)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe                                                          & Yes                    & Yes\\  
+   census\_tract                                                       & Yes                    & \\  
+   num\_units\_bin                                                     & Yes                    & Yes\\  
+   building\_type                                                      & Yes                    & Yes\\  
+   year\_blt\_decade                                                   & Yes                    & Yes\\  
+   num\_stories\_bin                                                   & Yes                    & Yes\\  
+   GEOID                                                               &                        & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                                        & 2,128,048              & 2,128,048\\  
+   R$^2$                                                               & 0.13837                & 0.13974\\  
+   Within R$^2$                                                        & 0.12534                & 0.12501\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_severe}\\
+                                                                       & Tract FE               & BG FE \\   
+   Model:                                                              & (1)                    & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c                                                        & 0.0003                 & 0.0004\\   
+                                                                       & (0.0005)               & (0.0005)\\   
+   tc\_female\_c                                                       & -0.0004                & -0.0004\\   
+                                                                       & (0.0004)               & (0.0004)\\   
+   tc\_black\_female\_c                                                & 0.0035$^{***}$         & 0.0036$^{***}$\\   
+                                                                       & (0.0006)               & (0.0006)\\   
+   tc\_cov\_c                                                          & -0.0014$^{***}$        & -0.0013$^{***}$\\   
+                                                                       & (0.0005)               & (0.0005)\\   
+   tenant\_comp\_missing                                               & 0.0002                 & 0.0002\\   
+                                                                       & (0.0003)               & (0.0003)\\   
+   tc\_black\_c $\times$ building\_type $=$ COMMERCIAL                 & 0.0029                 & 0.0032\\   
+                                                                       & (0.0083)               & (0.0081)\\   
+   tc\_black\_c $\times$ building\_type $=$ DETACHED                   & 0.0023                 & 0.0015\\   
+                                                                       & (0.0021)               & (0.0024)\\   
+   tc\_black\_c $\times$ building\_type $=$ HIGHRISE\_MULTI            & 0.2115$^{***}$         & 0.2045$^{***}$\\   
+                                                                       & (0.0370)               & (0.0351)\\   
+   tc\_black\_c $\times$ building\_type $=$ LOWRISE\_MULTI             & 0.0512$^{***}$         & 0.0491$^{***}$\\   
+                                                                       & (0.0056)               & (0.0052)\\   
+   tc\_black\_c $\times$ building\_type $=$ MIDRISE\_MULTI             & 0.0262$^{***}$         & 0.0262$^{***}$\\   
+                                                                       & (0.0094)               & (0.0097)\\   
+   tc\_black\_c $\times$ building\_type $=$ OTHER                      & 0.0043                 & 0.0041\\   
+                                                                       & (0.0065)               & (0.0062)\\   
+   tc\_black\_c $\times$ building\_type $=$ SMALL\_MULTI\_2\_4         & 0.0036$^{***}$         & 0.0035$^{***}$\\   
+                                                                       & (0.0011)               & (0.0011)\\   
+   tc\_black\_c $\times$ building\_type $=$ TWIN                       & 0.0014                 & 0.0017\\   
+                                                                       & (0.0011)               & (0.0012)\\   
+   tc\_female\_c $\times$ building\_type $=$ COMMERCIAL                & $-1.72\times 10^{-5}$  & 0.0008\\   
+                                                                       & (0.0060)               & (0.0062)\\   
+   tc\_female\_c $\times$ building\_type $=$ DETACHED                  & $8.66\times 10^{-5}$   & -0.0004\\   
+                                                                       & (0.0021)               & (0.0023)\\   
+   tc\_female\_c $\times$ building\_type $=$ HIGHRISE\_MULTI           & 0.0503                 & 0.0494\\   
+                                                                       & (0.0470)               & (0.0473)\\   
+   tc\_female\_c $\times$ building\_type $=$ LOWRISE\_MULTI            & 0.0027                 & 0.0023\\   
+                                                                       & (0.0041)               & (0.0042)\\   
+   tc\_female\_c $\times$ building\_type $=$ MIDRISE\_MULTI            & 0.0063                 & 0.0059\\   
+                                                                       & (0.0055)               & (0.0051)\\   
+   tc\_female\_c $\times$ building\_type $=$ OTHER                     & 0.0047                 & 0.0050\\   
+                                                                       & (0.0063)               & (0.0062)\\   
+   tc\_female\_c $\times$ building\_type $=$ SMALL\_MULTI\_2\_4        & -0.0008                & -0.0009\\   
+                                                                       & (0.0009)               & (0.0009)\\   
+   tc\_female\_c $\times$ building\_type $=$ TWIN                      & -0.0001                & -0.0001\\   
+                                                                       & (0.0011)               & (0.0011)\\   
+   total\_permits                                                      & -0.0027$^{***}$        & -0.0027$^{***}$\\   
+                                                                       & (0.0005)               & (0.0005)\\   
+   total\_violations                                                   & 0.0582$^{***}$         & 0.0581$^{***}$\\   
+                                                                       & (0.0013)               & (0.0013)\\   
+   log\_total\_area                                                    & 0.0041$^{***}$         & 0.0039$^{***}$\\   
+                                                                       & (0.0005)               & (0.0004)\\   
+   log\_market\_value                                                  & 0.0043$^{***}$         & 0.0046$^{***}$\\   
+                                                                       & (0.0004)               & (0.0004)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe                                                          & Yes                    & Yes\\  
+   census\_tract                                                       & Yes                    & \\  
+   num\_units\_bin                                                     & Yes                    & Yes\\  
+   building\_type                                                      & Yes                    & Yes\\  
+   year\_blt\_decade                                                   & Yes                    & Yes\\  
+   num\_stories\_bin                                                   & Yes                    & Yes\\  
+   GEOID                                                               &                        & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                                        & 4,302,256              & 4,302,256\\  
+   R$^2$                                                               & 0.08417                & 0.08520\\  
+   Within R$^2$                                                        & 0.06501                & 0.06463\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_severe}\\
+                                                                       & Tract FE        & BG FE \\   
+   Model:                                                              & (1)             & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c                                                        & 0.0006          & 0.0005\\   
+                                                                       & (0.0008)        & (0.0008)\\   
+   tc\_female\_c                                                       & 0.0005          & 0.0006\\   
+                                                                       & (0.0005)        & (0.0005)\\   
+   tc\_black\_female\_c                                                & 0.0020$^{**}$   & 0.0021$^{**}$\\   
+                                                                       & (0.0008)        & (0.0009)\\   
+   tc\_cov\_c                                                          & -0.0026$^{***}$ & -0.0024$^{***}$\\   
+                                                                       & (0.0007)        & (0.0007)\\   
+   tenant\_comp\_missing                                               & -0.0003         & -0.0003\\   
+                                                                       & (0.0003)        & (0.0003)\\   
+   tc\_black\_c $\times$ building\_type $=$ COMMERCIAL                 & 0.0037          & 0.0033\\   
+                                                                       & (0.0094)        & (0.0085)\\   
+   tc\_black\_c $\times$ building\_type $=$ DETACHED                   & 0.0009          & 0.0002\\   
+                                                                       & (0.0027)        & (0.0028)\\   
+   tc\_black\_c $\times$ building\_type $=$ HIGHRISE\_MULTI            & 0.1667$^{***}$  & 0.1594$^{***}$\\   
+                                                                       & (0.0352)        & (0.0385)\\   
+   tc\_black\_c $\times$ building\_type $=$ LOWRISE\_MULTI             & 0.0457$^{***}$  & 0.0440$^{***}$\\   
+                                                                       & (0.0059)        & (0.0057)\\   
+   tc\_black\_c $\times$ building\_type $=$ MIDRISE\_MULTI             & 0.0070          & 0.0072\\   
+                                                                       & (0.0112)        & (0.0116)\\   
+   tc\_black\_c $\times$ building\_type $=$ OTHER                      & -0.0035         & -0.0033\\   
+                                                                       & (0.0079)        & (0.0079)\\   
+   tc\_black\_c $\times$ building\_type $=$ SMALL\_MULTI\_2\_4         & 0.0028$^{**}$   & 0.0030$^{**}$\\   
+                                                                       & (0.0013)        & (0.0013)\\   
+   tc\_black\_c $\times$ building\_type $=$ TWIN                       & 0.0013          & 0.0012\\   
+                                                                       & (0.0014)        & (0.0015)\\   
+   tc\_female\_c $\times$ building\_type $=$ COMMERCIAL                & 0.0004          & 0.0016\\   
+                                                                       & (0.0065)        & (0.0067)\\   
+   tc\_female\_c $\times$ building\_type $=$ DETACHED                  & -0.0016         & -0.0026\\   
+                                                                       & (0.0029)        & (0.0031)\\   
+   tc\_female\_c $\times$ building\_type $=$ HIGHRISE\_MULTI           & 0.0314          & 0.0281\\   
+                                                                       & (0.0665)        & (0.0707)\\   
+   tc\_female\_c $\times$ building\_type $=$ LOWRISE\_MULTI            & 0.0007          & 0.0002\\   
+                                                                       & (0.0045)        & (0.0050)\\   
+   tc\_female\_c $\times$ building\_type $=$ MIDRISE\_MULTI            & 0.0068          & 0.0062\\   
+                                                                       & (0.0066)        & (0.0063)\\   
+   tc\_female\_c $\times$ building\_type $=$ OTHER                     & -0.0059         & -0.0052\\   
+                                                                       & (0.0079)        & (0.0080)\\   
+   tc\_female\_c $\times$ building\_type $=$ SMALL\_MULTI\_2\_4        & -0.0005         & -0.0007\\   
+                                                                       & (0.0010)        & (0.0011)\\   
+   tc\_female\_c $\times$ building\_type $=$ TWIN                      & -0.0024$^{*}$   & -0.0025$^{*}$\\   
+                                                                       & (0.0013)        & (0.0014)\\   
+   total\_permits                                                      & -0.0047$^{***}$ & -0.0049$^{***}$\\   
+                                                                       & (0.0007)        & (0.0007)\\   
+   total\_violations                                                   & 0.0666$^{***}$  & 0.0665$^{***}$\\   
+                                                                       & (0.0014)        & (0.0010)\\   
+   log\_total\_area                                                    & 0.0027$^{***}$  & 0.0025$^{***}$\\   
+                                                                       & (0.0004)        & (0.0004)\\   
+   log\_market\_value                                                  & 0.0039$^{***}$  & 0.0043$^{***}$\\   
+                                                                       & (0.0005)        & (0.0004)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe                                                          & Yes             & Yes\\  
+   census\_tract                                                       & Yes             & \\  
+   num\_units\_bin                                                     & Yes             & Yes\\  
+   building\_type                                                      & Yes             & Yes\\  
+   year\_blt\_decade                                                   & Yes             & Yes\\  
+   num\_stories\_bin                                                   & Yes             & Yes\\  
+   GEOID                                                               &                 & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                                        & 2,128,048       & 2,128,048\\  
+   R$^2$                                                               & 0.09731         & 0.09867\\  
+   Within R$^2$                                                        & 0.08202         & 0.08175\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_non\_severe}\\
+                                                                       & Tract FE               & BG FE \\   
+   Model:                                                              & (1)                    & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c                                                        & -0.0005                & -0.0007\\   
+                                                                       & (0.0005)               & (0.0005)\\   
+   tc\_female\_c                                                       & -0.0001                & $-5.86\times 10^{-5}$\\    
+                                                                       & (0.0004)               & (0.0004)\\   
+   tc\_black\_female\_c                                                & -0.0013$^{**}$         & -0.0013$^{**}$\\   
+                                                                       & (0.0006)               & (0.0005)\\   
+   tc\_cov\_c                                                          & 0.0024$^{***}$         & 0.0025$^{***}$\\   
+                                                                       & (0.0004)               & (0.0004)\\   
+   tenant\_comp\_missing                                               & 0.0046$^{***}$         & 0.0047$^{***}$\\   
+                                                                       & (0.0003)               & (0.0002)\\   
+   tc\_black\_c $\times$ building\_type $=$ COMMERCIAL                 & 0.0112                 & 0.0093\\   
+                                                                       & (0.0070)               & (0.0065)\\   
+   tc\_black\_c $\times$ building\_type $=$ DETACHED                   & 0.0033                 & 0.0029\\   
+                                                                       & (0.0024)               & (0.0024)\\   
+   tc\_black\_c $\times$ building\_type $=$ HIGHRISE\_MULTI            & -0.0440$^{***}$        & -0.0430$^{***}$\\   
+                                                                       & (0.0130)               & (0.0121)\\   
+   tc\_black\_c $\times$ building\_type $=$ LOWRISE\_MULTI             & -0.0035$^{*}$          & -0.0038$^{*}$\\   
+                                                                       & (0.0021)               & (0.0021)\\   
+   tc\_black\_c $\times$ building\_type $=$ MIDRISE\_MULTI             & -0.0010                & -0.0014\\   
+                                                                       & (0.0040)               & (0.0040)\\   
+   tc\_black\_c $\times$ building\_type $=$ OTHER                      & 0.0046                 & 0.0044\\   
+                                                                       & (0.0066)               & (0.0065)\\   
+   tc\_black\_c $\times$ building\_type $=$ SMALL\_MULTI\_2\_4         & -0.0008                & -0.0009\\   
+                                                                       & (0.0008)               & (0.0008)\\   
+   tc\_black\_c $\times$ building\_type $=$ TWIN                       & -0.0013                & -0.0012\\   
+                                                                       & (0.0010)               & (0.0010)\\   
+   tc\_female\_c $\times$ building\_type $=$ COMMERCIAL                & -0.0078                & -0.0075\\   
+                                                                       & (0.0079)               & (0.0078)\\   
+   tc\_female\_c $\times$ building\_type $=$ DETACHED                  & 0.0001                 & $-7.49\times 10^{-5}$\\    
+                                                                       & (0.0024)               & (0.0024)\\   
+   tc\_female\_c $\times$ building\_type $=$ HIGHRISE\_MULTI           & -0.0055                & -0.0064\\   
+                                                                       & (0.0218)               & (0.0229)\\   
+   tc\_female\_c $\times$ building\_type $=$ LOWRISE\_MULTI            & -0.0040                & -0.0039\\   
+                                                                       & (0.0024)               & (0.0024)\\   
+   tc\_female\_c $\times$ building\_type $=$ MIDRISE\_MULTI            & -0.0094$^{***}$        & -0.0098$^{***}$\\   
+                                                                       & (0.0034)               & (0.0034)\\   
+   tc\_female\_c $\times$ building\_type $=$ OTHER                     & 0.0095                 & 0.0094\\   
+                                                                       & (0.0076)               & (0.0076)\\   
+   tc\_female\_c $\times$ building\_type $=$ SMALL\_MULTI\_2\_4        & -0.0010                & -0.0010\\   
+                                                                       & (0.0009)               & (0.0009)\\   
+   tc\_female\_c $\times$ building\_type $=$ TWIN                      & $-5.54\times 10^{-6}$  & $-1.81\times 10^{-5}$\\    
+                                                                       & (0.0011)               & (0.0012)\\   
+   total\_permits                                                      & 0.0156$^{***}$         & 0.0159$^{***}$\\   
+                                                                       & (0.0024)               & (0.0023)\\   
+   total\_violations                                                   & 0.0383$^{***}$         & 0.0383$^{***}$\\   
+                                                                       & (0.0016)               & (0.0011)\\   
+   log\_total\_area                                                    & 0.0031$^{***}$         & 0.0032$^{***}$\\   
+                                                                       & (0.0003)               & (0.0003)\\   
+   log\_market\_value                                                  & -0.0030$^{***}$        & -0.0030$^{***}$\\   
+                                                                       & (0.0003)               & (0.0003)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe                                                          & Yes                    & Yes\\  
+   census\_tract                                                       & Yes                    & \\  
+   num\_units\_bin                                                     & Yes                    & Yes\\  
+   building\_type                                                      & Yes                    & Yes\\  
+   year\_blt\_decade                                                   & Yes                    & Yes\\  
+   num\_stories\_bin                                                   & Yes                    & Yes\\  
+   GEOID                                                               &                        & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                                        & 4,302,256              & 4,302,256\\  
+   R$^2$                                                               & 0.04720                & 0.04813\\  
+   Within R$^2$                                                        & 0.04014                & 0.04008\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_non\_severe}\\
+                                                                       & Tract FE        & BG FE \\   
+   Model:                                                              & (1)             & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c                                                        & -0.0004         & -0.0007\\   
+                                                                       & (0.0007)        & (0.0007)\\   
+   tc\_female\_c                                                       & -0.0007         & -0.0007\\   
+                                                                       & (0.0006)        & (0.0006)\\   
+   tc\_black\_female\_c                                                & -0.0006         & -0.0006\\   
+                                                                       & (0.0009)        & (0.0008)\\   
+   tc\_cov\_c                                                          & 0.0013$^{*}$    & 0.0015$^{**}$\\   
+                                                                       & (0.0007)        & (0.0007)\\   
+   tenant\_comp\_missing                                               & 0.0058$^{***}$  & 0.0061$^{***}$\\   
+                                                                       & (0.0004)        & (0.0003)\\   
+   tc\_black\_c $\times$ building\_type $=$ COMMERCIAL                 & 0.0323$^{***}$  & 0.0282$^{***}$\\   
+                                                                       & (0.0109)        & (0.0094)\\   
+   tc\_black\_c $\times$ building\_type $=$ DETACHED                   & 0.0025          & 0.0025\\   
+                                                                       & (0.0033)        & (0.0032)\\   
+   tc\_black\_c $\times$ building\_type $=$ HIGHRISE\_MULTI            & -0.0576$^{***}$ & -0.0583$^{***}$\\   
+                                                                       & (0.0196)        & (0.0172)\\   
+   tc\_black\_c $\times$ building\_type $=$ LOWRISE\_MULTI             & -0.0024         & -0.0025\\   
+                                                                       & (0.0031)        & (0.0030)\\   
+   tc\_black\_c $\times$ building\_type $=$ MIDRISE\_MULTI             & 0.0239$^{**}$   & 0.0222$^{*}$\\   
+                                                                       & (0.0110)        & (0.0114)\\   
+   tc\_black\_c $\times$ building\_type $=$ OTHER                      & 0.0070          & 0.0069\\   
+                                                                       & (0.0115)        & (0.0110)\\   
+   tc\_black\_c $\times$ building\_type $=$ SMALL\_MULTI\_2\_4         & -0.0021$^{**}$  & -0.0022$^{**}$\\   
+                                                                       & (0.0010)        & (0.0011)\\   
+   tc\_black\_c $\times$ building\_type $=$ TWIN                       & -0.0021$^{*}$   & -0.0022$^{*}$\\   
+                                                                       & (0.0012)        & (0.0013)\\   
+   tc\_female\_c $\times$ building\_type $=$ COMMERCIAL                & -0.0052         & -0.0053\\   
+                                                                       & (0.0092)        & (0.0091)\\   
+   tc\_female\_c $\times$ building\_type $=$ DETACHED                  & -0.0005         & -0.0007\\   
+                                                                       & (0.0034)        & (0.0036)\\   
+   tc\_female\_c $\times$ building\_type $=$ HIGHRISE\_MULTI           & 0.0030          & 0.0036\\   
+                                                                       & (0.0396)        & (0.0426)\\   
+   tc\_female\_c $\times$ building\_type $=$ LOWRISE\_MULTI            & -0.0049         & -0.0050\\   
+                                                                       & (0.0036)        & (0.0034)\\   
+   tc\_female\_c $\times$ building\_type $=$ MIDRISE\_MULTI            & -0.0133$^{***}$ & -0.0138$^{***}$\\   
+                                                                       & (0.0049)        & (0.0052)\\   
+   tc\_female\_c $\times$ building\_type $=$ OTHER                     & 0.0143          & 0.0148\\   
+                                                                       & (0.0113)        & (0.0113)\\   
+   tc\_female\_c $\times$ building\_type $=$ SMALL\_MULTI\_2\_4        & -0.0014         & -0.0014\\   
+                                                                       & (0.0012)        & (0.0012)\\   
+   tc\_female\_c $\times$ building\_type $=$ TWIN                      & -0.0003         & -0.0003\\   
+                                                                       & (0.0014)        & (0.0016)\\   
+   total\_permits                                                      & 0.0227$^{***}$  & 0.0235$^{***}$\\   
+                                                                       & (0.0038)        & (0.0034)\\   
+   total\_violations                                                   & 0.0534$^{***}$  & 0.0533$^{***}$\\   
+                                                                       & (0.0019)        & (0.0012)\\   
+   log\_total\_area                                                    & 0.0042$^{***}$  & 0.0044$^{***}$\\   
+                                                                       & (0.0004)        & (0.0004)\\   
+   log\_market\_value                                                  & -0.0051$^{***}$ & -0.0050$^{***}$\\   
+                                                                       & (0.0004)        & (0.0004)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe                                                          & Yes             & Yes\\  
+   census\_tract                                                       & Yes             & \\  
+   num\_units\_bin                                                     & Yes             & Yes\\  
+   building\_type                                                      & Yes             & Yes\\  
+   year\_blt\_decade                                                   & Yes             & Yes\\  
+   num\_stories\_bin                                                   & Yes             & Yes\\  
+   GEOID                                                               &                 & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                                        & 2,128,048       & 2,128,048\\  
+   R$^2$                                                               & 0.07200         & 0.07345\\  
+   Within R$^2$                                                        & 0.06478         & 0.06470\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

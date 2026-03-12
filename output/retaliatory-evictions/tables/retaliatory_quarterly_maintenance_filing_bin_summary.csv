@@ -1,0 +1,11 @@
+measure,filing_bin,n_rows,n_pid
+eb_pre_covid,"[0,1)",1146802,127849
+eb_pre_covid,"[1,5)",80169,10845
+eb_pre_covid,"[10,20)",156845,17473
+eb_pre_covid,"[20,inf)",66407,7406
+eb_pre_covid,"[5,10)",236329,26280
+raw_longrun_pre2019,"[0,1)",1188441,134459
+raw_longrun_pre2019,"[1,5)",73350,8190
+raw_longrun_pre2019,"[10,20)",110085,12259
+raw_longrun_pre2019,"[20,inf)",99772,11116
+raw_longrun_pre2019,"[5,10)",234222,26051

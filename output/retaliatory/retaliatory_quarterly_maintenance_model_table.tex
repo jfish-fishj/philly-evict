@@ -1,0 +1,34 @@
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{total\_permits}\\
+   Model:                                    & (1)            & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   above\_mean\_pct\_black\_btTRUE           & -0.039$^{***}$ & -0.025$^{**}$\\   
+                                             & (0.008)        & (0.010)\\   
+   high\_filingTRUE                          & -0.133$^{***}$ & -0.088$^{***}$\\   
+                                             & (0.017)        & (0.018)\\   
+   mean\_log\_med\_rent\_inf\_adj\_PID       &                & 0.283$^{***}$\\   
+                                             &                & (0.013)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   building\_type                            & Yes            & Yes\\  
+   year                                      & Yes            & Yes\\  
+   quality\_grade                            & Yes            & Yes\\  
+   year\_blt\_decade                         & Yes            & Yes\\  
+   num\_units\_bin                           & Yes            & Yes\\  
+   GEOID                                     & Yes            & Yes\\  
+   has\_rent\_data                           & Yes            & \\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                              & 1,284,982      & 565,467\\  
+   Squared Correlation                       & 0.45820        & 0.36169\\  
+   Pseudo R$^2$                              & 0.23154        & 0.29425\\  
+   BIC                                       & 693,945.2      & 378,022.4\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{IID standard-errors in parentheses}}\\
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

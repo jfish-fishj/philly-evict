@@ -1,0 +1,37 @@
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{4}{c}{total\_severe\_complaints}\\
+                                             & Reg 1         & Reg 2          & Reg 3          & Reg 4 \\   
+   Model:                                    & (1)           & (2)            & (3)            & (4)\\  
+   \midrule
+   \emph{Variables}\\
+   infousa\_pct\_black                       & 1.522$^{***}$ & 0.5197$^{***}$ & 0.5400$^{***}$ & 0.5146$^{***}$\\   
+                                             & (0.1242)      & (0.1149)       & (0.1113)       & (0.1143)\\   
+   log\_total\_area                          &               & 0.2001$^{***}$ & 0.1836$^{***}$ & 0.1989$^{***}$\\   
+                                             &               & (0.0351)       & (0.0333)       & (0.0350)\\   
+   maint\_stock\_lag\_rate\_sev3             &               &                & 0.1071$^{***}$ & 0.1080$^{***}$\\   
+                                             &               &                & (0.0205)       & (0.0202)\\   
+   severe\_viol\_stock\_lag\_rate\_sev3      &               &                &                & 0.2710$^{***}$\\   
+                                             &               &                &                & (0.0085)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   year                                      & Yes           & Yes            & Yes            & Yes\\  
+   unit\_bin\_fine                           & Yes           & Yes            & Yes            & Yes\\  
+   census\_tract                             &               & Yes            & Yes            & Yes\\  
+   building\_type                            &               & Yes            & Yes            & Yes\\  
+   year\_blt\_decade                         &               & Yes            & Yes            & Yes\\  
+   quality\_grade\_abcde                     &               & Yes            & Yes            & Yes\\  
+   num\_stories\_bin                         &               &                & Yes            & \\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                              & 4,976,196     & 4,754,796      & 4,754,796      & 4,754,796\\  
+   Squared Correlation                       & 0.01378       & 0.02837        & 0.02858        & 0.02210\\  
+   Pseudo R$^2$                              & 0.14411       & 0.24452        & 0.24558        & 0.24550\\  
+   BIC                                       & 4,276,493.2   & 3,606,318.5    & 3,601,361.2    & 3,601,678.0\\  
+   \midrule \midrule
+   \multicolumn{5}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

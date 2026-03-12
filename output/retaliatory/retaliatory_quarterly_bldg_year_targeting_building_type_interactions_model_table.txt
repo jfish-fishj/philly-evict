@@ -1,0 +1,516 @@
+                                                       m_tract_btint
+                                                            Tract FE
+Dependent Var.:                               share_retaliatory_same
+                                                                    
+tc_black_c                                                -0.0087   
+                                                          (0.0083)  
+tc_female_c                                                0.0079   
+                                                          (0.0087)  
+tc_black_female_c                                         -0.0158   
+                                                          (0.0100)  
+tc_cov_c                                                  -0.0057   
+                                                          (0.0081)  
+tenant_comp_missing                                        0.0014   
+                                                          (0.0035)  
+tc_black_c x building_type = COMMERCIAL                    0.1753*  
+                                                          (0.0744)  
+tc_black_c x building_type = DETACHED                      0.0192   
+                                                          (0.0495)  
+tc_black_c x building_type = HIGHRISE_MULTI                0.2565***
+                                                          (0.0582)  
+tc_black_c x building_type = LOWRISE_MULTI                 0.0835***
+                                                          (0.0196)  
+tc_black_c x building_type = MIDRISE_MULTI                 0.0950   
+                                                          (0.0509)  
+tc_black_c x building_type = OTHER                         0.0770   
+                                                          (0.0989)  
+tc_black_c x building_type = SMALL_MULTI_2_4               0.0210   
+                                                          (0.0135)  
+tc_black_c x building_type = TWIN                         -0.0106   
+                                                          (0.0172)  
+tc_female_c x building_type = COMMERCIAL                  -0.0040   
+                                                          (0.0776)  
+tc_female_c x building_type = DETACHED                    -0.0414   
+                                                          (0.0566)  
+tc_female_c x building_type = HIGHRISE_MULTI              -0.1129   
+                                                          (0.1339)  
+tc_female_c x building_type = LOWRISE_MULTI               -0.0177   
+                                                          (0.0279)  
+tc_female_c x building_type = MIDRISE_MULTI               -0.0389   
+                                                          (0.0540)  
+tc_female_c x building_type = OTHER                       -0.0898   
+                                                          (0.1201)  
+tc_female_c x building_type = SMALL_MULTI_2_4             -0.0304*  
+                                                          (0.0146)  
+tc_female_c x building_type = TWIN                        -0.0330   
+                                                          (0.0174)  
+log_total_area                                             0.0149***
+                                                          (0.0026)  
+log_market_value                                           0.0195***
+                                                          (0.0030)  
+Fixed-Effects:                                ----------------------
+year                                                             Yes
+census_tract                                                     Yes
+num_units_bin                                                    Yes
+building_type                                                    Yes
+year_blt_decade                                                  Yes
+num_stories_bin                                                  Yes
+GEOID                                                             No
+________________________________________      ______________________
+S.E.: Clustered                                     by: census_tract
+Observations                                                  74,843
+R2                                                           0.03694
+Within R2                                                    0.00342
+
+                                                          m_bg_btint
+                                                               BG FE
+Dependent Var.:                               share_retaliatory_same
+                                                                    
+tc_black_c                                                -0.0051   
+                                                          (0.0090)  
+tc_female_c                                                0.0082   
+                                                          (0.0094)  
+tc_black_female_c                                         -0.0167   
+                                                          (0.0108)  
+tc_cov_c                                                  -0.0048   
+                                                          (0.0078)  
+tenant_comp_missing                                        0.0009   
+                                                          (0.0036)  
+tc_black_c x building_type = COMMERCIAL                    0.1945*  
+                                                          (0.0799)  
+tc_black_c x building_type = DETACHED                      0.0201   
+                                                          (0.0486)  
+tc_black_c x building_type = HIGHRISE_MULTI                0.2390***
+                                                          (0.0547)  
+tc_black_c x building_type = LOWRISE_MULTI                 0.0706***
+                                                          (0.0192)  
+tc_black_c x building_type = MIDRISE_MULTI                 0.0775   
+                                                          (0.0526)  
+tc_black_c x building_type = OTHER                         0.0700   
+                                                          (0.0928)  
+tc_black_c x building_type = SMALL_MULTI_2_4               0.0196   
+                                                          (0.0131)  
+tc_black_c x building_type = TWIN                         -0.0124   
+                                                          (0.0179)  
+tc_female_c x building_type = COMMERCIAL                  -0.0157   
+                                                          (0.0779)  
+tc_female_c x building_type = DETACHED                    -0.0396   
+                                                          (0.0626)  
+tc_female_c x building_type = HIGHRISE_MULTI              -0.1169   
+                                                          (0.1308)  
+tc_female_c x building_type = LOWRISE_MULTI               -0.0170   
+                                                          (0.0269)  
+tc_female_c x building_type = MIDRISE_MULTI               -0.0399   
+                                                          (0.0536)  
+tc_female_c x building_type = OTHER                       -0.1087   
+                                                          (0.1193)  
+tc_female_c x building_type = SMALL_MULTI_2_4             -0.0327*  
+                                                          (0.0146)  
+tc_female_c x building_type = TWIN                        -0.0325   
+                                                          (0.0177)  
+log_total_area                                             0.0155***
+                                                          (0.0028)  
+log_market_value                                           0.0196***
+                                                          (0.0028)  
+Fixed-Effects:                                ----------------------
+year                                                             Yes
+census_tract                                                      No
+num_units_bin                                                    Yes
+building_type                                                    Yes
+year_blt_decade                                                  Yes
+num_stories_bin                                                  Yes
+GEOID                                                            Yes
+________________________________________      ______________________
+S.E.: Clustered                                            by: GEOID
+Observations                                                  74,835
+R2                                                           0.05493
+Within R2                                                    0.00309
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                                       m_tract_btint
+                                                            Tract FE
+Dependent Var.:                               share_retaliatory_same
+                                                                    
+tc_black_c                                                -0.0112   
+                                                          (0.0106)  
+tc_female_c                                                0.0045   
+                                                          (0.0106)  
+tc_black_female_c                                         -0.0133   
+                                                          (0.0123)  
+tc_cov_c                                                  -0.0134   
+                                                          (0.0107)  
+tenant_comp_missing                                        0.0012   
+                                                          (0.0040)  
+tc_black_c x building_type = COMMERCIAL                    0.2656*  
+                                                          (0.1155)  
+tc_black_c x building_type = DETACHED                      0.0184   
+                                                          (0.0606)  
+tc_black_c x building_type = HIGHRISE_MULTI                0.1830** 
+                                                          (0.0654)  
+tc_black_c x building_type = LOWRISE_MULTI                 0.0816***
+                                                          (0.0225)  
+tc_black_c x building_type = MIDRISE_MULTI                 0.0483   
+                                                          (0.0534)  
+tc_black_c x building_type = OTHER                         0.1572   
+                                                          (0.1257)  
+tc_black_c x building_type = SMALL_MULTI_2_4               0.0146   
+                                                          (0.0158)  
+tc_black_c x building_type = TWIN                         -0.0208   
+                                                          (0.0206)  
+tc_female_c x building_type = COMMERCIAL                  -0.0423   
+                                                          (0.0956)  
+tc_female_c x building_type = DETACHED                    -0.0182   
+                                                          (0.0644)  
+tc_female_c x building_type = HIGHRISE_MULTI              -0.0094   
+                                                          (0.1812)  
+tc_female_c x building_type = LOWRISE_MULTI               -0.0117   
+                                                          (0.0365)  
+tc_female_c x building_type = MIDRISE_MULTI                0.0225   
+                                                          (0.0529)  
+tc_female_c x building_type = OTHER                       -0.1263   
+                                                          (0.1365)  
+tc_female_c x building_type = SMALL_MULTI_2_4             -0.0330   
+                                                          (0.0173)  
+tc_female_c x building_type = TWIN                        -0.0342   
+                                                          (0.0197)  
+log_total_area                                             0.0055   
+                                                          (0.0033)  
+log_market_value                                           0.0216***
+                                                          (0.0042)  
+Fixed-Effects:                                ----------------------
+year                                                             Yes
+census_tract                                                     Yes
+num_units_bin                                                    Yes
+building_type                                                    Yes
+year_blt_decade                                                  Yes
+num_stories_bin                                                  Yes
+GEOID                                                             No
+________________________________________      ______________________
+S.E.: Clustered                                     by: census_tract
+Observations                                                  47,437
+R2                                                           0.02584
+Within R2                                                    0.00235
+
+                                                          m_bg_btint
+                                                               BG FE
+Dependent Var.:                               share_retaliatory_same
+                                                                    
+tc_black_c                                                -0.0103   
+                                                          (0.0116)  
+tc_female_c                                                0.0038   
+                                                          (0.0117)  
+tc_black_female_c                                         -0.0132   
+                                                          (0.0136)  
+tc_cov_c                                                  -0.0152   
+                                                          (0.0101)  
+tenant_comp_missing                                       -0.0004   
+                                                          (0.0043)  
+tc_black_c x building_type = COMMERCIAL                    0.2823*  
+                                                          (0.1149)  
+tc_black_c x building_type = DETACHED                      0.0126   
+                                                          (0.0571)  
+tc_black_c x building_type = HIGHRISE_MULTI                0.1609*  
+                                                          (0.0685)  
+tc_black_c x building_type = LOWRISE_MULTI                 0.0704** 
+                                                          (0.0243)  
+tc_black_c x building_type = MIDRISE_MULTI                 0.0293   
+                                                          (0.0579)  
+tc_black_c x building_type = OTHER                         0.1453   
+                                                          (0.1303)  
+tc_black_c x building_type = SMALL_MULTI_2_4               0.0096   
+                                                          (0.0156)  
+tc_black_c x building_type = TWIN                         -0.0217   
+                                                          (0.0217)  
+tc_female_c x building_type = COMMERCIAL                  -0.0647   
+                                                          (0.0977)  
+tc_female_c x building_type = DETACHED                    -0.0143   
+                                                          (0.0718)  
+tc_female_c x building_type = HIGHRISE_MULTI              -0.0350   
+                                                          (0.1849)  
+tc_female_c x building_type = LOWRISE_MULTI               -0.0049   
+                                                          (0.0343)  
+tc_female_c x building_type = MIDRISE_MULTI                0.0069   
+                                                          (0.0559)  
+tc_female_c x building_type = OTHER                       -0.1280   
+                                                          (0.1402)  
+tc_female_c x building_type = SMALL_MULTI_2_4             -0.0352*  
+                                                          (0.0170)  
+tc_female_c x building_type = TWIN                        -0.0387   
+                                                          (0.0217)  
+log_total_area                                             0.0047   
+                                                          (0.0036)  
+log_market_value                                           0.0244***
+                                                          (0.0041)  
+Fixed-Effects:                                ----------------------
+year                                                             Yes
+census_tract                                                      No
+num_units_bin                                                    Yes
+building_type                                                    Yes
+year_blt_decade                                                  Yes
+num_stories_bin                                                  Yes
+GEOID                                                            Yes
+________________________________________      ______________________
+S.E.: Clustered                                            by: GEOID
+Observations                                                  47,418
+R2                                                           0.04993
+Within R2                                                    0.00232
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                                     m_tract_btint
+                                                          Tract FE
+Dependent Var.:                               share_retaliatory_bw
+                                                                  
+tc_black_c                                              -0.0264*  
+                                                        (0.0127)  
+tc_female_c                                              0.0107   
+                                                        (0.0127)  
+tc_black_female_c                                        0.0030   
+                                                        (0.0150)  
+tc_cov_c                                                -0.0164   
+                                                        (0.0106)  
+tenant_comp_missing                                      0.0042   
+                                                        (0.0050)  
+tc_black_c x building_type = COMMERCIAL                  0.3314***
+                                                        (0.0984)  
+tc_black_c x building_type = DETACHED                    0.0007   
+                                                        (0.0583)  
+tc_black_c x building_type = HIGHRISE_MULTI              0.1983** 
+                                                        (0.0697)  
+tc_black_c x building_type = LOWRISE_MULTI               0.1480***
+                                                        (0.0307)  
+tc_black_c x building_type = MIDRISE_MULTI               0.0612   
+                                                        (0.0605)  
+tc_black_c x building_type = OTHER                       0.1694   
+                                                        (0.1435)  
+tc_black_c x building_type = SMALL_MULTI_2_4             0.0356   
+                                                        (0.0211)  
+tc_black_c x building_type = TWIN                        0.0073   
+                                                        (0.0214)  
+tc_female_c x building_type = COMMERCIAL                -0.2466*  
+                                                        (0.1109)  
+tc_female_c x building_type = DETACHED                  -0.0493   
+                                                        (0.0747)  
+tc_female_c x building_type = HIGHRISE_MULTI             0.1241   
+                                                        (0.1626)  
+tc_female_c x building_type = LOWRISE_MULTI             -0.0220   
+                                                        (0.0376)  
+tc_female_c x building_type = MIDRISE_MULTI              0.0494   
+                                                        (0.1000)  
+tc_female_c x building_type = OTHER                     -0.0805   
+                                                        (0.1670)  
+tc_female_c x building_type = SMALL_MULTI_2_4           -0.0331   
+                                                        (0.0197)  
+tc_female_c x building_type = TWIN                      -0.0463   
+                                                        (0.0260)  
+log_total_area                                           0.0339***
+                                                        (0.0040)  
+log_market_value                                         0.0356***
+                                                        (0.0050)  
+Fixed-Effects:                                --------------------
+year                                                           Yes
+census_tract                                                   Yes
+num_units_bin                                                  Yes
+building_type                                                  Yes
+year_blt_decade                                                Yes
+num_stories_bin                                                Yes
+GEOID                                                           No
+________________________________________      ____________________
+S.E.: Clustered                                   by: census_tract
+Observations                                                74,843
+R2                                                         0.07170
+Within R2                                                  0.00578
+
+                                                        m_bg_btint
+                                                             BG FE
+Dependent Var.:                               share_retaliatory_bw
+                                                                  
+tc_black_c                                              -0.0258*  
+                                                        (0.0126)  
+tc_female_c                                              0.0075   
+                                                        (0.0129)  
+tc_black_female_c                                        0.0080   
+                                                        (0.0151)  
+tc_cov_c                                                -0.0151   
+                                                        (0.0111)  
+tenant_comp_missing                                      0.0043   
+                                                        (0.0051)  
+tc_black_c x building_type = COMMERCIAL                  0.3643** 
+                                                        (0.1138)  
+tc_black_c x building_type = DETACHED                    0.0162   
+                                                        (0.0637)  
+tc_black_c x building_type = HIGHRISE_MULTI              0.1764*  
+                                                        (0.0688)  
+tc_black_c x building_type = LOWRISE_MULTI               0.1340***
+                                                        (0.0312)  
+tc_black_c x building_type = MIDRISE_MULTI               0.0676   
+                                                        (0.0621)  
+tc_black_c x building_type = OTHER                       0.1684   
+                                                        (0.1410)  
+tc_black_c x building_type = SMALL_MULTI_2_4             0.0355   
+                                                        (0.0199)  
+tc_black_c x building_type = TWIN                        0.0101   
+                                                        (0.0255)  
+tc_female_c x building_type = COMMERCIAL                -0.2348*  
+                                                        (0.1119)  
+tc_female_c x building_type = DETACHED                  -0.0440   
+                                                        (0.0764)  
+tc_female_c x building_type = HIGHRISE_MULTI             0.0982   
+                                                        (0.1617)  
+tc_female_c x building_type = LOWRISE_MULTI             -0.0231   
+                                                        (0.0380)  
+tc_female_c x building_type = MIDRISE_MULTI              0.0328   
+                                                        (0.0984)  
+tc_female_c x building_type = OTHER                     -0.1002   
+                                                        (0.1692)  
+tc_female_c x building_type = SMALL_MULTI_2_4           -0.0385   
+                                                        (0.0207)  
+tc_female_c x building_type = TWIN                      -0.0446   
+                                                        (0.0270)  
+log_total_area                                           0.0371***
+                                                        (0.0044)  
+log_market_value                                         0.0348***
+                                                        (0.0045)  
+Fixed-Effects:                                --------------------
+year                                                           Yes
+census_tract                                                    No
+num_units_bin                                                  Yes
+building_type                                                  Yes
+year_blt_decade                                                Yes
+num_stories_bin                                                Yes
+GEOID                                                          Yes
+________________________________________      ____________________
+S.E.: Clustered                                          by: GEOID
+Observations                                                74,835
+R2                                                         0.09037
+Within R2                                                  0.00548
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                                     m_tract_btint
+                                                          Tract FE
+Dependent Var.:                               share_retaliatory_bw
+                                                                  
+tc_black_c                                              -0.0335*  
+                                                        (0.0152)  
+tc_female_c                                              0.0130   
+                                                        (0.0150)  
+tc_black_female_c                                        0.0035   
+                                                        (0.0182)  
+tc_cov_c                                                -0.0200   
+                                                        (0.0140)  
+tenant_comp_missing                                      0.0032   
+                                                        (0.0056)  
+tc_black_c x building_type = COMMERCIAL                  0.3562*  
+                                                        (0.1397)  
+tc_black_c x building_type = DETACHED                    0.0507   
+                                                        (0.0716)  
+tc_black_c x building_type = HIGHRISE_MULTI              0.2258*  
+                                                        (0.0945)  
+tc_black_c x building_type = LOWRISE_MULTI               0.1641***
+                                                        (0.0344)  
+tc_black_c x building_type = MIDRISE_MULTI               0.0087   
+                                                        (0.0745)  
+tc_black_c x building_type = OTHER                       0.2878   
+                                                        (0.1732)  
+tc_black_c x building_type = SMALL_MULTI_2_4             0.0321   
+                                                        (0.0251)  
+tc_black_c x building_type = TWIN                        0.0146   
+                                                        (0.0237)  
+tc_female_c x building_type = COMMERCIAL                -0.2717*  
+                                                        (0.1367)  
+tc_female_c x building_type = DETACHED                  -0.0451   
+                                                        (0.0841)  
+tc_female_c x building_type = HIGHRISE_MULTI            -0.1047   
+                                                        (0.2945)  
+tc_female_c x building_type = LOWRISE_MULTI             -0.0448   
+                                                        (0.0432)  
+tc_female_c x building_type = MIDRISE_MULTI              0.0656   
+                                                        (0.1130)  
+tc_female_c x building_type = OTHER                     -0.1033   
+                                                        (0.1835)  
+tc_female_c x building_type = SMALL_MULTI_2_4           -0.0429   
+                                                        (0.0229)  
+tc_female_c x building_type = TWIN                      -0.0679*  
+                                                        (0.0296)  
+log_total_area                                           0.0210***
+                                                        (0.0050)  
+log_market_value                                         0.0377***
+                                                        (0.0065)  
+Fixed-Effects:                                --------------------
+year                                                           Yes
+census_tract                                                   Yes
+num_units_bin                                                  Yes
+building_type                                                  Yes
+year_blt_decade                                                Yes
+num_stories_bin                                                Yes
+GEOID                                                           No
+________________________________________      ____________________
+S.E.: Clustered                                   by: census_tract
+Observations                                                47,437
+R2                                                         0.05945
+Within R2                                                  0.00412
+
+                                                        m_bg_btint
+                                                             BG FE
+Dependent Var.:                               share_retaliatory_bw
+                                                                  
+tc_black_c                                              -0.0374*  
+                                                        (0.0152)  
+tc_female_c                                              0.0046   
+                                                        (0.0159)  
+tc_black_female_c                                        0.0125   
+                                                        (0.0188)  
+tc_cov_c                                                -0.0209   
+                                                        (0.0141)  
+tenant_comp_missing                                      0.0019   
+                                                        (0.0060)  
+tc_black_c x building_type = COMMERCIAL                  0.3811*  
+                                                        (0.1618)  
+tc_black_c x building_type = DETACHED                    0.0552   
+                                                        (0.0748)  
+tc_black_c x building_type = HIGHRISE_MULTI              0.2099*  
+                                                        (0.1002)  
+tc_black_c x building_type = LOWRISE_MULTI               0.1570***
+                                                        (0.0365)  
+tc_black_c x building_type = MIDRISE_MULTI               0.0168   
+                                                        (0.0794)  
+tc_black_c x building_type = OTHER                       0.2727   
+                                                        (0.1772)  
+tc_black_c x building_type = SMALL_MULTI_2_4             0.0267   
+                                                        (0.0233)  
+tc_black_c x building_type = TWIN                        0.0198   
+                                                        (0.0287)  
+tc_female_c x building_type = COMMERCIAL                -0.2928*  
+                                                        (0.1460)  
+tc_female_c x building_type = DETACHED                  -0.0492   
+                                                        (0.0884)  
+tc_female_c x building_type = HIGHRISE_MULTI            -0.1938   
+                                                        (0.3147)  
+tc_female_c x building_type = LOWRISE_MULTI             -0.0442   
+                                                        (0.0450)  
+tc_female_c x building_type = MIDRISE_MULTI              0.0160   
+                                                        (0.1126)  
+tc_female_c x building_type = OTHER                     -0.0833   
+                                                        (0.1783)  
+tc_female_c x building_type = SMALL_MULTI_2_4           -0.0429   
+                                                        (0.0235)  
+tc_female_c x building_type = TWIN                      -0.0681*  
+                                                        (0.0296)  
+log_total_area                                           0.0227***
+                                                        (0.0057)  
+log_market_value                                         0.0391***
+                                                        (0.0061)  
+Fixed-Effects:                                --------------------
+year                                                           Yes
+census_tract                                                    No
+num_units_bin                                                  Yes
+building_type                                                  Yes
+year_blt_decade                                                Yes
+num_stories_bin                                                Yes
+GEOID                                                          Yes
+________________________________________      ____________________
+S.E.: Clustered                                          by: GEOID
+Observations                                                47,418
+R2                                                         0.08582
+Within R2                                                  0.00396
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

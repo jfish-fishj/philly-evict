@@ -1,0 +1,72 @@
+
+\begin{table}[htbp]
+   \caption{\label{tab:xsec_filing} Cross-Sectional Filing Rate Regressions}
+   \centering
+   \begin{tabular}{lccccc}
+      \tabularnewline \midrule \midrule
+      Dependent Variable: & \multicolumn{5}{c}{filing\_rate\_eb\_pre\_covid}\\
+      Model:                                  & (1)                   & (2)            & (3)            & (4)             & (5)\\  
+      \midrule
+      \emph{Variables}\\
+      num\_units\_bin2-5                      & -0.0030               & -0.0032$^{*}$  & -0.0027        & -0.0041$^{**}$  & -0.0040$^{**}$\\   
+                                              & (0.0021)              & (0.0017)       & (0.0017)       & (0.0017)        & (0.0017)\\   
+      num\_units\_bin21-50                    & 0.0237$^{***}$        & 0.0176$^{**}$  & 0.0170$^{**}$  & 0.0145$^{**}$   & 0.0147$^{**}$\\   
+                                              & (0.0073)              & (0.0071)       & (0.0071)       & (0.0072)        & (0.0072)\\   
+      num\_units\_bin51+                      & 0.0293$^{***}$        & 0.0197$^{***}$ & 0.0192$^{***}$ & 0.0166$^{**}$   & 0.0169$^{**}$\\   
+                                              & (0.0082)              & (0.0073)       & (0.0073)       & (0.0072)        & (0.0072)\\   
+      num\_units\_bin6-20                     & $9.93\times 10^{-6}$  & -0.0049        & -0.0049        & -0.0076         & -0.0075\\   
+                                              & (0.0051)              & (0.0052)       & (0.0052)       & (0.0052)        & (0.0052)\\   
+      rental\_share                           & 0.0455$^{***}$        & 0.0462$^{***}$ & 0.0450$^{***}$ & 0.0479$^{***}$  & 0.0477$^{***}$\\   
+                                              & (0.0033)              & (0.0033)       & (0.0032)       & (0.0033)        & (0.0033)\\   
+      pct\_black\_mean                        &                       &                & 0.0341$^{***}$ & 0.0384$^{***}$  & 0.0383$^{***}$\\   
+                                              &                       &                & (0.0053)       & (0.0051)        & (0.0052)\\   
+      owner\_typeFor-profitcorp               &                       &                &                & 0.0215$^{***}$  & 0.0213$^{***}$\\   
+                                              &                       &                &                & (0.0048)        & (0.0044)\\   
+      owner\_typeNonprofit                    &                       &                &                & 0.0093          & 0.0082\\   
+                                              &                       &                &                & (0.0146)        & (0.0143)\\   
+      owner\_typePHA                          &                       &                &                & -0.0735$^{***}$ & -0.0764$^{***}$\\   
+                                              &                       &                &                & (0.0080)        & (0.0076)\\   
+      owner\_typeReligious                    &                       &                &                & -0.0137         & -0.0137\\   
+                                              &                       &                &                & (0.0229)        & (0.0228)\\   
+      owner\_typeTrust                        &                       &                &                & 0.0220          & 0.0218\\   
+                                              &                       &                &                & (0.0146)        & (0.0146)\\   
+      owner\_typeGovernment-Local             &                       &                &                & -0.0040         & -0.0062\\   
+                                              &                       &                &                & (0.0126)        & (0.0123)\\   
+      owner\_typeGovernment-Federal           &                       &                &                & -0.0756$^{*}$   & -0.0787$^{*}$\\   
+                                              &                       &                &                & (0.0403)        & (0.0404)\\   
+      owner\_typeFinancial-Intermediary       &                       &                &                & 0.0110          & 0.0103\\   
+                                              &                       &                &                & (0.0132)        & (0.0131)\\   
+      portfolio\_bin\_entity\_yr2-4           &                       &                &                & 0.0039          &   \\   
+                                              &                       &                &                & (0.0060)        &   \\   
+      portfolio\_bin\_entity\_yr5-19          &                       &                &                & -0.0037         &   \\   
+                                              &                       &                &                & (0.0042)        &   \\   
+      portfolio\_bin\_entity\_yr20+           &                       &                &                & 0.0051          &   \\   
+                                              &                       &                &                & (0.0047)        &   \\   
+      portfolio\_bin\_conglomerate\_yr2-4     &                       &                &                &                 & 0.0027\\   
+                                              &                       &                &                &                 & (0.0049)\\   
+      portfolio\_bin\_conglomerate\_yr5-19    &                       &                &                &                 & -0.0025\\   
+                                              &                       &                &                &                 & (0.0033)\\   
+      portfolio\_bin\_conglomerate\_yr20+     &                       &                &                &                 & 0.0081$^{*}$\\   
+                                              &                       &                &                &                 & (0.0044)\\   
+      \midrule
+      \emph{Fixed-effects}\\
+      zip                                     & Yes                   &                &                &                 & \\  
+      building\_type                          & Yes                   & Yes            & Yes            & Yes             & Yes\\  
+      year\_blt\_decade                       & Yes                   & Yes            & Yes            & Yes             & Yes\\  
+      quality\_grade                          & Yes                   & Yes            & Yes            & Yes             & Yes\\  
+      tract                                   &                       & Yes            & Yes            & Yes             & Yes\\  
+      \midrule
+      \emph{Fit statistics}\\
+      Observations                            & 167,706               & 167,713        & 167,713        & 167,713         & 167,713\\  
+      R$^2$                                   & 0.16824               & 0.24531        & 0.24734        & 0.25872         & 0.25873\\  
+      Adjusted R$^2$                          & 0.16776               & 0.24339        & 0.24542        & 0.25677         & 0.25679\\  
+      \midrule \midrule
+      \multicolumn{6}{l}{\emph{Clustered (tract) standard-errors in parentheses}}\\
+      \multicolumn{6}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+   \end{tabular}
+   
+   \par \raggedright 
+   Weighted by total units. Cluster SE at tract. Sample: 2011--2019 rental PIDs.
+\end{table}
+
+

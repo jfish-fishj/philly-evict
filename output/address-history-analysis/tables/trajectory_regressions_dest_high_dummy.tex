@@ -1,0 +1,34 @@
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{4}{c}{Destination filing rate (EB)}\\
+                                                   & Dest A         & Dest B         & Dest C          & Dest D \\   
+   Model:                                          & (1)            & (2)            & (3)             & (4)\\  
+   \midrule
+   \emph{Variables}\\
+   Middle building high-filing indicator (>=15\%)  & 0.0312$^{***}$ & 0.0292$^{***}$ & 0.0258$^{***}$  & 0.0242$^{***}$\\   
+                                                   & (0.0018)       & (0.0017)       & (0.0015)        & (0.0014)\\   
+   Origin filing rate (EB)                         &                & 0.0711$^{***}$ & 0.0615$^{***}$  &   \\   
+                                                   &                & (0.0091)       & (0.0080)        &   \\   
+   Log(origin total area)                          &                &                & 0.0030$^{***}$  & 0.0027$^{***}$\\   
+                                                   &                &                & (0.0007)        & (0.0007)\\   
+   Log(origin market value)                        &                &                & -0.0073$^{***}$ & -0.0065$^{***}$\\   
+                                                   &                &                & (0.0015)        & (0.0015)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   Origin tract FE                                 & Yes            & Yes            & Yes             & \\  
+   Origin year-built decade FE                     &                &                & Yes             & Yes\\  
+   Origin unit-bin FE                              &                &                & Yes             & Yes\\  
+   Origin building-type FE                         &                &                & Yes             & Yes\\  
+   Origin quality-grade FE                         &                &                & Yes             & Yes\\  
+   Origin stories-bin FE                           &                &                & Yes             & Yes\\  
+   Origin tract x origin filing-bin FE             &                &                &                 & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                    & 160,132        & 160,132        & 157,330         & 157,262\\  
+   \midrule \midrule
+   \multicolumn{5}{l}{\emph{Clustered (Origin block group) standard-errors in parentheses}}\\
+   \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

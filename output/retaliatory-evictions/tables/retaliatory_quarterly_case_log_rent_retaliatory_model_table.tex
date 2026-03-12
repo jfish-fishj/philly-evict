@@ -1,0 +1,36 @@
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{log(total\_rent)}\\
+   Model:                                                      & (1)           & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   Same-period severe                                          & -0.025$^{**}$ & 0.018\\   
+                                                               & (0.012)       & (0.024)\\   
+   One-quarter pre/post severe                                 & 0.005         & 0.029$^{*}$\\   
+                                                               & (0.008)       & (0.015)\\   
+   log(ongoing\_rent)                                          & 0.693$^{***}$ & 0.695$^{***}$\\   
+                                                               & (0.019)       & (0.021)\\   
+   Above-mean building pct black                               &               & -0.001\\   
+                                                               &               & (0.017)\\   
+   Same-period severe x above-mean building pct black          &               & -0.068$^{**}$\\   
+                                                               &               & (0.028)\\   
+   One-quarter pre/post severe x above-mean building pct black &               & -0.051$^{***}$\\   
+                                                               &               & (0.019)\\   
+   \% cases filed in quarter of complaint                      & 18.2          & 18.4\\  
+   \% cases in one-quarter pre/post window                     & 20.1          & 21.3\\  
+   \midrule
+   \emph{Fixed-effects}\\
+   PID                                                         & Yes           & Yes\\  
+   year                                                        & Yes           & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                                & 112,729       & 88,859\\  
+   R$^2$                                                       & 0.49715       & 0.50065\\  
+   Within R$^2$                                                & 0.04103       & 0.04208\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

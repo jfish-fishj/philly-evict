@@ -1,0 +1,5 @@
+sample,metric,mean,p50,p90
+Empirical neighborhoods,Neighborhood mean filing rate,0.0469675198849671,0.0441609977324263,0.0891797100980774
+Empirical neighborhoods,Neighborhood mean low-income share,0.49838564151119,0.507522491143487,0.907008018039114
+Simulated neighborhoods,Neighborhood mean filing rate,0.0652497242828244,0.0644973544973545,0.0853474335565023
+Simulated neighborhoods,Neighborhood mean low-income share,0.309644537670037,0.30522315455324,0.483831274480462

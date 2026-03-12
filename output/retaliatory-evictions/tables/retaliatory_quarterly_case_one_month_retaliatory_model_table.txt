@@ -1,0 +1,49 @@
+                                                            One-Month Back Re..
+Dependent Var.:                                             one_month_back_rent
+                                                                               
+Same-period severe                                                      0.017**
+                                                                       (0.006) 
+One-quarter pre/post severe                                            -5.95e-5
+                                                                       (0.006) 
+Above-mean building pct black                                                  
+                                                                               
+Same-period severe x above-mean building pct black                             
+                                                                               
+One-quarter pre/post severe x above-mean building pct black                    
+                                                                               
+% cases filed in quarter of complaint                                      18.2
+% cases in one-quarter pre/post window                                     20.1
+Fixed-Effects:                                              -------------------
+PID                                                                         Yes
+year                                                                        Yes
+________________________________________                    ___________________
+S.E.: Clustered                                                         by: PID
+Observations                                                            115,107
+R2                                                                      0.29134
+Within R2                                                               0.00025
+
+                                                            One-Month Back Re...1
+Dependent Var.:                                               one_month_back_rent
+                                                                                 
+Same-period severe                                                       -0.011  
+                                                                         (0.012) 
+One-quarter pre/post severe                                              -0.019  
+                                                                         (0.010) 
+Above-mean building pct black                                            -0.0003 
+                                                                         (0.010) 
+Same-period severe x above-mean building pct black                        0.046**
+                                                                         (0.016) 
+One-quarter pre/post severe x above-mean building pct black               0.032* 
+                                                                         (0.013) 
+% cases filed in quarter of complaint                                        18.4
+% cases in one-quarter pre/post window                                       21.3
+Fixed-Effects:                                                -------------------
+PID                                                                           Yes
+year                                                                          Yes
+________________________________________                      ___________________
+S.E.: Clustered                                                           by: PID
+Observations                                                               90,737
+R2                                                                        0.29007
+Within R2                                                                 0.00063
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

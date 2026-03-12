@@ -1,0 +1,44 @@
+\begin{table}
+
+\caption{Baseline outer sorting parameters}
+\centering
+\begin{tabular}[t]{llrll}
+\toprule
+block & parameter & value & status & note\\
+\midrule
+Simulation & B & 10000.0000 & Fixed & Number of simulated buildings in the baseline run.\\
+Simulation & sim\_year\_from & 2011.0000 & Fixed & First year in the simulation window used to annualize simulated outcomes.\\
+Simulation & sim\_year\_to & 2019.0000 & Fixed & Last year in the simulation window used to annualize simulated outcomes.\\
+Tenant-side anchors & mu & 0.3000 & Fixed & Citywide high-risk / precarious tenant share.\\
+Tenant-side anchors & delta\_L & 0.0100 & Fixed & Anchored low-risk default probability.\\
+Tenant-side anchors & delta\_H & 0.1000 & Fixed & Anchored high-risk default probability.\\
+Built environment & p\_bad\_shape1 & 2.0000 & Calibrated & Beta shape parameter for tract bad-type prevalence.\\
+Built environment & p\_bad\_shape2 & 6.0000 & Calibrated & Beta shape parameter for tract bad-type prevalence.\\
+Building age & old\_bldg\_cutoff\_year & 1940.0000 & Fixed & Observed-building threshold for old-building indicator.\\
+Building age & new\_bldg\_cutoff\_year & 2000.0000 & Fixed & Observed-building threshold for new-building indicator.\\
+Sorting & Dalph & 6.0000 & Calibrated & Sorting strength in the logistic update.\\
+Sorting & sigma\_eta\_sort & 0.6000 & Calibrated & Neighborhood sorting shifter standard deviation.\\
+Filing & aF & -3.0000 & Calibrated & Filing log-rate intercept.\\
+Filing & bF\_theta & 0.7000 & Calibrated & Bad-type filing shift.\\
+Filing & bF\_delta & 1.1000 & Calibrated & Sensitivity of filings to average tenant default risk.\\
+Complaints & aC & -2.1000 & Calibrated & Complaint intercept.\\
+Complaints & bC\_theta & 0.3500 & Calibrated & Bad-type complaint shift.\\
+Complaints & bC\_s\_bad & -0.1000 & Calibrated & Complaint-composition slope for bad landlords only.\\
+Complaints & bC\_old & 0.1000 & Calibrated & Complaint shift for older buildings.\\
+Complaints & bC\_new & -0.0500 & Calibrated & Complaint shift for newer buildings.\\
+Complaints & bC\_M & -0.1000 & Calibrated & Complaint response to maintenance.\\
+Maintenance & m0 & 0.1827 & Calibrated & Baseline per-unit maintenance rate.\\
+Maintenance & bM\_theta & -0.2000 & Calibrated & Bad-type maintenance shift.\\
+Maintenance & bM\_old & 0.1500 & Calibrated & Maintenance shift for older buildings.\\
+Maintenance & bM\_new & 0.2500 & Calibrated & Maintenance shift for newer buildings.\\
+Maintenance & bM\_C & 0.1200 & Calibrated & Maintenance response to complaint intensity.\\
+Numerics & lam & 0.4000 & Calibrated & Damping parameter in the fixed-point iteration.\\
+Numerics & tol & 0.0000 & Calibrated & Stopping tolerance on the composition update.\\
+Numerics & max\_iter & 300.0000 & Calibrated & Maximum fixed-point iterations.\\
+Numerics & high\_filing\_threshold & 0.1500 & Numeric & Absolute filing-rate cutoff for high-filing moments.\\
+Simulation & B & 10000.0000 & Numeric & Number of simulated buildings in the baseline run.\\
+Simulation & sim\_year\_from & 2011.0000 & Numeric & First year in the simulation window used to annualize simulated outcomes.\\
+Simulation & sim\_year\_to & 2019.0000 & Fixed & Last year in the simulation window used to annualize simulated outcomes.\\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,9 @@
+metric,value
+Converged,TRUE
+Iterations,26
+Max composition change,6.34e-07
+Mass residual before final projection,-9.6e-10
+Mass residual after final projection,-9.48e-10
+Final xi,-1.2584
+Target mu,0.300
+Weighted mean s,0.300

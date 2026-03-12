@@ -1,0 +1,5 @@
+acq_filer_bin,mean_filing_rate,mean_units,n,mean_violations
+High-filer portfolio,0.0178,1.5,271196,0.52
+Low-filer portfolio,0.00941,1.4,268489,0.49
+Non-filer (has portfolio),0.00792,1.4,516021,0.43
+Single-purchase,0.00958,1.6,3761990,0.37

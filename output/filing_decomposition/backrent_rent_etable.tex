@@ -1,0 +1,59 @@
+
+\begin{table}[htbp]
+   \caption{\label{tab:backrent_rent} Back-Rent Elasticity Regression}
+   \centering
+   \begin{tabular}{lc}
+      \tabularnewline \midrule \midrule
+      Dependent Variable:                       & log\_total\_rent\\    
+      Model:                                    & (1)\\  
+      \midrule
+      \emph{Variables}\\
+      log\_ongoing\_rent                        & 0.7389$^{***}$\\   
+                                                & (0.0089)\\   
+      plaintiff\_typeFor-profitcorp             & -0.0189$^{*}$\\   
+                                                & (0.0102)\\   
+      plaintiff\_typeNonprofit                  & -0.0516\\   
+                                                & (0.0362)\\   
+      plaintiff\_typePHA                        & -0.5265$^{***}$\\   
+                                                & (0.0402)\\   
+      owner\_typeFor-profitcorp                 & 0.0246$^{**}$\\   
+                                                & (0.0114)\\   
+      owner\_typeNonprofit                      & -0.0061\\   
+                                                & (0.0355)\\   
+      owner\_typePHA                            & 0.0971$^{*}$\\   
+                                                & (0.0502)\\   
+      owner\_typeReligious                      & -0.1439$^{*}$\\   
+                                                & (0.0802)\\   
+      owner\_typeTrust                          & -0.0441\\   
+                                                & (0.0399)\\   
+      owner\_typeGovernment-Local               & 0.0749\\   
+                                                & (0.1154)\\   
+      owner\_typeFinancial-Intermediary         & -0.0526\\   
+                                                & (0.0475)\\   
+      high\_filer\_bldgTRUE                     & -0.1247$^{***}$\\   
+                                                & (0.0071)\\   
+      log(portfolio\_size\_conglomerate\_yr)    & -0.0060$^{**}$\\   
+                                                & (0.0028)\\   
+      pct\_black                                & 0.0056\\   
+                                                & (0.0144)\\   
+      \midrule
+      \emph{Fixed-effects}\\
+      year                                      & Yes\\  
+      num\_units\_bin                           & Yes\\  
+      tract                                     & Yes\\  
+      building\_type                            & Yes\\  
+      \midrule
+      \emph{Fit statistics}\\
+      Observations                              & 113,405\\  
+      R$^2$                                     & 0.36882\\  
+      Adjusted R$^2$                            & 0.36657\\  
+      \midrule \midrule
+      \multicolumn{2}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+      \multicolumn{2}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+   \end{tabular}
+   
+   \par \raggedright 
+   Cluster SE at PID. Sample: non-commercial cases 2011--2019, ongoing\_rent 300--6000, total\_rent 300--15000.
+\end{table}
+
+

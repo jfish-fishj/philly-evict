@@ -1,0 +1,42 @@
+\begingroup
+\centering
+\begin{tabular}{lcccccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variables: & \multicolumn{2}{c}{Change in LOO tract filing rate (EB)} & \multicolumn{4}{c}{Destination LOO tract filing rate (EB)}\\
+                                                  & Delta A                & Delta B        & Dest A         & Dest B         & Dest C                & Dest D \\   
+   Model:                                         & (1)                    & (2)            & (3)            & (4)            & (5)                   & (6)\\  
+   \midrule
+   \emph{Variables}\\
+   Constant                                       & 0.0002                 &                &                &                &                       &   \\   
+                                                  & (0.0002)               &                &                &                &                       &   \\   
+   Middle building filing-rate bin $=$ [1,5)")    & $-1.31\times 10^{-5}$  & 0.0002         & 0.0002         & 0.0002         & 0.0002                & 0.0002\\   
+                                                  & (0.0003)               & (0.0003)       & (0.0003)       & (0.0003)       & (0.0003)              & (0.0002)\\   
+   Middle building filing-rate bin $=$ [5,10)")   & 0.0002                 & 0.0008$^{***}$ & 0.0007$^{***}$ & 0.0007$^{***}$ & 0.0007$^{***}$        & 0.0007$^{***}$\\   
+                                                  & (0.0002)               & (0.0001)       & (0.0001)       & (0.0001)       & (0.0001)              & (0.0001)\\   
+   Middle building filing-rate bin $=$ [10,20)")  & 0.0003                 & 0.0011$^{***}$ & 0.0010$^{***}$ & 0.0010$^{***}$ & 0.0010$^{***}$        & 0.0010$^{***}$\\   
+                                                  & (0.0002)               & (0.0002)       & (0.0002)       & (0.0002)       & (0.0002)              & (0.0002)\\   
+   Middle building filing-rate bin $=$ [20,inf)") & 0.0002                 & 0.0016$^{***}$ & 0.0011$^{***}$ & 0.0013$^{***}$ & 0.0013$^{***}$        & 0.0014$^{***}$\\   
+                                                  & (0.0004)               & (0.0003)       & (0.0003)       & (0.0003)       & (0.0003)              & (0.0003)\\   
+   Origin LOO tract filing rate (EB)              &                        &                &                & 0.3713$^{**}$  & 0.3631$^{**}$         &   \\   
+                                                  &                        &                &                & (0.1508)       & (0.1619)              &   \\   
+   Log(origin total area)                         &                        &                &                &                & $3.81\times 10^{-5}$  & $4.12\times 10^{-5}$\\    
+                                                  &                        &                &                &                & (0.0002)              & (0.0002)\\   
+   Log(origin market value)                       &                        &                &                &                & -0.0007$^{***}$       & -0.0007$^{***}$\\   
+                                                  &                        &                &                &                & (0.0002)              & (0.0002)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   Origin tract FE                                &                        & Yes            & Yes            & Yes            & Yes                   & \\  
+   Origin year-built decade FE                    &                        &                &                &                & Yes                   & Yes\\  
+   Origin unit-bin FE                             &                        &                &                &                & Yes                   & Yes\\  
+   Origin building-type FE                        &                        &                &                &                & Yes                   & Yes\\  
+   Origin quality-grade FE                        &                        &                &                &                & Yes                   & Yes\\  
+   Origin stories-bin FE                          &                        &                &                &                & Yes                   & Yes\\  
+   Origin tract x origin filing-bin FE            &                        &                &                &                &                       & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                   & 160,667                & 160,658        & 160,658        & 160,658        & 157,691               & 157,563\\  
+   \midrule \midrule
+   \multicolumn{7}{l}{\emph{Clustered (Origin block group) standard-errors in parentheses}}\\
+   \multicolumn{7}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

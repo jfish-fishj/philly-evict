@@ -1,0 +1,5 @@
+acq_filer_bin,n_transfers,n_owners,n_pids,mean_units,total_units_sum,pct_corporate,mean_portfolio,median_price,mean_acq_rate,mean_n_other,pct_of_transfers,pct_of_units
+Single-purchase,500141,424597,311379,1.6,209531,14.4,13.2,119900,,0,79.2,63.8
+Non-filer (has portfolio),66640,30082,60582,1.4,54033,42.9,10.3,72000,0,3,10.6,16.5
+High-filer portfolio,32348,10468,29792,1.5,34864,57,124.4,60000,0.11879,51.7,5.1,10.6
+Low-filer portfolio,32405,5860,30796,1.4,29937,72,95.2,57000,0.02667,43.2,5.1,9.1

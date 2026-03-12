@@ -1,0 +1,34 @@
+\begingroup
+\centering
+\begin{tabular}{lcccccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variables: & \multicolumn{2}{c}{Share Black} & \multicolumn{2}{c}{Share Female} & \multicolumn{2}{c}{Share Black Female}\\
+                                                                   & Tract FE        & BG FE           & Tract FE        & BG FE           & Tract FE        & BG FE \\   
+   Model:                                                          & (1)             & (2)             & (3)             & (4)             & (5)             & (6)\\  
+   \midrule
+   \emph{Variables}\\
+   Eviction intensity (longrun, pre-2019) $=$ Nofilings5-10\%]")   & -0.0262$^{***}$ & -0.0217$^{***}$ & -0.0217$^{***}$ & -0.0200$^{***}$ & -0.0238$^{***}$ & -0.0213$^{***}$\\   
+                                                                   & (0.0026)        & (0.0016)        & (0.0038)        & (0.0028)        & (0.0023)        & (0.0017)\\   
+   Eviction intensity (longrun, pre-2019) $=$ (0-5\%]5-10\%]")     & -0.0199$^{***}$ & -0.0143$^{***}$ & -0.0110$^{*}$   & -0.0086         & -0.0151$^{***}$ & -0.0118$^{***}$\\   
+                                                                   & (0.0045)        & (0.0031)        & (0.0066)        & (0.0060)        & (0.0038)        & (0.0030)\\   
+   Eviction intensity (longrun, pre-2019) $=$ (10-20\%]5-10\%]")   & 0.0166$^{***}$  & 0.0168$^{***}$  & 0.0062          & 0.0089$^{**}$   & 0.0149$^{***}$  & 0.0160$^{***}$\\   
+                                                                   & (0.0042)        & (0.0028)        & (0.0047)        & (0.0039)        & (0.0033)        & (0.0027)\\   
+   Eviction intensity (longrun, pre-2019) $=$ 20\%+5-10\%]")       & 0.0350$^{***}$  & 0.0338$^{***}$  & 0.0153$^{***}$  & 0.0186$^{***}$  & 0.0339$^{***}$  & 0.0340$^{***}$\\   
+                                                                   & (0.0049)        & (0.0031)        & (0.0049)        & (0.0042)        & (0.0036)        & (0.0030)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   census\_tract                                                   & Yes             &                 & Yes             &                 & Yes             & \\  
+   num\_units\_bin                                                 & Yes             & Yes             & Yes             & Yes             & Yes             & Yes\\  
+   building\_type                                                  & Yes             & Yes             & Yes             & Yes             & Yes             & Yes\\  
+   year\_blt\_decade                                               & Yes             & Yes             & Yes             & Yes             & Yes             & Yes\\  
+   quality\_grade\_standard                                        & Yes             & Yes             & Yes             & Yes             & Yes             & Yes\\  
+   num\_stories\_bin                                               & Yes             & Yes             & Yes             & Yes             & Yes             & Yes\\  
+   GEOID                                                           &                 & Yes             &                 & Yes             &                 & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                                    & 171,152         & 171,143         & 171,152         & 171,143         & 171,152         & 171,143\\  
+   R$^2$                                                           & 0.80881         & 0.88500         & 0.07006         & 0.08739         & 0.62192         & 0.67916\\  
+   \midrule \midrule
+   \multicolumn{7}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

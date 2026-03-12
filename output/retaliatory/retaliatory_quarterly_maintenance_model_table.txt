@@ -1,0 +1,25 @@
+                              Baseline Ma.. Baseline Ma...1
+Dependent Var.:               total_permits   total_permits
+                                                           
+above_mean_pct_black_btTRUE       -0.039***       -0.025*  
+                                  (0.008)         (0.010)  
+high_filingTRUE                   -0.133***       -0.088***
+                                  (0.017)         (0.018)  
+mean_log_med_rent_inf_adj_PID                      0.283***
+                                                  (0.013)  
+Fixed-Effects:                -------------   -------------
+building_type                           Yes             Yes
+year                                    Yes             Yes
+quality_grade                           Yes             Yes
+year_blt_decade                         Yes             Yes
+num_units_bin                           Yes             Yes
+GEOID                                   Yes             Yes
+has_rent_data                           Yes              No
+_____________________________ _____________   _____________
+S.E. type                               IID             IID
+Observations                      1,284,982         565,467
+Squared Cor.                        0.45820         0.36169
+Pseudo R2                           0.23154         0.29425
+BIC                               693,945.2       378,022.4
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

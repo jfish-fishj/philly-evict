@@ -1,0 +1,36 @@
+\begingroup
+\centering
+\begin{tabular}{lccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{3}{c}{Total severe complaints}\\
+   Model:                                                                              & (1)             & (2)             & (3)\\  
+   \midrule
+   \emph{Variables}\\
+   Composite inv/viol rate (lagged)                                                    & 0.1098$^{***}$  & 0.1003$^{***}$  & 0.0880$^{***}$\\   
+                                                                                       & (0.0048)        & (0.0032)        & (0.0032)\\   
+   High filing rate (lagged)                                                           & 1.075$^{***}$   & 0.9192$^{***}$  & 0.6419$^{***}$\\   
+                                                                                       & (0.0292)        & (0.0263)        & (0.0267)\\   
+   Above mean pct. Black (by building type)                                            & 0.6374$^{***}$  & 0.1995$^{***}$  & 0.1588$^{***}$\\   
+                                                                                       & (0.0121)        & (0.0168)        & (0.0208)\\   
+   Above mean pct. Black (by building type) $\times$ High filing rate (lagged)         & -0.3415$^{***}$ & -0.2187$^{***}$ & -0.1506$^{***}$\\   
+                                                                                       & (0.0365)        & (0.0321)        & (0.0325)\\   
+   Above mean pct. Black (by building type) $\times$ Composite inv/viol rate (lagged)  & -0.0178$^{***}$ & -0.0085$^{**}$  & -0.0077$^{**}$\\   
+                                                                                       & (0.0053)        & (0.0037)        & (0.0039)\\   
+   Parcel-level mean log median rent                                                   &                 &                 & -0.3448$^{***}$\\   
+                                                                                       &                 &                 & (0.0265)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   Year FE                                                                             & Yes             & Yes             & Yes\\  
+   Unit bins (fine)                                                                    & Yes             & Yes             & Yes\\  
+   Building type                                                                       & Yes             & Yes             & Yes\\  
+   Year built decade FE                                                                &                 & Yes             & Yes\\  
+   Census tract FE                                                                     &                 & Yes             & Yes\\  
+   Quality grade (A/B/C/D/E/Other)                                                     &                 & Yes             & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                                                        & 1,439,167       & 1,439,151       & 708,330\\  
+   \midrule \midrule
+   \multicolumn{4}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{4}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

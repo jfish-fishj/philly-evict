@@ -1,0 +1,13 @@
+moment,value
+Mean filing rate,0.0645911206652154
+Mean maintenance rate,0.199730373190687
+Mean complaint rate,0.138176263158266
+Zero filings share,0.4889
+Zero maintenance share,0.1326
+Zero complaints share,0.2356
+Sorting slope on high filing within neighborhood,0.0201392235209211
+Sorting slope: top filing bin vs low filing bin,0.0253949503370687
+Complaint on composition,4.56949769329721
+Complaint on composition x high filing,-0.245751726594381
+Maintenance on complaint intensity,-0.254816326270374
+Residual SD of filing rate after neighborhood FE,0.081593807808442

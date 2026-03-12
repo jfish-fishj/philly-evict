@@ -1,0 +1,7 @@
+status,N,bandwidth_periods,time_unit,share
+non_retaliatory,83005,1,quarter,0.737356868109904
+same_period,15734,1,quarter,0.139769567650638
+within_bw_not_same_period,13832,1,quarter,0.122873564239458
+non_retaliatory,75667,2,quarter,0.672171340753835
+same_period,15734,2,quarter,0.139769567650638
+within_bw_not_same_period,21170,2,quarter,0.188059091595526

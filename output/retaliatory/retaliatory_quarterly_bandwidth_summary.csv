@@ -1,0 +1,3 @@
+bandwidth_periods,eviction_rows,same_period_n,within_bw_n,plausible_only_n,non_retaliatory_n,time_unit,same_period_share,within_bw_share,plausible_only_share,non_retaliatory_share
+1,112571,15734,29566,13832,83005,quarter,0.139769567650638,0.262643131890096,0.122873564239458,0.737356868109904
+2,112571,15734,36904,21170,75667,quarter,0.139769567650638,0.327828659246165,0.188059091595526,0.672171340753835

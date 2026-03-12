@@ -7,24 +7,24 @@
    Model:                  & (1)            & (2)\\  
    \midrule
    \emph{Variables}\\
-   tc\_black\_c            & 0.0013$^{***}$ & 0.0011$^{***}$\\   
-                           & (0.0003)       & (0.0003)\\   
-   tc\_female\_c           & -0.0001        & -0.0001\\   
-                           & (0.0002)       & (0.0002)\\   
-   tc\_black\_female\_c    & 0.0009$^{***}$ & 0.0009$^{***}$\\   
-                           & (0.0003)       & (0.0003)\\   
-   tc\_cov\_c              & 0.0013$^{***}$ & 0.0013$^{***}$\\   
-                           & (0.0003)       & (0.0003)\\   
-   tenant\_comp\_missing   & 0.0026$^{***}$ & 0.0026$^{***}$\\   
-                           & (0.0002)       & (0.0002)\\   
-   total\_permits          & 0.0145$^{***}$ & 0.0147$^{***}$\\   
-                           & (0.0019)       & (0.0018)\\   
-   total\_violations       & 0.0632$^{***}$ & 0.0630$^{***}$\\   
-                           & (0.0016)       & (0.0014)\\   
-   log\_total\_area        & 0.0053$^{***}$ & 0.0052$^{***}$\\   
-                           & (0.0004)       & (0.0003)\\   
-   log\_market\_value      & 0.0037$^{***}$ & 0.0038$^{***}$\\   
-                           & (0.0004)       & (0.0003)\\   
+   tc\_black\_c            & 0.0014         & 0.0011\\   
+                           & (0.0011)       & (0.0011)\\   
+   tc\_female\_c           & -0.0003        & -0.0007\\   
+                           & (0.0010)       & (0.0009)\\   
+   tc\_black\_female\_c    & -0.0009        & -0.0004\\   
+                           & (0.0014)       & (0.0014)\\   
+   tc\_cov\_c              & 0.0037$^{***}$ & 0.0035$^{***}$\\   
+                           & (0.0010)       & (0.0010)\\   
+   tenant\_comp\_missing   & 0.0032$^{***}$ & 0.0030$^{***}$\\   
+                           & (0.0006)       & (0.0006)\\   
+   total\_permits          & 0.0137$^{***}$ & 0.0134$^{***}$\\   
+                           & (0.0033)       & (0.0032)\\   
+   total\_violations       & 0.0672$^{***}$ & 0.0666$^{***}$\\   
+                           & (0.0029)       & (0.0029)\\   
+   log\_total\_area        & 0.0023$^{***}$ & 0.0025$^{***}$\\   
+                           & (0.0005)       & (0.0006)\\   
+   log\_market\_value      & 0.0014$^{*}$   & 0.0010\\   
+                           & (0.0008)       & (0.0009)\\   
    \midrule
    \emph{Fixed-effects}\\
    period\_fe              & Yes            & Yes\\  
@@ -36,9 +36,9 @@
    GEOID                   &                & Yes\\  
    \midrule
    \emph{Fit statistics}\\
-   Observations            & 13,099,080     & 13,099,080\\  
-   R$^2$                   & 0.04451        & 0.04524\\  
-   Within R$^2$            & 0.04096        & 0.04063\\  
+   Observations            & 574,344        & 574,344\\  
+   R$^2$                   & 0.04769        & 0.05203\\  
+   Within R$^2$            & 0.03876        & 0.03800\\  
    \midrule \midrule
    \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
 \end{tabular}
@@ -48,42 +48,42 @@
 \begin{tabular}{lcc}
    \tabularnewline \midrule \midrule
    Dependent Variable: & \multicolumn{2}{c}{filed\_complaint}\\
-                           & Tract FE               & BG FE \\   
-   Model:                  & (1)                    & (2)\\  
+                           & Tract FE       & BG FE \\   
+   Model:                  & (1)            & (2)\\  
    \midrule
    \emph{Variables}\\
-   tc\_black\_c            & 0.0009$^{**}$          & 0.0006\\   
-                           & (0.0004)               & (0.0004)\\   
-   tc\_female\_c           & -0.0001                & -0.0001\\   
-                           & (0.0002)               & (0.0002)\\   
-   tc\_black\_female\_c    & 0.0006                 & 0.0007\\   
-                           & (0.0005)               & (0.0005)\\   
-   tc\_cov\_c              & $-6.03\times 10^{-5}$  & 0.0001\\   
-                           & (0.0004)               & (0.0004)\\   
-   tenant\_comp\_missing   & 0.0026$^{***}$         & 0.0027$^{***}$\\   
-                           & (0.0002)               & (0.0002)\\   
-   total\_permits          & 0.0177$^{***}$         & 0.0180$^{***}$\\   
-                           & (0.0022)               & (0.0019)\\   
-   total\_violations       & 0.0748$^{***}$         & 0.0747$^{***}$\\   
-                           & (0.0015)               & (0.0011)\\   
-   log\_total\_area        & 0.0050$^{***}$         & 0.0049$^{***}$\\   
-                           & (0.0004)               & (0.0003)\\   
-   log\_market\_value      & 0.0022$^{***}$         & 0.0025$^{***}$\\   
-                           & (0.0004)               & (0.0003)\\   
+   tc\_black\_c            & 0.0008         & 0.0008\\   
+                           & (0.0016)       & (0.0017)\\   
+   tc\_female\_c           & 0.0005         & 0.0007\\   
+                           & (0.0013)       & (0.0012)\\   
+   tc\_black\_female\_c    & -0.0023        & -0.0021\\   
+                           & (0.0022)       & (0.0021)\\   
+   tc\_cov\_c              & 0.0023         & 0.0022\\   
+                           & (0.0015)       & (0.0016)\\   
+   tenant\_comp\_missing   & 0.0031$^{***}$ & 0.0031$^{***}$\\   
+                           & (0.0008)       & (0.0008)\\   
+   total\_permits          & 0.0152$^{***}$ & 0.0152$^{***}$\\   
+                           & (0.0040)       & (0.0038)\\   
+   total\_violations       & 0.0774$^{***}$ & 0.0766$^{***}$\\   
+                           & (0.0038)       & (0.0037)\\   
+   log\_total\_area        & 0.0024$^{***}$ & 0.0027$^{***}$\\   
+                           & (0.0007)       & (0.0007)\\   
+   log\_market\_value      & -0.0006        & -0.0016\\   
+                           & (0.0011)       & (0.0011)\\   
    \midrule
    \emph{Fixed-effects}\\
-   period\_fe              & Yes                    & Yes\\  
-   census\_tract           & Yes                    & \\  
-   num\_units\_bin         & Yes                    & Yes\\  
-   building\_type          & Yes                    & Yes\\  
-   year\_blt\_decade       & Yes                    & Yes\\  
-   num\_stories\_bin       & Yes                    & Yes\\  
-   GEOID                   &                        & Yes\\  
+   period\_fe              & Yes            & Yes\\  
+   census\_tract           & Yes            & \\  
+   num\_units\_bin         & Yes            & Yes\\  
+   building\_type          & Yes            & Yes\\  
+   year\_blt\_decade       & Yes            & Yes\\  
+   num\_stories\_bin       & Yes            & Yes\\  
+   GEOID                   &                & Yes\\  
    \midrule
    \emph{Fit statistics}\\
-   Observations            & 6,475,704              & 6,475,704\\  
-   R$^2$                   & 0.05577                & 0.05650\\  
-   Within R$^2$            & 0.05261                & 0.05238\\  
+   Observations            & 283,824        & 283,824\\  
+   R$^2$                   & 0.06028        & 0.06624\\  
+   Within R$^2$            & 0.05288        & 0.05186\\  
    \midrule \midrule
    \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
 \end{tabular}
@@ -93,42 +93,42 @@
 \begin{tabular}{lcc}
    \tabularnewline \midrule \midrule
    Dependent Variable: & \multicolumn{2}{c}{filed\_severe}\\
-                           & Tract FE              & BG FE \\   
-   Model:                  & (1)                   & (2)\\  
+                           & Tract FE       & BG FE \\   
+   Model:                  & (1)            & (2)\\  
    \midrule
    \emph{Variables}\\
-   tc\_black\_c            & 0.0015$^{***}$        & 0.0014$^{***}$\\   
-                           & (0.0002)              & (0.0002)\\   
-   tc\_female\_c           & $4.69\times 10^{-5}$  & $1.47\times 10^{-5}$\\    
-                           & (0.0001)              & (0.0001)\\   
-   tc\_black\_female\_c    & 0.0013$^{***}$        & 0.0013$^{***}$\\   
-                           & (0.0002)              & (0.0002)\\   
-   tc\_cov\_c              & -0.0003$^{*}$         & -0.0003\\   
-                           & (0.0002)              & (0.0002)\\   
-   tenant\_comp\_missing   & 0.0003$^{***}$        & 0.0003$^{***}$\\   
-                           & (0.0001)              & (0.0001)\\   
-   total\_permits          & -0.0001               & $-9.74\times 10^{-5}$\\    
-                           & (0.0003)              & (0.0003)\\   
-   total\_violations       & 0.0389$^{***}$        & 0.0387$^{***}$\\   
-                           & (0.0009)              & (0.0009)\\   
-   log\_total\_area        & 0.0035$^{***}$        & 0.0034$^{***}$\\   
-                           & (0.0003)              & (0.0003)\\   
-   log\_market\_value      & 0.0050$^{***}$        & 0.0051$^{***}$\\   
-                           & (0.0004)              & (0.0003)\\   
+   tc\_black\_c            & 0.0007         & 0.0007\\   
+                           & (0.0008)       & (0.0008)\\   
+   tc\_female\_c           & -0.0007        & -0.0009\\   
+                           & (0.0006)       & (0.0006)\\   
+   tc\_black\_female\_c    & 0.0014         & 0.0013\\   
+                           & (0.0011)       & (0.0010)\\   
+   tc\_cov\_c              & 0.0011         & 0.0014$^{*}$\\   
+                           & (0.0008)       & (0.0007)\\   
+   tenant\_comp\_missing   & 0.0006         & 0.0006\\   
+                           & (0.0004)       & (0.0004)\\   
+   total\_permits          & 0.0005         & 0.0003\\   
+                           & (0.0014)       & (0.0013)\\   
+   total\_violations       & 0.0412$^{***}$ & 0.0408$^{***}$\\   
+                           & (0.0021)       & (0.0021)\\   
+   log\_total\_area        & 0.0012$^{***}$ & 0.0014$^{***}$\\   
+                           & (0.0004)       & (0.0005)\\   
+   log\_market\_value      & 0.0024$^{***}$ & 0.0022$^{***}$\\   
+                           & (0.0006)       & (0.0006)\\   
    \midrule
    \emph{Fixed-effects}\\
-   period\_fe              & Yes                   & Yes\\  
-   census\_tract           & Yes                   & \\  
-   num\_units\_bin         & Yes                   & Yes\\  
-   building\_type          & Yes                   & Yes\\  
-   year\_blt\_decade       & Yes                   & Yes\\  
-   num\_stories\_bin       & Yes                   & Yes\\  
-   GEOID                   &                       & Yes\\  
+   period\_fe              & Yes            & Yes\\  
+   census\_tract           & Yes            & \\  
+   num\_units\_bin         & Yes            & Yes\\  
+   building\_type          & Yes            & Yes\\  
+   year\_blt\_decade       & Yes            & Yes\\  
+   num\_stories\_bin       & Yes            & Yes\\  
+   GEOID                   &                & Yes\\  
    \midrule
    \emph{Fit statistics}\\
-   Observations            & 13,099,080            & 13,099,080\\  
-   R$^2$                   & 0.03163               & 0.03252\\  
-   Within R$^2$            & 0.02823               & 0.02786\\  
+   Observations            & 574,344        & 574,344\\  
+   R$^2$                   & 0.03537        & 0.03938\\  
+   Within R$^2$            & 0.02528        & 0.02476\\  
    \midrule \midrule
    \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
 \end{tabular}
@@ -138,42 +138,87 @@
 \begin{tabular}{lcc}
    \tabularnewline \midrule \midrule
    Dependent Variable: & \multicolumn{2}{c}{filed\_severe}\\
-                           & Tract FE              & BG FE \\   
-   Model:                  & (1)                   & (2)\\  
+                           & Tract FE       & BG FE \\   
+   Model:                  & (1)            & (2)\\  
    \midrule
    \emph{Variables}\\
-   tc\_black\_c            & 0.0011$^{***}$        & 0.0009$^{***}$\\   
-                           & (0.0003)              & (0.0003)\\   
-   tc\_female\_c           & 0.0003$^{*}$          & 0.0002\\   
-                           & (0.0002)              & (0.0002)\\   
-   tc\_black\_female\_c    & 0.0008$^{**}$         & 0.0009$^{***}$\\   
-                           & (0.0003)              & (0.0003)\\   
-   tc\_cov\_c              & -0.0008$^{***}$       & -0.0007$^{***}$\\   
-                           & (0.0003)              & (0.0003)\\   
-   tenant\_comp\_missing   & $9.55\times 10^{-5}$  & 0.0001\\   
-                           & (0.0001)              & (0.0001)\\   
-   total\_permits          & -0.0008$^{**}$        & -0.0008$^{**}$\\   
-                           & (0.0004)              & (0.0004)\\   
-   total\_violations       & 0.0428$^{***}$        & 0.0427$^{***}$\\   
-                           & (0.0010)              & (0.0008)\\   
-   log\_total\_area        & 0.0028$^{***}$        & 0.0027$^{***}$\\   
-                           & (0.0003)              & (0.0002)\\   
-   log\_market\_value      & 0.0041$^{***}$        & 0.0043$^{***}$\\   
-                           & (0.0003)              & (0.0003)\\   
+   tc\_black\_c            & 0.0007         & 0.0013\\   
+                           & (0.0012)       & (0.0013)\\   
+   tc\_female\_c           & -0.0002        & $-6.91\times 10^{-5}$\\    
+                           & (0.0008)       & (0.0008)\\   
+   tc\_black\_female\_c    & 0.0004         & -0.0001\\   
+                           & (0.0015)       & (0.0015)\\   
+   tc\_cov\_c              & 0.0002         & 0.0008\\   
+                           & (0.0011)       & (0.0012)\\   
+   tenant\_comp\_missing   & 0.0002         & 0.0003\\   
+                           & (0.0005)       & (0.0005)\\   
+   total\_permits          & -0.0003        & -0.0001\\   
+                           & (0.0014)       & (0.0014)\\   
+   total\_violations       & 0.0454$^{***}$ & 0.0450$^{***}$\\   
+                           & (0.0028)       & (0.0027)\\   
+   log\_total\_area        & 0.0009$^{*}$   & 0.0010$^{**}$\\   
+                           & (0.0005)       & (0.0005)\\   
+   log\_market\_value      & 0.0016$^{**}$  & 0.0013$^{**}$\\   
+                           & (0.0006)       & (0.0006)\\   
    \midrule
    \emph{Fixed-effects}\\
-   period\_fe              & Yes                   & Yes\\  
-   census\_tract           & Yes                   & \\  
-   num\_units\_bin         & Yes                   & Yes\\  
-   building\_type          & Yes                   & Yes\\  
-   year\_blt\_decade       & Yes                   & Yes\\  
-   num\_stories\_bin       & Yes                   & Yes\\  
-   GEOID                   &                       & Yes\\  
+   period\_fe              & Yes            & Yes\\  
+   census\_tract           & Yes            & \\  
+   num\_units\_bin         & Yes            & Yes\\  
+   building\_type          & Yes            & Yes\\  
+   year\_blt\_decade       & Yes            & Yes\\  
+   num\_stories\_bin       & Yes            & Yes\\  
+   GEOID                   &                & Yes\\  
    \midrule
    \emph{Fit statistics}\\
-   Observations            & 6,475,704             & 6,475,704\\  
-   R$^2$                   & 0.03457               & 0.03533\\  
-   Within R$^2$            & 0.03159               & 0.03138\\  
+   Observations            & 283,824        & 283,824\\  
+   R$^2$                   & 0.04010        & 0.04542\\  
+   Within R$^2$            & 0.03247        & 0.03182\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{filed\_non\_severe}\\
+                           & Tract FE       & BG FE \\   
+   Model:                  & (1)            & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c            & 0.0007         & 0.0004\\   
+                           & (0.0008)       & (0.0007)\\   
+   tc\_female\_c           & 0.0005         & 0.0003\\   
+                           & (0.0007)       & (0.0006)\\   
+   tc\_black\_female\_c    & -0.0024$^{**}$ & -0.0018$^{**}$\\   
+                           & (0.0010)       & (0.0009)\\   
+   tc\_cov\_c              & 0.0025$^{***}$ & 0.0019$^{***}$\\   
+                           & (0.0007)       & (0.0006)\\   
+   tenant\_comp\_missing   & 0.0025$^{***}$ & 0.0022$^{***}$\\   
+                           & (0.0004)       & (0.0004)\\   
+   total\_permits          & 0.0117$^{***}$ & 0.0116$^{***}$\\   
+                           & (0.0024)       & (0.0024)\\   
+   total\_violations       & 0.0271$^{***}$ & 0.0269$^{***}$\\   
+                           & (0.0020)       & (0.0018)\\   
+   log\_total\_area        & 0.0009$^{***}$ & 0.0010$^{***}$\\   
+                           & (0.0003)       & (0.0003)\\   
+   log\_market\_value      & -0.0006        & -0.0009$^{*}$\\   
+                           & (0.0004)       & (0.0005)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   period\_fe              & Yes            & Yes\\  
+   census\_tract           & Yes            & \\  
+   num\_units\_bin         & Yes            & Yes\\  
+   building\_type          & Yes            & Yes\\  
+   year\_blt\_decade       & Yes            & Yes\\  
+   num\_stories\_bin       & Yes            & Yes\\  
+   GEOID                   &                & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations            & 574,344        & 574,344\\  
+   R$^2$                   & 0.01985        & 0.02373\\  
+   Within R$^2$            & 0.01571        & 0.01537\\  
    \midrule \midrule
    \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
 \end{tabular}
@@ -187,24 +232,24 @@
    Model:                  & (1)             & (2)\\  
    \midrule
    \emph{Variables}\\
-   tc\_black\_c            & -0.0002         & -0.0003\\   
-                           & (0.0002)        & (0.0002)\\   
-   tc\_female\_c           & -0.0002         & -0.0001\\   
-                           & (0.0001)        & (0.0001)\\   
-   tc\_black\_female\_c    & -0.0004$^{**}$  & -0.0004$^{**}$\\   
-                           & (0.0002)        & (0.0002)\\   
-   tc\_cov\_c              & 0.0012$^{***}$  & 0.0012$^{***}$\\   
-                           & (0.0002)        & (0.0001)\\   
-   tenant\_comp\_missing   & 0.0021$^{***}$  & 0.0021$^{***}$\\   
-                           & (0.0001)        & ($9.29\times 10^{-5}$)\\    
-   total\_permits          & 0.0123$^{***}$  & 0.0124$^{***}$\\   
-                           & (0.0017)        & (0.0016)\\   
-   total\_violations       & 0.0261$^{***}$  & 0.0261$^{***}$\\   
-                           & (0.0012)        & (0.0008)\\   
-   log\_total\_area        & 0.0016$^{***}$  & 0.0017$^{***}$\\   
-                           & (0.0001)        & (0.0001)\\   
-   log\_market\_value      & -0.0011$^{***}$ & -0.0011$^{***}$\\   
-                           & (0.0001)        & ($10\times 10^{-5}$)\\    
+   tc\_black\_c            & 0.0007          & $-5.64\times 10^{-5}$\\    
+                           & (0.0011)        & (0.0011)\\   
+   tc\_female\_c           & 0.0008          & 0.0008\\   
+                           & (0.0010)        & (0.0009)\\   
+   tc\_black\_female\_c    & -0.0032$^{**}$  & -0.0024$^{*}$\\   
+                           & (0.0015)        & (0.0014)\\   
+   tc\_cov\_c              & 0.0019$^{*}$    & 0.0013\\   
+                           & (0.0010)        & (0.0011)\\   
+   tenant\_comp\_missing   & 0.0029$^{***}$  & 0.0028$^{***}$\\   
+                           & (0.0006)        & (0.0006)\\   
+   total\_permits          & 0.0161$^{***}$  & 0.0158$^{***}$\\   
+                           & (0.0038)        & (0.0038)\\   
+   total\_violations       & 0.0370$^{***}$  & 0.0366$^{***}$\\   
+                           & (0.0029)        & (0.0027)\\   
+   log\_total\_area        & 0.0015$^{***}$  & 0.0016$^{***}$\\   
+                           & (0.0005)        & (0.0005)\\   
+   log\_market\_value      & -0.0020$^{***}$ & -0.0028$^{***}$\\   
+                           & (0.0008)        & (0.0009)\\   
    \midrule
    \emph{Fixed-effects}\\
    period\_fe              & Yes             & Yes\\  
@@ -216,54 +261,9 @@
    GEOID                   &                 & Yes\\  
    \midrule
    \emph{Fit statistics}\\
-   Observations            & 13,099,080      & 13,099,080\\  
-   R$^2$                   & 0.01902         & 0.01940\\  
-   Within R$^2$            & 0.01660         & 0.01657\\  
-   \midrule \midrule
-   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
-\end{tabular}
-\par\endgroup
-\begingroup
-\centering
-\begin{tabular}{lcc}
-   \tabularnewline \midrule \midrule
-   Dependent Variable: & \multicolumn{2}{c}{filed\_non\_severe}\\
-                           & Tract FE        & BG FE \\   
-   Model:                  & (1)             & (2)\\  
-   \midrule
-   \emph{Variables}\\
-   tc\_black\_c            & -0.0001         & -0.0002\\   
-                           & (0.0003)        & (0.0003)\\   
-   tc\_female\_c           & -0.0004$^{**}$  & -0.0004$^{**}$\\   
-                           & (0.0002)        & (0.0002)\\   
-   tc\_black\_female\_c    & -0.0002         & -0.0002\\   
-                           & (0.0003)        & (0.0003)\\   
-   tc\_cov\_c              & 0.0008$^{***}$  & 0.0009$^{***}$\\   
-                           & (0.0003)        & (0.0003)\\   
-   tenant\_comp\_missing   & 0.0026$^{***}$  & 0.0027$^{***}$\\   
-                           & (0.0001)        & (0.0001)\\   
-   total\_permits          & 0.0189$^{***}$  & 0.0192$^{***}$\\   
-                           & (0.0022)        & (0.0020)\\   
-   total\_violations       & 0.0375$^{***}$  & 0.0375$^{***}$\\   
-                           & (0.0015)        & (0.0009)\\   
-   log\_total\_area        & 0.0023$^{***}$  & 0.0024$^{***}$\\   
-                           & (0.0002)        & (0.0002)\\   
-   log\_market\_value      & -0.0017$^{***}$ & -0.0017$^{***}$\\   
-                           & (0.0002)        & (0.0002)\\   
-   \midrule
-   \emph{Fixed-effects}\\
-   period\_fe              & Yes             & Yes\\  
-   census\_tract           & Yes             & \\  
-   num\_units\_bin         & Yes             & Yes\\  
-   building\_type          & Yes             & Yes\\  
-   year\_blt\_decade       & Yes             & Yes\\  
-   num\_stories\_bin       & Yes             & Yes\\  
-   GEOID                   &                 & Yes\\  
-   \midrule
-   \emph{Fit statistics}\\
-   Observations            & 6,475,704       & 6,475,704\\  
-   R$^2$                   & 0.03019         & 0.03078\\  
-   Within R$^2$            & 0.02775         & 0.02769\\  
+   Observations            & 283,824         & 283,824\\  
+   R$^2$                   & 0.03101         & 0.03660\\  
+   Within R$^2$            & 0.02606         & 0.02551\\  
    \midrule \midrule
    \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
 \end{tabular}

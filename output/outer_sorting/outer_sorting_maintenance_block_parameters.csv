@@ -1,0 +1,9 @@
+metric,value
+m0_best,0.167162610118016
+bM_theta_best,-0.542741605556982
+bM_C_best,0.283801131893818
+current_panel_coef_counts,0.223311375322802
+weighted_mean_mbar_best_panel,0.151715775248666
+weighted_mean_cbar_best_panel,0.143190947166502
+corr_log1p_c_rate_m_rate_best_panel,0.0304673774055451
+corr_log1p_c_rate_mbar_best_panel,-0.0137164123982512

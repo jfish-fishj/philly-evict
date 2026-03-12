@@ -1,0 +1,40 @@
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{4}{c}{Destination severe violations per unit}\\
+                                                  & Dest A         & Dest B         & Dest C         & Dest D \\   
+   Model:                                         & (1)            & (2)            & (3)            & (4)\\  
+   \midrule
+   \emph{Variables}\\
+   Middle building filing-rate bin $=$ [1,5)")    & 0.0112         & 0.0110         & 0.0049         & 0.0072\\   
+                                                  & (0.0155)       & (0.0155)       & (0.0163)       & (0.0165)\\   
+   Middle building filing-rate bin $=$ [5,10)")   & 0.0162         & 0.0157         & 0.0134         & 0.0132\\   
+                                                  & (0.0117)       & (0.0117)       & (0.0118)       & (0.0118)\\   
+   Middle building filing-rate bin $=$ [10,20)")  & 0.0433$^{***}$ & 0.0428$^{***}$ & 0.0401$^{***}$ & 0.0406$^{***}$\\   
+                                                  & (0.0143)       & (0.0143)       & (0.0144)       & (0.0146)\\   
+   Middle building filing-rate bin $=$ [20,inf)") & 0.0728$^{***}$ & 0.0722$^{***}$ & 0.0668$^{***}$ & 0.0662$^{***}$\\   
+                                                  & (0.0253)       & (0.0252)       & (0.0253)       & (0.0256)\\   
+   Origin severe violations per unit              &                & 0.0152$^{***}$ & 0.0133$^{***}$ &   \\   
+                                                  &                & (0.0038)       & (0.0038)       &   \\   
+   Log(origin total area)                         &                &                & -0.0100        & -0.0099\\   
+                                                  &                &                & (0.0089)       & (0.0091)\\   
+   Log(origin market value)                       &                &                & 0.0164         & 0.0148\\   
+                                                  &                &                & (0.0118)       & (0.0124)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   Origin tract FE                                & Yes            & Yes            & Yes            & \\  
+   Origin year-built decade FE                    &                &                & Yes            & Yes\\  
+   Origin unit-bin FE                             &                &                & Yes            & Yes\\  
+   Origin building-type FE                        &                &                & Yes            & Yes\\  
+   Origin quality-grade FE                        &                &                & Yes            & Yes\\  
+   Origin stories-bin FE                          &                &                & Yes            & Yes\\  
+   Origin tract x origin filing-bin FE            &                &                &                & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                   & 160,279        & 160,279        & 157,468        & 157,338\\  
+   \midrule \midrule
+   \multicolumn{5}{l}{\emph{Clustered (Origin block group) standard-errors in parentheses}}\\
+   \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

@@ -1,0 +1,35 @@
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{months\_back\_rent}\\
+   Model:                                                      & (1)           & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   Same-period severe                                          & -0.027$^{**}$ & 0.025\\   
+                                                               & (0.013)       & (0.026)\\   
+   One-quarter pre/post severe                                 & 0.005         & 0.028\\   
+                                                               & (0.010)       & (0.017)\\   
+   Above-mean building pct black                               &               & 0.017\\   
+                                                               &               & (0.023)\\   
+   Same-period severe x above-mean building pct black          &               & -0.080$^{**}$\\   
+                                                               &               & (0.031)\\   
+   One-quarter pre/post severe x above-mean building pct black &               & -0.047$^{**}$\\   
+                                                               &               & (0.022)\\   
+   \% cases filed in quarter of complaint                      & 18.2          & 18.4\\  
+   \% cases in one-quarter pre/post window                     & 20.1          & 21.3\\  
+   \midrule
+   \emph{Fixed-effects}\\
+   PID                                                         & Yes           & Yes\\  
+   year                                                        & Yes           & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                                & 115,043       & 90,679\\  
+   Squared Correlation                                         & 0.48646       & 0.49284\\  
+   Pseudo R$^2$                                                & 0.16481       & 0.16303\\  
+   BIC                                                         & 605,399.7     & 465,151.8\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

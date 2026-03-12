@@ -1,0 +1,34 @@
+block,parameter,value,status,note
+Simulation,B,10000,Fixed,Number of simulated buildings in the baseline run.
+Simulation,sim_year_from,2011,Fixed,First year in the simulation window used to annualize simulated outcomes.
+Simulation,sim_year_to,2019,Fixed,Last year in the simulation window used to annualize simulated outcomes.
+Tenant-side anchors,mu,0.3,Fixed,Citywide high-risk / precarious tenant share.
+Tenant-side anchors,delta_L,0.01,Fixed,Anchored low-risk default probability.
+Tenant-side anchors,delta_H,0.1,Fixed,Anchored high-risk default probability.
+Built environment,p_bad_shape1,2,Calibrated,Beta shape parameter for tract bad-type prevalence.
+Built environment,p_bad_shape2,6,Calibrated,Beta shape parameter for tract bad-type prevalence.
+Building age,old_bldg_cutoff_year,1940,Fixed,Observed-building threshold for old-building indicator.
+Building age,new_bldg_cutoff_year,2000,Fixed,Observed-building threshold for new-building indicator.
+Sorting,Dalph,6,Calibrated,Sorting strength in the logistic update.
+Sorting,sigma_eta_sort,0.6,Calibrated,Neighborhood sorting shifter standard deviation.
+Filing,aF,-3,Calibrated,Filing log-rate intercept.
+Filing,bF_theta,0.7,Calibrated,Bad-type filing shift.
+Filing,bF_delta,1.1,Calibrated,Sensitivity of filings to average tenant default risk.
+Complaints,aC,-2.1,Calibrated,Complaint intercept.
+Complaints,bC_theta,0.35,Calibrated,Bad-type complaint shift.
+Complaints,bC_s_bad,-0.1,Calibrated,Complaint-composition slope for bad landlords only.
+Complaints,bC_old,0.1,Calibrated,Complaint shift for older buildings.
+Complaints,bC_new,-0.05,Calibrated,Complaint shift for newer buildings.
+Complaints,bC_M,-0.1,Calibrated,Complaint response to maintenance.
+Maintenance,m0,0.1826835,Calibrated,Baseline per-unit maintenance rate.
+Maintenance,bM_theta,-0.2,Calibrated,Bad-type maintenance shift.
+Maintenance,bM_old,0.15,Calibrated,Maintenance shift for older buildings.
+Maintenance,bM_new,0.25,Calibrated,Maintenance shift for newer buildings.
+Maintenance,bM_C,0.12,Calibrated,Maintenance response to complaint intensity.
+Numerics,lam,0.4,Calibrated,Damping parameter in the fixed-point iteration.
+Numerics,tol,1e-06,Calibrated,Stopping tolerance on the composition update.
+Numerics,max_iter,300,Calibrated,Maximum fixed-point iterations.
+Numerics,high_filing_threshold,0.15,Numeric,Absolute filing-rate cutoff for high-filing moments.
+Simulation,B,10000,Numeric,Number of simulated buildings in the baseline run.
+Simulation,sim_year_from,2011,Numeric,First year in the simulation window used to annualize simulated outcomes.
+Simulation,sim_year_to,2019,Fixed,Last year in the simulation window used to annualize simulated outcomes.

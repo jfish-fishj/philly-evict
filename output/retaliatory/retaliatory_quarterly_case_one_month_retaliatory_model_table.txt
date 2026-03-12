@@ -1,0 +1,109 @@
+                                                   One-Month Back Re..
+Dependent Var.:                                    one_month_back_rent
+                                                                      
+Same-period severe                                             0.017**
+                                                              (0.006) 
+Within-band severe (not same period)                          -5.95e-5
+                                                              (0.006) 
+Above-mean building pct black                                         
+                                                                      
+Same-period severe x above-mean building pct black                    
+                                                                      
+Within-band severe x above-mean building pct black                    
+                                                                      
+Defendant race: Black                                                 
+                                                                      
+Defendant race: Unknown                                               
+                                                                      
+Same-period severe x defendant Black                                  
+                                                                      
+Within-band severe x defendant Black                                  
+                                                                      
+Same-period severe x defendant Unknown                                
+                                                                      
+Within-band severe x defendant Unknown                                
+                                                                      
+% cases filed in quarter of complaint                             18.2
+% cases filed in bandwidth of complaint                           20.1
+Fixed-Effects:                                     -------------------
+PID                                                                Yes
+year                                                               Yes
+________________________________________           ___________________
+S.E.: Clustered                                                by: PID
+Observations                                                   115,107
+R2                                                             0.29134
+Within R2                                                      0.00025
+
+                                                   One-Month Back Re...1
+Dependent Var.:                                      one_month_back_rent
+                                                                        
+Same-period severe                                              -0.011  
+                                                                (0.012) 
+Within-band severe (not same period)                            -0.019  
+                                                                (0.010) 
+Above-mean building pct black                                   -0.0003 
+                                                                (0.010) 
+Same-period severe x above-mean building pct black               0.046**
+                                                                (0.016) 
+Within-band severe x above-mean building pct black               0.032* 
+                                                                (0.013) 
+Defendant race: Black                                                   
+                                                                        
+Defendant race: Unknown                                                 
+                                                                        
+Same-period severe x defendant Black                                    
+                                                                        
+Within-band severe x defendant Black                                    
+                                                                        
+Same-period severe x defendant Unknown                                  
+                                                                        
+Within-band severe x defendant Unknown                                  
+                                                                        
+% cases filed in quarter of complaint                               18.4
+% cases filed in bandwidth of complaint                             21.3
+Fixed-Effects:                                       -------------------
+PID                                                                  Yes
+year                                                                 Yes
+________________________________________             ___________________
+S.E.: Clustered                                                  by: PID
+Observations                                                      90,737
+R2                                                               0.29007
+Within R2                                                        0.00063
+
+                                                   One-Month Back Re...2
+Dependent Var.:                                      one_month_back_rent
+                                                                        
+Same-period severe                                               0.010  
+                                                                (0.010) 
+Within-band severe (not same period)                             0.001  
+                                                                (0.010) 
+Above-mean building pct black                                           
+                                                                        
+Same-period severe x above-mean building pct black                      
+                                                                        
+Within-band severe x above-mean building pct black                      
+                                                                        
+Defendant race: Black                                           -0.013  
+                                                                (0.007) 
+Defendant race: Unknown                                          0.007  
+                                                                (0.006) 
+Same-period severe x defendant Black                             0.017  
+                                                                (0.010) 
+Within-band severe x defendant Black                            -4.89e-5
+                                                                (0.011) 
+Same-period severe x defendant Unknown                           0.0007 
+                                                                (0.009) 
+Within-band severe x defendant Unknown                          -0.001  
+                                                                (0.009) 
+% cases filed in quarter of complaint                               18.2
+% cases filed in bandwidth of complaint                             20.2
+Fixed-Effects:                                       -------------------
+PID                                                                  Yes
+year                                                                 Yes
+________________________________________             ___________________
+S.E.: Clustered                                                  by: PID
+Observations                                                     114,314
+R2                                                               0.29201
+Within R2                                                        0.00049
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

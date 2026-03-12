@@ -1,0 +1,65 @@
+                              Raw >=15% d.. Raw >=15% d...1 Raw filing ..
+Dependent Var.:               total_permits   total_permits total_permits
+                                                                         
+above_mean_pct_black_btTRUE       -0.373***       -0.326***     -0.362***
+                                  (0.007)         (0.009)       (0.007)  
+high_filing_raw                   -0.211***       -0.137***              
+                                  (0.013)         (0.014)                
+mean_log_med_rent_inf_adj_PID                      0.375***              
+                                                  (0.010)                
+filing_bin_raw = [1,5)")                                        -0.150***
+                                                                (0.010)  
+filing_bin_raw = [5,10)")                                       -0.197***
+                                                                (0.009)  
+filing_bin_raw = [10,20)")                                      -0.217***
+                                                                (0.013)  
+filing_bin_raw = [20,inf)")                                     -0.324***
+                                                                (0.015)  
+Fixed-Effects:                -------------   ------------- -------------
+building_type                           Yes             Yes           Yes
+year                                    Yes             Yes           Yes
+quality_grade                           Yes             Yes           Yes
+year_blt_decade                         Yes             Yes           Yes
+num_units_bin                           Yes             Yes           Yes
+GEOID                                   Yes             Yes           Yes
+has_rent_data                           Yes              No           Yes
+_____________________________ _____________   _____________ _____________
+S.E. type                               IID             IID           IID
+Observations                      1,703,026         750,270     1,703,026
+Squared Cor.                        0.31361         0.25042       0.31484
+Pseudo R2                           0.20788         0.26008       0.20841
+BIC                             1,144,210.6       615,062.0   1,143,500.9
+
+                              Raw filing ...1
+Dependent Var.:                 total_permits
+                                             
+above_mean_pct_black_btTRUE         -0.316***
+                                    (0.009)  
+high_filing_raw                              
+                                             
+mean_log_med_rent_inf_adj_PID        0.352***
+                                    (0.010)  
+filing_bin_raw = [1,5)")            -0.184***
+                                    (0.011)  
+filing_bin_raw = [5,10)")           -0.137***
+                                    (0.011)  
+filing_bin_raw = [10,20)")          -0.151***
+                                    (0.014)  
+filing_bin_raw = [20,inf)")         -0.232***
+                                    (0.016)  
+Fixed-Effects:                  -------------
+building_type                             Yes
+year                                      Yes
+quality_grade                             Yes
+year_blt_decade                           Yes
+num_units_bin                             Yes
+GEOID                                     Yes
+has_rent_data                              No
+_____________________________   _____________
+S.E. type                                 IID
+Observations                          750,270
+Squared Cor.                          0.25360
+Pseudo R2                             0.26058
+BIC                                 614,705.9
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

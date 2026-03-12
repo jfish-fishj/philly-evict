@@ -1,0 +1,246 @@
+                                    m_tract            m_bg
+                                   Tract FE           BG FE
+Dependent Var.:             filed_complaint filed_complaint
+                                                           
+tc_black_c                        0.0006          0.0007   
+                                 (0.0007)        (0.0007)  
+tc_female_c                      -0.0007         -0.0007   
+                                 (0.0004)        (0.0004)  
+tc_black_female_c                 0.0013          0.0013   
+                                 (0.0008)        (0.0008)  
+tc_cov_c                          0.0007          0.0009   
+                                 (0.0006)        (0.0006)  
+tenant_comp_missing               0.0060***       0.0063***
+                                 (0.0004)        (0.0003)  
+total_permits                     0.0206***       0.0207***
+                                 (0.0019)        (0.0017)  
+total_violations                  0.1049***       0.1049***
+                                 (0.0018)        (0.0013)  
+cumulative_permit_count          -0.0009***      -0.0008***
+                                 (9.61e-5)       (0.0001)  
+cumulative_violations_count       0.0031***       0.0031***
+                                 (7.97e-5)       (6.86e-5) 
+log_total_area                    0.0048***       0.0049***
+                                 (0.0004)        (0.0004)  
+log_market_value                 -4.92e-5         0.0001   
+                                 (0.0005)        (0.0004)  
+Fixed-Effects:              --------------- ---------------
+period_fe                               Yes             Yes
+census_tract                            Yes              No
+num_units_bin                           Yes             Yes
+building_type                           Yes             Yes
+year_blt_decade                         Yes             Yes
+num_stories_bin                         Yes             Yes
+GEOID                                    No             Yes
+___________________________ _______________ _______________
+S.E.: Clustered             by: census_tr..       by: GEOID
+Observations                      3,631,312       3,631,312
+R2                                  0.13946         0.14040
+Within R2                           0.12940         0.12909
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                    m_tract            m_bg
+                                   Tract FE           BG FE
+Dependent Var.:             filed_complaint filed_complaint
+                                                           
+tc_black_c                        0.0006          0.0007   
+                                 (0.0007)        (0.0007)  
+tc_female_c                      -0.0007         -0.0007   
+                                 (0.0004)        (0.0004)  
+tc_black_female_c                 0.0013          0.0013   
+                                 (0.0008)        (0.0008)  
+tc_cov_c                          0.0007          0.0009   
+                                 (0.0006)        (0.0006)  
+tenant_comp_missing               0.0060***       0.0063***
+                                 (0.0004)        (0.0003)  
+total_permits                     0.0206***       0.0207***
+                                 (0.0019)        (0.0017)  
+total_violations                  0.1049***       0.1049***
+                                 (0.0018)        (0.0013)  
+cumulative_permit_count          -0.0009***      -0.0008***
+                                 (9.61e-5)       (0.0001)  
+cumulative_violations_count       0.0031***       0.0031***
+                                 (7.97e-5)       (6.86e-5) 
+log_total_area                    0.0048***       0.0049***
+                                 (0.0004)        (0.0004)  
+log_market_value                 -4.92e-5         0.0001   
+                                 (0.0005)        (0.0004)  
+Fixed-Effects:              --------------- ---------------
+period_fe                               Yes             Yes
+census_tract                            Yes              No
+num_units_bin                           Yes             Yes
+building_type                           Yes             Yes
+year_blt_decade                         Yes             Yes
+num_stories_bin                         Yes             Yes
+GEOID                                    No             Yes
+___________________________ _______________ _______________
+S.E.: Clustered             by: census_tr..       by: GEOID
+Observations                      3,631,312       3,631,312
+R2                                  0.13946         0.14040
+Within R2                           0.12940         0.12909
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                 m_tract         m_bg
+                                Tract FE        BG FE
+Dependent Var.:             filed_severe filed_severe
+                                                     
+tc_black_c                     0.0029***    0.0030***
+                              (0.0005)     (0.0005)  
+tc_female_c                    0.0006*      0.0006*  
+                              (0.0003)     (0.0003)  
+tc_black_female_c              0.0009       0.0009   
+                              (0.0005)     (0.0005)  
+tc_cov_c                      -0.0023***   -0.0022***
+                              (0.0004)     (0.0004)  
+tenant_comp_missing           -0.0017***   -0.0016***
+                              (0.0002)     (0.0002)  
+total_permits                 -0.0036***   -0.0036***
+                              (0.0006)     (0.0006)  
+total_violations               0.0586***    0.0586***
+                              (0.0013)     (0.0009)  
+cumulative_permit_count       -0.0001*     -0.0002*  
+                              (7.2e-5)     (7.4e-5)  
+cumulative_violations_count    0.0015***    0.0015***
+                              (7.36e-5)    (6.11e-5) 
+log_total_area                 0.0023***    0.0023***
+                              (0.0003)     (0.0003)  
+log_market_value               0.0038***    0.0041***
+                              (0.0004)     (0.0003)  
+Fixed-Effects:              ------------ ------------
+period_fe                            Yes          Yes
+census_tract                         Yes           No
+num_units_bin                        Yes          Yes
+building_type                        Yes          Yes
+year_blt_decade                      Yes          Yes
+num_stories_bin                      Yes          Yes
+GEOID                                 No          Yes
+___________________________ ____________ ____________
+S.E.: Clustered             by: census..    by: GEOID
+Observations                   3,631,312    3,631,312
+R2                               0.08500      0.08596
+Within R2                        0.07314      0.07294
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                 m_tract         m_bg
+                                Tract FE        BG FE
+Dependent Var.:             filed_severe filed_severe
+                                                     
+tc_black_c                     0.0029***    0.0030***
+                              (0.0005)     (0.0005)  
+tc_female_c                    0.0006*      0.0006*  
+                              (0.0003)     (0.0003)  
+tc_black_female_c              0.0009       0.0009   
+                              (0.0005)     (0.0005)  
+tc_cov_c                      -0.0023***   -0.0022***
+                              (0.0004)     (0.0004)  
+tenant_comp_missing           -0.0017***   -0.0016***
+                              (0.0002)     (0.0002)  
+total_permits                 -0.0036***   -0.0036***
+                              (0.0006)     (0.0006)  
+total_violations               0.0586***    0.0586***
+                              (0.0013)     (0.0009)  
+cumulative_permit_count       -0.0001*     -0.0002*  
+                              (7.2e-5)     (7.4e-5)  
+cumulative_violations_count    0.0015***    0.0015***
+                              (7.36e-5)    (6.11e-5) 
+log_total_area                 0.0023***    0.0023***
+                              (0.0003)     (0.0003)  
+log_market_value               0.0038***    0.0041***
+                              (0.0004)     (0.0003)  
+Fixed-Effects:              ------------ ------------
+period_fe                            Yes          Yes
+census_tract                         Yes           No
+num_units_bin                        Yes          Yes
+building_type                        Yes          Yes
+year_blt_decade                      Yes          Yes
+num_stories_bin                      Yes          Yes
+GEOID                                 No          Yes
+___________________________ ____________ ____________
+S.E.: Clustered             by: census..    by: GEOID
+Observations                   3,631,312    3,631,312
+R2                               0.08500      0.08596
+Within R2                        0.07314      0.07294
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                     m_tract             m_bg
+                                    Tract FE            BG FE
+Dependent Var.:             filed_non_severe filed_non_severe
+                                                             
+tc_black_c                        -0.0021***       -0.0021***
+                                  (0.0005)         (0.0005)  
+tc_female_c                       -0.0014***       -0.0014***
+                                  (0.0004)         (0.0004)  
+tc_black_female_c                  0.0003           0.0004   
+                                  (0.0006)         (0.0005)  
+tc_cov_c                           0.0029***        0.0031***
+                                  (0.0005)         (0.0005)  
+tenant_comp_missing                0.0078***        0.0080***
+                                  (0.0003)         (0.0003)  
+total_permits                      0.0250***        0.0251***
+                                  (0.0022)         (0.0019)  
+total_violations                   0.0581***        0.0581***
+                                  (0.0020)         (0.0012)  
+cumulative_permit_count           -0.0008***       -0.0007***
+                                  (9.93e-5)        (9.7e-5)  
+cumulative_violations_count        0.0019***        0.0018***
+                                  (6.96e-5)        (5.75e-5) 
+log_total_area                     0.0029***        0.0030***
+                                  (0.0003)         (0.0003)  
+log_market_value                  -0.0037***       -0.0038***
+                                  (0.0003)         (0.0003)  
+Fixed-Effects:              ---------------- ----------------
+period_fe                                Yes              Yes
+census_tract                             Yes               No
+num_units_bin                            Yes              Yes
+building_type                            Yes              Yes
+year_blt_decade                          Yes              Yes
+num_stories_bin                          Yes              Yes
+GEOID                                     No              Yes
+___________________________ ________________ ________________
+S.E.: Clustered             by: census_tract        by: GEOID
+Observations                       3,631,312        3,631,312
+R2                                   0.08344          0.08439
+Within R2                            0.07731          0.07713
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                     m_tract             m_bg
+                                    Tract FE            BG FE
+Dependent Var.:             filed_non_severe filed_non_severe
+                                                             
+tc_black_c                        -0.0021***       -0.0021***
+                                  (0.0005)         (0.0005)  
+tc_female_c                       -0.0014***       -0.0014***
+                                  (0.0004)         (0.0004)  
+tc_black_female_c                  0.0003           0.0004   
+                                  (0.0006)         (0.0005)  
+tc_cov_c                           0.0029***        0.0031***
+                                  (0.0005)         (0.0005)  
+tenant_comp_missing                0.0078***        0.0080***
+                                  (0.0003)         (0.0003)  
+total_permits                      0.0250***        0.0251***
+                                  (0.0022)         (0.0019)  
+total_violations                   0.0581***        0.0581***
+                                  (0.0020)         (0.0012)  
+cumulative_permit_count           -0.0008***       -0.0007***
+                                  (9.93e-5)        (9.7e-5)  
+cumulative_violations_count        0.0019***        0.0018***
+                                  (6.96e-5)        (5.75e-5) 
+log_total_area                     0.0029***        0.0030***
+                                  (0.0003)         (0.0003)  
+log_market_value                  -0.0037***       -0.0038***
+                                  (0.0003)         (0.0003)  
+Fixed-Effects:              ---------------- ----------------
+period_fe                                Yes              Yes
+census_tract                             Yes               No
+num_units_bin                            Yes              Yes
+building_type                            Yes              Yes
+year_blt_decade                          Yes              Yes
+num_stories_bin                          Yes              Yes
+GEOID                                     No              Yes
+___________________________ ________________ ________________
+S.E.: Clustered             by: census_tract        by: GEOID
+Observations                       3,631,312        3,631,312
+R2                                   0.08344          0.08439
+Within R2                            0.07731          0.07713
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

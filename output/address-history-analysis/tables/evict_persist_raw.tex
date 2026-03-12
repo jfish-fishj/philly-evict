@@ -1,0 +1,30 @@
+\begin{table}[htbp]
+   \caption{\label{tab:evict_persist_raw} Eviction Persistence: Raw Long-Run Filing Rates (Appendix Robustness)}
+   \centering
+   \begin{tabular}{lccc}
+      \tabularnewline \midrule \midrule
+      Dependent Variable: & \multicolumn{3}{c}{Filing rate (destination, raw long-run)}\\
+                                           & m1             & m2             & m3 \\   
+      Model:                               & (1)            & (2)            & (3)\\  
+      \midrule
+      \emph{Variables}\\
+      Filing rate (origin, raw long-run)   & 0.1069$^{***}$ & 0.0466$^{***}$ & 0.0447$^{***}$\\   
+                                           & (0.0162)       & (0.0092)       & (0.0114)\\   
+      Avg real rent (destination building) &                &                & -0.0599$^{***}$\\   
+                                           &                &                & (0.0028)\\   
+      Avg real rent (origin building)      &                &                & 0.0016\\   
+                                           &                &                & (0.0029)\\   
+      \midrule
+      \emph{Fixed-effects}\\
+      Units bin (destination)              &                & Yes            & Yes\\  
+      Units bin (origin)                   &                & Yes            & Yes\\  
+      Destination tract FE                 &                & Yes            & Yes\\  
+      Origin tract FE                      &                & Yes            & Yes\\  
+      \midrule
+      \emph{Fit statistics}\\
+      Observations                         & 87,989         & 87,976         & 56,412\\  
+      \midrule \midrule
+      \multicolumn{4}{l}{\emph{Clustered (pid) standard-errors in parentheses}}\\
+      \multicolumn{4}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+   \end{tabular}
+\end{table}

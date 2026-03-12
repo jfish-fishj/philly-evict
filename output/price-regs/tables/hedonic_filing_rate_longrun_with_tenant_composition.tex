@@ -1,0 +1,55 @@
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{4}{c}{log\_med\_rent}\\
+   Model:                                                  & (1)             & (2)             & (3)             & (4)\\  
+   \midrule
+   \emph{Variables}\\
+   Filing rate = 0                                         & 0.0953$^{***}$  &                 & 0.0911$^{***}$  &   \\   
+                                                           & (0.0118)        &                 & (0.0117)        &   \\   
+   Filing rate (0, 5\%]                                    & 0.0477$^{***}$  &                 & 0.0463$^{***}$  &   \\   
+                                                           & (0.0130)        &                 & (0.0129)        &   \\   
+   Filing rate (10, 20\%]                                  & -0.0295$^{***}$ &                 & -0.0261$^{**}$  &   \\   
+                                                           & (0.0110)        &                 & (0.0110)        &   \\   
+   Filing rate 20\%+                                       & -0.0377$^{***}$ &                 & -0.0343$^{***}$ &   \\   
+                                                           & (0.0097)        &                 & (0.0096)        &   \\   
+   any\_unsafe\_dangerous\_violationTRUE                   & -0.0076         &                 & -0.0060         &   \\   
+                                                           & (0.0156)        &                 & (0.0155)        &   \\   
+   any\_heat\_fire\_drainage\_plumbing\_complaintTRUE      & -0.0263$^{*}$   &                 & -0.0244         &   \\   
+                                                           & (0.0150)        &                 & (0.0149)        &   \\   
+   log(total\_area)                                        & 0.0079          & 0.0079          & 0.0080          & 0.0080\\   
+                                                           & (0.0075)        & (0.0077)        & (0.0075)        & (0.0076)\\   
+   log(market\_value)                                      & 0.0533$^{***}$  & 0.0523$^{***}$  & 0.0528$^{***}$  & 0.0519$^{***}$\\   
+                                                           & (0.0091)        & (0.0090)        & (0.0091)        & (0.0090)\\   
+   Filing rate (pre-2019)                                  &                 & -0.3270$^{***}$ &                 & -0.3024$^{***}$\\   
+                                                           &                 & (0.0284)        &                 & (0.0280)\\   
+   infousa\_pct\_black\_imp                                &                 &                 & -0.1143$^{***}$ & -0.1159$^{***}$\\   
+                                                           &                 &                 & (0.0156)        & (0.0157)\\   
+   infousa\_pct\_female\_imp                               &                 &                 & -0.0592$^{***}$ & -0.0610$^{***}$\\   
+                                                           &                 &                 & (0.0101)        & (0.0103)\\   
+   infousa\_pct\_black\_female\_imp                        &                 &                 & 0.0574$^{***}$  & 0.0585$^{***}$\\   
+                                                           &                 &                 & (0.0135)        & (0.0136)\\   
+   infousa\_share\_persons\_demog\_ok\_imp                 &                 &                 & 0.0327$^{**}$   & 0.0398$^{***}$\\   
+                                                           &                 &                 & (0.0152)        & (0.0154)\\   
+   tenant\_comp\_missing                                   &                 &                 & 0.0382$^{***}$  & 0.0454$^{***}$\\   
+                                                           &                 &                 & (0.0091)        & (0.0091)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   year                                                    & Yes             & Yes             & Yes             & Yes\\  
+   GEOID                                                   & Yes             & Yes             & Yes             & Yes\\  
+   year\_blt\_decade                                       & Yes             & Yes             & Yes             & Yes\\  
+   source                                                  & Yes             & Yes             & Yes             & Yes\\  
+   num\_units\_bin                                         & Yes             & Yes             & Yes             & Yes\\  
+   building\_type                                          & Yes             & Yes             & Yes             & Yes\\  
+   quality\_grade\_standard                                & Yes             & Yes             & Yes             & Yes\\  
+   num\_stories\_bin                                       & Yes             & Yes             & Yes             & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                            & 116,641         & 116,641         & 116,641         & 116,641\\  
+   R$^2$                                                   & 0.67288         & 0.66984         & 0.67480         & 0.67209\\  
+   \midrule \midrule
+   \multicolumn{5}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

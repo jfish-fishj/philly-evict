@@ -1,0 +1,135 @@
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{total\_complaints\_any}\\
+                                   & Tract FE        & BG FE \\   
+   Model:                          & (1)             & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c                    & 0.0577          & 0.0610\\   
+                                   & (0.0410)        & (0.0385)\\   
+   tc\_female\_c                   & -0.0094         & 0.0088\\   
+                                   & (0.0306)        & (0.0296)\\   
+   tc\_black\_female\_c            & -0.0022         & -0.0225\\   
+                                   & (0.0419)        & (0.0418)\\   
+   tc\_cov\_c                      & 0.0172          & 0.0359\\   
+                                   & (0.0374)        & (0.0327)\\   
+   tenant\_comp\_missing           & 0.3660$^{***}$  & 0.3869$^{***}$\\   
+                                   & (0.0279)        & (0.0218)\\   
+   cumulative\_permit\_count       & 0.0019          & 0.0011\\   
+                                   & (0.0012)        & (0.0017)\\   
+   cumulative\_violations\_count   & 0.0556$^{***}$  & 0.0648$^{***}$\\   
+                                   & (0.0027)        & (0.0023)\\   
+   log\_total\_area                & 0.1426$^{***}$  & 0.1506$^{***}$\\   
+                                   & (0.0235)        & (0.0202)\\   
+   log\_market\_value              & -0.1314$^{***}$ & -0.1089$^{***}$\\   
+                                   & (0.0204)        & (0.0186)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   census\_tract                   & Yes             & \\  
+   num\_units\_bin                 & Yes             & Yes\\  
+   building\_type                  & Yes             & Yes\\  
+   year\_blt\_decade               & Yes             & Yes\\  
+   num\_stories\_bin               & Yes             & Yes\\  
+   GEOID                           &                 & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                    & 179,391         & 179,388\\  
+   Squared Correlation             & 0.16045         & 0.23757\\  
+   Pseudo R$^2$                    & 0.20160         & 0.22445\\  
+   BIC                             & 576,973.2       & 571,993.9\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{total\_complaints\_severe}\\
+                                   & Tract FE        & BG FE \\   
+   Model:                          & (1)             & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c                    & 0.1918$^{***}$  & 0.2189$^{***}$\\   
+                                   & (0.0489)        & (0.0445)\\   
+   tc\_female\_c                   & 0.0646$^{*}$    & 0.0829$^{**}$\\   
+                                   & (0.0382)        & (0.0361)\\   
+   tc\_black\_female\_c            & 0.0059          & -0.0249\\   
+                                   & (0.0488)        & (0.0488)\\   
+   tc\_cov\_c                      & -0.2142$^{***}$ & -0.2092$^{***}$\\   
+                                   & (0.0383)        & (0.0391)\\   
+   tenant\_comp\_missing           & 0.0265          & 0.0157\\   
+                                   & (0.0287)        & (0.0262)\\   
+   cumulative\_permit\_count       & -0.0053$^{***}$ & -0.0074$^{***}$\\   
+                                   & (0.0018)        & (0.0019)\\   
+   cumulative\_violations\_count   & 0.0508$^{***}$  & 0.0602$^{***}$\\   
+                                   & (0.0029)        & (0.0028)\\   
+   log\_total\_area                & 0.1238$^{***}$  & 0.1228$^{***}$\\   
+                                   & (0.0268)        & (0.0227)\\   
+   log\_market\_value              & 0.0491$^{**}$   & 0.0790$^{***}$\\   
+                                   & (0.0239)        & (0.0214)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   census\_tract                   & Yes             & \\  
+   num\_units\_bin                 & Yes             & Yes\\  
+   building\_type                  & Yes             & Yes\\  
+   year\_blt\_decade               & Yes             & Yes\\  
+   num\_stories\_bin               & Yes             & Yes\\  
+   GEOID                           &                 & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                    & 179,391         & 179,276\\  
+   Squared Correlation             & 0.26083         & 0.31977\\  
+   Pseudo R$^2$                    & 0.20656         & 0.22423\\  
+   BIC                             & 369,799.3       & 372,897.0\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{total\_complaints\_non\_severe}\\
+                                   & Tract FE        & BG FE \\   
+   Model:                          & (1)             & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   tc\_black\_c                    & -0.1552$^{***}$ & -0.1761$^{***}$\\   
+                                   & (0.0514)        & (0.0499)\\   
+   tc\_female\_c                   & -0.0442         & -0.0349\\   
+                                   & (0.0334)        & (0.0347)\\   
+   tc\_black\_female\_c            & -0.1308$^{**}$  & -0.1274$^{**}$\\   
+                                   & (0.0550)        & (0.0568)\\   
+   tc\_cov\_c                      & 0.2283$^{***}$  & 0.2588$^{***}$\\   
+                                   & (0.0490)        & (0.0416)\\   
+   tenant\_comp\_missing           & 0.6846$^{***}$  & 0.7231$^{***}$\\   
+                                   & (0.0372)        & (0.0263)\\   
+   cumulative\_permit\_count       & 0.0094$^{***}$  & 0.0087$^{***}$\\   
+                                   & (0.0031)        & (0.0028)\\   
+   cumulative\_violations\_count   & 0.0638$^{***}$  & 0.0708$^{***}$\\   
+                                   & (0.0025)        & (0.0020)\\   
+   log\_total\_area                & 0.1563$^{***}$  & 0.1836$^{***}$\\   
+                                   & (0.0265)        & (0.0231)\\   
+   log\_market\_value              & -0.3285$^{***}$ & -0.3032$^{***}$\\   
+                                   & (0.0296)        & (0.0253)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   census\_tract                   & Yes             & \\  
+   num\_units\_bin                 & Yes             & Yes\\  
+   building\_type                  & Yes             & Yes\\  
+   year\_blt\_decade               & Yes             & Yes\\  
+   num\_stories\_bin               & Yes             & Yes\\  
+   GEOID                           &                 & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                    & 179,385         & 179,378\\  
+   Squared Correlation             & 0.07736         & 0.14833\\  
+   Pseudo R$^2$                    & 0.18660         & 0.20789\\  
+   BIC                             & 393,632.2       & 394,889.5\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

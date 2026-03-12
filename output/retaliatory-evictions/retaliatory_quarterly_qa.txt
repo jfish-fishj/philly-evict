@@ -1,0 +1,204 @@
+Retaliatory Evictions QA (Quarterly, Rental-Only)
+Timestamp: 2026-03-04 12:52:38 EST
+Quarterly panel input: /Users/joefish/Documents/GitHub/philly-evictions/data/processed/panels/building_data_rental_quarter.parquet
+Analytic PID input: /Users/joefish/Documents/GitHub/philly-evictions/data/processed/analytic/analytic_sample.csv
+Rows analyzed (full): 6981480
+Rows analyzed (pre-covid): 6981480
+Unique PIDs (full): 193930
+Eviction filing rate (full): 0.016124
+Any complaint rate (full): 0.029174
+Case back-rent one-month tolerance: +/-0.1
+Case rows for back-rent analysis: 140665
+Case share with valid total_rent/ongoing_rent ratio: 1
+Case one-month back-rent share (among valid ratios): 0.189848
+Case PID-period panel match share: 1
+Case retaliatory(severe-proximity) share among matched: 0.383144
+Case race join share: 0.999076
+Case race impute-ok share among joined: 0.995168
+Filing intensity main measure: filing_rate_eb_pre_covid (EB pooled pre-2019)
+High filing threshold: 0.15
+Filing bins: [0,1), [1,5), [5,10), [10,20), [20,inf)
+Pre-COVID infousa_pct_black split method: mean
+Pre-COVID infousa_pct_black cutoff used: 0.378579
+Time unit: quarter
+skip_distlag: TRUE
+include_full: FALSE
+Bandwidths evaluated: 1 to 2 quarters
+
+Bandwidth summary (head):
+   bandwidth_periods eviction_rows same_period_n within_bw_n plausible_only_n
+               <int>         <int>         <int>       <int>            <int>
+1:                 1        112571         15734       29566            13832
+2:                 2        112571         15734       36904            21170
+   non_retaliatory_n time_unit same_period_share within_bw_share
+               <int>    <char>             <num>           <num>
+1:             83005   quarter         0.1397696       0.2626431
+2:             75667   quarter         0.1397696       0.3278287
+   plausible_only_share non_retaliatory_share
+                  <num>                 <num>
+1:            0.1228736             0.7373569
+2:            0.1880591             0.6721713
+
+Case back-rent summary (head):
+   sample         group n_cases n_valid_ratio share_valid_ratio share_one_month
+   <char>        <char>   <int>         <int>             <num>           <num>
+1:    pre           all  140665        140665                 1       0.1898482
+2:    pre    high_black   62472         62472                 1       0.1699641
+3:    pre     low_black   49835         49835                 1       0.2116785
+4:    pre missing_black   28358         28358                 1       0.1952888
+   mean_months_back median_months_back
+              <num>              <num>
+1:         2.474686                  2
+2:         2.540321                  2
+3:         2.338913                  2
+4:         2.568695                  2
+
+Case retaliatory status summary (pre-covid):
+                 retaliatory_status n_cases     share
+                             <char>   <int>     <num>
+1:                  non_retaliatory   86770 0.6168556
+2:               same_period_severe   25554 0.1816657
+3: within_bw_severe_not_same_period   28341 0.2014787
+
+Case one-month retaliatory LPM sample summary:
+Index: <spec>
+                                           spec  n_obs mean_outcome
+                                         <char>  <int>        <num>
+1:              one_month_on_retaliatory_severe 115107    0.1898482
+2: one_month_on_retaliatory_severe_x_high_black  90737    0.1884744
+   same_period_share bw_not_same_period_share high_black_share
+               <num>                    <num>            <num>
+1:         0.1816657                0.2014787         0.556261
+2:         0.1843785                0.2129164         0.556261
+   defendant_race_black_share defendant_race_white_share
+                        <num>                      <num>
+1:                         NA                         NA
+2:                         NA                         NA
+   defendant_race_unknown_share defendant_race_ok_share
+                          <num>                   <num>
+1:                           NA               0.9951685
+2:                           NA               0.9954809
+
+Case one-month retaliatory LPM coefficients (head):
+                                           spec             outcome
+                                         <char>              <char>
+1:              one_month_on_retaliatory_severe one_month_back_rent
+2:              one_month_on_retaliatory_severe one_month_back_rent
+3: one_month_on_retaliatory_severe_x_high_black one_month_back_rent
+4: one_month_on_retaliatory_severe_x_high_black one_month_back_rent
+5: one_month_on_retaliatory_severe_x_high_black one_month_back_rent
+6: one_month_on_retaliatory_severe_x_high_black one_month_back_rent
+7: one_month_on_retaliatory_severe_x_high_black one_month_back_rent
+                                                                    term
+                                                                  <char>
+1:                                retaliatory_status::same_period_severe
+2:                  retaliatory_status::within_bw_severe_not_same_period
+3:                                retaliatory_status::same_period_severe
+4:                  retaliatory_status::within_bw_severe_not_same_period
+5:                                                      high_black_split
+6:               high_black_split:retaliatory_status::same_period_severe
+7: high_black_split:retaliatory_status::within_bw_severe_not_same_period
+        estimate   std_error     t_value     p_value     conf_low   conf_high
+           <num>       <num>       <num>       <num>        <num>       <num>
+1:  0.0172670189 0.006494789  2.65859587 0.007852592  0.004537233 0.029996805
+2: -0.0000595295 0.005709390 -0.01042660 0.991681029 -0.011249934 0.011130875
+3: -0.0108294738 0.012021632 -0.90083226 0.367690871 -0.034391872 0.012732925
+4: -0.0186207153 0.009947260 -1.87194410 0.061232295 -0.038117346 0.000875915
+5: -0.0002646099 0.009702625 -0.02727199 0.978243129 -0.019281755 0.018752535
+6:  0.0457909208 0.016329021  2.80426615 0.005049112  0.013786040 0.077795802
+7:  0.0320030578 0.012515446  2.55708492 0.010564350  0.007472784 0.056533332
+    n_obs
+    <int>
+1: 115107
+2: 115107
+3:  90737
+4:  90737
+5:  90737
+6:  90737
+7:  90737
+
+Case months-back-rent Poisson (PPML) coefficients (head):
+                                                  spec          outcome
+                                                <char>           <char>
+1:              months_back_rent_on_retaliatory_severe months_back_rent
+2:              months_back_rent_on_retaliatory_severe months_back_rent
+3: months_back_rent_on_retaliatory_severe_x_high_black months_back_rent
+4: months_back_rent_on_retaliatory_severe_x_high_black months_back_rent
+5: months_back_rent_on_retaliatory_severe_x_high_black months_back_rent
+6: months_back_rent_on_retaliatory_severe_x_high_black months_back_rent
+7: months_back_rent_on_retaliatory_severe_x_high_black months_back_rent
+                                                                    term
+                                                                  <char>
+1:                                retaliatory_status::same_period_severe
+2:                  retaliatory_status::within_bw_severe_not_same_period
+3:                                retaliatory_status::same_period_severe
+4:                  retaliatory_status::within_bw_severe_not_same_period
+5:                                                      high_black_split
+6:               high_black_split:retaliatory_status::same_period_severe
+7: high_black_split:retaliatory_status::within_bw_severe_not_same_period
+      estimate  std_error    t_value    p_value     conf_low    conf_high
+         <num>      <num>      <num>      <num>        <num>        <num>
+1: -0.02733978 0.01307121 -2.0916033 0.03647402 -0.052959352 -0.001720214
+2:  0.00463973 0.00956056  0.4852990 0.62746426 -0.014098967  0.023378428
+3:  0.02485329 0.02648250  0.9384798 0.34799787 -0.027052409  0.076758996
+4:  0.02814887 0.01744506  1.6135724 0.10662021 -0.006043451  0.062341194
+5:  0.01720499 0.02265555  0.7594159 0.44760380 -0.027199896  0.061609870
+6: -0.07972470 0.03100961 -2.5709675 0.01014149 -0.140503539 -0.018945863
+7: -0.04710647 0.02160554 -2.1802955 0.02923557 -0.089453334 -0.004759603
+    n_obs
+    <int>
+1: 115043
+2: 115043
+3:  90679
+4:  90679
+5:  90679
+6:  90679
+7:  90679
+
+Eviction case filter counts:
+                                   step n_rows retained_share_from_raw
+                                 <char>  <int>                   <num>
+1:             raw_evictions_clean_rows 796440               1.0000000
+2:            unique_parcel_xwalk_match 535757               0.6726897
+3:                drop_commercial_cases 534826               0.6715208
+4:           drop_non_residential_cases 530654               0.6662825
+5: keep_nonpayment_of_rent_cases_a_flag 336502               0.4225077
+6:      keep_year_between_2011_and_2019 174940               0.2196525
+
+Wrote dist-lag coefficients CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_distlag_coefficients.csv
+Wrote dist-lag black-split coefficients CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_distlag_coefficients_black_split.csv
+Wrote bandwidth summary CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_bandwidth_summary.csv
+Wrote bandwidth status CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_bandwidth_status_counts.csv
+Wrote case back-rent summary CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_case_back_rent_summary.csv
+Wrote case back-rent by-year CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_case_back_rent_by_year.csv
+Wrote case retaliatory-status summary CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_case_retaliatory_status_summary.csv
+Wrote case one-month retaliatory coefficients CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_case_one_month_retaliatory_coefficients.csv
+Wrote case one-month retaliatory sample summary CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_case_one_month_retaliatory_sample_summary.csv
+Wrote case one-month retaliatory model table (txt): /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_case_one_month_retaliatory_model_table.txt
+Wrote case one-month retaliatory model table (tex): /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_case_one_month_retaliatory_model_table.tex
+Wrote case months-back-rent Poisson coefficients CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_case_one_month_retaliatory_pois_coefficients.csv
+Wrote case months-back-rent Poisson model table (txt): /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_case_one_month_retaliatory_pois_model_table.txt
+Wrote case months-back-rent Poisson model table (tex): /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_case_one_month_retaliatory_pois_model_table.tex
+Wrote eviction-case filter counts CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_eviction_case_filter_counts.csv
+Case race input path: /Users/joefish/Documents/GitHub/philly-evictions/output/qa/race_imputed_case_sample.csv
+Wrote dist-lag model table: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_distlag_model_table.txt
+Distributed lag skipped; no dist-lag plot written.
+Distributed lag black-split skipped because distributed lag was skipped.
+Wrote maintenance model table (txt): /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_maintenance_model_table.txt
+Wrote maintenance model table (tex): /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_maintenance_model_table.tex
+Wrote maintenance raw-robustness table (txt): /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_maintenance_model_table_raw.txt
+Wrote maintenance raw-robustness table (tex): /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_maintenance_model_table_raw.tex
+Wrote maintenance filing-bin summary CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_maintenance_filing_bin_summary.csv
+Wrote landlord response coefficients CSV: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_landlord_response_coefficients.csv
+Wrote landlord response plot: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/figs/retaliatory_quarterly_landlord_response_plot.png
+
+Module A (Quarter-window filing hazard, bandwidth=1)
+  PID score table rows: 193930
+  score_ok_same_q (n_same>=2, n_base>=8): 22537
+  score_ok_near_q (n_same>=2, n_near>=2): 22520
+  mean excess_same_q_vs_base (finite PIDs): 0.0815
+  mean excess_same_q_vs_base_eb (finite PIDs): 0.0814
+  cor(excess_raw, filing_rate_raw): 0.1268
+  cor(excess_eb,  filing_rate_raw): 0.099
+  Wrote LPM coefs:  /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_hazard_window_lpm_severe_coefficients.csv
+  Wrote PID scores: /Users/joefish/Documents/GitHub/philly-evictions/output/retaliatory-evictions/tables/retaliatory_quarterly_pid_excess_hazard_score.csv

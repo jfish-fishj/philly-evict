@@ -1,0 +1,36 @@
+\begingroup
+\centering
+\begin{tabular}{lcccccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variables: & \multicolumn{2}{c}{Change in LOO tract filing rate (raw)} & \multicolumn{4}{c}{Destination LOO tract filing rate (raw)}\\
+                                                   & Delta A                & Delta B  & Dest A   & Dest B         & Dest C         & Dest D \\   
+   Model:                                          & (1)                    & (2)      & (3)      & (4)            & (5)            & (6)\\  
+   \midrule
+   \emph{Variables}\\
+   Constant                                        & $-6.88\times 10^{-5}$  &          &          &                &                &   \\   
+                                                   & (0.0006)               &          &          &                &                &   \\   
+   Middle building high-filing indicator (>=15\%)  & -0.0002                & 0.0006   & 0.0003   & 0.0006         & 0.0007$^{**}$  & 0.0006$^{*}$\\   
+                                                   & (0.0003)               & (0.0004) & (0.0005) & (0.0004)       & (0.0003)       & (0.0003)\\   
+   Origin LOO tract filing rate (raw)              &                        &          &          & 0.7780$^{***}$ & 0.8049$^{***}$ &   \\   
+                                                   &                        &          &          & (0.1033)       & (0.1233)       &   \\   
+   Log(origin total area)                          &                        &          &          &                & -0.0004        & -0.0005\\   
+                                                   &                        &          &          &                & (0.0005)       & (0.0004)\\   
+   Log(origin market value)                        &                        &          &          &                & -0.0004        & -0.0004\\   
+                                                   &                        &          &          &                & (0.0004)       & (0.0003)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   Origin tract FE                                 &                        & Yes      & Yes      & Yes            & Yes            & \\  
+   Origin year-built decade FE                     &                        &          &          &                & Yes            & Yes\\  
+   Origin unit-bin FE                              &                        &          &          &                & Yes            & Yes\\  
+   Origin building-type FE                         &                        &          &          &                & Yes            & Yes\\  
+   Origin quality-grade FE                         &                        &          &          &                & Yes            & Yes\\  
+   Origin stories-bin FE                           &                        &          &          &                & Yes            & Yes\\  
+   Origin tract x origin filing-bin FE             &                        &          &          &                &                & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                    & 160,667                & 160,658  & 160,658  & 160,658        & 157,691        & 157,563\\  
+   \midrule \midrule
+   \multicolumn{7}{l}{\emph{Clustered (Origin block group) standard-errors in parentheses}}\\
+   \multicolumn{7}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

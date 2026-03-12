@@ -1,0 +1,132 @@
+                                   m_tract                   m_bg
+                                  Tract FE                  BG FE
+Dependent Var.:     share_retaliatory_same share_retaliatory_same
+                                                                 
+tc_black_c                      -0.0047                -0.0064   
+                                (0.0091)               (0.0099)  
+tc_female_c                     -0.0065                -0.0084   
+                                (0.0081)               (0.0088)  
+tc_black_female_c               -0.0096                -0.0083   
+                                (0.0105)               (0.0115)  
+tc_cov_c                        -0.0050                -0.0068   
+                                (0.0084)               (0.0087)  
+tenant_comp_missing              0.0015                -6.19e-5  
+                                (0.0044)               (0.0045)  
+log_total_area                   0.0081*                0.0078*  
+                                (0.0035)               (0.0038)  
+log_market_value                 0.0182***              0.0201***
+                                (0.0040)               (0.0038)  
+Fixed-Effects:      ---------------------- ----------------------
+year                                   Yes                    Yes
+census_tract                           Yes                     No
+num_units_bin                          Yes                    Yes
+building_type                          Yes                    Yes
+year_blt_decade                        Yes                    Yes
+num_stories_bin                        Yes                    Yes
+GEOID                                   No                    Yes
+___________________ ______________________ ______________________
+S.E.: Clustered           by: census_tract              by: GEOID
+Observations                        50,437                 50,418
+R2                                 0.02586                0.04920
+Within R2                          0.00134                0.00139
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                   m_tract                   m_bg
+                                  Tract FE                  BG FE
+Dependent Var.:     share_retaliatory_same share_retaliatory_same
+                                                                 
+tc_black_c                      -0.0047                -0.0064   
+                                (0.0091)               (0.0099)  
+tc_female_c                     -0.0065                -0.0084   
+                                (0.0081)               (0.0088)  
+tc_black_female_c               -0.0096                -0.0083   
+                                (0.0105)               (0.0115)  
+tc_cov_c                        -0.0050                -0.0068   
+                                (0.0084)               (0.0087)  
+tenant_comp_missing              0.0015                -6.19e-5  
+                                (0.0044)               (0.0045)  
+log_total_area                   0.0081*                0.0078*  
+                                (0.0035)               (0.0038)  
+log_market_value                 0.0182***              0.0201***
+                                (0.0040)               (0.0038)  
+Fixed-Effects:      ---------------------- ----------------------
+year                                   Yes                    Yes
+census_tract                           Yes                     No
+num_units_bin                          Yes                    Yes
+building_type                          Yes                    Yes
+year_blt_decade                        Yes                    Yes
+num_stories_bin                        Yes                    Yes
+GEOID                                   No                    Yes
+___________________ ______________________ ______________________
+S.E.: Clustered           by: census_tract              by: GEOID
+Observations                        50,437                 50,418
+R2                                 0.02586                0.04920
+Within R2                          0.00134                0.00139
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                 m_tract                 m_bg
+                                Tract FE                BG FE
+Dependent Var.:     share_retaliatory_bw share_retaliatory_bw
+                                                             
+tc_black_c                    -0.0227              -0.0304*  
+                              (0.0127)             (0.0132)  
+tc_female_c                   -0.0041              -0.0122   
+                              (0.0113)             (0.0122)  
+tc_black_female_c              0.0087               0.0182   
+                              (0.0157)             (0.0165)  
+tc_cov_c                      -0.0026              -0.0033   
+                              (0.0113)             (0.0120)  
+tenant_comp_missing            0.0062               0.0064   
+                              (0.0064)             (0.0061)  
+log_total_area                 0.0272***            0.0296***
+                              (0.0056)             (0.0061)  
+log_market_value               0.0301***            0.0295***
+                              (0.0063)             (0.0059)  
+Fixed-Effects:      -------------------- --------------------
+year                                 Yes                  Yes
+census_tract                         Yes                   No
+num_units_bin                        Yes                  Yes
+building_type                        Yes                  Yes
+year_blt_decade                      Yes                  Yes
+num_stories_bin                      Yes                  Yes
+GEOID                                 No                  Yes
+___________________ ____________________ ____________________
+S.E.: Clustered         by: census_tract            by: GEOID
+Observations                      50,437               50,418
+R2                               0.05944              0.08513
+Within R2                        0.00273              0.00265
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                 m_tract                 m_bg
+                                Tract FE                BG FE
+Dependent Var.:     share_retaliatory_bw share_retaliatory_bw
+                                                             
+tc_black_c                    -0.0227              -0.0304*  
+                              (0.0127)             (0.0132)  
+tc_female_c                   -0.0041              -0.0122   
+                              (0.0113)             (0.0122)  
+tc_black_female_c              0.0087               0.0182   
+                              (0.0157)             (0.0165)  
+tc_cov_c                      -0.0026              -0.0033   
+                              (0.0113)             (0.0120)  
+tenant_comp_missing            0.0062               0.0064   
+                              (0.0064)             (0.0061)  
+log_total_area                 0.0272***            0.0296***
+                              (0.0056)             (0.0061)  
+log_market_value               0.0301***            0.0295***
+                              (0.0063)             (0.0059)  
+Fixed-Effects:      -------------------- --------------------
+year                                 Yes                  Yes
+census_tract                         Yes                   No
+num_units_bin                        Yes                  Yes
+building_type                        Yes                  Yes
+year_blt_decade                      Yes                  Yes
+num_stories_bin                      Yes                  Yes
+GEOID                                 No                  Yes
+___________________ ____________________ ____________________
+S.E.: Clustered         by: census_tract            by: GEOID
+Observations                      50,437               50,418
+R2                               0.05944              0.08513
+Within R2                        0.00273              0.00265
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

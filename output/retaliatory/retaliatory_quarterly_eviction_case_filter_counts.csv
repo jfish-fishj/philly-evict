@@ -1,0 +1,7 @@
+step,n_rows,retained_share_from_raw
+raw_evictions_clean_rows,796440,1
+unique_parcel_xwalk_match,535757,0.672689719250665
+drop_commercial_cases,534826,0.671520767414997
+drop_non_residential_cases,530654,0.666282456933353
+keep_nonpayment_of_rent_cases_a_flag,336502,0.422507659082919
+keep_year_between_2011_and_2019,174940,0.219652453417709

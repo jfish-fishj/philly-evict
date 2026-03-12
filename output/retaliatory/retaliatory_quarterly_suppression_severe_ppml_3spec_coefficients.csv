@@ -1,0 +1,11 @@
+term,estimate,std_error,t_value,p_value,model,n_obs,n_pid,sample_note
+infousa_pct_black,1.52172242813013,0.124234105687941,12.2488298982284,1.70437226072631e-34,reg1_pct_black_year,4976196,174813,tenant_comp_missing==0
+infousa_pct_black,0.51970533755065,0.114920863407595,4.52228883546923,6.11745041938827e-06,reg2_plus_building_nhood_year,4754796,168181,tenant_comp_missing==0 + area + tract
+log_total_area,0.200101651842712,0.0350661100999985,5.70641144033597,1.15382896069373e-08,reg2_plus_building_nhood_year,4754796,168181,tenant_comp_missing==0 + area + tract
+infousa_pct_black,0.5399702200487,0.111306013081189,4.85122236527181,1.22702882388914e-06,reg3_plus_maintenance_stock,4754796,168181,reg2 sample + maintenance stock
+log_total_area,0.183552555619359,0.0333506284639613,5.50372104135027,3.71857782223047e-08,reg3_plus_maintenance_stock,4754796,168181,reg2 sample + maintenance stock
+maint_stock_lag_rate_sev3,0.107145356523465,0.0204733617296795,5.23340318693927,1.6641718822541e-07,reg3_plus_maintenance_stock,4754796,168181,reg2 sample + maintenance stock
+infousa_pct_black,0.514568952488774,0.114344355045745,4.50016926749829,6.78993725403261e-06,reg4_plus_severe_violation_stock,4754796,168181,reg3 sample + lagged severe violation stock
+log_total_area,0.198915518004537,0.0349632172110134,5.6892795878601,1.27576441601912e-08,reg4_plus_severe_violation_stock,4754796,168181,reg3 sample + lagged severe violation stock
+maint_stock_lag_rate_sev3,0.108046005537298,0.0202394130919169,5.3383961800972,9.37723773115497e-08,reg4_plus_severe_violation_stock,4754796,168181,reg3 sample + lagged severe violation stock
+severe_viol_stock_lag_rate_sev3,0.271015394106548,0.00852504726723129,31.7904858015605,8.7622388160753e-222,reg4_plus_severe_violation_stock,4754796,168181,reg3 sample + lagged severe violation stock

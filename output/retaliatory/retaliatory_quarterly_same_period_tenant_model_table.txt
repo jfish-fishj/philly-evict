@@ -1,0 +1,150 @@
+                                            m_base       m_tenant
+Dependent Var.:                     filed_eviction filed_eviction
+                                                                 
+filed_complaint                           0.043***       0.042***
+                                         (0.0006)       (0.0006) 
+tenant_comp_missing                                     -0.002***
+                                                        (0.0002) 
+filed_complaint x tc_black_c                             0.030***
+                                                        (0.003)  
+filed_complaint x tc_female_c                            0.003   
+                                                        (0.002)  
+filed_complaint x tc_black_female_c                      0.003   
+                                                        (0.004)  
+filed_complaint x tc_cov_c                              -0.015***
+                                                        (0.003)  
+Fixed-Effects:                      -------------- --------------
+period_fe                                      Yes            Yes
+PID                                            Yes            Yes
+___________________________________ ______________ ______________
+S.E.: Clustered                            by: PID        by: PID
+Observations                             6,981,480      6,981,480
+R2                                         0.16816        0.16840
+Within R2                                  0.00337        0.00366
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                         m_base       m_tenant
+Dependent Var.:                  filed_eviction filed_eviction
+                                                              
+filed_severe                           0.080***       0.077***
+                                      (0.001)        (0.001)  
+tenant_comp_missing                                  -0.002***
+                                                     (0.0002) 
+filed_severe x tc_black_c                             0.028***
+                                                     (0.005)  
+filed_severe x tc_female_c                            0.0006  
+                                                     (0.005)  
+filed_severe x tc_black_female_c                      0.0004  
+                                                     (0.007)  
+filed_severe x tc_cov_c                              -0.020***
+                                                     (0.005)  
+Fixed-Effects:                   -------------- --------------
+period_fe                                   Yes            Yes
+PID                                         Yes            Yes
+________________________________ ______________ ______________
+S.E.: Clustered                         by: PID        by: PID
+Observations                          6,981,480      6,981,480
+R2                                      0.17051        0.17062
+Within R2                               0.00619        0.00632
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                             m_base       m_tenant
+Dependent Var.:                      filed_eviction filed_eviction
+                                                                  
+filed_non_severe                           0.007***       0.007***
+                                          (0.0005)       (0.0005) 
+tenant_comp_missing                                      -0.002***
+                                                         (0.0002) 
+filed_non_severe x tc_black_c                            -0.006*  
+                                                         (0.003)  
+filed_non_severe x tc_female_c                           -0.002   
+                                                         (0.002)  
+filed_non_severe x tc_black_female_c                      0.007   
+                                                         (0.004)  
+filed_non_severe x tc_cov_c                              -0.008** 
+                                                         (0.003)  
+Fixed-Effects:                       -------------- --------------
+period_fe                                       Yes            Yes
+PID                                             Yes            Yes
+____________________________________ ______________ ______________
+S.E.: Clustered                             by: PID        by: PID
+Observations                              6,981,480      6,981,480
+R2                                          0.16538        0.16540
+Within R2                                   4.75e-5        7.01e-5
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                            m_base       m_tenant
+Dependent Var.:                     filed_eviction filed_eviction
+                                                                 
+filed_complaint                           0.043***       0.042***
+                                         (0.0006)       (0.0006) 
+tenant_comp_missing                                     -0.002***
+                                                        (0.0002) 
+filed_complaint x tc_black_c                             0.030***
+                                                        (0.003)  
+filed_complaint x tc_female_c                            0.003   
+                                                        (0.002)  
+filed_complaint x tc_black_female_c                      0.003   
+                                                        (0.004)  
+filed_complaint x tc_cov_c                              -0.015***
+                                                        (0.003)  
+Fixed-Effects:                      -------------- --------------
+period_fe                                      Yes            Yes
+PID                                            Yes            Yes
+___________________________________ ______________ ______________
+S.E.: Clustered                            by: PID        by: PID
+Observations                             6,981,480      6,981,480
+R2                                         0.16816        0.16840
+Within R2                                  0.00337        0.00366
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                         m_base       m_tenant
+Dependent Var.:                  filed_eviction filed_eviction
+                                                              
+filed_severe                           0.080***       0.077***
+                                      (0.001)        (0.001)  
+tenant_comp_missing                                  -0.002***
+                                                     (0.0002) 
+filed_severe x tc_black_c                             0.028***
+                                                     (0.005)  
+filed_severe x tc_female_c                            0.0006  
+                                                     (0.005)  
+filed_severe x tc_black_female_c                      0.0004  
+                                                     (0.007)  
+filed_severe x tc_cov_c                              -0.020***
+                                                     (0.005)  
+Fixed-Effects:                   -------------- --------------
+period_fe                                   Yes            Yes
+PID                                         Yes            Yes
+________________________________ ______________ ______________
+S.E.: Clustered                         by: PID        by: PID
+Observations                          6,981,480      6,981,480
+R2                                      0.17051        0.17062
+Within R2                               0.00619        0.00632
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                                             m_base       m_tenant
+Dependent Var.:                      filed_eviction filed_eviction
+                                                                  
+filed_non_severe                           0.007***       0.007***
+                                          (0.0005)       (0.0005) 
+tenant_comp_missing                                      -0.002***
+                                                         (0.0002) 
+filed_non_severe x tc_black_c                            -0.006*  
+                                                         (0.003)  
+filed_non_severe x tc_female_c                           -0.002   
+                                                         (0.002)  
+filed_non_severe x tc_black_female_c                      0.007   
+                                                         (0.004)  
+filed_non_severe x tc_cov_c                              -0.008** 
+                                                         (0.003)  
+Fixed-Effects:                       -------------- --------------
+period_fe                                       Yes            Yes
+PID                                             Yes            Yes
+____________________________________ ______________ ______________
+S.E.: Clustered                             by: PID        by: PID
+Observations                              6,981,480      6,981,480
+R2                                          0.16538        0.16540
+Within R2                                   4.75e-5        7.01e-5
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

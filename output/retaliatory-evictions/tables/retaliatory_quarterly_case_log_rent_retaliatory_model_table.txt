@@ -1,0 +1,53 @@
+                                                            log(Total Ren..
+Dependent Var.:                                             log(total_rent)
+                                                                           
+Same-period severe                                                -0.025*  
+                                                                  (0.012)  
+One-quarter pre/post severe                                        0.005   
+                                                                  (0.008)  
+log(ongoing_rent)                                                  0.693***
+                                                                  (0.019)  
+Above-mean building pct black                                              
+                                                                           
+Same-period severe x above-mean building pct black                         
+                                                                           
+One-quarter pre/post severe x above-mean building pct black                
+                                                                           
+% cases filed in quarter of complaint                                  18.2
+% cases in one-quarter pre/post window                                 20.1
+Fixed-Effects:                                              ---------------
+PID                                                                     Yes
+year                                                                    Yes
+________________________________________                    _______________
+S.E.: Clustered                                                     by: PID
+Observations                                                        112,729
+R2                                                                  0.49715
+Within R2                                                           0.04103
+
+                                                            log(Total Ren...1
+Dependent Var.:                                               log(total_rent)
+                                                                             
+Same-period severe                                                   0.018   
+                                                                    (0.024)  
+One-quarter pre/post severe                                          0.029   
+                                                                    (0.015)  
+log(ongoing_rent)                                                    0.695***
+                                                                    (0.021)  
+Above-mean building pct black                                       -0.001   
+                                                                    (0.017)  
+Same-period severe x above-mean building pct black                  -0.068*  
+                                                                    (0.028)  
+One-quarter pre/post severe x above-mean building pct black         -0.051** 
+                                                                    (0.019)  
+% cases filed in quarter of complaint                                    18.4
+% cases in one-quarter pre/post window                                   21.3
+Fixed-Effects:                                                ---------------
+PID                                                                       Yes
+year                                                                      Yes
+________________________________________                      _______________
+S.E.: Clustered                                                       by: PID
+Observations                                                           88,859
+R2                                                                    0.50065
+Within R2                                                             0.04208
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

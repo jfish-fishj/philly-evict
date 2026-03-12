@@ -1,0 +1,100 @@
+                             m_tract             m_bg
+                            Tract FE            BG FE
+Dependent Var.:     retaliatory_same retaliatory_same
+                                                     
+tc_black_c                -0.0134           -0.0146* 
+                          (0.0072)          (0.0071) 
+tc_female_c               -0.0058           -0.0059  
+                          (0.0058)          (0.0058) 
+tc_black_female_c         -0.0075           -0.0063  
+                          (0.0077)          (0.0079) 
+tc_cov_c                  -0.0211***        -0.0190**
+                          (0.0055)          (0.0058) 
+tenant_comp_missing       -0.0088*          -0.0057  
+                          (0.0038)          (0.0034) 
+Fixed-Effects:      ---------------- ----------------
+period_fe                        Yes              Yes
+census_tract                     Yes               No
+GEOID                             No              Yes
+___________________ ________________ ________________
+S.E.: Clustered     by: census_tract        by: GEOID
+Observations                 118,706          118,696
+R2                           0.01962          0.03695
+Within R2                    0.00036          0.00030
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                             m_tract             m_bg
+                            Tract FE            BG FE
+Dependent Var.:     retaliatory_same retaliatory_same
+                                                     
+tc_black_c                -0.0134           -0.0146* 
+                          (0.0072)          (0.0071) 
+tc_female_c               -0.0058           -0.0059  
+                          (0.0058)          (0.0058) 
+tc_black_female_c         -0.0075           -0.0063  
+                          (0.0077)          (0.0079) 
+tc_cov_c                  -0.0211***        -0.0190**
+                          (0.0055)          (0.0058) 
+tenant_comp_missing       -0.0088*          -0.0057  
+                          (0.0038)          (0.0034) 
+Fixed-Effects:      ---------------- ----------------
+period_fe                        Yes              Yes
+census_tract                     Yes               No
+GEOID                             No              Yes
+___________________ ________________ ________________
+S.E.: Clustered     by: census_tract        by: GEOID
+Observations                 118,706          118,696
+R2                           0.01962          0.03695
+Within R2                    0.00036          0.00030
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                           m_tract           m_bg
+                          Tract FE          BG FE
+Dependent Var.:     retaliatory_bw retaliatory_bw
+                                                 
+tc_black_c              -0.0180        -0.0244*  
+                        (0.0111)       (0.0108)  
+tc_female_c              0.0039         0.0027   
+                        (0.0087)       (0.0087)  
+tc_black_female_c       -0.0167        -0.0120   
+                        (0.0115)       (0.0120)  
+tc_cov_c                -0.0372***     -0.0355***
+                        (0.0093)       (0.0094)  
+tenant_comp_missing     -0.0216**      -0.0150** 
+                        (0.0066)       (0.0056)  
+Fixed-Effects:      -------------- --------------
+period_fe                      Yes            Yes
+census_tract                   Yes             No
+GEOID                           No            Yes
+___________________ ______________ ______________
+S.E.: Clustered     by: census_t..      by: GEOID
+Observations               118,706        118,696
+R2                         0.04843        0.07906
+Within R2                  0.00054        0.00043
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                           m_tract           m_bg
+                          Tract FE          BG FE
+Dependent Var.:     retaliatory_bw retaliatory_bw
+                                                 
+tc_black_c              -0.0180        -0.0244*  
+                        (0.0111)       (0.0108)  
+tc_female_c              0.0039         0.0027   
+                        (0.0087)       (0.0087)  
+tc_black_female_c       -0.0167        -0.0120   
+                        (0.0115)       (0.0120)  
+tc_cov_c                -0.0372***     -0.0355***
+                        (0.0093)       (0.0094)  
+tenant_comp_missing     -0.0216**      -0.0150** 
+                        (0.0066)       (0.0056)  
+Fixed-Effects:      -------------- --------------
+period_fe                      Yes            Yes
+census_tract                   Yes             No
+GEOID                           No            Yes
+___________________ ______________ ______________
+S.E.: Clustered     by: census_t..      by: GEOID
+Observations               118,706        118,696
+R2                         0.04843        0.07906
+Within R2                  0.00054        0.00043
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

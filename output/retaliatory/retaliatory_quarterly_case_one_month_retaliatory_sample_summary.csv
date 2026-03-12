@@ -1,0 +1,4 @@
+spec,n_obs,mean_outcome,same_period_share,bw_not_same_period_share,high_black_share,defendant_race_black_share,defendant_race_white_share,defendant_race_unknown_share,defendant_race_ok_share
+one_month_on_retaliatory_severe,115107,0.189848220950485,0.181665659545729,0.201478690505812,0.556260963252513,,,,0.995168463372114
+one_month_on_retaliatory_severe_x_high_black,90737,0.188474449500031,0.184378533840277,0.21291638099139,0.556260963252513,,,,0.995480920929486
+one_month_on_retaliatory_severe_x_defendant_race_grp,114314,0.189866720054914,0.181558174121954,0.201600217366434,0.556328569893628,0.453781031918545,0.243271650840865,0.30294731724059,1

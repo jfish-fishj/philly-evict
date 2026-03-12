@@ -1,0 +1,46 @@
+\begingroup
+\centering
+\begin{tabular}{lccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{3}{c}{one\_month\_back\_rent}\\
+   Model:                                             & (1)                    & (2)           & (3)\\  
+   \midrule
+   \emph{Variables}\\
+   Same-period severe                                 & 0.017$^{***}$          & -0.011        & 0.010\\   
+                                                      & (0.006)                & (0.012)       & (0.010)\\   
+   Within-band severe (not same period)               & $-5.95\times 10^{-5}$  & -0.019$^{*}$  & 0.001\\   
+                                                      & (0.006)                & (0.010)       & (0.010)\\   
+   Above-mean building pct black                      &                        & -0.0003       &   \\   
+                                                      &                        & (0.010)       &   \\   
+   Same-period severe x above-mean building pct black &                        & 0.046$^{***}$ &   \\   
+                                                      &                        & (0.016)       &   \\   
+   Within-band severe x above-mean building pct black &                        & 0.032$^{**}$  &   \\   
+                                                      &                        & (0.013)       &   \\   
+   Defendant race: Black                              &                        &               & -0.013$^{*}$\\   
+                                                      &                        &               & (0.007)\\   
+   Defendant race: Unknown                            &                        &               & 0.007\\   
+                                                      &                        &               & (0.006)\\   
+   Same-period severe x defendant Black               &                        &               & 0.017$^{*}$\\   
+                                                      &                        &               & (0.010)\\   
+   Within-band severe x defendant Black               &                        &               & $-4.89\times 10^{-5}$\\    
+                                                      &                        &               & (0.011)\\   
+   Same-period severe x defendant Unknown             &                        &               & 0.0007\\   
+                                                      &                        &               & (0.009)\\   
+   Within-band severe x defendant Unknown             &                        &               & -0.001\\   
+                                                      &                        &               & (0.009)\\   
+   \% cases filed in quarter of complaint             & 18.2                   & 18.4          & 18.2\\  
+   \% cases filed in bandwidth of complaint           & 20.1                   & 21.3          & 20.2\\  
+   \midrule
+   \emph{Fixed-effects}\\
+   PID                                                & Yes                    & Yes           & Yes\\  
+   year                                               & Yes                    & Yes           & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                       & 115,107                & 90,737        & 114,314\\  
+   R$^2$                                              & 0.29134                & 0.29007       & 0.29201\\  
+   Within R$^2$                                       & 0.00025                & 0.00063       & 0.00049\\  
+   \midrule \midrule
+   \multicolumn{4}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+   \multicolumn{4}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

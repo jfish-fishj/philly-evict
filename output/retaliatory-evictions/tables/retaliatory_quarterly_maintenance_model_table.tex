@@ -1,0 +1,42 @@
+\begingroup
+\centering
+\begin{tabular}{lcccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{4}{c}{total\_permits}\\
+   Model:                                    & (1)            & (2)            & (3)            & (4)\\  
+   \midrule
+   \emph{Variables}\\
+   above\_mean\_pct\_black\_btTRUE           & -0.375$^{***}$ & -0.327$^{***}$ & -0.379$^{***}$ & -0.335$^{***}$\\   
+                                             & (0.007)        & (0.009)        & (0.007)        & (0.009)\\   
+   high\_filing\_eb                          & -0.153$^{***}$ & -0.101$^{***}$ &                &   \\   
+                                             & (0.012)        & (0.012)        &                &   \\   
+   mean\_log\_med\_rent\_inf\_adj\_PID       &                & 0.376$^{***}$  &                & 0.383$^{***}$\\   
+                                             &                & (0.010)        &                & (0.010)\\   
+   filing\_bin\_eb $=$ [1,5)")               &                &                & 0.093$^{***}$  & -0.003\\   
+                                             &                &                & (0.008)        & (0.010)\\   
+   filing\_bin\_eb $=$ [5,10)")              &                &                & -0.154$^{***}$ & -0.130$^{***}$\\   
+                                             &                &                & (0.009)        & (0.011)\\   
+   filing\_bin\_eb $=$ [10,20)")             &                &                & -0.130$^{***}$ & -0.090$^{***}$\\   
+                                             &                &                & (0.011)        & (0.012)\\   
+   filing\_bin\_eb $=$ [20,inf)")            &                &                & -0.219$^{***}$ & -0.179$^{***}$\\   
+                                             &                &                & (0.015)        & (0.016)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   building\_type                            & Yes            & Yes            & Yes            & Yes\\  
+   year                                      & Yes            & Yes            & Yes            & Yes\\  
+   quality\_grade                            & Yes            & Yes            & Yes            & Yes\\  
+   year\_blt\_decade                         & Yes            & Yes            & Yes            & Yes\\  
+   num\_units\_bin                           & Yes            & Yes            & Yes            & Yes\\  
+   GEOID                                     & Yes            & Yes            & Yes            & Yes\\  
+   has\_rent\_data                           & Yes            &                & Yes            & \\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                              & 1,703,026      & 750,270        & 1,683,789      & 743,824\\  
+   Squared Correlation                       & 0.31379        & 0.25057        & 0.32030        & 0.25933\\  
+   Pseudo R$^2$                              & 0.20782        & 0.26005        & 0.20954        & 0.26192\\  
+   BIC                                       & 1,144,296.2    & 615,091.5      & 1,121,025.3    & 602,300.0\\  
+   \midrule \midrule
+   \multicolumn{5}{l}{\emph{IID standard-errors in parentheses}}\\
+   \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+\par\endgroup

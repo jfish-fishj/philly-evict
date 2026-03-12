@@ -1,0 +1,26 @@
+     sample   outcome     fe     group_var slope_label group_level
+     <char>    <char> <char>        <char>      <char>      <char>
+  1:   full complaint     bg num_units_bin   pct_black           1
+  2:   full complaint     bg num_units_bin   pct_black         2-5
+  3:   full complaint     bg num_units_bin   pct_black       21-50
+  4:   full complaint     bg num_units_bin   pct_black         51+
+  5:   full complaint     bg num_units_bin   pct_black        6-20
+ ---                                                              
+116:    pre    severe  tract num_units_bin   pct_women           1
+117:    pre    severe  tract num_units_bin   pct_women         2-5
+118:    pre    severe  tract num_units_bin   pct_women       21-50
+119:    pre    severe  tract num_units_bin   pct_women         51+
+120:    pre    severe  tract num_units_bin   pct_women        6-20
+     ref_group_level      estimate    std_error      p_value estimable
+              <char>         <num>        <num>        <num>    <lgcl>
+  1:               1  0.0001120203 0.0006944561 0.8718520168      TRUE
+  2:               1  0.0012900436 0.0010352710 0.2127303824      TRUE
+  3:               1  0.0592529790 0.0152733190 0.0001046675      TRUE
+  4:               1  0.0812694121 0.0242803700 0.0008165464      TRUE
+  5:               1  0.0237140004 0.0066618125 0.0003712900      TRUE
+ ---                                                                  
+116:               1  0.0007962018 0.0003238219 0.0139416105      TRUE
+117:               1 -0.0001013038 0.0005922587 0.8641872140      TRUE
+118:               1  0.0244306455 0.0185759975 0.1884518540      TRUE
+119:               1 -0.0041502799 0.0345604864 0.9044138921      TRUE
+120:               1  0.0054179953 0.0049862410 0.2772184287      TRUE

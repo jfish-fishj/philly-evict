@@ -1,0 +1,279 @@
+                              m
+Dependent Var.:  filed_eviction
+                               
+lag_complaint_4        0.0006  
+                      (0.0004) 
+lag_complaint_3        0.001** 
+                      (0.0004) 
+lag_complaint_2        0.003***
+                      (0.0004) 
+lag_complaint_1        0.014***
+                      (0.0005) 
+filed_complaint        0.040***
+                      (0.0006) 
+lead_complaint_1       0.010***
+                      (0.0004) 
+lead_complaint_2       0.002***
+                      (0.0004) 
+lead_complaint_3       0.001***
+                      (0.0004) 
+lead_complaint_4       0.001** 
+                      (0.0004) 
+Fixed-Effects:   --------------
+period_fe                   Yes
+PID                         Yes
+________________ ______________
+S.E.: Clustered         by: PID
+Observations          6,981,480
+R2                      0.16780
+Within R2               0.00380
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                               m
+Dependent Var.:   filed_eviction
+                                
+lag_non_severe_4       -0.0004  
+                       (0.0004) 
+lag_non_severe_3       -0.0006  
+                       (0.0004) 
+lag_non_severe_2       -0.0005  
+                       (0.0004) 
+lag_non_severe_1        0.002***
+                       (0.0004) 
+filed_non_severe        0.006***
+                       (0.0005) 
+lead_non_severe_1       0.004***
+                       (0.0005) 
+lead_non_severe_2       0.002***
+                       (0.0004) 
+lead_non_severe_3       0.0004  
+                       (0.0004) 
+lead_non_severe_4      -0.0002  
+                       (0.0004) 
+Fixed-Effects:    --------------
+period_fe                    Yes
+PID                          Yes
+_________________ ______________
+S.E.: Clustered          by: PID
+Observations           6,981,480
+R2                       0.16468
+Within R2                6.88e-5
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                             m
+Dependent Var.: filed_eviction
+                              
+lag_severe_4          0.003***
+                     (0.0007) 
+lag_severe_3          0.004***
+                     (0.0007) 
+lag_severe_2          0.009***
+                     (0.0007) 
+lag_severe_1          0.029***
+                     (0.0008) 
+filed_severe          0.076***
+                     (0.001)  
+lead_severe_1         0.018***
+                     (0.0007) 
+lead_severe_2         0.003***
+                     (0.0006) 
+lead_severe_3         0.003***
+                     (0.0007) 
+lead_severe_4         0.004***
+                     (0.0007) 
+Fixed-Effects:  --------------
+period_fe                  Yes
+PID                        Yes
+_______________ ______________
+S.E.: Clustered        by: PID
+Observations         6,981,480
+R2                     0.17059
+Within R2              0.00715
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                              m
+Dependent Var.:  filed_eviction
+                               
+lag_complaint_4        0.0004  
+                      (0.0009) 
+lag_complaint_3        0.002*  
+                      (0.0009) 
+lag_complaint_2        0.005***
+                      (0.0009) 
+lag_complaint_1        0.022***
+                      (0.001)  
+filed_complaint        0.058***
+                      (0.001)  
+lead_complaint_1       0.013***
+                      (0.0009) 
+lead_complaint_2       0.003** 
+                      (0.0009) 
+lead_complaint_3       0.002*  
+                      (0.0009) 
+lead_complaint_4       0.002   
+                      (0.0009) 
+Fixed-Effects:   --------------
+period_fe                   Yes
+PID                         Yes
+________________ ______________
+S.E.: Clustered         by: PID
+Observations          2,087,872
+R2                      0.17880
+Within R2               0.00515
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                               m
+Dependent Var.:   filed_eviction
+                                
+lag_non_severe_4        0.0001  
+                       (0.001)  
+lag_non_severe_3       -0.0003  
+                       (0.001)  
+lag_non_severe_2        0.0005  
+                       (0.001)  
+lag_non_severe_1        0.004** 
+                       (0.001)  
+filed_non_severe        0.006***
+                       (0.001)  
+lead_non_severe_1       0.004***
+                       (0.001)  
+lead_non_severe_2       0.003** 
+                       (0.001)  
+lead_non_severe_3       0.0003  
+                       (0.001)  
+lead_non_severe_4       0.0001  
+                       (0.001)  
+Fixed-Effects:    --------------
+period_fe                    Yes
+PID                          Yes
+_________________ ______________
+S.E.: Clustered          by: PID
+Observations           2,087,872
+R2                       0.17458
+Within R2                4.14e-5
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                             m
+Dependent Var.: filed_eviction
+                              
+lag_severe_4          0.0010  
+                     (0.001)  
+lag_severe_3          0.004***
+                     (0.001)  
+lag_severe_2          0.009***
+                     (0.001)  
+lag_severe_1          0.035***
+                     (0.001)  
+filed_severe          0.087***
+                     (0.002)  
+lead_severe_1         0.019***
+                     (0.001)  
+lead_severe_2         0.002   
+                     (0.001)  
+lead_severe_3         0.003** 
+                     (0.001)  
+lead_severe_4         0.003*  
+                     (0.001)  
+Fixed-Effects:  --------------
+period_fe                  Yes
+PID                        Yes
+_______________ ______________
+S.E.: Clustered        by: PID
+Observations         2,087,872
+R2                     0.18102
+Within R2              0.00784
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                              m
+Dependent Var.:  filed_eviction
+                               
+lag_complaint_4        0.001   
+                      (0.0007) 
+lag_complaint_3        0.001   
+                      (0.0006) 
+lag_complaint_2        0.004***
+                      (0.0007) 
+lag_complaint_1        0.012***
+                      (0.0007) 
+filed_complaint        0.034***
+                      (0.0009) 
+lead_complaint_1       0.011***
+                      (0.0007) 
+lead_complaint_2       0.002***
+                      (0.0006) 
+lead_complaint_3       0.001   
+                      (0.0006) 
+lead_complaint_4       0.0010  
+                      (0.0006) 
+Fixed-Effects:   --------------
+period_fe                   Yes
+PID                         Yes
+________________ ______________
+S.E.: Clustered         by: PID
+Observations          3,052,808
+R2                      0.21370
+Within R2               0.00332
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                               m
+Dependent Var.:   filed_eviction
+                                
+lag_non_severe_4        0.0003  
+                       (0.0007) 
+lag_non_severe_3       -1.48e-5 
+                       (0.0007) 
+lag_non_severe_2        0.0007  
+                       (0.0007) 
+lag_non_severe_1        0.004***
+                       (0.0008) 
+filed_non_severe        0.010***
+                       (0.0008) 
+lead_non_severe_1       0.008***
+                       (0.0008) 
+lead_non_severe_2       0.004***
+                       (0.0007) 
+lead_non_severe_3       0.002*  
+                       (0.0007) 
+lead_non_severe_4       0.0009  
+                       (0.0007) 
+Fixed-Effects:    --------------
+period_fe                    Yes
+PID                          Yes
+_________________ ______________
+S.E.: Clustered          by: PID
+Observations           3,052,808
+R2                       0.21129
+Within R2                0.00026
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+                             m
+Dependent Var.: filed_eviction
+                              
+lag_severe_4          0.004***
+                     (0.001)  
+lag_severe_3          0.004** 
+                     (0.001)  
+lag_severe_2          0.009***
+                     (0.001)  
+lag_severe_1          0.024***
+                     (0.001)  
+filed_severe          0.067***
+                     (0.002)  
+lead_severe_1         0.017***
+                     (0.001)  
+lead_severe_2         0.002*  
+                     (0.001)  
+lead_severe_3         0.002   
+                     (0.001)  
+lead_severe_4         0.003*  
+                     (0.001)  
+Fixed-Effects:  --------------
+period_fe                  Yes
+PID                        Yes
+_______________ ______________
+S.E.: Clustered        by: PID
+Observations         3,052,808
+R2                     0.21555
+Within R2              0.00566
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

@@ -1,0 +1,55 @@
+                                              m_sev3_r1               m_sev3_r2
+                                                  Reg 1                   Reg 2
+Dependent Var.:                 total_severe_complaints total_severe_complaints
+                                                                               
+infousa_pct_black                              1.522***               0.5197***
+                                              (0.1242)               (0.1149)  
+log_total_area                                                        0.2001***
+                                                                     (0.0351)  
+maint_stock_lag_rate_sev3                                                      
+                                                                               
+severe_viol_stock_lag_rate_sev3                                                
+                                                                               
+Fixed-Effects:                  ----------------------- -----------------------
+year                                                Yes                     Yes
+unit_bin_fine                                       Yes                     Yes
+census_tract                                         No                     Yes
+building_type                                        No                     Yes
+year_blt_decade                                      No                     Yes
+quality_grade_abcde                                  No                     Yes
+num_stories_bin                                      No                      No
+_______________________________ _______________________ _______________________
+S.E.: Clustered                                 by: PID                 by: PID
+Observations                                  4,976,196               4,754,796
+Squared Cor.                                    0.01378                 0.02837
+Pseudo R2                                       0.14411                 0.24452
+BIC                                         4,276,493.2             3,606,318.5
+
+                                              m_sev3_r3               m_sev3_r4
+                                                  Reg 3                   Reg 4
+Dependent Var.:                 total_severe_complaints total_severe_complaints
+                                                                               
+infousa_pct_black                             0.5400***               0.5146***
+                                             (0.1113)                (0.1143)  
+log_total_area                                0.1836***               0.1989***
+                                             (0.0333)                (0.0350)  
+maint_stock_lag_rate_sev3                     0.1071***               0.1080***
+                                             (0.0205)                (0.0202)  
+severe_viol_stock_lag_rate_sev3                                       0.2710***
+                                                                     (0.0085)  
+Fixed-Effects:                  ----------------------- -----------------------
+year                                                Yes                     Yes
+unit_bin_fine                                       Yes                     Yes
+census_tract                                        Yes                     Yes
+building_type                                       Yes                     Yes
+year_blt_decade                                     Yes                     Yes
+quality_grade_abcde                                 Yes                     Yes
+num_stories_bin                                     Yes                      No
+_______________________________ _______________________ _______________________
+S.E.: Clustered                                 by: PID                 by: PID
+Observations                                  4,754,796               4,754,796
+Squared Cor.                                    0.02858                 0.02210
+Pseudo R2                                       0.24558                 0.24550
+BIC                                         3,601,361.2             3,601,678.0
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
