@@ -4,6 +4,8 @@
 
 This document describes how rental occupancy and BLP market shares are constructed, from raw InfoUSA/Census data through to the estimation-ready `bldg_panel_blp`.
 
+As of 2026-03-11, the rental universe is no longer defined only by rental licenses/listings/filings. PHA-owned parcels are included via deterministic owner-name matching, while university-owned housing is explicitly excluded from the effective rental universe because it behaves more like group quarters than market rental stock.
+
 ## 1. `make-occupancy-vars.r` — Occupancy Panel
 
 ### Inputs
@@ -24,12 +26,13 @@ Safeguards to control unit counts:
 - **Selective raking** (added 2026-02-17): Small-building bins (`u_1_detached`, `u_1_attached`, `u_2_units`) are NOT raked to Census BG targets — they keep their imputed seed units. These are individual structures; raking gave them fractional units (e.g., 112 ROW homes sharing 329 Census slots → 0.9 units each). For larger bins (`u_3_4_units` through `u_50plus_units`), raking only occurs when the pipeline's imputed units cover ≥70% of the Census bin target, preventing extreme up-scaling from poor coverage. BG-level total HU raking (former step 6b) is removed entirely.
 - **Soft ceiling** (added 2026-02-16): If InfoUSA ever observed `max_households >= 5` at a PID, `total_units` is capped at `1.5 × max_households`. Applied in both the 2010 snapshot and the final panel. The 1.5× slack accounts for InfoUSA undercoverage. This prevents extreme over-imputation (e.g., raking assigning 300 units to a building where InfoUSA has only ever seen 2 households).
 - **Suspect commercial filter** (added 2026-02-17): Parcels with `num_units_base >= 20`, `max_households <= 2` or NA, ambiguous building type (COMMERCIAL/OTHER/GROUP_QUARTERS/MULTI), and NO rental evidence are removed before unit raking. These are likely hotels, institutional buildings, or commercial properties with residential building codes. 734 parcels removed.
+- **Guarded label-1 override** (added 2026-03-11): The old rule that replaced `num_units_label == 1` with large seed counts now only fires when there is corroborating multifamily evidence (large shared address clusters, clear multifamily type, or strong household counts). In the current rebuild, 571 parcels were candidates, 526 were allowed, and 45 were blocked as likely bad single-unit overrides.
 
 ### `renters_2010` — Census BG-raked renter allocation (Section 7 of `make-occupancy-vars.r`)
 
 For years <= 2010, renter counts are derived from Census block group totals, not InfoUSA. The allocation works as follows:
 
-1. **Propensity scoring**: A logistic model estimates each building's probability of being rental (`p_rent`) using building_type, size, and rental evidence signals. Buildings with a license get `p_rent = 1`; buildings with `p_rent < 0.25` get zeroed out.
+1. **Propensity scoring**: A logistic model estimates each building's probability of being rental (`p_rent`) using building_type, size, and rental evidence signals. Buildings with effective rental evidence (`license`, `Altos`, `eviction`, or `PHA owner`) get `p_rent = 1`; university-owned housing is excluded from this rental universe. Buildings with `p_rent < 0.25` get zeroed out.
 
 2. **Raw allocation**: `renters_raw = units_raked × 0.91 × p_rent` (where 0.91 is the 2010 Philadelphia renter occupancy prior).
 
@@ -41,7 +44,7 @@ For years <= 2010, renter counts are derived from Census block group totals, not
 
 ### `renter_occ` (renter-occupied units)
 
-**Key assumption**: For rental properties, all InfoUSA households are renters. We do NOT subtract `num_homeowners` because the InfoUSA owner/renter status field is unreliable. Properties are already identified as rentals via licenses, Apartments.com, or eviction filings, so this assumption is reasonable.
+**Key assumption**: For rental properties, all InfoUSA households are renters. We do NOT subtract `num_homeowners` because the InfoUSA owner/renter status field is unreliable. Properties are identified as rentals using effective rental evidence (`license`, `Altos`, `eviction`, or `PHA owner`), with university-owned housing excluded, so this assumption is targeted at the market-rental stock rather than all institutionally owned housing.
 
 Assignment logic:
 - **year <= 2010 AND year_built <= 2010**: `renters_2010` (Census BG-raked)
@@ -72,7 +75,7 @@ When `renter_occ` is NA after the initial assignment, three mechanisms are appli
 
 2. **Within-PID LOCF/NOCB** (Step A): If the PID has InfoUSA data in *any* year, the observed occupancy rate is carried forward/backward to fill gaps. The interpolation works on occupancy rate (renter_occ/total_units), not raw counts, to handle unit changes correctly.
 
-3. **BG-level fallback** (Step B): If the PID has *never* appeared in InfoUSA AND has rental evidence (license, Altos listing, or eviction filing), it receives the BG × structure_bin × year weighted-average occupancy rate from PIDs that do have data. PIDs with no InfoUSA data AND no rental evidence are left as NA (treated as 0) — these are likely not actually rentals.
+3. **BG-level fallback** (Step B): If the PID has *never* appeared in InfoUSA AND has effective rental evidence (`license`, `Altos`, `eviction`, or `PHA owner`), it receives the BG × structure_bin × year weighted-average occupancy rate from PIDs that do have data. PIDs with no InfoUSA data AND no rental evidence are left as NA (treated as 0) — these are likely not actually rentals.
 
 This reduced missing `renter_occ` from ~2M rows to ~11K (99.5% filled).
 
@@ -90,7 +93,7 @@ Rescaled so the unit-weighted mean in 2010 equals 0.9 per `num_units_bin`, among
 scale_factor = 0.9 / weighted_mean_occ_2010[bin]
 rental_occupancy_rate_scaled = occupancy_rate * scale_factor
 ```
-Clamped to [0, 1]. Each bin gets its own factor. After the 2026-02-16 fixes, scale factors are ~1.1 for bins 1/2-5/6-20 (healthy), and ~1.6-1.7 for bins 21-50/51+ (elevated due to structural InfoUSA undercoverage in large buildings). A log warning fires if any factor exceeds 1.5.
+Clamped to [0, 1]. Each bin gets its own factor. In the 2026-03-11 rebuild, scale factors are ~1.1 for bins 1/2-5/6-20 (healthy), but remain high for large bins (`21-50`: 2.09, `51+`: 2.35), which points to residual InfoUSA undercoverage or remaining unit overstatement in large buildings. A log warning fires if any factor exceeds 1.5.
 
 ### Output
 - `parcel_occupancy_panel` (key: PID × year)
@@ -161,7 +164,7 @@ This is a conceptual shift from Census-matched totals: `sum(total_units)` is the
 
 Expected inside share sums per market: 0.5–0.8 (healthy)
 
-## 4. QA and Remaining Limitations (as of 2026-03-01)
+## 4. QA and Remaining Limitations (as of 2026-03-11)
 
 ### QA outputs from `make-occupancy-vars.r`
 - `output/qa/units_vs_max_households_worst_offenders.csv`
@@ -169,7 +172,7 @@ Expected inside share sums per market: 0.5–0.8 (healthy)
 - `output/qa/infousa_unmatched_high_hh_addresses.csv` — InfoUSA addresses with >=5 households but no parcel match (1,635 addresses, 37K unmatched households)
 - `output/qa/infousa_oversubscribed_addresses.csv` — PIDs where max_hh >= 10 and ratio > 2× vs total_units (1,336 PIDs, median ratio 10:1)
 - `output/qa/occupancy_by_building_type_year.csv` — weighted mean occupancy by building_type × year
-- `output/qa/suspect_commercial_parcels.csv` — 734 parcels flagged as suspect commercial (large buildings, no InfoUSA, no rental evidence) (added 2026-02-17)
+- `output/qa/suspect_commercial_parcels.csv` — 719 parcels flagged as suspect commercial (large buildings, no InfoUSA, no rental evidence) in the 2026-03-11 rebuild
 - `output/qa/renter_overalloc_bg_diagnostic.csv` — BG-level summary of 686 BGs with renter overallocation (added 2026-02-17)
 - `output/qa/renter_overalloc_bldg_diagnostic.csv` — building-level detail for overallocated buildings (added 2026-02-17)
 - `output/qa/step5_clamped_rows_diagnostic.csv` — top 5,000 clamped panel rows by excess (added 2026-02-17)
@@ -186,13 +189,13 @@ Expected inside share sums per market: 0.5–0.8 (healthy)
   - Fix 2 diagnostic: PIDs with no InfoUSA ever, by size and rental evidence
   - Scale factor guard: warns if any bin's factor > 1.5
 
-### What improved (2026-02-16, 2026-02-17, 2026-03-01)
+### What improved (2026-02-16, 2026-02-17, 2026-03-01, 2026-03-11)
 - Occupancy rates now 0.88-0.91 (scaled) across all bins for 2015-2019, vs 0.55-0.70 before.
 - ~2M missing renter_occ rows filled via LOCF/NOCB interpolation + BG fallback (99.5%).
 - Unit over-imputation constrained via 1.5× max_households ceiling.
-- Step B (BG fallback) restricted to PIDs with rental evidence — no longer creates phantom occupancy for non-rentals.
+- Step B (BG fallback) restricted to PIDs with effective rental evidence — no longer creates phantom occupancy for non-rentals.
 - Large condo undercount cases resolved.
-- 734 suspect commercial parcels removed (large buildings with no InfoUSA + no rental evidence).
+- 719 suspect commercial parcels removed in the current rebuild (large buildings with no InfoUSA + no rental evidence).
 - Hotel detection improved (single-column match), GROUP_QUARTERS type added for boarding/dormitory.
 - 86 new InfoUSA fuzzy house-number matches via Tier 5 crosswalk.
 - Hard clamp: renter_occ <= total_units enforced after all imputation (75K rows affected, now near-zero after fixes below).
@@ -202,6 +205,9 @@ Expected inside share sums per market: 0.5–0.8 (healthy)
 - "Present in InfoUSA but unlinked" recovery (2026-03-01): link-group redistribution filled **22,633** rental PID-years that were previously missing household counts.
 - Missing rental share dropped from **32.85% to 31.41%** overall (and from **24.32% to 22.70%** for years `<= 2022`).
 - `present_in_infousa_but_unlinked` bucket dropped from **30,601 to 2,526** rows overall (for `<=2022`: **23,272 to 588**).
+- Owner-based rental-universe adjustment (2026-03-11): PHA-owned parcels are now treated as rentals even when absent from license data; the current rebuild adds 4,262 PHA owner-only rental parcels and includes 5,626 PHA parcels total in the rental universe.
+- University-owned exclusion (2026-03-11): 379 university-owned parcels are kept for audit but excluded from the effective rental universe so dormitory-like stock does not inflate rental-property or rental-unit counts.
+- Guarded single-unit override (2026-03-11): 45 candidate `num_units_label == 1` parcels with very large seed counts are now blocked from inheriting those large seeds without corroborating multifamily evidence.
 
 ### Known remaining issues
 
@@ -209,7 +215,7 @@ Expected inside share sums per market: 0.5–0.8 (healthy)
 
 **~~Small buildings get fractional units from raking~~** (RESOLVED 2026-02-17): Small-building bins (`u_1_detached`, `u_1_attached`, `u_2_units`) are no longer raked. ROW homes now keep their imputed 1 unit instead of being assigned ~0.9 units from Census bin sharing. Larger bins are only raked when pipeline coverage ≥70% of Census target.
 
-**Large-building admin parcels with tiny max_hh**: Some parcels classified as HIGHRISE/MIDRISE have 100-300 imputed units but only 2-4 max_households. These are likely admin parcels, condo master records, or commercial buildings with residential codes. LOCF carries their near-zero occupancy forward, dragging down the 21-50 and 51+ bin raw rates. Scale factors for these bins remain ~1.6-1.7 to compensate. The new suspect_commercial filter (2026-02-17) removes 734 of the worst offenders (num_units >= 20, max_hh <= 2, no rental evidence).
+**Large-building admin parcels with tiny max_hh**: Some parcels classified as HIGHRISE/MIDRISE have 100-300 imputed units but only 2-4 max_households. These are likely admin parcels, condo master records, or commercial buildings with residential codes. LOCF carries their near-zero occupancy forward, dragging down the 21-50 and 51+ bin raw rates. Scale factors for these bins remain very high (`21-50`: 2.09, `51+`: 2.35 in the 2026-03-11 rebuild), so the unit/coverage problem is only partially solved. The suspect_commercial filter now removes 719 of the worst offenders, but more work is still needed on large-building coverage and unit calibration.
 
 **OTHER/COMMERCIAL type dead weight**: 15K OTHER and 5K COMMERCIAL PIDs in the panel. 95% are u_1_attached (row homes with non-standard building codes). ~10K have neither rental evidence nor InfoUSA households in a given year — they entered the panel from signals in other years but contribute little.
 

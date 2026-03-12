@@ -17,14 +17,17 @@ Reference for all major data products in the pipeline. Each entry documents the 
 7. [gender_imputed_case_sample](#gender_imputed_case_sample) — Eviction defendant gender (case-level)
 8. [parcel_occupancy_panel](#parcel_occupancy_panel) — Parcel occupancy panel
 9. [ever_rentals_panel](#ever_rentals_panel) — Rental activity panel
-10. [altos_pid_year_bedbin](#altos_pid_year_bedbin) — Altos PID-year-bedroom-bin cell panel
-11. [building_data](#building_data) — Building permits, violations, complaints
-12. [evictions_clean](#evictions_clean) — Cleaned eviction case data
-13. [evict_address_xwalk / evict_address_xwalk_case](#evict_address_xwalk) — Eviction-to-parcel crosswalks
-14. [evict_infousa_hh_matches / evict_infousa_hh_unmatched / evict_infousa_candidate_stats](#evict_infousa_household_linkage) — Eviction case-to-InfoUSA household linkage products
-15. [bg_renter_poverty_share / tract_renter_poverty_share](#renter_poverty_geography_products) — Geography-level renter poverty products
-16. [outer_sorting_empirical_moments](#outer_sorting_empirical_moments) — Empirical outer-sorting calibration target moments
-17. [outer_sorting_sim_panel / outer_sorting_sim_moments / outer_sorting_sim_diagnostics](#outer_sorting_simulation_products) — Simulated outer-sorting baseline products
+10. [nhpd_clean](#nhpd_clean) — Cleaned National Housing Preservation Database properties
+11. [nhpd_address_agg / nhpd_parcel_xwalk / nhpd_parcel_xwalk_property](#nhpd_xwalk_products) — NHPD-to-parcel crosswalk products
+12. [altos_pid_year_bedbin](#altos_pid_year_bedbin) — Altos PID-year-bedroom-bin cell panel
+13. [building_data](#building_data) — Building permits, violations, complaints
+14. [evictions_clean](#evictions_clean) — Cleaned eviction case data
+15. [evict_address_xwalk / evict_address_xwalk_case](#evict_address_xwalk) — Eviction-to-parcel crosswalks
+16. [evict_infousa_hh_matches / evict_infousa_hh_unmatched / evict_infousa_candidate_stats](#evict_infousa_household_linkage) — Eviction case-to-InfoUSA household linkage products
+17. [bg_renter_poverty_share / tract_renter_poverty_share](#renter_poverty_geography_products) — Geography-level renter poverty products
+18. [infousa_building_income_proxy_panel](#infousa_building_income_proxy_panel) — PID-year InfoUSA low-income proxy
+19. [outer_sorting_empirical_moments](#outer_sorting_empirical_moments) — Empirical outer-sorting calibration target moments
+20. [outer_sorting_sim_panel / outer_sorting_sim_moments / outer_sorting_sim_diagnostics](#outer_sorting_simulation_products) — Simulated outer-sorting baseline products
 
 ---
 
@@ -36,11 +39,11 @@ Reference for all major data products in the pipeline. Each entry documents the 
 | **Path** | `data/processed/analytic/bldg_panel_blp.csv` |
 | **Producing script** | `r/make-analytic-sample.R` |
 | **Primary key** | `PID` x `year` |
-| **Rows** | ~3,585,124 |
-| **Columns** | 208 |
-| **Years** | 2006-2022 |
+| **Rows** | 3,560,446 |
+| **Columns** | 274 |
+| **Years** | 2006-2024 |
 
-The main analysis panel. Merges parcel occupancy, rental activity, eviction filings, building characteristics, assessments, and BLP market share instruments. Every rental parcel-year in the occupancy panel.
+The main analysis panel. Merges parcel occupancy, rental activity, eviction filings, building characteristics, assessments, and BLP market share instruments. Every effective-rental parcel-year in the occupancy panel, including parcels identified through NHPD and owner-based PHA rules and excluding university-owned housing from the effective rental universe.
 
 ### Consumed by
 
@@ -225,7 +228,15 @@ Continuous variables used (`blp_cont_vars` in `make-analytic-sample.R`):
 | `rental_from_altos` | logical | PID appears in Altos listings. |
 | `rental_from_license` | logical | PID has rental license. |
 | `rental_from_evict` | logical | PID has eviction filing. |
-| `ever_rental_any_year` | logical | Any rental evidence in any year. |
+| `rental_from_nhpd` | logical | PID is identified as rental in the current year through a uniquely matched NHPD property. |
+| `rental_from_owner` | logical | PID is pulled into the effective rental universe via owner-name rules (currently PHA owner matching). |
+| `ever_rental_nhpd` | logical | PID has any uniquely matched NHPD rental evidence across years. |
+| `nhpd_property_count` | integer | Number of uniquely matched NHPD properties on the parcel. |
+| `nhpd_total_units` | numeric | Sum of NHPD-reported units across uniquely matched properties on the parcel. |
+| `is_pha_owner` | logical | Parcel owner matches the PHA owner-name regex. |
+| `is_university_owned` | logical | Parcel owner matches the curated university-owner regex. |
+| `include_in_rental_universe` | logical | Final effective-rental-universe flag after adding PHA parcels and excluding university-owned housing. |
+| `ever_rental_any_year` | logical | Any effective rental evidence in any year. |
 | `intensity_*` | numeric | Rental intensity scores by source and period. |
 
 ---
@@ -238,17 +249,17 @@ Continuous variables used (`blp_cont_vars` in `make-analytic-sample.R`):
 | **Path** | `data/processed/analytic/analytic_sample.csv` |
 | **Producing script** | `r/make-analytic-sample.R` |
 | **Primary key** | `PID` x `year` |
-| **Rows** | ~270,345 |
-| **Columns** | 208 (same as bldg_panel_blp) |
+| **Rows** | 303,964 |
+| **Columns** | 274 (same as bldg_panel_blp) |
 
-Subset of `bldg_panel_blp` filtered to rows with non-missing rent, shares, and units, plus market quality filters. This is the estimation sample for BLP and price regulation regressions.
+Subset of `bldg_panel_blp` filtered to rows with non-missing rent and units, plus market quality filters. This is the estimation sample for BLP and price regulation regressions.
 
 ### Filter criteria (from make-analytic-sample.R)
 
-- `!is.na(med_rent_altos)` — must have observed rent
-- `!is.na(share_zip)` and `share_zip > 0` — must have valid market share
-- `total_units >= 1` — must have units
-- Market has >= 5 products (buildings) in the zip-year
+- `!is.na(log_med_rent)` — must have a usable rent measure
+- `!is.na(market_share_units)` — must have a valid within-market occupied-unit share
+- `!is.na(total_units)` — must have units
+- Market has `>= 5` products and `>= 2` distinct owners within `market_id`
 
 ### Consumed by
 
@@ -460,11 +471,11 @@ Case-level gender aggregation from SSA baby name gender imputation.
 | **Path** | `data/processed/panels/parcel_occupancy_panel_with_ever_rentals.csv` |
 | **Producing script** | `r/make-occupancy-vars.r` |
 | **Primary key** | `PID` x `year` |
-| **Rows** | ~9,190,439 |
-| **Columns** | 26 |
-| **Years** | 2006-2022 |
+| **Rows** | 9,241,087 |
+| **Columns** | 36 |
+| **Years** | 2006-2024 |
 
-All parcels (not just rentals) crossed with all years. Contains imputed unit counts and occupancy measures.
+All parcels (not just rentals) crossed with all years. Contains imputed unit counts and occupancy measures, plus current-year rental evidence flags used downstream. The rental-only companion output is `data/processed/panels/parcel_occupancy_panel_rentals_only.csv`.
 
 ### Consumed by
 
@@ -478,7 +489,6 @@ All parcels (not just rentals) crossed with all years. Contains imputed unit cou
 |--------|------|-------------|
 | `PID` | character | Parcel ID. |
 | `year` | integer | Calendar year. |
-| `parcel_number` | character | OPA parcel number (= PID). |
 | `GEOID` | character | Block group GEOID from spatial join. |
 | `total_units` | numeric | Imputed housing units (capped at 1.5x max_households). |
 | `renter_occ` | numeric | Estimated renter-occupied units. |
@@ -487,8 +497,15 @@ All parcels (not just rentals) crossed with all years. Contains imputed unit cou
 | `structure_bin` | character | Structure type bin. |
 | `num_units_base` | numeric | Pre-cap unit count. |
 | `max_households` | numeric | Maximum InfoUSA households ever observed. |
-| `has_hh_data` | logical | Whether PID has any InfoUSA household data. |
-| `ever_rental` | logical | Any rental evidence. |
+| `ever_rental_any_year` | logical | Any effective rental evidence in any year. |
+| `rental_from_altos` | logical | Current-year Altos rental evidence after rental-universe exclusions. |
+| `rental_from_license` | logical | Current-year rental-license evidence after rental-universe exclusions. |
+| `rental_from_evict` | logical | Current-year eviction-based rental evidence after rental-universe exclusions. |
+| `rental_from_nhpd` | logical | Current-year NHPD rental evidence after unique NHPD-to-parcel matching. |
+| `rental_from_owner` | logical | Owner-based rental evidence in the current year. |
+| `num_households_observed_raw` | numeric | Parcel-observed household count before sibling-link redistribution. |
+| `num_households_link_alloc` | numeric | Household count allocated from the shared InfoUSA link group. |
+| `num_households_from_link_alloc` | logical | TRUE when the final household count used link-group redistribution. |
 
 ---
 
@@ -500,10 +517,11 @@ All parcels (not just rentals) crossed with all years. Contains imputed unit cou
 | **Path** | `data/processed/panels/ever_rentals_panel.csv` |
 | **Producing script** | `r/make-rent-panel.R` |
 | **Primary key** | `PID` x `year` |
-| **Rows** | ~3,666,886 |
-| **Columns** | 19 |
+| **Rows** | 3,770,246 |
+| **Columns** | 62 |
+| **Years** | 2006-2024 |
 
-Rental-only panel: PIDs with any rental evidence (license, listing, or eviction) crossed with years. Contains rent levels, filing counts, and rental intensity measures.
+Candidate rental panel: PIDs with any rental evidence or qualifying owner-based rental evidence crossed with years. Rental identification now combines licenses, Altos, evictions, uniquely matched NHPD properties, and PHA owner-name rules, while retaining excluded university-owned parcels for audit via `include_in_rental_universe == FALSE`. Contains rent levels, filing counts, owner flags, NHPD preservation flags, and rental intensity measures.
 
 ### Consumed by
 
@@ -537,16 +555,133 @@ Rental-only panel: PIDs with any rental evidence (license, listing, or eviction)
 | `num_filings_with_ha` | integer | Filings with housing authority. |
 | `med_eviction_rent` | numeric | Median rent claimed in eviction filings. |
 | `pm.zip` | character | Mailing ZIP (underscore-prefixed). |
-| `rental_from_altos` | logical | Has Altos listing evidence. |
-| `rental_from_license` | logical | Has rental license evidence. |
-| `rental_from_evict` | logical | Has eviction filing evidence. |
-| `ever_rental_any_year` | logical | Any rental evidence in any year. |
+| `owner_1` | character | Primary owner name from parcels. |
+| `is_pha_owner` | logical | Parcel owner matches the PHA owner-name regex. |
+| `is_university_owned` | logical | Parcel owner matches the curated university-owner regex. |
+| `ever_rental_nhpd` | logical | Parcel has any uniquely matched NHPD property. |
+| `nhpd_property_count` | integer | Number of uniquely matched NHPD properties on the parcel. |
+| `nhpd_total_units` | numeric | Sum of NHPD-reported units across those properties. |
+| `nhpd_any_active` | logical | At least one uniquely matched NHPD property is `Active`. |
+| `nhpd_any_inconclusive` | logical | At least one uniquely matched NHPD property is `Inconclusive`. |
+| `ever_rental_owner` | logical | Any owner-based rental evidence across years. |
+| `include_in_rental_universe` | logical | Final effective-rental-universe flag after owner-based inclusions/exclusions. |
+| `rental_from_altos_raw` | logical | Raw Altos listing evidence before owner-based exclusion rules. |
+| `rental_from_license_raw` | logical | Raw license evidence before owner-based exclusion rules. |
+| `rental_from_evict_raw` | logical | Raw eviction evidence before owner-based exclusion rules. |
+| `rental_from_nhpd_raw` | logical | Raw NHPD evidence before owner-based exclusion rules. |
+| `rental_from_altos` | logical | Effective Altos listing evidence used downstream. |
+| `rental_from_license` | logical | Effective rental license evidence used downstream. |
+| `rental_from_evict` | logical | Effective eviction evidence used downstream. |
+| `rental_from_nhpd` | logical | Effective NHPD evidence used downstream. |
+| `rental_from_owner` | logical | Owner-based rental evidence used downstream (currently PHA owner matching). |
+| `ever_rental_any_year` | logical | Any effective rental evidence in any year. |
 | `intensity_license_y` | numeric | License-based rental intensity. |
 | `intensity_altos_y` | numeric | Altos-based rental intensity. |
 | `intensity_evict_y` | numeric | Eviction-based rental intensity. |
 | `intensity_evict_ha_y` | numeric | Housing authority eviction intensity. |
 | `intensity_total_y` | numeric | Combined rental intensity. |
 | `intensity_total_y_recent` | numeric | Recent-period rental intensity. |
+
+---
+
+## nhpd_clean
+
+| Field | Value |
+|-------|-------|
+| **Config key** | `products.nhpd_clean` |
+| **Path** | `data/processed/clean/nhpd_clean.csv` |
+| **Producing script** | `r/clean-nhpd-addresses.R` |
+| **Primary key** | `nhpd_property_id` |
+| **Rows** | 461 |
+| **Columns** | 300 |
+
+Cleaned National Housing Preservation Database property-level file for Philadelphia. Built from the NHPD "Active and Inconclusive Properties" workbook, filtered to `State == "PA"`, `City == "Philadelphia"`, and `PropertyStatus %in% c("Active", "Inconclusive")`, then standardized with the same Postmastr-based address cleaning flow used for Altos and other sources.
+
+### Consumed by
+
+- `r/merge-nhpd-parcels.R` — parcel crosswalk construction
+
+### Key columns
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `nhpd_property_id` | character | NHPD property identifier (`NHPDPropertyID`). Primary key. |
+| `PropertyName` | character | Property name from the NHPD workbook. |
+| `PropertyAddress` | character | Raw property address from the NHPD workbook. |
+| `PropertyStatus` | character | NHPD status, retained here as `Active` or `Inconclusive`. |
+| `TotalUnits` | numeric | Total NHPD-reported units at the property. |
+| `Owner` | character | Owner name from NHPD. |
+| `pm.house` | character | Parsed house number. |
+| `pm.street` | character | Parsed street name. |
+| `pm.streetSuf` | character | Parsed street suffix. |
+| `pm.zip` | character | Parsed ZIP code, underscore-prefixed. |
+| `n_sn_ss_c` | character | Canonicalized normalized address string used in crosswalk joins. |
+| `GEOID.longitude` | numeric | Longitude from the source workbook. |
+| `GEOID.latitude` | numeric | Latitude from the source workbook. |
+| `num_properties_at_address` | integer | Number of NHPD properties sharing the cleaned address. |
+| `address_total_units` | numeric | Sum of `TotalUnits` across all NHPD properties at the cleaned address. |
+
+---
+
+## nhpd_xwalk_products
+
+| Field | Value |
+|-------|-------|
+| **Config keys** | `products.nhpd_address_agg`, `products.nhpd_parcel_xwalk`, `products.nhpd_parcel_xwalk_property` |
+| **Paths** | `data/processed/xwalks/nhpd_address_agg.csv`; `data/processed/xwalks/nhpd_parcel_xwalk.csv`; `data/processed/xwalks/nhpd_parcel_xwalk_property.csv` |
+| **Producing script** | `r/merge-nhpd-parcels.R` |
+| **Primary keys** | `n_sn_ss_c` (`nhpd_address_agg`); `PID` x `n_sn_ss_c` (`nhpd_parcel_xwalk`); `nhpd_property_id` x `PID` (`nhpd_parcel_xwalk_property`) |
+| **Rows** | 461; 472; 472 |
+| **Columns** | 12; 6; 8 |
+
+NHPD-to-parcel crosswalk products. Matching is deterministic and tiered: normalized address match on `pm.house + pm.street + pm.streetSuf`, then parcel-polygon spatial join, then a nearest-parcel fallback within 50 feet for residual cases. In the current Philadelphia build, 428 of 461 NHPD properties (90.7%) matched uniquely, mapping to 422 unique parcels.
+
+### Consumed by
+
+- `r/make-rent-panel.R` — NHPD-based rental identification
+- `r/make-occupancy-vars.r` — NHPD rental flags in occupancy products
+- `r/make-analytic-sample.R` — downstream analytic rental-source fields
+
+### nhpd_address_agg
+
+One row per cleaned NHPD address, aggregated before parcel matching.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `n_sn_ss_c` | character | Canonical cleaned address key. Primary key. |
+| `nhpd_property_count` | integer | Number of NHPD properties at the address. |
+| `nhpd_total_units` | numeric | Sum of NHPD `TotalUnits` at the address. |
+| `property_status_mode` | character | Modal NHPD status at the address. |
+| `GEOID.longitude` | numeric | Address longitude used for spatial fallback. |
+| `GEOID.latitude` | numeric | Address latitude used for spatial fallback. |
+
+### nhpd_parcel_xwalk
+
+Address-level parcel crosswalk, analogous to the Altos parcel crosswalk.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `PID` | character | Matched parcel ID. |
+| `n_sn_ss_c` | character | Cleaned NHPD address key. |
+| `merge` | character | Match tier: `num_st_sfx`, `spatial`, `nearest_50ft`, or `not_merged`. |
+| `unique` | logical | TRUE when the cleaned address matched exactly one parcel. |
+| `num_parcels_matched` | integer | Number of parcels linked to the address. |
+| `num_addys_matched` | integer | Number of NHPD addresses linked to the parcel in this xwalk. |
+
+### nhpd_parcel_xwalk_property
+
+Property-level parcel crosswalk retaining one row per NHPD property x matched parcel.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `nhpd_property_id` | character | NHPD property identifier. |
+| `PID` | character | Matched parcel ID. |
+| `n_sn_ss_c` | character | Cleaned address key. |
+| `merge` | character | Match tier inherited from `nhpd_parcel_xwalk`. |
+| `unique` | logical | TRUE when the underlying address matched one parcel. |
+| `matched_unique` | logical | TRUE when the NHPD property is carried forward as a unique parcel match in downstream rental identification. |
+| `num_parcels_matched` | integer | Number of parcels linked to the property address. |
+| `num_addys_matched` | integer | Number of cleaned NHPD addresses linked to the parcel. |
 
 ---
 
@@ -829,7 +964,7 @@ Geography-level poverty products for outer-sorting empirical targets. If a raw i
 | **Primary key** | Single-row product |
 | **Rows** | 1 |
 
-Empirical calibration moment vector for the outer-sorting model, built from `bldg_panel_blp` plus the block-group renter poverty product. The script collapses `bldg_panel_blp` over the configured year window to one row per PID, uses tract FE (`substr(GEOID, 1, 11)`) as the neighborhood definition, and uses block-group renter poverty share as the building composition proxy. Counts are annualized over each building's active years in the window, with rate construction based on total unit-years. Buildings with `year_built > year_to` are dropped; buildings built after `year_from` start exposure at `year_built`. If a building's BG poverty share is missing, the script falls back to tract poverty share; rows with both BG and tract poverty share missing are dropped from the empirical target sample.
+Empirical calibration moment vector for the outer-sorting model, built from `bldg_panel_blp` plus a PID-year InfoUSA composition proxy. The script collapses `bldg_panel_blp` over the configured year window to one row per PID, uses tract FE (`substr(GEOID, 1, 11)`) as the neighborhood definition, and uses the configured building-level low-income-share proxy as the empirical analogue of composition `s`. Counts are annualized over each building's active years in the window, with rate construction based on total unit-years. Buildings with `year_built > year_to` are dropped; buildings built after `year_from` start exposure at `year_built`. Rows with missing building-level composition proxy are dropped from the empirical target sample.
 
 Additional metadata columns beyond the simulated moment schema:
 
@@ -837,9 +972,9 @@ Additional metadata columns beyond the simulated moment schema:
 |--------|------|-------------|
 | `year_from` | integer | First year included in the pooled empirical target window. |
 | `year_to` | integer | Last year included in the pooled empirical target window. |
-| `poverty_bg_product_key` | character | Config product key used for the block-group poverty input. |
-| `poverty_tract_product_key` | character | Config product key used for the tract poverty fallback input. |
-| `poverty_measure_source` | character | Source flag from the poverty product. |
+| `composition_product_key` | character | Config product key used for the building-level composition input. |
+| `composition_proxy_col` | character | Column from the composition product used as the empirical analogue of `s`. |
+| `composition_measure_source` | character | Source flag from the composition product. |
 
 Outcome mapping in the default empirical build:
 
@@ -849,16 +984,15 @@ Outcome mapping in the default empirical build:
 | Complaints | `total_complaints` |
 | Maintenance | `total_permits` |
 | Units exposure | `total_units`, aggregated to PID-level unit-years and annualized back to average annual units |
-| Composition share `s` | block-group `renter_poverty_share` |
+| Composition share `s` | PID-year InfoUSA low-income share (`infousa_find_low_income_share` by default) |
 | Neighborhood FE | tract `substr(GEOID, 1, 11)` |
 
-Poverty merge fallback:
+Composition-proxy merge:
 
 | Stage | Source |
 |-------|--------|
-| Primary composition proxy | block-group `renter_poverty_share` |
-| Fallback if BG share missing | tract `renter_poverty_share` |
-| Residual missing | dropped from empirical target sample |
+| Building composition proxy | `infousa_building_income_proxy_panel` |
+| Missing PID-year proxy | dropped from empirical target sample |
 
 Empirical collapse semantics in the default build:
 
@@ -868,6 +1002,34 @@ Empirical collapse semantics in the default build:
 | Unit-years | `sum(total_units)` across active years |
 | Annualized counts | `sum(outcome_count) / active_years` |
 | Per-unit-year rates | `sum(outcome_count) / sum(total_units)` |
+
+---
+
+## infousa_building_income_proxy_panel
+
+| Field | Value |
+|-------|-------|
+| **Config key** | `products.infousa_building_income_proxy_panel` |
+| **Path** | `data/processed/analytic/infousa_building_income_proxy_panel.csv` |
+| **Producing script** | `r/make-infousa-building-income-proxy.R` |
+| **Primary key** | `PID` x `year` |
+| **Rows** | ~3.6M for the default 2011-2019 window |
+
+PID-year InfoUSA income proxy panel used by the outer-sorting empirical target path. The builder starts from `infousa_clean`, keeps primary-family rows, deduplicates to one row per `familyid` x `year`, aggregates to address-year, links addresses to parcels via `xwalk_infousa_to_parcel`, drops address keys that map to more than one PID, and then aggregates to PID-year. The default composition proxy is the share of linked households with `find_div_1000 <= 30`.
+
+### Columns
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `PID` | character | Parcel ID. Primary key part 1. |
+| `year` | integer | Calendar year. Primary key part 2. |
+| `infousa_num_households_income_proxy` | integer | Number of linked primary-household observations contributing to the PID-year proxy. |
+| `infousa_find_mean_k` | numeric | Mean `find_div_1000` across linked households at the PID-year. |
+| `infousa_find_low_income_share` | numeric | Share of linked households with `find_div_1000` at or below the configured threshold. Default threshold is `30`. |
+| `infousa_income_proxy_any_ownership_unsafe` | logical | TRUE if any contributing address row in the parcel xwalk was flagged `ownership_unsafe`. |
+| `infousa_income_proxy_xwalk_status_mode` | character | Modal xwalk status across contributing address-year rows. |
+| `infousa_income_proxy_source` | character | Source label for the proxy definition. |
+| `infousa_income_proxy_threshold_k` | numeric | Income threshold in `$000s` used to define the low-income share. |
 
 ---
 
@@ -881,7 +1043,7 @@ Empirical collapse semantics in the default build:
 | **Primary keys** | panel: `b`; moments: single-row product; diagnostics: single-row product |
 | **Rows** | panel: `B` from `run.outer_sorting.B`; moments: 1; diagnostics: 1 |
 
-Simulation outputs from the stationary baseline outer sorting DGP in `latex/sorting_model_outer_dgp.tex` (baseline normalization with signal `x_b = fbar_b`, where filings depend on average tenant default risk `\bar\delta_b = s_b \delta_H + (1 - s_b)\delta_L`). By default, simulated building units are drawn by resampling the empirical PID-level average annual `total_units` distribution from `bldg_panel_blp` over the configured unit-draw window; the older discrete-bin unit draw remains available only as an explicit fallback mode.
+Simulation outputs from the stationary baseline outer sorting DGP in `latex/sorting_model_outer_dgp.tex`. The current baseline uses signal `x_b = fbar_b`, where filings follow a single-intensity Poisson block driven by average tenant default risk `\bar\delta_b = s_b \delta_H + (1 - s_b)\delta_L`, complaints depend on composition only for bad landlords, and the sorting update includes a neighborhood shifter `eta_sort`. The maintenance and complaint blocks also include empirically drawn building-age indicators based on year built. By default, simulated building units and year-built observables are drawn by resampling the empirical PID-level BLP distribution over the configured unit-draw window. Realized simulation outcomes are then generated as total counts over each building's active years in the configured simulation window and annualized back to average annual counts and per-unit-year rates; the older discrete-bin unit draw remains available only as an explicit fallback mode.
 
 ### outer_sorting_sim_panel
 
@@ -894,11 +1056,19 @@ One row per simulated building.
 | `theta` | character | Landlord/building type label (`G` or `B`). |
 | `theta_bad` | integer | Type indicator (`1` for bad type, `0` for good type). |
 | `units` | numeric | Simulated building units. Default build draws by empirical resampling from PID-level average annual `total_units`; legacy discrete-bin draws are only used if explicitly configured. |
+| `year_built` | integer | Empirically resampled year built from the BLP-based draw pool; may be missing for some simulated buildings if the source year built is missing. |
+| `old_bldg` | integer | Indicator for `year_built <= run.outer_sorting.old_bldg_cutoff_year`. |
+| `new_bldg` | integer | Indicator for `year_built >= run.outer_sorting.new_bldg_cutoff_year`. |
+| `first_year_active` | integer | First simulated active year, equal to `max(run.outer_sorting.sim_year_from, year_built)` when `year_built` is observed and `run.outer_sorting.sim_year_from` otherwise. |
+| `exposure_years` | integer | Number of active simulated years used to generate annualized outcomes. |
+| `unit_years` | numeric | Simulated unit-years, `units * exposure_years`. |
+| `eta_sort` | numeric | Neighborhood sorting shifter drawn once per neighborhood and shared across buildings in that neighborhood. |
 | `s` | numeric | Equilibrium share of group-1 tenants in the building. |
 | `mbar`, `cbar`, `fbar` | numeric | Expected maintenance/complaint/filing rates per unit. |
 | `x` | numeric | Sorting signal index. Baseline: `x = fbar`. |
-| `M`, `C`, `F` | integer | One-shot Poisson count draws after fixed-point convergence. |
-| `m_rate`, `c_rate`, `f_rate` | numeric | Realized per-unit rates (`count / units`). |
+| `M_total`, `C_total`, `F_total` | integer | Total maintenance/complaint/filing counts drawn over the building's active simulated years. |
+| `M`, `C`, `F` | numeric | Average annual maintenance/complaint/filing counts (`total / exposure_years`). |
+| `m_rate`, `c_rate`, `f_rate` | numeric | Annualized realized per-unit-year rates (`total / unit_years`). |
 
 ### outer_sorting_sim_moments
 
@@ -911,6 +1081,9 @@ Single-row calibration moment summary.
 | `mean_f_rate` | numeric | Unit-weighted mean realized filing rate. |
 | `mean_m_rate` | numeric | Unit-weighted mean realized maintenance rate. |
 | `mean_c_rate` | numeric | Unit-weighted mean realized complaint rate. |
+| `mean_m_rate_pos` | numeric | Mean realized maintenance rate among buildings with positive maintenance counts (`M > 0`). |
+| `m_rate_pos_p50` | numeric | Median realized maintenance rate among buildings with positive maintenance counts. |
+| `m_rate_pos_p90` | numeric | 90th percentile realized maintenance rate among buildings with positive maintenance counts. |
 | `zero_share_f` | numeric | Share of buildings with zero filings (`F = 0`). |
 | `zero_share_m` | numeric | Share of buildings with zero maintenance counts (`M = 0`). |
 | `zero_share_c` | numeric | Share of buildings with zero complaints (`C = 0`). |
@@ -926,8 +1099,13 @@ Single-row calibration moment summary.
 | `beta_ppml_above_mean_s` | numeric | Backward-compatible alias of `beta_ppml_s`. |
 | `beta_ppml_interaction` | numeric | Backward-compatible alias of `beta_ppml_s_x_high_filing`. |
 | `filing_resid_sd_nhood_fe` | numeric | SD of filing-rate residuals after neighborhood demeaning. |
-| `beta_maint_on_log1p_c_rate` | numeric | Maintenance-discipline PPML coefficient on `log(1 + c_rate)` with neighborhood FE and unit offset. |
-| `beta_maint_on_log1p_cbar` | numeric | Backward-compatible alias of `beta_maint_on_log1p_c_rate`. |
+| `nhood_mean_s_sd` | numeric | SD of neighborhood mean group-1 share. |
+| `nhood_mean_s_p90_p10` | numeric | 90-10 spread of neighborhood mean group-1 share. |
+| `nhood_mean_f_rate_sd` | numeric | SD of neighborhood mean filing rates. |
+| `nhood_mean_f_rate_p90_p10` | numeric | 90-10 spread of neighborhood mean filing rates. |
+| `beta_maint_on_c_rate` | numeric | Maintenance-discipline PPML coefficient on raw `c_rate` with neighborhood FE and unit offset. |
+| `beta_maint_on_log1p_c_rate` | numeric | Backward-compatible alias of `beta_maint_on_c_rate`. |
+| `beta_maint_on_log1p_cbar` | numeric | Backward-compatible alias of `beta_maint_on_c_rate`. |
 
 ### outer_sorting_sim_diagnostics
 
@@ -938,6 +1116,9 @@ Single-row fixed-point convergence diagnostics.
 | `converged` | logical | TRUE when tolerance conditions were met before `max_iter`. |
 | `iters` | integer | Iteration count at stop. |
 | `max_diff` | numeric | Final `max_b |s^{k+1} - s^k|`. |
+| `sim_year_from` | integer | First year in the configured simulation window used for annualization. |
+| `sim_year_to` | integer | Last year in the configured simulation window used for annualization. |
+| `sim_n_years` | integer | Length of the configured simulation window. |
 | `mass_resid_before_final_proj` | numeric | Citywide mass residual before final exact projection step. |
 | `mass_resid_final` | numeric | Citywide mass residual after final projection. |
 | `xi_last_iter` | numeric | Last intercept value from iterative updates. |
