@@ -332,6 +332,12 @@ start_year <- to_int(opts$start_year, 2007L)
 end_year <- to_int(opts$end_year, 2024L)
 pre_covid_end <- to_int(opts$pre_covid_end, 2019L)
 high_filing_threshold <- to_num_scalar(opts$high_filing_threshold, 0.10)
+retaliatory_same_lead_quarters <- to_int(opts$retaliatory_same_lead_quarters, 1L)
+plausible_lag_quarters <- to_int(opts$plausible_lag_quarters, 1L)
+plausible_lead_quarters <- to_int(opts$plausible_lead_quarters, 2L)
+if (retaliatory_same_lead_quarters < 0L) retaliatory_same_lead_quarters <- 0L
+if (plausible_lag_quarters < 0L) plausible_lag_quarters <- 0L
+if (plausible_lead_quarters < 0L) plausible_lead_quarters <- 0L
 
 race_case_path <- pick_race_case_path(cfg, opts$race_case %||% "")
 gender_case_path <- pick_gender_case_path(cfg, opts$gender_case %||% "")
@@ -360,6 +366,12 @@ logf("Tract race priors input (optional): ", tract_prior_path, log_file = log_fi
 logf("BG race priors input (optional): ", bg_prior_path, log_file = log_file)
 logf("Output dir: ", out_dir, log_file = log_file)
 logf("High filing threshold (long-run pre-2019): ", high_filing_threshold, log_file = log_file)
+logf(
+  "Quarter retaliation windows: retaliatory = [0,+", retaliatory_same_lead_quarters,
+  "], plausible-only adds [-", plausible_lag_quarters, ",+",
+  plausible_lead_quarters, "] outside retaliatory window",
+  log_file = log_file
+)
 
 for (pp in c(race_case_path, gender_case_path, evictions_path, xwalk_path, quarter_panel_path, blp_panel_path)) {
   if (!file.exists(pp)) stop("Missing required input: ", pp)
@@ -451,23 +463,45 @@ complaints[, t_index := year * 4L + qtr]
 setorder(complaints, PID, t_index)
 complaints[, lag_complaint_1 := shift(filed_complaint, n = 1L, type = "lag"), by = PID]
 complaints[, lead_complaint_1 := shift(filed_complaint, n = 1L, type = "lead"), by = PID]
+complaints[, lead_complaint_2 := shift(filed_complaint, n = 2L, type = "lead"), by = PID]
 complaints[, lag_severe_complaint_1 := shift(filed_severe_complaint, n = 1L, type = "lag"), by = PID]
 complaints[, lead_severe_complaint_1 := shift(filed_severe_complaint, n = 1L, type = "lead"), by = PID]
-for (cc in c("lag_complaint_1", "lead_complaint_1", "lag_severe_complaint_1", "lead_severe_complaint_1")) {
+complaints[, lead_severe_complaint_2 := shift(filed_severe_complaint, n = 2L, type = "lead"), by = PID]
+for (cc in c("lag_complaint_1", "lead_complaint_1", "lead_complaint_2",
+             "lag_severe_complaint_1", "lead_severe_complaint_1", "lead_severe_complaint_2")) {
   complaints[is.na(get(cc)), (cc) := 0L]
 }
 
+complaints[, is_retaliatory_any := as.integer(
+  filed_complaint == 1L |
+    (retaliatory_same_lead_quarters >= 1L & lead_complaint_1 == 1L)
+)]
+complaints[, is_plausibly_any := as.integer(
+  !is_retaliatory_any &
+    ((plausible_lag_quarters >= 1L & lag_complaint_1 == 1L) |
+       (plausible_lead_quarters >= 2L & lead_complaint_2 == 1L))
+)]
+complaints[, is_retaliatory_severe := as.integer(
+  filed_severe_complaint == 1L |
+    (retaliatory_same_lead_quarters >= 1L & lead_severe_complaint_1 == 1L)
+)]
+complaints[, is_plausibly_severe := as.integer(
+  !is_retaliatory_severe &
+    ((plausible_lag_quarters >= 1L & lag_severe_complaint_1 == 1L) |
+       (plausible_lead_quarters >= 2L & lead_severe_complaint_2 == 1L))
+)]
+
 complaints[, retaliatory_status_any := fifelse(
-  filed_complaint == 1L, "retaliatory",
-  fifelse(lag_complaint_1 == 1L | lead_complaint_1 == 1L, "plausibly_retaliatory", "non_retaliatory")
+  is_retaliatory_any == 1L, "retaliatory",
+  fifelse(is_plausibly_any == 1L, "plausibly_retaliatory", "non_retaliatory")
 )]
 complaints[, retaliatory_status_race := fifelse(
-  filed_severe_complaint == 1L, "retaliatory",
-  fifelse(lag_complaint_1 == 1L | lead_complaint_1 == 1L, "plausibly_retaliatory", "non_retaliatory")
+  is_retaliatory_severe == 1L, "retaliatory",
+  fifelse(is_plausibly_any == 1L, "plausibly_retaliatory", "non_retaliatory")
 )]
 complaints[, retaliatory_severe_status := fifelse(
-  filed_severe_complaint == 1L, "retaliatory_severe",
-  fifelse(lag_severe_complaint_1 == 1L | lead_severe_complaint_1 == 1L, "plausibly_retaliatory_severe", "non_retaliatory_severe")
+  is_retaliatory_severe == 1L, "retaliatory_severe",
+  fifelse(is_plausibly_severe == 1L, "plausibly_retaliatory_severe", "non_retaliatory_severe")
 )]
 
 complaints <- complaints[, .(
@@ -1422,6 +1456,10 @@ qa_lines <- c(
   paste0("Quarter panel input: ", quarter_panel_path),
   paste0("BLP panel input: ", blp_panel_path),
   paste0("High filing threshold (long-run pre-2019): ", high_filing_threshold),
+  paste0(
+    "Quarter retaliation windows: retaliatory=[0,+", retaliatory_same_lead_quarters,
+    "], plausible-only adds [-", plausible_lag_quarters, ",+", plausible_lead_quarters, "]"
+  ),
   "",
   paste0("Race panel rows: ", nrow(panel_race)),
   paste0("Gender panel rows: ", nrow(panel_gender)),

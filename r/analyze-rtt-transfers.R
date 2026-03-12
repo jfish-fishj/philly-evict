@@ -32,8 +32,8 @@ log_file <- p_out(cfg, "logs", "analyze-rtt-transfers.log")
 logf("=== Starting analyze-rtt-transfers.R ===", log_file = log_file)
 
 # Output directories
-out_dir <- p_out(cfg, "rtt_analysis")
-fig_dir <- file.path(cfg$paths$repo_root, "figs")
+out_dir <- p_out(cfg, "analyze-rtt-transfers", "tables")
+fig_dir <- p_out(cfg, "analyze-rtt-transfers", "figs")
 fs::dir_create(out_dir, recurse = TRUE)
 fs::dir_create(fig_dir, recurse = TRUE)
 
@@ -53,6 +53,33 @@ logf("  rtt_clean: ", nrow(rtt), " rows, ", rtt[, uniqueN(PID)], " unique PIDs",
 bldg <- fread(p_product(cfg, "bldg_panel_blp"))
 bldg[, PID := normalize_pid(PID)]
 logf("  bldg_panel_blp: ", nrow(bldg), " rows, ", bldg[, uniqueN(PID)], " unique PIDs", log_file = log_file)
+if ("rental_ownership_unsafe_any" %in% names(bldg)) {
+  bldg[, rental_ownership_unsafe_any := as.logical(rental_ownership_unsafe_any)]
+  n_bldg_before <- nrow(bldg)
+  n_pid_before <- bldg[, uniqueN(PID)]
+  units_before <- if ("total_units" %in% names(bldg)) bldg[, sum(total_units, na.rm = TRUE)] else NA_real_
+  unsafe_idx <- !is.na(bldg$rental_ownership_unsafe_any) & bldg$rental_ownership_unsafe_any
+  n_flag_rows <- bldg[unsafe_idx, .N]
+  n_flag_pids <- bldg[unsafe_idx, uniqueN(PID)]
+  units_flag <- if ("total_units" %in% names(bldg)) {
+    bldg[unsafe_idx, sum(total_units, na.rm = TRUE)]
+  } else NA_real_
+  bldg <- bldg[!unsafe_idx]
+  logf("  Excluded ownership-unsafe rental rows from bldg_panel_blp: ",
+       n_flag_rows, " rows (", round(100 * n_flag_rows / n_bldg_before, 2), "%), ",
+       n_flag_pids, " PIDs",
+       if (!is.na(units_flag) && !is.na(units_before) && units_before > 0) {
+         paste0(", ", units_flag, " units (", round(100 * units_flag / units_before, 2), "%)")
+       } else "",
+       log_file = log_file)
+  logf("  bldg_panel_blp after ownership-unsafe exclusion: ", nrow(bldg), " rows, ",
+       bldg[, uniqueN(PID)], " unique PIDs (dropped ",
+       n_bldg_before - nrow(bldg), " rows, ", n_pid_before - bldg[, uniqueN(PID)], " PIDs)",
+       log_file = log_file)
+} else {
+  logf("  WARNING: rental_ownership_unsafe_any not found in bldg_panel_blp; no ownership-unsafe exclusion applied",
+       log_file = log_file)
+}
 
 # Merge RTT -> bldg on (PID, year) — inner join
 rtt[, year := as.integer(year)]

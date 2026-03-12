@@ -21,6 +21,8 @@
 ##   - output/qa/race_imputation_preflight_case.csv
 ##   - output/qa/race_imputation_preflight_qa.txt
 ##   - output/logs/impute-race-preflight.log
+##   - data/processed/clean/eviction_party_names_clean.csv  (cleaned party names; config: eviction_party_names_clean)
+##   - data/processed/clean/eviction_case_commercial.csv    (case commercial flag from defendant #1; config: eviction_case_commercial)
 ## ============================================================
 
 suppressPackageStartupMessages({
@@ -247,6 +249,10 @@ firstname_path <- opts$firstname_file %||% p_in(cfg, "name-files/first_nameRaceP
 out_person <- opts$output_person %||% p_out(cfg, "qa", "race_imputation_preflight_person.csv")
 out_case <- opts$output_case %||% p_out(cfg, "qa", "race_imputation_preflight_case.csv")
 out_qa <- opts$output_qa %||% p_out(cfg, "qa", "race_imputation_preflight_qa.txt")
+out_names_clean <- opts$output_names_clean %||%
+  tryCatch(p_product(cfg, "eviction_party_names_clean"), error = function(e) NULL)
+out_case_commercial <- opts$output_case_commercial %||%
+  tryCatch(p_product(cfg, "eviction_case_commercial"), error = function(e) NULL)
 
 sample_n <- suppressWarnings(as.integer(opts$sample_n %||% NA_character_))
 seed <- suppressWarnings(as.integer(opts$seed %||% cfg$run$seed %||% 123))
@@ -672,6 +678,42 @@ logf("  Wrote ", nrow(dt), " rows to ", out_person, log_file = log_file)
 logf("Writing case-level preflight output...", log_file = log_file)
 fwrite(case_dt, out_case)
 logf("  Wrote ", nrow(case_dt), " rows to ", out_case, log_file = log_file)
+
+# ---- Cleaned party names (for downstream commercial classification) ----
+# Outputs all party rows with cleaned names, role flags, and business-entity flags.
+# Used by analyze-filing-decomposition.R (and similar scripts) via eviction_case_commercial.
+if (!is.null(out_names_clean)) {
+  dir.create(dirname(out_names_clean), recursive = TRUE, showWarnings = FALSE)
+  names_clean_cols <- intersect(
+    c("id", "role", "is_defendant", "is_plaintiff", "is_analysis_defendant",
+      "name", "name_clean", "first_name", "last_name",
+      "not_person_flag", "counterclaim_party_flag", "impute_status"),
+    names(dt)
+  )
+  fwrite(dt[, ..names_clean_cols], out_names_clean)
+  logf("  Wrote cleaned party names: ", nrow(dt), " rows to ", out_names_clean,
+       log_file = log_file)
+}
+
+# ---- Case-level commercial classification from defendant #1 ----
+# A case is commercial when defendant #1 (the first analysis defendant in data order)
+# has not_person_flag == TRUE.  Only defendant #1 is used because tenants can countersue
+# their landlords: a corporate landlord who is a counterclaim defendant should not
+# make the case "commercial" (counterclaim parties are already excluded from
+# is_analysis_defendant via the counterclaim_party_flag).
+if (!is.null(out_case_commercial)) {
+  dir.create(dirname(out_case_commercial), recursive = TRUE, showWarnings = FALSE)
+  def_ordered <- dt[is_analysis_defendant == TRUE,
+    .(id, defendant_1_name_raw = name, defendant_1_name_clean = name_clean,
+      is_commercial = not_person_flag)]
+  def1 <- def_ordered[, .SD[1L], by = id]
+  n_commercial_cases <- def1[is_commercial == TRUE, .N]
+  fwrite(def1, out_case_commercial)
+  logf("  Wrote case commercial classification: ", nrow(def1), " rows to ",
+       out_case_commercial, log_file = log_file)
+  logf("  Commercial cases (defendant #1 is not a person): ", n_commercial_cases,
+       " / ", nrow(def1), log_file = log_file)
+}
 
 qa_lines <- c(
   "Race Imputation Preflight QA (No WRU)",

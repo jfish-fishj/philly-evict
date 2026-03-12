@@ -24,8 +24,8 @@ source("r/config.R")
 source("r/helper-functions.R")
 cfg <- read_config()
 log_file <- p_out(cfg, "logs", "building-demographics-evictions.log")
-tab_dir  <- p_out(cfg, "tables")
-fig_dir  <- p_out(cfg, "figs")
+tab_dir  <- p_out(cfg, "building-demographics-evictions", "tables")
+fig_dir  <- p_out(cfg, "building-demographics-evictions", "figs")
 dir.create(tab_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
 logf("=== Starting building-demographics-evictions.R ===", log_file = log_file)
@@ -111,6 +111,8 @@ bldg_chars <- bldg_panel[, {
       filing_rate_eb_zip_pre_covid[1] else NA_real_,
     total_filings_pre2019        = if ("total_filings_pre2019" %in% names(.SD))
       total_filings_pre2019[1] else NA_integer_,
+    filing_rate_longrun_pre2019  = if ("filing_rate_longrun_pre2019" %in% names(.SD))
+      filing_rate_longrun_pre2019[1] else NA_real_,
     pm.zip                       = pm.zip[which.max(!is.na(pm.zip))]
   )
 }, by = PID]
@@ -148,9 +150,7 @@ reg_dt <- bldg[
   !is.na(filing_rate_eb_pre_covid) &
     filing_rate_eb_pre_covid <= 0.75 &
     !is.na(infousa_pct_black) &
-    !is.na(GEOID) & nzchar(GEOID) &
-    !is.na(total_area) & total_area > 0 &
-    !is.na(market_value) & market_value > 0
+    !is.na(GEOID) & nzchar(GEOID)
 ]
 
 logf("Regression sample: ", nrow(reg_dt), " buildings", log_file = log_file)
@@ -168,7 +168,7 @@ desc_table <- reg_dt[, {
   list(
     n_buildings         = .N,
     total_unit_years    = round(sum(total_units * n_years_demog)),
-    mean_units          = round(weighted.mean(total_units, w = w, na.rm = TRUE), 1),
+    mean_units          = round(mean(total_units, na.rm = TRUE), 1),
     pct_black           = round(weighted.mean(infousa_pct_black, w = w, na.rm = TRUE), 3),
     pct_female          = round(weighted.mean(infousa_pct_female, w = w, na.rm = TRUE), 3),
     pct_black_female    = round(weighted.mean(infousa_pct_black_female, w = w, na.rm = TRUE), 3),
@@ -206,10 +206,11 @@ sp_names <- paste0("spline_", 1:ncol(B))
 reg_dt[, (sp_names) := as.data.table(B)]
 reg_dt[never_filed == 1L, (sp_names) := 0]
 
-run_demog_models <- function(outcome, dt) {
+run_demog_models <- function(outcome, dt, bins_var = "filing_rate_bins",
+                             sp_cols = sp_names, never_var = "never_filed") {
   # (A) Unconditional binned
   m_a <- feols(
-    as.formula(paste0(outcome, " ~ i(filing_rate_bins, ref = '", ref_bin, "')")),
+    as.formula(paste0(outcome, " ~ i(", bins_var, ", ref = '", ref_bin, "')")),
     data = dt,
     weights = ~ total_units,
     cluster = ~ census_tract
@@ -218,7 +219,7 @@ run_demog_models <- function(outcome, dt) {
   # (B) Tract FE + controls
   m_b <- feols(
     as.formula(paste0(
-      outcome, " ~ i(filing_rate_bins, ref = '", ref_bin, "') + ",
+      outcome, " ~ i(", bins_var, ", ref = '", ref_bin, "') + ",
       "log(total_area) + log(market_value) | ",
       "census_tract + num_units_bin + building_type + year_blt_decade + quality_grade_standard + num_stories_bin"
     )),
@@ -230,7 +231,7 @@ run_demog_models <- function(outcome, dt) {
   # (C) Block group FE + controls
   m_c <- feols(
     as.formula(paste0(
-      outcome, " ~ i(filing_rate_bins, ref = '", ref_bin, "') + ",
+      outcome, " ~ i(", bins_var, ", ref = '", ref_bin, "') + ",
       "log(total_area) + log(market_value) | ",
       "GEOID + num_units_bin + building_type + year_blt_decade + quality_grade_standard + num_stories_bin"
     )),
@@ -239,8 +240,8 @@ run_demog_models <- function(outcome, dt) {
     cluster = ~ GEOID
   )
 
-  # (D) Hurdle spline: never_filed + ns(filing_rate) for ever-filers, BG FE
-  rhs_spline <- paste(c("never_filed", sp_names,
+  # (D) Hurdle spline: never_var indicator + ns(rate) for ever-filers, BG FE
+  rhs_spline <- paste(c(never_var, sp_cols,
                          "log(total_area)", "log(market_value)"),
                        collapse = " + ")
   fe_part <- "GEOID + num_units_bin + building_type + year_blt_decade + quality_grade_standard + num_stories_bin"
@@ -324,12 +325,14 @@ logf(paste(capture.output(etable(
 # COEFFICIENT PLOTS
 # ==================================================================
 
-extract_bin_coefs <- function(model, outcome_label, spec_label) {
+extract_bin_coefs <- function(model, outcome_label, spec_label,
+                              bins_var = "filing_rate_bins") {
   ct <- as.data.table(summary(model)$coeftable, keep.rownames = "term")
   setnames(ct, c("Estimate", "Std. Error"), c("estimate", "std_error"))
-  ct <- ct[grepl("filing_rate_bins::", term)]
+  pat <- paste0(bins_var, "::")
+  ct <- ct[grepl(pat, term, fixed = TRUE)]
   if (!nrow(ct)) return(data.table())
-  ct[, term := gsub("^filing_rate_bins::", "", term)]
+  ct[, term := gsub(paste0("^", pat), "", term)]
   ct[, outcome := outcome_label]
   ct[, spec := spec_label]
   ct[, .(outcome, spec, term, estimate, std_error)]
@@ -407,5 +410,163 @@ logf("  Mean demog coverage: ", round(weighted.mean(reg_dt$demog_coverage_mean, 
      log_file = log_file)
 logf("  Unique tracts: ", uniqueN(reg_dt$census_tract), log_file = log_file)
 logf("  Unique block groups: ", uniqueN(reg_dt$GEOID), log_file = log_file)
+
+# ==================================================================
+# LONGRUN (NON-EB) FILING RATE: BINS + MODELS
+# ==================================================================
+# Parallel to the EB section above, but uses filing_rate_longrun_pre2019
+# (raw total_filings_pre2019 / unit-years) — no shrinkage toward city mean.
+
+if (!"filing_rate_longrun_pre2019" %in% names(bldg) ||
+    bldg[!is.na(filing_rate_longrun_pre2019), .N] == 0L) {
+  logf("WARNING: filing_rate_longrun_pre2019 not available; skipping longrun models.",
+       log_file = log_file)
+} else {
+
+  # ---- Bin longrun rate (same cutpoints as EB) ----
+  bldg[, filing_rate_bins_lr := fcase(
+    never_filed_pre2019 == TRUE,              "No filings",
+    filing_rate_longrun_pre2019 <= 0.05,      "(0-5%]",
+    filing_rate_longrun_pre2019 <= 0.10,      "(5-10%]",
+    filing_rate_longrun_pre2019 <= 0.20,      "(10-20%]",
+    filing_rate_longrun_pre2019  > 0.20,      "20%+",
+    default = NA_character_
+  )]
+  bldg[, filing_rate_bins_lr := factor(filing_rate_bins_lr,
+    levels = c("No filings", "(0-5%]", "(5-10%]", "(10-20%]", "20%+")
+  )]
+
+  # ---- Sample restriction (keyed on longrun rate) ----
+  reg_dt_lr <- bldg[
+    !is.na(filing_rate_longrun_pre2019) &
+      filing_rate_longrun_pre2019 <= 0.75  &
+      !is.na(infousa_pct_black) &
+      !is.na(GEOID) & nzchar(GEOID)
+  ]
+
+  reg_dt_lr[, never_filed := as.integer(
+    is.na(total_filings_pre2019) | total_filings_pre2019 == 0L
+  )]
+  reg_dt_lr[, filing_rate_longrun_filed := fifelse(
+    never_filed == 1L, NA_real_, filing_rate_longrun_pre2019
+  )]
+
+  # ---- Spline basis on longrun rate (ever-filers only) ----
+  B_lr      <- ns(reg_dt_lr$filing_rate_longrun_filed, df = n_splines)
+  sp_lr_names <- paste0("spline_lr_", seq_len(ncol(B_lr)))
+  reg_dt_lr[, (sp_lr_names) := as.data.table(B_lr)]
+  reg_dt_lr[never_filed == 1L, (sp_lr_names) := 0]
+
+  logf("Longrun regression sample: ", nrow(reg_dt_lr), " buildings", log_file = log_file)
+  logf("  Filing rate bins (longrun):", log_file = log_file)
+  logf(paste(capture.output(reg_dt_lr[, .(.N, mean_units = round(mean(total_units), 1)),
+                                       by = filing_rate_bins_lr][order(filing_rate_bins_lr)]),
+             collapse = "\n"), log_file = log_file)
+
+  # ---- Models ----
+  models_black_lr        <- run_demog_models("infousa_pct_black",
+    reg_dt_lr, bins_var = "filing_rate_bins_lr", sp_cols = sp_lr_names)
+  models_female_lr       <- run_demog_models("infousa_pct_female",
+    reg_dt_lr, bins_var = "filing_rate_bins_lr", sp_cols = sp_lr_names)
+  models_black_female_lr <- run_demog_models("infousa_pct_black_female",
+    reg_dt_lr, bins_var = "filing_rate_bins_lr", sp_cols = sp_lr_names)
+
+  # ---- Tables ----
+  setFixest_dict(c(
+    "filing_rate_bins_lr"        = "Eviction intensity (longrun, pre-2019)",
+    "filing_rate_longrun_pre2019" = "Longrun filing rate (pre-2019)",
+    "infousa_pct_black"          = "Share Black",
+    "infousa_pct_female"         = "Share Female",
+    "infousa_pct_black_female"   = "Share Black Female"
+  ))
+
+  tab_main_lr <- etable(
+    models_black_lr$tract_fe,        models_black_lr$bg_fe,
+    models_female_lr$tract_fe,       models_female_lr$bg_fe,
+    models_black_female_lr$tract_fe, models_black_female_lr$bg_fe,
+    title   = "Tenant demographics by eviction intensity (longrun rate, building-level)",
+    headers = rep(c("Tract FE", "BG FE"), 3),
+    keep    = "%filing_rate_",
+    order   = "%filing_rate_",
+    tex     = TRUE
+  )
+  writeLines(tab_main_lr,
+    file.path(tab_dir, "building_demog_by_eviction_intensity_longrun.tex"))
+
+  tab_black_full_lr <- etable(
+    models_black_lr$unconditional, models_black_lr$tract_fe,
+    models_black_lr$bg_fe,         models_black_lr$spline,
+    title   = "Share Black tenants by eviction intensity (longrun rate)",
+    headers = c("Unconditional", "Tract FE", "BG FE", "Spline"),
+    keep    = "%filing_rate_|%never_filed|%spline_lr_",
+    order   = "%filing_rate_|%never_filed",
+    tex     = TRUE
+  )
+  writeLines(tab_black_full_lr,
+    file.path(tab_dir, "building_demog_black_full_specs_longrun.tex"))
+
+  logf("--- Share Black models (longrun) ---", log_file = log_file)
+  logf(paste(capture.output(etable(
+    models_black_lr$unconditional, models_black_lr$tract_fe,
+    models_black_lr$bg_fe,         models_black_lr$spline,
+    keep = "%filing_rate_|%never_filed|%spline_lr_", tex = FALSE
+  )), collapse = "\n"), log_file = log_file)
+
+  # ---- Coefficient plots ----
+  coef_all_lr <- rbindlist(list(
+    extract_bin_coefs(models_black_lr$unconditional,    "Share Black",        "Unconditional", bins_var = "filing_rate_bins_lr"),
+    extract_bin_coefs(models_black_lr$tract_fe,         "Share Black",        "Tract FE",      bins_var = "filing_rate_bins_lr"),
+    extract_bin_coefs(models_black_lr$bg_fe,            "Share Black",        "BG FE",         bins_var = "filing_rate_bins_lr"),
+    extract_bin_coefs(models_female_lr$bg_fe,           "Share Female",       "BG FE",         bins_var = "filing_rate_bins_lr"),
+    extract_bin_coefs(models_black_female_lr$bg_fe,     "Share Black Female", "BG FE",         bins_var = "filing_rate_bins_lr")
+  ))
+
+  if (nrow(coef_all_lr) > 0) {
+    p_black_lr <- ggplot(
+      coef_all_lr[outcome == "Share Black"],
+      aes(x = term, y = estimate, color = spec)
+    ) +
+      geom_point(position = position_dodge(width = 0.3)) +
+      geom_errorbar(
+        aes(ymin = estimate - 1.96 * std_error,
+            ymax = estimate + 1.96 * std_error),
+        width = 0.15, position = position_dodge(width = 0.3)
+      ) +
+      geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.5) +
+      labs(
+        x     = "Longrun filing rate bin (pre-2019)",
+        y     = "Effect on share Black (relative to 5-10%)",
+        title = "Share Black tenants by eviction intensity (longrun rate)",
+        color = "Specification"
+      ) +
+      theme_minimal()
+
+    ggsave(file.path(fig_dir, "coefplot_demog_black_by_eviction_longrun.png"),
+           p_black_lr, width = 9, height = 5, bg = "white")
+
+    p_all_lr <- ggplot(
+      coef_all_lr[spec == "BG FE"],
+      aes(x = term, y = estimate, color = outcome)
+    ) +
+      geom_point(position = position_dodge(width = 0.3)) +
+      geom_errorbar(
+        aes(ymin = estimate - 1.96 * std_error,
+            ymax = estimate + 1.96 * std_error),
+        width = 0.15, position = position_dodge(width = 0.3)
+      ) +
+      geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.5) +
+      labs(
+        x     = "Longrun filing rate bin (pre-2019)",
+        y     = "Effect on demographic share (relative to 5-10%)",
+        title = "Tenant demographics by eviction intensity: longrun rate (BG FE)",
+        color = "Outcome"
+      ) +
+      theme_minimal()
+
+    ggsave(file.path(fig_dir, "coefplot_demog_all_by_eviction_longrun.png"),
+           p_all_lr, width = 9, height = 5, bg = "white")
+  }
+
+}
 
 logf("=== Finished building-demographics-evictions.R ===", log_file = log_file)

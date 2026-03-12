@@ -1,5 +1,9 @@
 ## ============================================================
-## analyze-transfer-evictions-quarterly.R
+## analyze-transfer-evictions-quarterly.R  [DEPRECATED]
+## ============================================================
+## NOTE: This script is superseded by analyze-transfer-evictions-unified.R
+##       which supports both annual and quarterly frequency.
+##       Kept for reference only.
 ## ============================================================
 ## Purpose: Quarterly event study of eviction filing rates
 ##          around ownership transfers, using exact transfer
@@ -203,12 +207,42 @@ bldg[, PID := normalize_pid(PID)]
 bldg[, year := as.integer(year)]
 logf("  bldg_panel_blp: ", nrow(bldg), " rows, ", bldg[, uniqueN(PID)], " unique PIDs",
      log_file = log_file)
+if ("rental_ownership_unsafe_any" %in% names(bldg)) {
+  bldg[, rental_ownership_unsafe_any := as.logical(rental_ownership_unsafe_any)]
+  n_bldg_before <- nrow(bldg)
+  n_pid_before <- bldg[, uniqueN(PID)]
+  units_before <- if ("total_units" %in% names(bldg)) bldg[, sum(total_units, na.rm = TRUE)] else NA_real_
+  unsafe_idx <- !is.na(bldg$rental_ownership_unsafe_any) & bldg$rental_ownership_unsafe_any
+  n_flag_rows <- bldg[unsafe_idx, .N]
+  n_flag_pids <- bldg[unsafe_idx, uniqueN(PID)]
+  units_flag <- if ("total_units" %in% names(bldg)) {
+    bldg[unsafe_idx, sum(total_units, na.rm = TRUE)]
+  } else NA_real_
+  bldg <- bldg[!unsafe_idx]
+  logf("  Excluded ownership-unsafe rental rows from bldg_panel_blp: ",
+       n_flag_rows, " rows (", round(100 * n_flag_rows / n_bldg_before, 2), "%), ",
+       n_flag_pids, " PIDs",
+       if (!is.na(units_flag) && !is.na(units_before) && units_before > 0) {
+         paste0(", ", units_flag, " units (", round(100 * units_flag / units_before, 2), "%)")
+       } else "",
+       log_file = log_file)
+  logf("  bldg_panel_blp after ownership-unsafe exclusion: ", nrow(bldg), " rows, ",
+       bldg[, uniqueN(PID)], " unique PIDs (dropped ",
+       n_bldg_before - nrow(bldg), " rows, ", n_pid_before - bldg[, uniqueN(PID)], " PIDs)",
+       log_file = log_file)
+} else {
+  logf("  WARNING: rental_ownership_unsafe_any not found in bldg_panel_blp; no ownership-unsafe exclusion applied",
+       log_file = log_file)
+}
 
 # Owner linkage
-xwalk_owner <- fread(p_product(cfg, "owner_linkage_xwalk"))
-portfolio <- fread(p_product(cfg, "owner_portfolio"))
+xwalk_owner   <- fread(p_product(cfg, "owner_linkage_xwalk"))
+portfolio_cong <- fread(p_product(cfg, "owner_portfolio"))
+xwalk_cong    <- fread(p_product(cfg, "xwalk_pid_conglomerate"))
+xwalk_cong[, PID := normalize_pid(PID)]
 logf("  owner_linkage_xwalk: ", nrow(xwalk_owner), " rows", log_file = log_file)
-logf("  owner_portfolio: ", nrow(portfolio), " rows", log_file = log_file)
+logf("  owner_portfolio (conglomerate-level): ", nrow(portfolio_cong), " rows",
+     log_file = log_file)
 
 # ============================================================
 # SECTION 1: Build Quarterly Eviction Counts (PID × quarter)
@@ -262,12 +296,26 @@ n_collapsed <- nrow(rtt) - nrow(transfers)
 logf("  Collapsed RTT to PID-quarter level: ", nrow(transfers), " transfers (",
      n_collapsed, " duplicates dropped)", log_file = log_file)
 
-# Merge owner linkage
-transfers <- merge(transfers, xwalk_owner[, .(grantee_upper, owner_group_id, is_corp)],
-                   by = "grantee_upper", all.x = TRUE)
+# Merge owner linkage — two-step join: corps by grantee_upper, persons by (grantee_upper, PID).
+xwalk_corp_ow <- xwalk_owner[is.na(PID), .(grantee_upper, owner_group_id, is_corp)]
+xwalk_pers_ow <- xwalk_owner[!is.na(PID), .(grantee_upper, PID, owner_group_id, is_corp)]
+corp_grantees_ow <- xwalk_corp_ow[, unique(grantee_upper)]
+
+transfers_corp_ow <- merge(
+  transfers[grantee_upper %in% corp_grantees_ow],
+  xwalk_corp_ow, by = "grantee_upper", all.x = TRUE)
+transfers_pers_ow <- merge(
+  transfers[!grantee_upper %in% corp_grantees_ow],
+  xwalk_pers_ow, by = c("grantee_upper", "PID"), all.x = TRUE)
+transfers <- rbind(transfers_corp_ow, transfers_pers_ow, fill = TRUE)
+
+# Portfolio: join via (PID, year) → conglomerate_id → portfolio stats.
 transfers <- merge(transfers,
-                   portfolio[, .(owner_group_id, n_properties_total, portfolio_bin)],
-                   by = "owner_group_id", all.x = TRUE)
+  xwalk_cong[, .(PID, year, conglomerate_id)],
+  by = c("PID", "year"), all.x = TRUE)
+transfers <- merge(transfers,
+  portfolio_cong[, .(conglomerate_id, n_properties_total, portfolio_bin)],
+  by = "conglomerate_id", all.x = TRUE)
 logf("  Owner linkage match rate: ",
      round(100 * transfers[!is.na(owner_group_id), .N] / nrow(transfers), 1), "%",
      log_file = log_file)

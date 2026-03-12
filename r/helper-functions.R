@@ -121,6 +121,65 @@ Mode <- function(x, na.rm = FALSE) {
   return(ux[which.max(tabulate(match(x, ux)))])
 }
 
+normalize_owner_name <- function(x) {
+  x |>
+    as.character() |>
+    stringr::str_to_upper() |>
+    stringr::str_squish()
+}
+
+pha_owner_regex <- function() {
+  stringr::regex(
+    paste0(
+      "PHILADELPHIA\\s+HOUSING",
+      "|PHILA[.\\s]?HOUS[A-Z\\s.]{0,20}AUTH",
+      "|\\bPAPMC\\b",
+      "|AFFILIATE\\s+OF\\s+THE\\s+PHILA",
+      "|\\bHOUS\\w*\\s+AUTH"
+    ),
+    ignore_case = TRUE
+  )
+}
+
+university_owner_regex <- function() {
+  positive_patterns <- c(
+    "\\bDREXEL\\b",
+    "THOMAS\\s+JEFFERSON",
+    "JEFFERSON\\s+UNIV",
+    "UNIVERSITY\\s+OF\\s+PENNSYLVANIA",
+    "TRUSTEES\\s+OF\\s+(THE\\s+)?UNIV(ERSITY)?\\s+OF\\s+PENN",
+    "TRS\\s+(OF\\s+THE\\s+)?UNIV\\s+OF\\s+PENN",
+    "TR\\s+UNIV\\s+OF\\s+PENNA",
+    "UNI\\s+PENN\\s+HOUSING",
+    "\\bUPENN\\b",
+    "TEMPLE\\s+UNIVERSITY",
+    "TEMPLE\\s+UNIV",
+    "TEMPLE\\s+UNIVERSITY\\s+HOSPIT",
+    "TEMPLE\\s+(RESEV|PROPERT|NEST|VILLA|CASA|WEST|SOUTH|LOFT|ESTATE|OWL\\s+RENTALS|AREA\\s+STUDENT)",
+    "ARCH\\s+[IVX]+\\s*-?\\s*TEMPLE",
+    "(IFP|IRP)\\s+FUND\\s+II\\s+TEMPLE",
+    "NEST\\s+AT\\s+TEMPLE",
+    "LA\\s+SALLE\\s+(UNIV|COLLEGE)",
+    "LASALLE\\s+(UNIV|COLLEGE|HOUSING)",
+    "SAINT\\s+JOSEPH'?S?\\s+(UNIV|COLLEGE)",
+    "ST[.]?\\s+JOSEPH'?S?\\s+(UNIV|COLLEGE)",
+    "COMMUNITY\\s+COLLEGE\\s+OF\\s+PHILADELPHIA",
+    "HOLY\\s+FAMILY\\s+(UNIV|COLLEGE)",
+    "CURTIS\\s+INSTITUTE",
+    "MOORE\\s+COLLEGE\\s+OF\\s+ART"
+  )
+
+  stringr::regex(paste(positive_patterns, collapse = "|"), ignore_case = TRUE)
+}
+
+is_pha_owner_name <- function(owner_name) {
+  stringr::str_detect(normalize_owner_name(owner_name), pha_owner_regex())
+}
+
+is_university_owner_name <- function(owner_name) {
+  stringr::str_detect(normalize_owner_name(owner_name), university_owner_regex())
+}
+
 impute_units <- function(col){
   col = col %>%
     str_remove("\\.0+")
@@ -153,6 +212,248 @@ impute_baths <- function(col){
     TRUE ~ NA_real_
 
   ) %>% return()
+}
+
+# =============================================================================
+# ALTOS BED-MIX STANDARDIZATION HELPERS
+# =============================================================================
+
+#' Collapse numeric bedrooms into Phase 1 Altos bed bins
+#'
+#' @param beds Numeric bedroom count
+#' @return Character vector in {"studio","1br","2br","3plus"} or NA
+altos_bed_bin <- function(beds) {
+  beds_num <- suppressWarnings(as.numeric(beds))
+  out <- rep(NA_character_, length(beds_num))
+  out[is.finite(beds_num) & beds_num == 0] <- "studio"
+  out[is.finite(beds_num) & beds_num == 1] <- "1br"
+  out[is.finite(beds_num) & beds_num == 2] <- "2br"
+  out[is.finite(beds_num) & beds_num >= 3] <- "3plus"
+  out
+}
+
+#' Map detailed parcel building types to a fixed bed-mix class
+#'
+#' Phase 1 uses coarse classes for Altos composition standardization. Commercial,
+#' non-residential, and missing types are conservatively treated as large-apartment
+#' mix to avoid underweighting smaller-bedroom units.
+#'
+#' @param building_type Character vector from `standardize_building_type()`
+#' @return Character vector in {"small_apartment","mid_apartment","large_apartment"}
+altos_bed_mix_class <- function(building_type) {
+  bt <- toupper(coalesce(as.character(building_type), ""))
+  out <- rep("large_apartment", length(bt))
+
+  out[bt %in% c("DETACHED", "ROW", "TWIN", "SMALL_MULTI_2_4")] <- "small_apartment"
+  out[bt %in% c("LOWRISE_MULTI", "OTHER", "GROUP_QUARTERS")] <- "mid_apartment"
+  out[bt %in% c("MIDRISE_MULTI", "HIGHRISE_MULTI", "MULTI_BLDG_COMPLEX", "COMMERCIAL")] <- "large_apartment"
+
+  out
+}
+
+#' Default fixed bedroom shares by coarse structure class (Phase 1 fallback)
+#'
+#' These are used when an AHS-derived table is unavailable. Shares sum to 1 within
+#' each `mix_class`.
+#'
+#' @return data.table with columns `mix_class`, `bed_bin`, `weight`, `weight_source`
+default_altos_bed_mix_weights <- function() {
+  dt <- data.table::data.table(
+    mix_class = rep(c("small_apartment", "mid_apartment", "large_apartment"), each = 4),
+    bed_bin = rep(c("studio", "1br", "2br", "3plus"), times = 3),
+    weight = c(
+      0.02, 0.22, 0.46, 0.30,  # small_apartment
+      0.06, 0.38, 0.38, 0.18,  # mid_apartment
+      0.14, 0.50, 0.28, 0.08   # large_apartment
+    ),
+    weight_source = "fallback_default_phase1"
+  )
+  dt[]
+}
+
+#' Parse AHS Table 0 bedroom-by-structure counts into Phase 1 bed-mix weights
+#'
+#' Expected source is the CSV export used in this repo (AHS Table 0). The parser
+#' locates the `Bedrooms` section (header row ~189 in the current export), then
+#' reads the rows `None`, `1`, `2`, `3`, and `4 or more`.
+#'
+#' Mapping from AHS structure columns to Phase 1 mix classes:
+#' - `small_apartment` = `2 to 4 Units`
+#' - `mid_apartment`   = `5 to 9 Units` + `10 to 19 Units`
+#' - `large_apartment` = `20 to 49 Units` + `50 or more`
+#'
+#' `3plus` combines the AHS `3` and `4 or more` bedroom rows.
+#'
+#' @param ahs_path Path to AHS Table 0 CSV export
+#' @return data.table with columns `mix_class`, `bed_bin`, `weight`, `weight_source`
+parse_ahs_table0_bed_mix_weights <- function(ahs_path) {
+  stopifnot(file.exists(ahs_path))
+
+  ahs <- data.table::fread(
+    ahs_path,
+    header = FALSE,
+    fill = TRUE,
+    na.strings = c("", "NA"),
+    encoding = "UTF-8"
+  )
+  setDT(ahs)
+
+  # Clean UTF-8 BOM if present in the first cell.
+  if ("V1" %in% names(ahs)) {
+    ahs[, V1 := gsub("^\ufeff", "", as.character(V1))]
+  }
+
+  trim_chr <- function(x) trimws(as.character(x))
+  parse_num <- function(x) {
+    out <- suppressWarnings(as.numeric(gsub(",", "", trim_chr(x), fixed = TRUE)))
+    out[!is.finite(out)] <- NA_real_
+    out
+  }
+
+  # Column labels live in row 2 in this export.
+  header_row <- 2L
+  col_labels <- vapply(ahs[header_row], function(z) trim_chr(z), character(1))
+  col_map <- stats::setNames(seq_along(col_labels), col_labels)
+  col_var_map <- stats::setNames(names(ahs), col_labels)
+
+  req_cols <- c("2 to 4 Units", "5 to 9 Units", "10 to 19 Units", "20 to 49 Units", "50 or more")
+  missing_cols <- setdiff(req_cols, names(col_map))
+  if (length(missing_cols) > 0) {
+    stop("AHS parser: missing expected structure columns: ", paste(missing_cols, collapse = ", "))
+  }
+
+  bedrooms_hdr <- which(trim_chr(ahs$V1) == "Bedrooms")
+  if (length(bedrooms_hdr) == 0) stop("AHS parser: could not find 'Bedrooms' section")
+  bedrooms_hdr <- bedrooms_hdr[1]
+
+  # Data rows begin after the blank row following the section header.
+  start_row <- bedrooms_hdr + 2L
+  row_labels <- trim_chr(ahs$V1)
+  end_row <- which(seq_len(nrow(ahs)) > start_row & row_labels == "")[1] - 1L
+  if (!is.finite(end_row)) end_row <- nrow(ahs)
+
+  bed_block <- ahs[start_row:end_row]
+  bed_block[, row_label := trim_chr(V1)]
+
+  target_rows <- data.table::data.table(
+    row_label = c("None", "1", "2", "3", "4 or more"),
+    bed_bin_src = c("studio", "1br", "2br", "3", "4plus")
+  )
+
+  bed_rows <- merge(target_rows, bed_block, by = "row_label", all.x = TRUE, sort = FALSE)
+  if (bed_rows[is.na(V1), .N] > 0) {
+    stop("AHS parser: missing expected bedroom rows in 'Bedrooms' section")
+  }
+
+  counts_long <- rbindlist(list(
+    data.table::data.table(
+      bed_bin_src = bed_rows$bed_bin_src,
+      mix_class = "small_apartment",
+      count = parse_num(bed_rows[[col_var_map[["2 to 4 Units"]]]])
+    ),
+    data.table::data.table(
+      bed_bin_src = bed_rows$bed_bin_src,
+      mix_class = "mid_apartment",
+      count = parse_num(bed_rows[[col_var_map[["5 to 9 Units"]]]]) +
+        parse_num(bed_rows[[col_var_map[["10 to 19 Units"]]]])
+    ),
+    data.table::data.table(
+      bed_bin_src = bed_rows$bed_bin_src,
+      mix_class = "large_apartment",
+      count = parse_num(bed_rows[[col_var_map[["20 to 49 Units"]]]]) +
+        parse_num(bed_rows[[col_var_map[["50 or more"]]]])
+    )
+  ), use.names = TRUE)
+
+  counts <- counts_long[
+    ,
+    .(count = sum(count, na.rm = TRUE)),
+    by = .(mix_class, bed_bin = fifelse(bed_bin_src %in% c("3", "4plus"), "3plus", bed_bin_src))
+  ]
+
+  # Require all bins and positive totals.
+  req_bins <- c("studio", "1br", "2br", "3plus")
+  out <- CJ(
+    mix_class = c("small_apartment", "mid_apartment", "large_apartment"),
+    bed_bin = req_bins,
+    unique = TRUE
+  )
+  out <- merge(out, counts, by = c("mix_class", "bed_bin"), all.x = TRUE)
+  if (out[is.na(count), .N] > 0) {
+    stop("AHS parser: missing counts for some (mix_class, bed_bin) cells")
+  }
+
+  out[, total_count := sum(count), by = mix_class]
+  if (out[total_count <= 0 | !is.finite(total_count), .N] > 0) {
+    stop("AHS parser: non-positive total count in at least one mix_class")
+  }
+
+  out[, weight := count / total_count]
+  out[, weight_source := "ahs_table0_bedrooms_structure_2026"]
+  out[, c("count", "total_count") := NULL]
+
+  out[]
+}
+
+#' Load AHS-based bedroom shares for Altos standardization (optional)
+#'
+#' This function uses the configured AHS table when available; otherwise it falls
+#' back to `default_altos_bed_mix_weights()` and logs the reason.
+#'
+#' @param cfg Optional config object from `read_config()`
+#' @param input_key Config input key for the AHS table
+#' @param log_file Optional log file path for `logf()`
+#' @return data.table with columns `mix_class`, `bed_bin`, `weight`, `weight_source`
+get_altos_bed_mix_weights <- function(cfg = NULL,
+                                      input_key = "ahs_table0_bed_mix",
+                                      log_file = NULL) {
+  log_local <- function(...) {
+    if (exists("logf", mode = "function")) {
+      logf(..., log_file = log_file)
+    }
+  }
+
+  weights <- default_altos_bed_mix_weights()
+
+  # Optional config-driven AHS path. If absent/missing, fallback silently + log.
+  ahs_path <- NULL
+  if (!is.null(cfg) && !is.null(cfg$inputs) && !is.null(cfg$inputs[[input_key]])) {
+    ahs_path <- if (exists("p_input", mode = "function")) {
+      p_input(cfg, input_key)
+    } else {
+      cfg$inputs[[input_key]]
+    }
+  }
+
+  if (is.null(ahs_path) || !nzchar(ahs_path)) {
+    log_local("Altos bed-mix weights: using fallback defaults (no config input key '", input_key, "').")
+  } else if (!file.exists(ahs_path)) {
+    log_local("Altos bed-mix weights: using fallback defaults (AHS file missing: ", ahs_path, ").")
+  } else {
+    parsed <- tryCatch({
+      parse_ahs_table0_bed_mix_weights(ahs_path)
+    }, error = function(e) {
+      log_local("Altos bed-mix weights: AHS parse failed, using fallback defaults. Error: ",
+                conditionMessage(e))
+      NULL
+    })
+    if (!is.null(parsed)) {
+      weights <- parsed
+      log_local("Altos bed-mix weights: loaded AHS-based weights from ", ahs_path)
+    }
+  }
+
+  # Assertions: weights must be complete and sum to 1 within class
+  req_bins <- c("studio", "1br", "2br", "3plus")
+  req_cls <- c("small_apartment", "mid_apartment", "large_apartment")
+  stopifnot(all(req_bins %in% weights$bed_bin))
+  stopifnot(all(req_cls %in% weights$mix_class))
+  chk <- weights[, .(weight_sum = sum(weight, na.rm = TRUE), n_bins = data.table::uniqueN(bed_bin)), by = mix_class]
+  stopifnot(all(chk$mix_class %in% req_cls))
+  stopifnot(all(abs(chk$weight_sum - 1) < 1e-8))
+  stopifnot(all(chk$n_bins == length(req_bins)))
+
+  weights[]
 }
 
 

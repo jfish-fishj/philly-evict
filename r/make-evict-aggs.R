@@ -40,6 +40,22 @@ Mode <- function(x, na.rm = FALSE) {
   return(ux[which.max(tabulate(match(x, ux)))])
 }
 
+ModeChar <- function(x) {
+  x <- as.character(x)
+  x <- x[!is.na(x) & nzchar(x)]
+  if (!length(x)) return(NA_character_)
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+
+normalize_pid_local <- function(x) {
+  y <- as.character(x)
+  y[!nzchar(y) | y %in% c("NA", "NaN")] <- NA_character_
+  out <- stringr::str_pad(y, width = 9L, side = "left", pad = "0")
+  out[is.na(y)] <- NA_character_
+  out
+}
+
 # ---- Load input data ----
 logf("Loading input data...", log_file = log_file)
 
@@ -91,9 +107,34 @@ if (!is.null(xwalk)) {
   xwalk_cols <- names(xwalk)
   logf("  Crosswalk columns: ", paste(xwalk_cols, collapse = ", "), log_file = log_file)
 
-  # Merge on n_sn_ss_c (the composite address key)
-  if ("n_sn_ss_c" %in% xwalk_cols && "n_sn_ss_c" %in% names(evict)) {
-    # Deduplicate crosswalk: take best match (highest score) per address
+  use_phase1_xwalk <- all(c("source_address_id", "anchor_pid", "xwalk_status", "link_type", "ownership_unsafe") %in% xwalk_cols)
+
+  if (use_phase1_xwalk && "pm.uid" %in% names(evict)) {
+    evict[, source_address_id := as.character(pm.uid)]
+    assert_unique(xwalk, "source_address_id", "xwalk_evictions_to_parcel (source_address_id)")
+    xwalk_unique <- xwalk[
+      ,
+      .(
+        source_address_id = as.character(source_address_id),
+        parcel_number = normalize_pid_local(fcoalesce(anchor_pid, parcel_number)),
+        evict_parcel_number_raw = normalize_pid_local(parcel_number),
+        evict_anchor_pid = normalize_pid_local(anchor_pid),
+        evict_link_id = as.character(link_id),
+        evict_link_type = as.character(link_type),
+        evict_xwalk_status = as.character(xwalk_status),
+        evict_ownership_unsafe = as.logical(fcoalesce(ownership_unsafe, FALSE)),
+        match_tier,
+        match_score
+      )
+    ]
+    evict_m <- merge(
+      evict,
+      xwalk_unique,
+      by = "source_address_id",
+      all.x = TRUE
+    )
+  } else if ("n_sn_ss_c" %in% xwalk_cols && "n_sn_ss_c" %in% names(evict)) {
+    # Legacy path: deduplicate crosswalk by address key
     xwalk_unique <- xwalk[order(-match_score)][!duplicated(n_sn_ss_c)]
     logf("  Deduplicated crosswalk: ", nrow(xwalk_unique), " unique addresses", log_file = log_file)
 
@@ -103,20 +144,16 @@ if (!is.null(xwalk)) {
       by = "n_sn_ss_c",
       all.x = TRUE
     )
-  } else if ("source_address_id" %in% xwalk_cols) {
-    # Alternative: match on source_address_id
-    evict_m <- merge(
-      evict,
-      xwalk[, .(source_address_id, parcel_number, match_tier, match_score)],
-      by.x = "pm.uid",
-      by.y = "source_address_id",
-      all.x = TRUE
-    )
   } else {
     logf("WARNING: Cannot determine crosswalk join key. Using address_id fallback.", log_file = log_file)
     evict_m <- copy(evict)
     evict_m[, parcel_number := NA_character_]
   }
+
+  if (!"evict_link_type" %in% names(evict_m)) evict_m[, evict_link_type := fifelse(!is.na(parcel_number), "parcel", NA_character_)]
+  if (!"evict_xwalk_status" %in% names(evict_m)) evict_m[, evict_xwalk_status := fifelse(!is.na(parcel_number), "legacy_unique_match", NA_character_)]
+  if (!"evict_ownership_unsafe" %in% names(evict_m)) evict_m[, evict_ownership_unsafe := FALSE]
+  if (!"evict_link_id" %in% names(evict_m)) evict_m[, evict_link_id := fifelse(!is.na(parcel_number), as.character(parcel_number), NA_character_)]
 
   # Report match rate
   n_matched <- evict_m[!is.na(parcel_number), .N]
@@ -143,7 +180,12 @@ evict_pid_year <- evict_m[!is.na(parcel_number), .(
   first_filing_date = min(d_filing, na.rm = TRUE),
   last_filing_date = max(d_filing, na.rm = TRUE),
   n_unique_addresses = uniqueN(n_sn_ss_c),
-  modal_zip = Mode(pm.zip, na.rm = TRUE)
+  modal_zip = Mode(pm.zip, na.rm = TRUE),
+  evict_any_ownership_unsafe = any(as.logical(evict_ownership_unsafe), na.rm = TRUE),
+  evict_any_condo_group_link = any(evict_link_type == "condo_group", na.rm = TRUE),
+  evict_link_type_mode = ModeChar(evict_link_type),
+  evict_xwalk_status_mode = ModeChar(evict_xwalk_status),
+  evict_n_link_ids = uniqueN(evict_link_id[!is.na(evict_link_id) & nzchar(evict_link_id)])
 ), by = .(parcel_number, year)]
 
 logf("  Created evict_pid_year: ", nrow(evict_pid_year), " rows", log_file = log_file)
@@ -195,6 +237,13 @@ if ("match_tier" %in% names(evict_m)) {
   for (i in 1:nrow(tier_coverage)) {
     logf("    ", tier_coverage$match_tier[i], ": ", tier_coverage$N[i],
         " (", tier_coverage$pct[i], "%)", log_file = log_file)
+  }
+}
+if ("evict_xwalk_status" %in% names(evict_m)) {
+  xwalk_mix <- evict_m[!is.na(parcel_number), .N, by = evict_xwalk_status][order(-N)]
+  logf("  Xwalk status coverage among linked filings:", log_file = log_file)
+  for (i in seq_len(nrow(xwalk_mix))) {
+    logf("    ", xwalk_mix$evict_xwalk_status[i], ": ", xwalk_mix$N[i], log_file = log_file)
   }
 }
 

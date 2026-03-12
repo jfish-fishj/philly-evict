@@ -824,7 +824,7 @@ if ("owner_1" %in% names(bldg_panel)) {
 
 ## Rental status from ever_rentals_panel columns
 ## Restrict to parcels that ever look like rentals
-rental_pids <- unique(ever_panel$PID)
+rental_pids <- unique(ever_panel[ever_rental_any_year %in% TRUE, PID])
 bldg_panel  <- bldg_panel[PID %in% rental_pids]
 
 ## Restrict to multi-unit rentals (tweak threshold as needed)
@@ -996,7 +996,10 @@ bldg_panel[, total_units := as.numeric(total_units)]
 # Source label (keep your convention; infer if absent)
 if (!("source" %in% names(bldg_panel))) {
   bldg_panel[, source := fifelse(rental_from_altos == 1, "altos",
-                                 fifelse(rental_from_evict == 1, "evict", NA_character_))]
+                                 fifelse(rental_from_evict == 1, "evict",
+                                         fifelse(rental_from_license == 1, "license",
+                                                 fifelse(rental_from_nhpd == 1, "nhpd",
+                                                         fifelse(rental_from_owner == 1, "owner", NA_character_)))))]
 }
 
 # Decade built
@@ -1106,7 +1109,8 @@ owner_market <- bldg_panel[
     owner_parcels     = .N,
     any_evict_owner   = any(fco(rental_from_evict, FALSE) | fco(num_filings, 0) > 0, na.rm = TRUE),
     any_altos_owner   = any(fco(rental_from_altos, FALSE), na.rm = TRUE),
-    any_license_owner = any(fco(rental_from_license, FALSE), na.rm = TRUE)
+    any_license_owner = any(fco(rental_from_license, FALSE), na.rm = TRUE),
+    any_nhpd_owner    = any(fco(rental_from_nhpd, FALSE), na.rm = TRUE)
   ),
   by = .(market_id, owner_mailing_clean)
 ]
@@ -1245,96 +1249,46 @@ logf(sprintf("  zip-year-bin share sums: mean=%.4f, median=%.4f",
              mean(share_bin_sums$share_sum), median(share_bin_sums$share_sum)), log_file = log_file)
 
 ## ------------------------------------------------------------
-## 8) SIMPLE BLP-STYLE INSTRUMENTS
+## 8) SIMPLE BLP-STYLE INSTRUMENTS  [DISABLED — z_* cols unused]
 ## ------------------------------------------------------------
-
-make_blp_instruments <- function(
-    DT,
-    market,
-    product_id,
-    firm,
-    cont_vars = character(),
-    prefix = "z"
-) {
-  stopifnot(data.table::is.data.table(DT))
-  mkt <- market
-  frm <- firm
-
-  ## Counts
-  DT[, `:=`(
-    z_cnt_market = .N,
-    z_cnt_firm   = .N
-  ), by = c(mkt, frm)]
-
-  DT[
-    ,
-    `:=`(
-      z_cnt_others    = z_cnt_market - 1L,
-      z_cnt_samefirm  = z_cnt_firm - 1L,
-      z_cnt_otherfirm = z_cnt_market - z_cnt_firm
-    )
-  ]
-
-  for (v in cont_vars) {
-    if (!v %in% names(DT)) {
-      warning("make_blp_instruments: skipping missing variable: ", v)
-      next
-    }
-
-    nm_all <- paste(prefix, "sum_others",    v, sep = "_")
-    nm_sf  <- paste(prefix, "sum_samefirm",  v, sep = "_")
-    nm_of  <- paste(prefix, "sum_otherfirm", v, sep = "_")
-
-    DT[, tmp_v := fco(get(v), 0)]
-
-    DT[
-      ,
-      sum_market := sum(tmp_v),
-      by = c(mkt)
-    ]
-    DT[
-      ,
-      sum_firm := sum(tmp_v),
-      by = c(mkt, frm)
-    ]
-    DT[,(nm_all) := sum_market - tmp_v]
-    DT[,(nm_sf)  := sum_firm   - tmp_v]
-    DT[,(nm_of)  := sum_market - sum_firm]
-
-  }
-
-  DT[, c("tmp_v", "sum_market", "sum_firm") := NULL]
-  invisible(DT)
-}
-
-blp_cont_vars <- c(
-  "total_units",
-  "log_med_rent",
-  "hazardous_violation_count",
-  "total_violations",
-  "total_severe_violations",
-  "total_investigations",
-  "total_severe_investigations",
-  "building_permit_count",
-  "general_permit_count",
-  "mechanical_permit_count",
-  "zoning_permit_count",
-  "plumbing_permit_count",
-  "taxable_value",
-  "change_taxable_value",
-  "log_taxable_value",
-  "change_taxable_value_per_unit",
-  "log_taxable_value_per_unit"
-)
-
-bldg_panel <- make_blp_instruments(
-  DT         = bldg_panel,
-  market     = "market_id",
-  product_id = "PID",
-  firm       = "owner_mailing_clean",
-  cont_vars  = blp_cont_vars,
-  prefix     = "z"
-)
+## To re-enable, uncomment the block below.
+# make_blp_instruments <- function(
+#     DT, market, product_id, firm, cont_vars = character(), prefix = "z"
+# ) {
+#   stopifnot(data.table::is.data.table(DT))
+#   mkt <- market; frm <- firm
+#   DT[, `:=`(z_cnt_market = .N, z_cnt_firm = .N), by = c(mkt, frm)]
+#   DT[, `:=`(z_cnt_others = z_cnt_market - 1L,
+#              z_cnt_samefirm = z_cnt_firm - 1L,
+#              z_cnt_otherfirm = z_cnt_market - z_cnt_firm)]
+#   for (v in cont_vars) {
+#     if (!v %in% names(DT)) { warning("skipping missing: ", v); next }
+#     nm_all <- paste(prefix, "sum_others",    v, sep = "_")
+#     nm_sf  <- paste(prefix, "sum_samefirm",  v, sep = "_")
+#     nm_of  <- paste(prefix, "sum_otherfirm", v, sep = "_")
+#     DT[, tmp_v := fco(get(v), 0)]
+#     DT[, sum_market := sum(tmp_v), by = c(mkt)]
+#     DT[, sum_firm   := sum(tmp_v), by = c(mkt, frm)]
+#     DT[, (nm_all) := sum_market - tmp_v]
+#     DT[, (nm_sf)  := sum_firm   - tmp_v]
+#     DT[, (nm_of)  := sum_market - sum_firm]
+#   }
+#   DT[, c("tmp_v", "sum_market", "sum_firm") := NULL]
+#   invisible(DT)
+# }
+# blp_cont_vars <- c(
+#   "total_units", "log_med_rent", "hazardous_violation_count",
+#   "total_violations", "total_severe_violations",
+#   "total_investigations", "total_severe_investigations",
+#   "building_permit_count", "general_permit_count",
+#   "mechanical_permit_count", "zoning_permit_count", "plumbing_permit_count",
+#   "taxable_value", "change_taxable_value", "log_taxable_value",
+#   "change_taxable_value_per_unit", "log_taxable_value_per_unit"
+# )
+# bldg_panel <- make_blp_instruments(
+#   DT = bldg_panel, market = "market_id", product_id = "PID",
+#   firm = "owner_mailing_clean", cont_vars = blp_cont_vars, prefix = "z"
+# )
 
 ## ------------------------------------------------------------
 ## 9) FILTER DOWN TO ANALYTIC SAMPLE

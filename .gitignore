@@ -15,5 +15,6 @@ Output/logs*
 claude-chats/*
 Codex-chats/*
 scratch/
+tmp/
 **/smoke*/
 graveyard/

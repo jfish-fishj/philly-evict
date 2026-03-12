@@ -344,10 +344,13 @@ legacy_infousa_link_pids <- unique(xwalk_addr_unique$PID)
 rental_pid_xwalk_qa <- unique(
   ever_rentals_pid[, .(
     PID,
+    ever_rental_owner,
+    ever_rental_nhpd,
     ever_rental_altos,
     ever_rental_license,
     ever_rental_evict,
     years_any_evidence,
+    nhpd_property_count,
     years_altos,
     years_license,
     years_evict,
@@ -419,13 +422,13 @@ xwalk_cov_summary <- rbindlist(list(
 
 gained_rental_pids <- rental_pid_xwalk_qa[gained_by_harmonized == TRUE, .(
   PID, units_wt, mode_num_units, num_units, mean_num_units,
-  ever_rental_altos, ever_rental_license, ever_rental_evict,
+  ever_rental_owner, ever_rental_nhpd, ever_rental_altos, ever_rental_license, ever_rental_evict,
   years_any_evidence, years_altos, years_license, years_evict
 )][order(-units_wt, -years_any_evidence, PID)]
 
 lost_rental_pids <- rental_pid_xwalk_qa[lost_vs_legacy == TRUE, .(
   PID, units_wt, mode_num_units, num_units, mean_num_units,
-  ever_rental_altos, ever_rental_license, ever_rental_evict,
+  ever_rental_owner, ever_rental_nhpd, ever_rental_altos, ever_rental_license, ever_rental_evict,
   years_any_evidence, years_altos, years_license, years_evict
 )][order(-units_wt, -years_any_evidence, PID)]
 
@@ -433,6 +436,8 @@ gained_by_evidence <- rental_pid_xwalk_qa[gained_by_harmonized == TRUE, .(
   n_pid = .N,
   units = sum(units_wt, na.rm = TRUE)
 ), by = .(
+  ever_rental_owner = as.integer(ever_rental_owner %in% TRUE),
+  ever_rental_nhpd = as.integer(ever_rental_nhpd %in% TRUE),
   ever_rental_altos = as.integer(ever_rental_altos %in% TRUE),
   ever_rental_license = as.integer(ever_rental_license %in% TRUE),
   ever_rental_evict = as.integer(ever_rental_evict %in% TRUE)
@@ -706,7 +711,7 @@ parcel_agg[, structure_bin := fcase(
 
 parcel_agg = merge(
   parcel_agg,
-  ever_rentals_pid[,.(PID, ever_rental_altos, ever_rental_license,
+  ever_rentals_pid[,.(PID, ever_rental_owner, ever_rental_nhpd, ever_rental_altos, ever_rental_license,
                       ever_rental_evict, ever_rental_any, intensity_total_sum,
                       intensity_altos_sum, intensity_license_sum, intensity_evict_sum,
                       years_any_evidence, years_altos, years_license, years_evict
@@ -716,7 +721,7 @@ parcel_agg = merge(
 )
 
 # replace NAs with 0 for ever_rental indicators
-for (nm in c("ever_rental_altos","ever_rental_license","ever_rental_evict","ever_rental_any")) {
+for (nm in c("ever_rental_owner","ever_rental_nhpd","ever_rental_altos","ever_rental_license","ever_rental_evict","ever_rental_any")) {
   parcel_agg[is.na(get(nm)), (nm) := 0L]
 }
 
@@ -745,7 +750,13 @@ parcel_agg[, is_ambig := building_type %in% c("OTHER","COMMERCIAL","GROUP_QUARTE
 
 parcel_agg[, has_hh      := !is.na(max_households) & max_households >= 1]
 
-parcel_agg[, has_rental_evidence := (ever_rental_license == 1L) | (ever_rental_altos == 1L) | (ever_rental_evict == 1L) ]
+parcel_agg[, has_rental_evidence :=
+  (ever_rental_owner == 1L) |
+  (ever_rental_nhpd == 1L) |
+  (ever_rental_license == 1L) |
+  (ever_rental_altos == 1L) |
+  (ever_rental_evict == 1L)
+]
 
 # residential universe flag
 parcel_agg[, in_res_universe := is_def_res |
@@ -932,15 +943,46 @@ parcel_agg[!is.finite(num_units_seed) | is.na(num_units_seed) | num_units_seed <
 parcel_agg[, num_units_base := fifelse(!is.na(num_units_label), num_units_label, num_units_seed)]
 parcel_agg[, num_units_base := pmax(1, num_units_base)]
 
-# where num_units_label = 1 but num_units_seed > 10, use num_units_seed (likely a mislabeled single-family with strong multi-family signal)
-parcel_agg[num_units_label == 1 & num_units_seed > 10, num_units_base := num_units_seed]
-
 # Condo-like address override:
 # If an address has many PID rows and condo signal, PID-level labels of 1 are
 # typically parcel splits rather than true building unit totals. In these cases
 # keep address-level distributed seeds instead of PID labels.
 parcel_agg[, condo_like_addr := is_condo_addr == 1L & n_pid_addr >= 10 & n_label_addr >= 5 & label_mean_addr <= 1.5]
 parcel_agg[condo_like_addr == TRUE, num_units_base := num_units_seed]
+
+# Only let very large seeds overwrite a 1-unit label when there is
+# corroborating multi-family evidence. This blocks office/hotel/institutional
+# parcels with bad 1-unit labels from exploding into large unit counts.
+parcel_agg[, nonres_building_code_signal := stringr::str_detect(
+  stringr::str_to_upper(fcoalesce(building_code_description_new, "")),
+  "HOTEL|OFFICE|SCHOOL|RELIGIOUS|RECREATIONAL|INDUSTRIAL|COLLEGES"
+)]
+parcel_agg[, allow_label1_seed_override := (
+  condo_like_addr == TRUE |
+    (!is.na(max_hh_addr) & max_hh_addr >= 5) |
+    (
+      building_type %in% c("SMALL_MULTI_2_4", "LOWRISE_MULTI", "MIDRISE_MULTI", "HIGHRISE_MULTI", "MULTI_BLDG_COMPLEX") &
+        !nonres_building_code_signal
+    )
+)]
+label1_seed_candidates <- parcel_agg[num_units_label == 1 & num_units_seed > 10, .N]
+label1_seed_allowed <- parcel_agg[
+  num_units_label == 1 & num_units_seed > 10 & allow_label1_seed_override == TRUE,
+  .N
+]
+parcel_agg[
+  num_units_label == 1 & num_units_seed > 10 & allow_label1_seed_override == TRUE,
+  num_units_base := num_units_seed
+]
+logf(
+  "  [label=1 seed override] candidates=",
+  label1_seed_candidates,
+  " allowed=",
+  label1_seed_allowed,
+  " blocked=",
+  label1_seed_candidates - label1_seed_allowed,
+  log_file = log_file
+)
 
 # Additional undercount guardrail:
 # if an address is condo-split and has many observed households, do not allow
@@ -986,7 +1028,7 @@ logf("  [Step 3] Suspect commercial parcels flagged: ", n_suspect, log_file = lo
 # Write QA output for spot-checking
 suspect_qa <- parcel_agg[suspect_commercial == TRUE, .(
   PID, building_type, num_units_base, max_households,
-  ever_rental_altos, ever_rental_license, ever_rental_evict,
+  ever_rental_owner, ever_rental_nhpd, ever_rental_altos, ever_rental_license, ever_rental_evict,
   has_rental_evidence, structure_bin, n_sn_ss_c
 )]
 suspect_qa_out <- p_out(cfg, "qa", "suspect_commercial_parcels.csv")
@@ -1227,6 +1269,8 @@ ever_pid_stats <- ever_rentals_panel[
   ,
   .(
     ever_rental_any      = as.integer(any(ever_rental_any_year, na.rm = TRUE)),
+    ever_rental_owner    = as.integer(any(rental_from_owner,   na.rm = TRUE)),
+    ever_rental_nhpd     = as.integer(any(rental_from_nhpd,    na.rm = TRUE)),
     ever_rental_altos    = as.integer(any(rental_from_altos,   na.rm = TRUE)),
     ever_rental_license  = as.integer(any(rental_from_license, na.rm = TRUE)),
     ever_rental_evict    = as.integer(any(rental_from_evict,   na.rm = TRUE)),
@@ -1236,7 +1280,7 @@ ever_pid_stats <- ever_rentals_panel[
 ]
 
 parcel_bg <- merge(parcel_bg, ever_pid_stats, by = "PID", all.x = TRUE)
-for (nm in c("ever_rental_any","ever_rental_altos","ever_rental_license","ever_rental_evict","ever_filings_any")) {
+for (nm in c("ever_rental_any","ever_rental_owner","ever_rental_nhpd","ever_rental_altos","ever_rental_license","ever_rental_evict","ever_filings_any")) {
   parcel_bg[is.na(get(nm)), (nm) := 0L]
 }
 
@@ -1254,21 +1298,21 @@ base <- fcase(
   default = 0.3
 )
 
-# label: choose something you believe indicates "rental"
-parcel_bg[, y_rental := as.integer(ever_rental_license == 1L)]  # or ever_rental_any_year, etc.
+# Label "rental" from the effective rental universe, not licenses alone.
+parcel_bg[, y_rental := as.integer(ever_rental_any == 1L)]
 
 parcel_bg[, z_log_bldg_sqft := scale(log_bldg_sqft)]
 parcel_bg[, z_log_bldg_hgt  := scale(log_bldg_hgt)]
 
 m <- glm(
-  y_rental ~ building_type + is_condo + z_log_bldg_sqft + z_log_bldg_hgt + ever_filings_any + ever_rental_altos + ever_rental_evict,
+  y_rental ~ building_type + is_condo + z_log_bldg_sqft + z_log_bldg_hgt + ever_filings_any + ever_rental_nhpd + ever_rental_altos + ever_rental_evict,
   data = parcel_bg,
   family = binomial()
 )
 
 parcel_bg[, p_rent := predict(m, type = "response", newdata = parcel_bg)]
 # replace p_rent = 1 if there is rental evidence (to ensure all evidence gets allocated renters)
-parcel_bg[ever_rental_license == 1L, p_rent := 1]
+parcel_bg[ever_rental_any == 1L, p_rent := 1]
 # now for p <= 0.25 -> 0
 parcel_bg[p_rent < 0.25, p_rent := 0]
 
@@ -1407,6 +1451,8 @@ logf(
 # rental panel info
 ever_panel_year <- ever_rentals_panel[, .(
   PID, year,
+  rental_from_owner,
+  rental_from_nhpd,
   ever_rental_any_year,
   rental_from_altos,
   rental_from_license,
@@ -1579,6 +1625,8 @@ panel[is.na(total_units) | total_units <= 0, total_units := 1L]
 panel[, num_households_observed_raw := num_households]
 panel[, rental_row_for_link_fill := (
   ever_rental_any_year %in% TRUE |
+    rental_from_owner %in% TRUE |
+    rental_from_nhpd %in% TRUE |
     rental_from_altos %in% TRUE |
     rental_from_license %in% TRUE |
     rental_from_evict %in% TRUE
@@ -1771,6 +1819,8 @@ never_hh_pids <- panel[
     total_units = first(total_units),
     building_type = first(building_type),
     structure_bin = first(structure_bin),
+    has_owner = any(rental_from_owner %in% TRUE),
+    has_nhpd = any(rental_from_nhpd %in% TRUE),
     has_license = any(rental_from_license %in% TRUE),
     has_altos = any(rental_from_altos %in% TRUE),
     has_evict = any(rental_from_evict %in% TRUE),
@@ -1784,11 +1834,13 @@ never_hh_summary <- never_hh_pids[, .(
   n_units_3_5 = sum(total_units >= 3 & total_units <= 5),
   n_units_6_20 = sum(total_units >= 6 & total_units <= 20),
   n_units_21plus = sum(total_units >= 21),
+  has_owner = sum(has_owner),
+  has_nhpd = sum(has_nhpd),
   has_license = sum(has_license),
   has_altos = sum(has_altos),
   has_evict = sum(has_evict),
-  has_any_evidence = sum(has_license | has_altos | has_evict),
-  has_no_evidence = sum(!has_license & !has_altos & !has_evict & total_filings == 0)
+  has_any_evidence = sum(has_owner | has_nhpd | has_license | has_altos | has_evict),
+  has_no_evidence = sum(!has_owner & !has_nhpd & !has_license & !has_altos & !has_evict & total_filings == 0)
 )]
 logf(sprintf(
   "  [Fix 2 diagnostic] PIDs with NO InfoUSA data ever (2011-2019): %d PIDs",
@@ -1800,8 +1852,8 @@ logf(sprintf(
   never_hh_summary$n_units_6_20, never_hh_summary$n_units_21plus
 ), log_file = log_file)
 logf(sprintf(
-  "    Rental evidence: license=%d, altos=%d, evict=%d, any=%d, NONE=%d",
-  never_hh_summary$has_license, never_hh_summary$has_altos,
+  "    Rental evidence: owner=%d, nhpd=%d, license=%d, altos=%d, evict=%d, any=%d, NONE=%d",
+  never_hh_summary$has_owner, never_hh_summary$has_nhpd, never_hh_summary$has_license, never_hh_summary$has_altos,
   never_hh_summary$has_evict, never_hh_summary$has_any_evidence,
   never_hh_summary$has_no_evidence
 ), log_file = log_file)
@@ -1898,6 +1950,8 @@ never_infousa_pid_review <- panel[
     total_units_max = max(total_units, na.rm = TRUE),
     building_type = first(building_type),
     structure_bin = first(structure_bin),
+    years_owner = sum(rental_from_owner %in% TRUE, na.rm = TRUE),
+    years_nhpd = sum(rental_from_nhpd %in% TRUE, na.rm = TRUE),
     years_license = sum(rental_from_license %in% TRUE, na.rm = TRUE),
     years_altos = sum(rental_from_altos %in% TRUE, na.rm = TRUE),
     years_evict = sum(rental_from_evict %in% TRUE, na.rm = TRUE),
@@ -1906,9 +1960,9 @@ never_infousa_pid_review <- panel[
   by = PID
 ]
 never_infousa_pid_review[, strong_counterevidence := (
-  (years_license >= 2L) + (years_altos >= 2L) + (years_evict >= 2L) >= 2L
+  (years_owner >= 2L) + (years_nhpd >= 2L) + (years_license >= 2L) + (years_altos >= 2L) + (years_evict >= 2L) >= 2L
 ) | total_filings >= 10L]
-setorder(never_infousa_pid_review, -total_units_max, -years_license, -years_altos, -years_evict, -total_filings)
+setorder(never_infousa_pid_review, -total_units_max, -years_owner, -years_nhpd, -years_license, -years_altos, -years_evict, -total_filings)
 never_review_out <- p_out(cfg, "qa", "infousa_never_in_infousa_pid_review.csv")
 fwrite(never_infousa_pid_review, never_review_out)
 logf(
@@ -1940,6 +1994,8 @@ spotty_large_pid_year <- panel[
     num_households_raw_gapfill_1y,
     num_households_completed,
     spotty_adjacent_observed,
+    rental_from_owner,
+    rental_from_nhpd,
     rental_from_license, rental_from_altos, rental_from_evict,
     num_filings
   )
@@ -1970,6 +2026,8 @@ n_filled_locf <- panel[pid_has_any_hh == TRUE & has_hh_data == FALSE & !is.na(oc
 # altos, eviction filings). PIDs with no InfoUSA AND no rental evidence are
 # likely not rentals at all — imputing occupancy for them inflates denominators.
 panel[, pid_has_rental_evidence := any(
+  rental_from_owner %in% TRUE |
+  rental_from_nhpd %in% TRUE |
   rental_from_license %in% TRUE |
   rental_from_altos %in% TRUE |
   rental_from_evict %in% TRUE |
@@ -2254,6 +2312,8 @@ if (nrow(oversub) > 0) {
 # ---- Identify rental PIDs for scaling ----
 # A PID-year qualifies as "rental" if it has any rental signal that year
 panel[, rental_year := as.integer(
+  (rental_from_owner   %in% TRUE) |
+  (rental_from_nhpd    %in% TRUE) |
   (rental_from_altos   %in% TRUE) |
   (rental_from_license %in% TRUE) |
   (rental_from_evict   %in% TRUE) |
@@ -2411,19 +2471,27 @@ fwrite(panel, out_path_all)
 logf("Wrote parcel_occupancy_panel: ", nrow(panel), " rows to ", out_path_all, log_file = log_file)
 
 # Rental-only subset (fix old bug: rental_from_altos is boolean; do NOT use > 1)
+panel[, ever_rental_owner    := any(rental_from_owner,   na.rm = TRUE), by = PID]
+panel[, ever_rental_nhpd     := any(rental_from_nhpd,    na.rm = TRUE), by = PID]
 panel[, ever_rental_license := any(rental_from_license, na.rm = TRUE), by = PID]
 panel[, ever_rental_altos   := any(rental_from_altos,   na.rm = TRUE), by = PID]
 panel[, ever_evict          := any(num_filings > 0,     na.rm = TRUE), by = PID]
 
 # repeat but years
+panel[,num_years_owner   := sum(rental_from_owner,   na.rm=TRUE), by=PID]
+panel[,num_years_nhpd    := sum(rental_from_nhpd,    na.rm=TRUE), by=PID]
 panel[,num_years_license := sum(rental_from_license, na.rm=TRUE), by=PID]
 panel[,num_years_altos   := sum(rental_from_altos,   na.rm=TRUE), by=PID]
 panel[,num_filings       := sum(num_filings,       na.rm=TRUE), by=PID]
 
 panel_rentals <- panel[
-  (rental_from_altos %||% FALSE) |
+  (rental_from_owner %||% FALSE) |
+    (rental_from_nhpd %||% FALSE) |
+    (rental_from_altos %||% FALSE) |
     (rental_from_license %||% FALSE) |
     ((num_filings > 5)) |
+    (num_years_owner > 0) |
+    (num_years_nhpd > 0) |
     (num_years_license > 0) |
     (num_years_altos   > 3)
 ]

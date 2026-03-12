@@ -25,8 +25,8 @@ source("r/config.R")
 source("r/helper-functions.R")
 cfg <- read_config()
 log_file <- p_out(cfg, "logs", "price-regs-eb.log")
-tab_dir <- p_out(cfg, "tables")
-fig_dir <- p_out(cfg, "figs")
+tab_dir <- p_out(cfg, "price-regs-eb", "tables")
+fig_dir <- p_out(cfg, "price-regs-eb", "figs")
 dir.create(tab_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
 logf("=== Starting price-regs-eb.R ===", log_file = log_file)
@@ -193,14 +193,14 @@ tab <- etable(
   tex   = TRUE
 )
 
-writeLines(tab, p_out(cfg, "tables", "hedonic_eviction_intensity_eb.tex"))
+writeLines(tab, file.path(tab_dir, "hedonic_eviction_intensity_eb.tex"))
 
 tab_tenant <- etable(
   m_bin, m_cont, m_bin_tenant, m_cont_tenant,
   title = "Hedonic rent regressions with tenant composition controls (additive)",
   tex = TRUE
 )
-writeLines(tab_tenant, p_out(cfg, "tables", "hedonic_eviction_intensity_eb_with_tenant_composition.tex"))
+writeLines(tab_tenant, file.path(tab_dir, "hedonic_eviction_intensity_eb_with_tenant_composition.tex"))
 
 extract_model_coefs <- function(model, model_name, term_pattern) {
   ct <- as.data.table(summary(model)$coeftable, keep.rownames = "term")
@@ -232,7 +232,7 @@ if (!nrow(coef_compare)) {
 }
 fwrite(
   coef_compare,
-  p_out(cfg, "tables", "hedonic_eviction_intensity_eb_tenant_composition_coef_compare.csv")
+  file.path(tab_dir, "hedonic_eviction_intensity_eb_tenant_composition_coef_compare.csv")
 )
 
 # Coefficient plot for binned model
@@ -254,7 +254,7 @@ if (nrow(coef_dt) > 0) {
     ) +
     theme_minimal()
 
-  ggsave(p_out(cfg, "figs", "coefplot_hedonic_eviction_intensity_eb.png"),
+  ggsave(file.path(fig_dir, "coefplot_hedonic_eviction_intensity_eb.png"),
          p, width = 8, height = 5, bg = "white")
 }
 
@@ -274,7 +274,7 @@ logf(
 )
 
 # ------------------------------------------------------------------
-# Diagnostics: residual variation and spline stigma curve
+# Diagnostics: residual variation and spline filing curve
 # ------------------------------------------------------------------
 
 
@@ -663,14 +663,13 @@ p_spline <- ggplot() +
   #   aes(x = x, y = y),
   #   size = 3
   # ) +
-  geom_smooth(data = all_rows, aes(x = x, y = y, weight = w), se = F)+
   scale_x_continuous(breaks = scales::pretty_breaks(20), limits = c(0,0.25)) +
   scale_y_continuous(breaks = scales::pretty_breaks(10)) +
 
   labs(
     x = "EB filing rate (pre-2019), ever-filers",
     y = "Partial residual (filing component) vs never-filers",
-    title = "Spline-implied stigma curve with partial-residual binned means overlay",
+    title = "Spline-implied filing curve with partial-residual binned means overlay",
     weights = "Point size = total unit-years in bin",
     subtitle = paste0(
       "Points: binned means of \n(fitted filing component + residual) − β_never; ",
@@ -679,7 +678,7 @@ p_spline <- ggplot() +
   ) +
   theme_philly_evict()
 
-ggsave(file.path(fig_dir, "spline_stigma_curve.png"),
+ggsave(file.path(fig_dir, "spline_filing_curve.png"),
        p_spline, width = 10, height = 6, dpi = 300, bg = "white")
 
 logf("=== Finished price-regs-eb.R ===", log_file = log_file)

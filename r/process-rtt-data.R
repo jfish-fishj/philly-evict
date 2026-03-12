@@ -149,8 +149,18 @@ logf("--- STEP 4: Arms-length transfer filter ---", log_file = log_file)
 
 n_before <- nrow(rtt)
 
-# Flag each filter reason independently (rows can hit multiple)
-rtt[, low_consideration := is.na(total_consideration) | total_consideration < 100]
+# Flag sheriff's deeds before applying filters.
+# Sheriff's deeds legitimately have $0 or NA consideration (forced sales) —
+# they must not be dropped by the low_consideration check.
+rtt[, is_sheriff_deed := grepl("SHERIFF", toupper(trimws(document_type)))]
+logf("  Sheriff's deeds entering filter: ", rtt[is_sheriff_deed == TRUE, .N],
+     " (", round(100 * rtt[is_sheriff_deed == TRUE, .N] / n_before, 1), "%)",
+     log_file = log_file)
+
+# Flag each filter reason independently (rows can hit multiple).
+# low_consideration only applies to non-sheriff deeds.
+rtt[, low_consideration := (!is_sheriff_deed) &
+      (is.na(total_consideration) | total_consideration < 100)]
 
 rtt[, grantors_clean := toupper(trimws(grantors))]
 rtt[, grantees_clean := toupper(trimws(grantees))]
@@ -200,8 +210,13 @@ for (i in seq_len(nrow(filter_by_type))) {
 rtt <- rtt[is_arms_length == TRUE]
 logf("After arms-length filter: ", nrow(rtt), " rows (dropped ", n_before - nrow(rtt), ")",
      log_file = log_file)
+logf("  Post-filter by deed class:",
+     log_file = log_file)
+logf("    Regular deeds:   ", rtt[is_sheriff_deed == FALSE, .N], log_file = log_file)
+logf("    Sheriff's deeds: ", rtt[is_sheriff_deed == TRUE,  .N],
+     " (expected ~100% retained)", log_file = log_file)
 
-# Drop temp filter columns
+# Drop temp filter columns (keep is_sheriff_deed — stable output column)
 rtt[, c("low_consideration", "self_transfer", "bulk_transfer",
         "is_arms_length", "grantors_clean", "grantees_clean") := NULL]
 
@@ -212,6 +227,7 @@ logf("--- STEP 5: Final column selection and checks ---", log_file = log_file)
 
 keep_cols <- c("PID", "display_date", "year", "year_quarter",
                "document_type", "document_id", "record_id",
+               "is_sheriff_deed",
                "total_consideration", "adjusted_total_consideration",
                "cash_consideration", "assessed_value", "fair_market_value",
                "grantors", "grantees",

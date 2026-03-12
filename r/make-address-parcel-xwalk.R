@@ -39,7 +39,7 @@ logf("Config: ", cfg$meta$config_path, log_file = log_file)
 # ============================================================
 
 MATCH_PARAMS <- list(
-  version = "1.0.0",
+  version = "1.1.0",
 
   # Fuzzy matching thresholds
   fuzzy_threshold = 0.85,
@@ -57,6 +57,7 @@ MATCH_PARAMS <- list(
 
   # Blocking parameters
   house_diff_max = 2,
+  near_number_house_diff_max = 10,
   street_prefix_len = 3
 )
 
@@ -82,6 +83,179 @@ create_stable_id <- function(house, street, suffix, zip) {
   # Create canonical string and hash
   canonical <- paste(house, street, suffix, zip, sep = "|")
   sapply(canonical, function(x) digest(x, algo = "xxhash32"), USE.NAMES = FALSE)
+}
+
+#' Condo flag for parcels (mirrors `standardize_building_type()` condo detection in r/helper-functions.R)
+infer_is_condo_parcel <- function(old_desc, new_desc) {
+  old_desc <- str_to_upper(replace_na(as.character(old_desc), ""))
+  new_desc <- str_to_upper(replace_na(as.character(new_desc), ""))
+  grepl("CONDO", old_desc) | grepl("CONDO", new_desc)
+}
+
+#' Build deterministic condo parcel groups using common parcel address keys.
+#' Phase 1 uses shared `n_sn_ss_c` among condo parcels as the grouping key.
+build_condo_parcel_groups <- function(parcels_dt) {
+  stopifnot(is.data.table(parcels_dt))
+  assert_has_cols(parcels_dt, c("parcel_number", "n_sn_ss_c", "building_code_description", "building_code_description_new"))
+
+  m <- copy(parcels_dt)[, .(
+    parcel_number = as.character(parcel_number),
+    n_sn_ss_c = str_squish(str_to_lower(replace_na(as.character(n_sn_ss_c), ""))),
+    is_condo = infer_is_condo_parcel(building_code_description, building_code_description_new)
+  )]
+
+  m[, n_sn_ss_c := fifelse(nzchar(n_sn_ss_c), n_sn_ss_c, NA_character_)]
+  m <- unique(m, by = c("parcel_number", "n_sn_ss_c"))
+  assert_unique(m, c("parcel_number"), "parcels_dt (for condo grouping)")
+
+  out <- copy(m)
+  out[, `:=`(
+    condo_group_id = NA_character_,
+    anchor_pid = NA_character_,
+    group_size_pids = NA_integer_,
+    group_n_parcel_addresses = NA_integer_
+  )]
+
+  condo_with_addr <- out[is_condo == TRUE & !is.na(n_sn_ss_c)]
+  if (nrow(condo_with_addr) > 0) {
+    grp <- condo_with_addr[, .(
+      group_size_pids = .N,
+      group_n_parcel_addresses = uniqueN(n_sn_ss_c),
+      anchor_pid = sort(as.character(parcel_number))[1L]
+    ), by = n_sn_ss_c]
+    grp[, condo_group_id := vapply(
+      n_sn_ss_c,
+      function(x) paste0("cg_", digest(paste0("n_sn_ss_c|", x), algo = "xxhash64")),
+      FUN.VALUE = character(1)
+    )]
+    assert_unique(grp, c("n_sn_ss_c"), "condo group mapping by n_sn_ss_c")
+    assert_unique(grp, c("condo_group_id"), "condo group ids")
+
+    out[grp, `:=`(
+      condo_group_id = i.condo_group_id,
+      anchor_pid = i.anchor_pid,
+      group_size_pids = i.group_size_pids,
+      group_n_parcel_addresses = i.group_n_parcel_addresses
+    ), on = "n_sn_ss_c"]
+  }
+
+  # Non-condos and condos without a shared common-address key remain parcel-linked only.
+  out[is.na(anchor_pid), anchor_pid := as.character(parcel_number)]
+  out[, group_key_version := "phase1_n_sn_ss_c_v1"]
+  assert_unique(out, c("parcel_number"), "condo_parcel_group_membership")
+  out[]
+}
+
+#' Add source-agnostic xwalk status + condo diagnostics to winner rows.
+add_xwalk_phase1_diagnostics <- function(winners, all_candidates, condo_membership, source_name) {
+  stopifnot(is.data.table(winners), is.data.table(all_candidates), is.data.table(condo_membership))
+
+  if (!all(c("source_address_id", "parcel_number") %in% names(all_candidates))) {
+    cand <- data.table(source_address_id = winners$source_address_id[0], parcel_number = character())
+  } else {
+    cand <- unique(all_candidates[, .(source_address_id, parcel_number = as.character(parcel_number))],
+                   by = c("source_address_id", "parcel_number"))
+  }
+  cand <- cand[!is.na(parcel_number)]
+  if (nrow(cand) > 0) {
+    cand[condo_membership[, .(parcel_number, is_condo, condo_group_id, anchor_pid, group_size_pids)],
+         `:=`(
+           candidate_is_condo = i.is_condo,
+           candidate_condo_group_id = i.condo_group_id,
+           candidate_anchor_pid = i.anchor_pid,
+           candidate_group_size_pids = i.group_size_pids
+         ),
+         on = "parcel_number"]
+  } else {
+    cand[, `:=`(
+      candidate_is_condo = logical(),
+      candidate_condo_group_id = character(),
+      candidate_anchor_pid = character(),
+      candidate_group_size_pids = integer()
+    )]
+  }
+  cand[is.na(candidate_is_condo), candidate_is_condo := FALSE]
+
+  cand_diag <- cand[, .(
+    n_candidate_parcels = uniqueN(parcel_number),
+    n_condo_candidates = uniqueN(parcel_number[candidate_is_condo %in% TRUE]),
+    n_condo_groups = uniqueN(candidate_condo_group_id[!is.na(candidate_condo_group_id)]),
+    candidate_share_condo = {
+      n_all <- uniqueN(parcel_number)
+      if (n_all > 0) uniqueN(parcel_number[candidate_is_condo %in% TRUE]) / n_all else NA_real_
+    },
+    condo_groupable = uniqueN(parcel_number) > 1L & uniqueN(parcel_number[candidate_is_condo %in% TRUE]) >= 2L,
+    condo_groupable_majority = uniqueN(parcel_number) > 1L &&
+      uniqueN(parcel_number[candidate_is_condo %in% TRUE]) >= 2L &&
+      (uniqueN(parcel_number[candidate_is_condo %in% TRUE]) / uniqueN(parcel_number)) >= 0.5,
+    candidate_condo_group_id = {
+      cg <- candidate_condo_group_id[!is.na(candidate_condo_group_id)]
+      if (length(cg) == 0) NA_character_ else sort(names(sort(table(cg), decreasing = TRUE)))[1L]
+    }
+  ), by = source_address_id]
+  setkey(cand_diag, source_address_id)
+
+  out <- copy(winners)
+  out[, parcel_number := as.character(parcel_number)]
+
+  out[cand_diag, `:=`(
+    n_candidate_parcels = i.n_candidate_parcels,
+    n_condo_candidates = i.n_condo_candidates,
+    n_candidate_condo_groups = i.n_condo_groups,
+    candidate_share_condo = i.candidate_share_condo,
+    condo_groupable = i.condo_groupable,
+    condo_groupable_majority = i.condo_groupable_majority,
+    candidate_condo_group_id = i.candidate_condo_group_id
+  ), on = "source_address_id"]
+
+  out[condo_membership[, .(parcel_number, winner_is_condo = is_condo, winner_condo_group_id = condo_group_id, winner_anchor_pid = anchor_pid)],
+      `:=`(
+        winner_is_condo = i.winner_is_condo,
+        winner_condo_group_id = i.winner_condo_group_id,
+        winner_anchor_pid = i.winner_anchor_pid
+      ),
+      on = "parcel_number"]
+
+  out[is.na(n_candidate_parcels), n_candidate_parcels := fifelse(is.na(parcel_number), 0L, 1L)]
+  out[is.na(n_condo_candidates), n_condo_candidates := 0L]
+  out[is.na(n_candidate_condo_groups), n_candidate_condo_groups := 0L]
+  out[is.na(condo_groupable), condo_groupable := FALSE]
+  out[is.na(condo_groupable_majority), condo_groupable_majority := FALSE]
+  out[is.na(winner_is_condo), winner_is_condo := FALSE]
+
+  out[, xwalk_status := fifelse(
+    match_tier == "unmatched" & n_candidate_parcels == 0L, "unmatched_address",
+    fifelse(
+      (match_tier == "ambiguous" | n_candidate_parcels > 1L) & condo_groupable == TRUE,
+      "ambiguous_match_condo_groupable",
+      fifelse(
+        (match_tier == "ambiguous" | n_candidate_parcels > 1L),
+        "ambiguous_match_noncondo",
+        "unique_match"
+      )
+    )
+  )]
+
+  # Phase 1: expose future condo-aware link metadata without changing winner parcel selection.
+  out[, link_type := fifelse(
+    !is.na(parcel_number) & xwalk_status == "ambiguous_match_condo_groupable" & !is.na(winner_condo_group_id),
+    "condo_group",
+    fifelse(!is.na(parcel_number), "parcel", NA_character_)
+  )]
+  out[, link_id := fifelse(
+    link_type == "condo_group", winner_condo_group_id,
+    fifelse(link_type == "parcel", parcel_number, NA_character_)
+  )]
+  out[, anchor_pid := fifelse(
+    !is.na(winner_anchor_pid), winner_anchor_pid,
+    fifelse(!is.na(parcel_number), parcel_number, NA_character_)
+  )]
+  out[, ownership_unsafe := xwalk_status == "ambiguous_match_condo_groupable"]
+  out[, xwalk_phase1_version := "condo_group_diagnostics_v1"]
+
+  # Invariant: winner xwalk remains one row per source_address_id.
+  assert_unique(out, c("source_address_id"), paste0("winner xwalk + diagnostics (", source_name, ")"))
+  out[]
 }
 
 #' Normalize address components for relaxed matching
@@ -246,10 +420,15 @@ select_winner <- function(candidates) {
 #' @param parcels_dt Parcel reference (data.table)
 #' @param source_name Name of source (e.g., "evictions")
 #' @return List with winners, audit, and summary tables
-run_matching <- function(source_dt, parcels_dt, source_name) {
+run_matching <- function(source_dt, parcels_dt, source_name, condo_membership = NULL) {
   logf("  Running matching for source: ", source_name, log_file = log_file)
   logf("    Source addresses: ", nrow(source_dt), log_file = log_file)
   logf("    Parcels: ", nrow(parcels_dt), log_file = log_file)
+  if (is.null(condo_membership)) {
+    condo_membership <- data.table(parcel_number = character(), is_condo = logical(),
+                                   condo_group_id = character(), anchor_pid = character(),
+                                   group_size_pids = integer(), group_n_parcel_addresses = integer())
+  }
 
   # Normalize both datasets
   source_norm <- normalize_address(source_dt)
@@ -329,6 +508,70 @@ run_matching <- function(source_dt, parcels_dt, source_name) {
     tier_stats$tier1 <- 0
   }
   logf("      Matched: ", tier_stats$tier1, " additional addresses", log_file = log_file)
+
+  # Update matched IDs
+  matched_ids <- unique(all_candidates$source_address_id)
+
+  # --------------------------------------------------------
+  # TIER 1B: NEAR-NUMBER MATCH (same street/suffix/zip, close house number)
+  # --------------------------------------------------------
+  logf("    Tier 1b: Near-number match (same street/suffix/zip)...", log_file = log_file)
+
+  unmatched_source <- source_norm[!source_address_id %in% matched_ids]
+
+  if (nrow(unmatched_source) > 0) {
+    tier1b_matches <- merge(
+      unmatched_source[, .(source_address_id, n_sn_ss_c, house_norm, street_norm, suffix_norm, dir_norm, zip_norm)],
+      parcels_norm[, .(parcel_number, n_sn_ss_c, house_norm, street_norm, suffix_norm, dir_norm, zip_norm,
+                      geocode_x, geocode_y)],
+      by = c("street_norm", "suffix_norm", "zip_norm"),
+      suffixes = c("_source", "_parcel"),
+      allow.cartesian = TRUE
+    )
+
+    if (nrow(tier1b_matches) > 0) {
+      tier1b_matches[, house_diff := abs(house_norm_source - house_norm_parcel)]
+      tier1b_matches <- tier1b_matches[
+        !is.na(house_norm_source) &
+        !is.na(house_norm_parcel) &
+        house_diff > 0 &
+        house_diff <= MATCH_PARAMS$near_number_house_diff_max
+      ]
+
+      if (nrow(tier1b_matches) > 0) {
+        tier1b_matches <- tier1b_matches[
+          ,
+          .SD[house_diff == min(house_diff, na.rm = TRUE)],
+          by = source_address_id
+        ]
+        tier1b_matches <- tier1b_matches[
+          ,
+          if (.N == 1L) .SD else .SD[0],
+          by = source_address_id
+        ]
+      }
+
+      if (nrow(tier1b_matches) > 0) {
+        tier1b_matches[, match_tier := "near_number"]
+        tier1b_matches[, street_sim := 1.0]
+        tier1b_matches[, house_score := pmax(
+          0,
+          1 - (house_diff / MATCH_PARAMS$near_number_house_diff_max)
+        )]
+        tier1b_matches[, suffix_score := 1.0]
+        tier1b_matches[, dir_score := fifelse(dir_norm_source == dir_norm_parcel, 1.0, 0.5)]
+        tier1b_matches[, zip_score := 1.0]
+        tier1b_matches[, match_score := 0.84 + 0.10 * house_score + 0.06 * dir_score]
+
+        all_candidates <- rbind(all_candidates, tier1b_matches[, !"house_diff"], fill = TRUE)
+      }
+    }
+
+    tier_stats$tier1b_near_number <- tier1b_matches[!source_address_id %in% matched_ids, uniqueN(source_address_id)]
+  } else {
+    tier_stats$tier1b_near_number <- 0
+  }
+  logf("      Matched: ", tier_stats$tier1b_near_number, " additional addresses", log_file = log_file)
 
   # Update matched IDs
   matched_ids <- unique(all_candidates$source_address_id)
@@ -416,7 +659,7 @@ run_matching <- function(source_dt, parcels_dt, source_name) {
 
     winners <- select_winner(all_candidates)
 
-    # Check score gap threshold for fuzzy matches
+    # Check score gap threshold for lower-confidence matches
     winners[match_tier == "fuzzy" & score_gap < MATCH_PARAMS$gap_threshold,
            `:=`(match_tier = "ambiguous", parcel_number = NA_character_)]
   } else {
@@ -431,7 +674,8 @@ run_matching <- function(source_dt, parcels_dt, source_name) {
   # Add unmatched addresses
   all_source_ids <- source_norm$source_address_id
   matched_source_ids <- winners[!is.na(parcel_number), source_address_id]
-  unmatched_ids <- setdiff(all_source_ids, matched_source_ids)
+  winner_source_ids <- unique(winners$source_address_id)
+  unmatched_ids <- setdiff(all_source_ids, winner_source_ids)
 
   if (length(unmatched_ids) > 0) {
     unmatched_rows <- data.table(
@@ -451,7 +695,7 @@ run_matching <- function(source_dt, parcels_dt, source_name) {
   # CREATE OUTPUTS
   # --------------------------------------------------------
 
-  # Winner crosswalk
+  # Winner crosswalk (base fields preserved for downstream compatibility)
   winner_xwalk <- winners[, .(
     source = source_name,
     source_address_id,
@@ -474,6 +718,14 @@ run_matching <- function(source_dt, parcels_dt, source_name) {
   )
   setnames(winner_xwalk, c("n_sn_ss_c", "zip_norm"), c("n_sn_ss_c", "zip"))
 
+  # Phase 1 diagnostics (no change to selected parcel_number)
+  winner_xwalk <- add_xwalk_phase1_diagnostics(
+    winners = winner_xwalk,
+    all_candidates = all_candidates,
+    condo_membership = condo_membership,
+    source_name = source_name
+  )
+
   # Audit table (all candidates)
   audit_table <- all_candidates[, .(
     source_address_id,
@@ -492,9 +744,35 @@ run_matching <- function(source_dt, parcels_dt, source_name) {
     suffix_norm_source,
     suffix_norm_parcel
   )]
+  if (nrow(audit_table) > 0) {
+    audit_table[, parcel_number := as.character(parcel_number)]
+    audit_table[condo_membership[, .(parcel_number, candidate_is_condo = is_condo, candidate_condo_group_id = condo_group_id,
+                                     candidate_anchor_pid = anchor_pid, candidate_group_size_pids = group_size_pids)],
+               `:=`(
+                 candidate_is_condo = i.candidate_is_condo,
+                 candidate_condo_group_id = i.candidate_condo_group_id,
+                 candidate_anchor_pid = i.candidate_anchor_pid,
+                 candidate_group_size_pids = i.candidate_group_size_pids
+               ),
+               on = "parcel_number"]
+    audit_table[is.na(candidate_is_condo), candidate_is_condo := FALSE]
+  } else {
+    audit_table[, `:=`(
+      candidate_is_condo = logical(),
+      candidate_condo_group_id = character(),
+      candidate_anchor_pid = character(),
+      candidate_group_size_pids = integer()
+    )]
+  }
   audit_table[, rank := frank(-match_score, ties.method = "min"), by = source_address_id]
 
   # Summary table
+  xwalk_status_counts <- winner_xwalk[, .N, by = xwalk_status]
+  get_status_n <- function(status) {
+    n <- xwalk_status_counts[xwalk_status == status, N]
+    if (length(n) == 0) 0L else as.integer(n[1])
+  }
+
   summary_table <- data.table(
     source = source_name,
     total_addresses = length(all_source_ids),
@@ -503,14 +781,24 @@ run_matching <- function(source_dt, parcels_dt, source_name) {
     match_rate = round(length(matched_source_ids) / length(all_source_ids) * 100, 2),
     tier0_exact = tier_stats$tier0,
     tier1_relaxed = tier_stats$tier1,
+    tier1b_near_number = tier_stats$tier1b_near_number,
     tier2_fuzzy = tier_stats$tier2,
     ambiguous = winners[match_tier == "ambiguous", .N],
     ties = winners[tie_flag == TRUE, .N],
+    xwalk_unique_match = get_status_n("unique_match"),
+    xwalk_ambiguous_condo_groupable = get_status_n("ambiguous_match_condo_groupable"),
+    xwalk_ambiguous_noncondo = get_status_n("ambiguous_match_noncondo"),
+    xwalk_unmatched_address = get_status_n("unmatched_address"),
     rule_version = MATCH_PARAMS$version
   )
 
   logf("    Results: ", summary_table$matched, "/", summary_table$total_addresses,
       " matched (", summary_table$match_rate, "%)", log_file = log_file)
+  logf("    Xwalk status counts - unique: ", summary_table$xwalk_unique_match,
+      ", ambig_condo_groupable: ", summary_table$xwalk_ambiguous_condo_groupable,
+      ", ambig_noncondo: ", summary_table$xwalk_ambiguous_noncondo,
+      ", unmatched: ", summary_table$xwalk_unmatched_address,
+      log_file = log_file)
 
   return(list(
     winners = winner_xwalk,
@@ -537,6 +825,18 @@ stopifnot("parcel_number must be unique" = parcels[, uniqueN(parcel_number)] == 
 # Standardize parcel columns
 parcels[, pm.house := as.numeric(pm.house)]
 parcels[, pm.zip := as.character(pm.zip)]
+parcels[, parcel_number := as.character(parcel_number)]
+
+# Build and write condo-group membership (Phase 1 product)
+logf("Building condo parcel grouping (Phase 1)...", log_file = log_file)
+condo_membership <- build_condo_parcel_groups(parcels)
+condo_membership_path <- p_product(cfg, "condo_parcel_group_membership")
+dir.create(dirname(condo_membership_path), showWarnings = FALSE, recursive = TRUE)
+fwrite(condo_membership, condo_membership_path)
+logf("  Wrote condo parcel group membership: ", nrow(condo_membership), " rows -> ", condo_membership_path, log_file = log_file)
+logf("  Condo parcels grouped: ", condo_membership[is_condo == TRUE & !is.na(condo_group_id), .N],
+     " parcels across ", condo_membership[is_condo == TRUE & !is.na(condo_group_id), uniqueN(condo_group_id)],
+     " condo groups", log_file = log_file)
 
 # ============================================================
 # PROCESS EACH SOURCE
@@ -606,7 +906,7 @@ for (source_name in names(sources)) {
   source_unique <- unique(source_dt, by = "source_address_id")
 
   # Run matching
-  results <- run_matching(source_unique, parcels, source_name)
+  results <- run_matching(source_unique, parcels, source_name, condo_membership = condo_membership)
 
   # Write outputs
   xwalk_path <- p_product(cfg, source_cfg$xwalk_key)
@@ -632,6 +932,7 @@ for (source_name in names(sources)) {
   logf("    Matched: ", results$summary$matched, " (", results$summary$match_rate, "%)", log_file = log_file)
   logf("    By tier - Exact: ", results$summary$tier0_exact,
       ", Relaxed: ", results$summary$tier1_relaxed,
+      ", Near-number: ", results$summary$tier1b_near_number,
       ", Fuzzy: ", results$summary$tier2_fuzzy, log_file = log_file)
 
   # ---- ENHANCED DIAGNOSTICS ----

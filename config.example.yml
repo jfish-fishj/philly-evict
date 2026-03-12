@@ -37,6 +37,7 @@ inputs:
 
   # --- Listings (Altos) ---
   altos_metro_raw: "listings/philadelphia_metro_all_years.csv"
+  nhpd_properties_raw: "misc/Active and Inconclusive Properties.xlsx"
   # Optional Phase 1 Altos composition weights source (falls back to built-in weights if missing)
   ahs_table0_bed_mix: "ahs/AHS TABLE0 2_22_2026.csv"
 
@@ -93,6 +94,7 @@ products:
   parcel_address_counts: "clean/philly-parcel-address-counts.csv"
   licenses_clean: "clean/licenses_clean.csv"
   altos_clean: "clean/altos_clean.csv"
+  nhpd_clean: "clean/nhpd_clean.csv"
   infousa_clean: "clean/infousa_clean.csv"
   corelogic_clean: "clean/corelogic_clean.csv"
   eviction_names_clean: "clean/eviction_names_clean.csv"
@@ -160,6 +162,9 @@ products:
   altos_address_agg: "xwalks/altos_address_agg.csv"
   altos_parcel_xwalk: "xwalks/altos_parcel_xwalk.csv"
   altos_parcel_xwalk_listing: "xwalks/altos_parcel_xwalk_listing.csv"
+  nhpd_address_agg: "xwalks/nhpd_address_agg.csv"
+  nhpd_parcel_xwalk: "xwalks/nhpd_parcel_xwalk.csv"
+  nhpd_parcel_xwalk_property: "xwalks/nhpd_parcel_xwalk_property.csv"
 
   # --- Analytic (final analysis-ready datasets) ---
   analytic_sample: "analytic/analytic_sample.csv"
@@ -176,6 +181,15 @@ products:
   infousa_link_people: "analytic/infousa_link_people.csv"
   infousa_building_race_panel: "analytic/infousa_building_race_panel.csv"
   infousa_building_demographics_panel: "analytic/infousa_building_demographics_panel.csv"
+
+  # --- Simulation products (outer sorting baseline) ---
+  outer_sorting_sim_panel: "sim/outer_sorting_sim_panel.csv"
+  outer_sorting_sim_moments: "sim/outer_sorting_sim_moments.csv"
+  outer_sorting_sim_diagnostics: "sim/outer_sorting_sim_diagnostics.csv"
+  outer_sorting_empirical_moments: "targets/outer_sorting_empirical_moments.csv"
+  infousa_building_income_proxy_panel: "analytic/infousa_building_income_proxy_panel.csv"
+  bg_renter_poverty_share: "xwalks/bg_renter_poverty_share.csv"
+  tract_renter_poverty_share: "xwalks/tract_renter_poverty_share.csv"
 
 # ============================================================
 # RUN SETTINGS
@@ -215,6 +229,158 @@ run:
   retaliatory_black_split_method: "mean"
   # Used when method == quantile (0-1 scale).
   retaliatory_black_split_quantile: 0.75
+  # Entity linkage settings (build-ownership-panel.R)
+  entity_linkage_max_rounds: 5        # max fixed-point rounds for Phase 2 (OPA-only); converges early if stable
+  entity_linkage_ra_threshold: 300    # registered-agent filter: exclude addresses linking > N entities
+  entity_linkage_diag_threshold: 20   # conglomerates > this many members get bridge-address diagnostics written to QA
+  renter_poverty_geo:
+    acs_year: 2015
+    state: "PA"
+    county: "Philadelphia"
+    input_geography: "block_group"
+  # Outer sorting baseline simulation controls.
+  outer_sorting:
+    B: 10000
+    Nhood: 300
+    seed: 123
+    sim_year_from: 2011
+    sim_year_to: 2019
+    mu: 0.30
+    delta_L: 0.01
+    delta_H: 0.10
+    lam: 0.40
+    tol: 1.0e-06
+    mass_tol_abs: 1.0e-06
+    max_iter: 300
+    p_bad_shape1: 2.0
+    p_bad_shape2: 6.0
+    units_draw_mode: "empirical_resample"
+    units_empirical_product_key: "bldg_panel_blp"
+    units_empirical_year_from: 2011
+    units_empirical_year_to: 2019
+    units_empirical_year_built_col: "year_built"
+    # Legacy fallback only; ignored when units_draw_mode == "empirical_resample".
+    units_bin_values: [1, 2, 3, 4, 7, 15, 35, 75]
+    units_bin_probs: [0.28, 0.16, 0.10, 0.08, 0.14, 0.12, 0.08, 0.04]
+    Dalph: 6.0
+    sigma_eta_sort: 0.60
+    old_bldg_cutoff_year: 1940
+    new_bldg_cutoff_year: 2000
+    m0: 0.1826835
+    bM_theta: -0.20
+    bM_old: 0.15
+    bM_new: 0.25
+    bM_C: 0.12
+    aC: -2.10
+    bC_theta: 0.35
+    bC_s_bad: -0.10
+    bC_old: 0.10
+    bC_new: -0.05
+    bC_M: -0.10
+    aF: -3.00
+    bF_theta: 0.70
+    # Filing is a single-intensity Poisson block:
+    # log(fbar) = aF + bF_theta*1{theta=B} + bF_delta*delta_bar
+    bF_delta: 1.10
+    high_filing_threshold: 0.15
+    xi_bracket: [-40, 40]
+    calibration:
+      target_product_key: "outer_sorting_sim_moments"
+      params: ["Dalph", "sigma_eta_sort", "p_bad_shape1", "p_bad_shape2", "aF", "bF_theta", "bF_delta", "aC", "bC_theta", "bC_s_bad", "bC_old", "bC_new", "bC_M", "m0", "bM_theta", "bM_old", "bM_new", "bM_C"]
+      moment_cols:
+        - "mean_f_rate"
+        - "mean_m_rate"
+        - "mean_c_rate"
+        - "mean_m_rate_pos"
+        - "m_rate_pos_p50"
+        - "m_rate_pos_p90"
+        - "nhood_mean_s_sd"
+        - "nhood_mean_s_p90_p10"
+        - "nhood_mean_f_rate_sd"
+        - "nhood_mean_f_rate_p90_p10"
+        - "sorting_coef_high_filing_nhood"
+        - "sorting_coef_high_bin_nhood"
+        - "beta_ppml_s"
+        - "beta_ppml_s_x_high_filing"
+        - "beta_maint_on_c_rate"
+        - "filing_resid_sd_nhood_fe"
+      weights:
+        mean_f_rate: 10
+        mean_m_rate: 10
+        mean_c_rate: 10
+        mean_m_rate_pos: 5
+        m_rate_pos_p50: 5
+        m_rate_pos_p90: 5
+        nhood_mean_s_sd: 8
+        nhood_mean_s_p90_p10: 8
+        nhood_mean_f_rate_sd: 5
+        nhood_mean_f_rate_p90_p10: 5
+        sorting_coef_high_filing_nhood: 5
+        sorting_coef_high_bin_nhood: 5
+        beta_ppml_s: 2
+        beta_ppml_s_x_high_filing: 2
+        filing_resid_sd_nhood_fe: 5
+        beta_maint_on_c_rate: 3
+      high_filing_threshold: 0.15
+      maxit: 300
+      reltol: 1.0e-04
+      grid_Dalph: [2, 4, 6, 8, 10]
+      bounds:
+        Dalph: [0.05, 50]
+        sigma_eta_sort: [0, 5]
+        p_bad_shape1: [0.2, 20]
+        p_bad_shape2: [0.2, 20]
+        aF: [-8, 2]
+        bF_theta: [-2, 2]
+        bF_delta: [0, 10]
+        aC: [-6, 2]
+        bC_theta: [-2, 2]
+        bC_s_bad: [-2, 2]
+        bC_old: [-2, 2]
+        bC_new: [-2, 2]
+        bC_M: [-2, 0]
+        m0: [1.0e-04, 5]
+        bM_theta: [-2, 2]
+        bM_old: [-2, 2]
+        bM_new: [-2, 2]
+        bM_C: [0, 2]
+    empirical:
+      bldg_panel_product_key: "bldg_panel_blp"
+      composition_product_key: "infousa_building_income_proxy_panel"
+      composition_proxy_col: "infousa_find_low_income_share"
+      composition_weight_col: "infousa_num_households_income_proxy"
+      composition_source_col: "infousa_income_proxy_source"
+      year_from: 2011
+      year_to: 2019
+      maintenance_count_col: "total_permits"
+      complaint_count_col: "total_complaints"
+      filing_count_col: "num_filings"
+      units_col: "total_units"
+      geoid_col: "GEOID"
+      pid_col: "PID"
+      year_built_col: "year_built"
+      high_filing_threshold: 0.15
+    recovery:
+      n_rep: 20
+      seed: 20260307
+      params: ["Dalph", "bF_delta", "bF_theta", "bC_s_bad", "bM_C"]
+      truth_bounds:
+        Dalph: [3, 10]
+        bF_delta: [0.3, 2.5]
+        bF_theta: [0.2, 1.2]
+        bC_s_bad: [-0.8, 0.2]
+        bM_C: [0.02, 0.4]
+    income_proxy:
+      infousa_product_key: "infousa_clean"
+      xwalk_product_key: "xwalk_infousa_to_parcel"
+      income_col: "find_div_1000"
+      address_col: "n_sn_ss_c"
+      household_id_col: "familyid"
+      primary_flag_col: "primary_family_ind"
+      year_col: "year"
+      year_from: 2011
+      year_to: 2019
+      low_income_threshold_k: 30
 
 # ============================================================
 # RACE PRIORS SETTINGS

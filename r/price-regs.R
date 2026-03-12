@@ -1,1142 +1,938 @@
 ## ============================================================
 ## price-regs.R
 ## ============================================================
-## Purpose: Price regulation regressions and analysis
+## Purpose: Hedonic rent regressions using raw long-run filing rate
+##          (filing_rate_longrun_pre2019) as main covariate.
 ##
-## Inputs: analytic_sample
-## Outputs: tables/*.tex, figs/*.png
+## Pipeline assumption:
+##   1) make-rent-panel.R
+##   2) make-occupancy-vars.R
+##   3) make-analytic-sample.R  -> exports analytic_sample (PID x year)
+##
+## Inputs:  products/analytic_sample (from config)
+## Outputs: output/tables/*.tex, output/figs/*.png
 ## ============================================================
 
-library(data.table)
-library(tidyverse)
-library(sf)
-library(tidycensus)
-library(fixest)
+suppressPackageStartupMessages({
+  library(data.table)
+  library(fixest)
+  library(ggplot2)
+  library(stringr)
+})
 
-# ---- Load config ----
+# ---- Load config + helpers (project-local) ----
 source("r/config.R")
-source('r/helper-functions.R')
+source("r/helper-functions.R")
 cfg <- read_config()
+log_file <- p_out(cfg, "logs", "price-regs.log")
+tab_dir <- p_out(cfg, "price-regs", "tables")
+fig_dir <- p_out(cfg, "price-regs", "figs")
+dir.create(tab_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
+logf("=== Starting price-regs.R ===", log_file = log_file)
+logf("Config: ", cfg$meta$config_path, log_file = log_file)
 
-# ---- Load data via config ----
-bldg_panel = fread(p_product(cfg, "analytic_sample"))
+# ---- Load analytic sample ----
+bldg_panel <- fread(p_product(cfg, "analytic_sample"))
 
+# ---- Defensive checks ----
+req_cols <- c("PID", "year", "log_med_rent", "total_units", "GEOID",
+              "filing_rate_longrun_pre2019")
+missing <- setdiff(req_cols, names(bldg_panel))
+if (length(missing) > 0) {
+  stop("Missing required columns in analytic_sample: ", paste(missing, collapse = ", "))
+}
 
+# Sample restriction consistent with "pre-period" hedonic interpretation
+reg_dt <- bldg_panel[
+  year %in% 2014:2019 &
+    !is.na(filing_rate_longrun_pre2019) &
+    filing_rate_longrun_pre2019 <= 0.75
+]
 
-#analytic_df[,high_filing := ifelse(filing_rate > 0.1, 1, 0)]
-bldg_panel[,high_filing := ifelse(filing_rate > 0.1, 1, 0)]
-bldg_panel[,filing_rate_year := num_filings / num_units_imp]
-bldg_panel[,high_filing_year := ifelse(filing_rate_year > 0.1, 1, 0)]
-bldg_panel[,last_obs := year == max(year) | year == 2019, by = PID]
-bldg_panel[order(PID, year), cumsum_filings := cumsum(num_filings), by = PID]
-bldg_panel[,rel_year := year - 2005]
-bldg_panel[order(PID, year), cumsum_filing_rate :=cumsum_filings/(rel_year)/num_units_imp]
-bldg_panel[,sfh := num_units_imp == 1]
-bldg_panel[,year_blt_decade := floor(year_built / 10) * 10]
-bldg_panel[,year_blt_decade := fifelse(year_built < 1900, "pre-1900", as.character(year_blt_decade))]
-bldg_panel[,num_stories_bin := case_when(
-  number_stories == 1 ~ "1",
-  number_stories <= 3 ~ "2-3",
-  number_stories <= 5 ~ "4-5",
-  number_stories <= 10 ~ "6-10",
-  number_stories > 10 ~ "11+",
-  TRUE ~ NA_character_
+# ---- Tenant composition controls ----
+tenant_comp_raw <- c(
+  "infousa_pct_black",
+  "infousa_pct_female",
+  "infousa_pct_black_female",
+  "infousa_share_persons_demog_ok"
+)
+for (cc in tenant_comp_raw) {
+  if (!(cc %in% names(reg_dt))) reg_dt[, (cc) := NA_real_]
+  reg_dt[, (cc) := suppressWarnings(as.numeric(get(cc)))]
+}
+fill_with_mean <- function(x) {
+  mu <- mean(x, na.rm = TRUE)
+  if (!is.finite(mu)) mu <- 0
+  fifelse(is.na(x), mu, x)
+}
+reg_dt[, tenant_comp_missing := as.integer(
+  is.na(infousa_pct_black) |
+    is.na(infousa_pct_female) |
+    is.na(infousa_pct_black_female) |
+    is.na(infousa_share_persons_demog_ok)
 )]
+reg_dt[, infousa_pct_black_imp := fill_with_mean(infousa_pct_black)]
+reg_dt[, infousa_pct_female_imp := fill_with_mean(infousa_pct_female)]
+reg_dt[, infousa_pct_black_female_imp := fill_with_mean(infousa_pct_black_female)]
+reg_dt[, infousa_share_persons_demog_ok_imp := fill_with_mean(infousa_share_persons_demog_ok)]
 
-bldg_panel[,total_permits_all := sum(total_permits), by = PID]
-bldg_panel[,total_violations_all := sum(total_violations), by = PID]
-bldg_panel[,total_complaints_all := sum(total_complaints), by = PID]
-bldg_panel[,total_investigations_all := sum(total_investigations), by = PID]
+# ------------------------------------------------------------------
+# Derived variables
+# ------------------------------------------------------------------
+reg_dt[, census_tract := str_sub(GEOID, 1, 11)]
 
-# per unit
-bldg_panel[,permits_per_unit := total_permits_all/num_units_imp]
-bldg_panel[,violations_per_unit := total_violations_all/num_units_imp]
-bldg_panel[,severe_violations_per_unit := sum(
-  (unsafe_violation_count+
-     hazardous_violation_count +imminently_dangerous_violation_count
-  )
-)/num_units_imp, by = PID]
-bldg_panel[,complaints_per_unit := total_complaints_all/num_units_imp]
-bldg_panel[,investigations_per_unit := total_investigations_all/num_units_imp]
-
-# make dummies for any complaints, permits, etc
-bldg_panel[,ever_permit := fifelse(total_permits_all > 0, 1, 0)]
-bldg_panel[,ever_violations := fifelse(total_violations_all > 0, 1, 0)]
-bldg_panel[,ever_complaints := fifelse(total_complaints_all > 0, 1, 0)]
-bldg_panel[,ever_investigations := fifelse(total_investigations_all > 0, 1, 0)]
-
-bldg_panel[,any_unsafe_hazordous_dangerous := any(unsafe_violation_count > 1 |
-                                                     hazardous_violation_count > 1 | imminently_dangerous_violation_count > 1
-),
-by = PID]
-
-bldg_panel[,cumsum_filings := replace_na(cumsum_filings, 0)]
-bldg_panel[,filings_pre_covid := max(cumsum_filings[year <= 2019], na.rm = T), by = PID]
-bldg_panel[,filing_rate_pre_covid := filings_pre_covid / num_units_imp]
-bldg_panel[,filing_rate_pre_covid := median(filing_rate_pre_covid,na.rm =T), by = PID]
-# bin filing rates into 0,0.05, 0.15, 0.25, 25+
-bldg_panel[,filing_rate_cuts := cut(
-  filing_rate_pre_covid,
-  breaks = c(-Inf, 0, 0.075, 0.2, Inf),
-  labels = c("0", "(0-7.5%]", "(7.5-20%]", "20%+"),
-  # breaks = c(-Inf, 0,  0.02, 0.05, 0.1, 0.2, 0.3, Inf),
-  # labels = c("0", "(0-2%]", "(2-5%]", "(5-10%]", "(10-20%]", "(20-30%]", "30%+"),
-  include.lowest = TRUE
-) ]
-
-# bin violations
-bldg_panel[,violations_per_unit_cuts := cut(
-  violations_per_unit,
-  breaks = c(-Inf, 0, 0.01, 0.02, 0.05, 0.1, 0.2, Inf),
-  labels = c("0", "(0-1%]", "(1-2%]", "(2-5%]", "(5-10%]", "(10-20%]", "20%+"),
-  include.lowest = TRUE
+# Standardize quality grade: keep A-D, remove +/-, NA -> Unknown
+reg_dt[, quality_grade_standard := fifelse(
+  stringr::str_detect(quality_grade, "[ABCDabcd]"), quality_grade, NA_character_
 )]
+reg_dt[, quality_grade_standard := stringr::str_remove_all(quality_grade_standard, "[+-]")]
+reg_dt[is.na(quality_grade_standard), quality_grade_standard := "Unknown"]
 
-# severe severe_violations_per_unit
-bldg_panel[,severe_violations_per_unit_cuts := cut(
-  severe_violations_per_unit,
-  breaks = c(-Inf, 0,  0.05,Inf),
-  labels = c("0", "(0-5%]", "5%+"),
-  include.lowest = TRUE
-)]
+# Violation/complaint flags (ever, within PID)
+reg_dt[, any_unsafe_dangerous_violation := any(
+  imminently_dangerous_violation_count > 0 |
+    unsafe_violation_count > 0 |
+    hazardous_violation_count > 0
+), by = PID]
+reg_dt[, any_heat_fire_drainage_plumbing_complaint := any(
+  heat_complaint_count > 0 |
+    fire_complaint_count > 0 |
+    structural_deficiency_complaint_count > 0 |
+    drainage_complaint_count > 0
+), by = PID]
 
-# bin into quartiles
-# quantiles <- quantile(bldg_panel$filing_rate, probs = seq(0, 1, by = 0.25), na.rm = TRUE)
-# bldg_panel[,filing_rate_cuts_q := cut(
-#   filing_rate,
-#   breaks = quantile(filing_rate, probs = seq(0, 1, by = 0.25), na.rm = T),
-#   labels = c("Q1", "Q2","Q3", "Q4"),
-#   include.lowest = TRUE
-# ) ]
+# High-eviction indicator
+reg_dt[, high_evict_raw := filing_rate_longrun_pre2019 > 0.2]
 
-bldg_panel[,number_of_bedrooms_bin := case_when(
-  number_of_bedrooms == 0 ~ "0",
-  number_of_bedrooms == 1 ~ "1",
-  number_of_bedrooms == 2 ~ "2",
-  number_of_bedrooms == 3 ~ "3",
-  number_of_bedrooms >= 4 ~ "4+",
-  TRUE ~ "missing"
-)]
-
-bldg_panel[,post_covid := (year >= 2021)]
-bldg_panel[,no_filings := (filing_rate == 0)]
-bldg_panel[,source := fifelse(rental_from_altos == 1, "altos",
-                             fifelse(rental_from_evict == 1, "evict",
-                                     NA_character_))]
-bldg_panel[,ever_altos := any(source == "altos"), by = PID]
-
-# break unit bins into 5 categories
-m1 <- fixest::feols(
-  log_med_rent ~i(filing_rate_cuts, ref = "(7.5-20%]") #+log(taxable_value) +log( total_livable_area)
-  |year + census_tract #month +
-+   num_units_bin
-+   year_blt_decade
-#   #num_stories_bin+
-+   source
-#   #number_of_bedrooms_bin +
-#   quality_grade +
-#   exterior_condition+
-#    building_code_description_new_fixed
-#+source
- , data = bldg_panel[#source == "evict" &
-                       year %in% 2014:2019 &
-                       #year>=2014 &
-                  #       str_detect(building_code_description_new_fixed,"APART") &
-                   # num_units_imp >= 15 &
-                     # severe_violations_per_unit <= 1 &
-                    #(last_obs == T) &
-                         filing_rate <=1  ],
-weights = ~(num_units_imp),
-  cluster = ~PID,
-  combine.quick = T
-)
-
-summary(m1)
-
-m2 <- fixest::feols(
-  log_med_rent ~i(filing_rate_cuts_q, ref = "Q2")#*post_covid +
-  #+filing_rate_sq #+  ever_voucher*source
-  # +i(num_units_bins, ref = "1")
-  #+ sfh#*source
-  #   + year_built #* ever_permit
-  # + year_built^2
-  #+ permits_per_unit#*i(source,ref = "evict")
-  # +severe_violations_per_unit#*i(source,ref = "evict")
-  # +i(beds_imp_first_fixed, ref = 0)
-  # +i(baths_first_fixed, ref = 1)
-  #  + any_unsafe_hazordous_dangerous#*i(source,ref = "evict")
-  #  + permits_per_unit
-  # +ever_investigations
-  #+ total_investigations_per_unit
-  # +  severe_violations_per_unit
-  #+poly(number_stories,3)#*i(source,ref = "evict")
-  #  +log(market_value)
-  #+log(total_area)
-  |GEOID ^ year+  #num_units_bins+ #month +
-    num_units_bins+
-    year_blt_decade+
-    num_stories_bin+
-    source +
-    number_of_bedrooms_bin +
-    source^sfh +
-    quality_grade_fixed +
-    # #exterior_condition
-    building_code_description_new_fixed
-  #+source
-  , data = bldg_panel[#source == "evict" &
-    year %in% 2011:2019 &
-      #year>=2014 &
-      # num_units_imp > 1 &
-      #(last_obs == T) &
-      filing_rate <=1  ],
-  #weights = ~(num_units_imp),
-  cluster = ~PID,
-  combine.quick = T
-)
-
-
-
-etable(m1, keep = "%filing_rate_cuts",
-       dict = c("filing_rate_cuts" = "Filing Rate Category",
-                "filing_rate_cuts0-10%" = "Filing Rate: 0-10%",
-                "filing_rate_cuts10-20%" = "Filing Rate: 10-20%",
-                "filing_rate_cuts20-30%" = "Filing Rate: 20-30%",
-                "filing_rate_cuts30%+" = "Filing Rate: 30%+",
-                "filing_rate_cuts_q:Q1" = "Filing Rate: Q1",
-                "filing_rate_cuts_q:Q3" = "Filing Rate: Q3",
-                "filing_rate_cuts_q:Q4" = "Filing Rate: Q4",
-                "year_built" = "Year Built",
-                "num_units_imp" = "Number of Units",
-                "num_units_imp^2" = "Number of Units Squared",
-                "severe_violations_per_unit" = "Severe Violations per Unit",
-                "log(total_area)" = "Log Total Area",
-                "source" = "Data Source",
-                "quality_grade_fixed" = "Quality Grade",
-                "exterior_condition" = "Exterior Condition",
-                "building_code_description_new_fixed" = "Building Type",
-                "year_blt_decade" = "Decade Built",
-                "num_stories_bin" = "Number of Stories",
-                "GEOID" = "Census Block Group"
-                ),
-       tex = T
-       ) %>%
-  writeLines(p_out(cfg, "tables", "hedonic_filing_rate_cuts.tex"))
-
-
-coeftable(m1, keep = "filing|voucher")
-#View(analytic_df[order(desc(abs(resids)))][1:100])
-
-quantile(m1$residuals)
-summary(m1)
-
-
-m2 = fixest::feols(
-  log_med_rent ~ filing_rate + filing_rate_sq + num_units + num_units^2  |
-    GEOID^year+type_heater +quality_grade_fixed +year_blt_decade + num_stories_bin+
-    view_type + building_code_description_new_fixed+
-    general_construction ,
-  data = bldg_panel[source == "evict" & filing_rate < 1],
-  #weights = ~num_units,
-  cluster = ~PID,
-  combine.quick = F
-)
-
-# same thing but full sample
-m3 = fixest::feols(
-  log_med_rent ~filing_rate | year +source,
-  data = analytic_df[ filing_rate < 1  ],
-  #weights = ~num_units,
-  cluster = ~PID
-)
-
-m4 = fixest::feols(
-  log_med_rent ~ filing_rate + filing_rate_sq + num_units + num_units^2  |
-    GEOID^year+type_heater +quality_grade_fixed +year_blt_decade + num_stories_bin+
-    view_type + building_code_description_new_fixed+
-    general_construction ,
-  data = bldg_panel[ filing_rate < 1],
-  #weights = ~num_units,
-  cluster = ~PID,
-  combine.quick = F
-)
-
-# m5 = fixest::feols(
-#   log_med_rent ~ filing_rate*source  +num_units_bins+ poly(num_units,2) + poly(year_built,2)+poly(number_stories,2) +
-#     poly(beds_imp_first_pred,2) + poly(baths_first_pred,2)|
-#     GEOID^year+type_heater +quality_grade_fixed +
-#     view_type + building_code_description_new_fixed+
-#     general_construction ,
-#   data = analytic_df[filing_rate>0 & year <= 2018 & filing_rate < 1& !is.na(baths_first_pred)],
-#   #weights = ~num_units,
-#   cluster = ~PID,
-#   combine.quick = F
-# )
-#
-# m6 = fixest::feols(
-#   log_med_rent ~ filing_rate + ever_voucher  +num_units_bins+ + poly(year_built,2)+#poly(number_stories,2) +
-#     poly(beds_imp_first_pred,2) + poly(baths_first_pred,2)|
-#     GEOID^year+type_heater +quality_grade_fixed +source+
-#     view_type + building_code_description_new_fixed+
-#     general_construction ,
-#   data = analytic_df[ year <= 2018  & filing_rate < 1& !is.na(baths_first_pred)],
-#   weights = ~num_units,
-#   cluster = ~PID,
-#   combine.quick = F
-# )
-
-# export tables:
-# make table
-setFixest_dict(
-  c(
-    "source"= "Data Source",
-    "sourceevict"= "Eviction Rental",
-    "year" = "Year",
-    "log_med_rent" = "Log(Price)",
-    "bed_bath_pid_ID" = "Unit",
-    "ATT" = "ATT",
-    "num_listings" = "Listings",
-    "num_units" = "Number of Units",
-    "year_built" = "Year Built",
-    "number_stories" = "Number of Stories",
-    "quality_grade_fixed" = "Quality Grade",
-    "building_code_description_new_fixed" = "Building Code",
-    "zoning" = "Zoning",
-    "zip_code" = "Zip Code",
-    "PID" = "Parcel ID",
-    "GEOID" = "Census Block Group",
-    "CT_ID_10" = "Census Tract",
-    "num_filings" = "Number of Filings",
-    "multi_source" = "Multiple Sources",
-    "num_filings_total_source" = "Total Filings",
-    "num_filings_source" = "Filings",
-    "filing_rate" = "Filing Rate",
-    "filing_rate_sq" = "Filing Rate^2",
-    "filing_rate_cube" = "Filing Rate^3",
-    "num_filings_total_sq" = "Total Filings^2",
-    "share_units_zip" = "Share of Units in Zip",
-    "share_units_evict" = "Share of Units in Zip with Eviction",
-    "share_units_evict_sq" = "Share of Units in Zip with Eviction^2",
-    "num_units_zip" = "Number of Units in Zip",
-    "num_units_evict" = "Number of Units with Eviction",
-    "num_rentals" = "Number of Rentals",
-    "beds_imp_first_pred" = "Beds (Imputed)",
-    "baths_first_pred" = "Baths (Imputed)",
-    'view_type' = "View Type",
-    'type_heater' = "Heater Type",
-    'general_construction'="Construction Type"
-  )
-)
-# set default style
-def_style = style.df(depvar.title = "", fixef.title = "",
-                     fixef.suffix = " fixed effect", yesNo = c("Yes","No"))
-
-fixest::setFixest_etable(
-  digits = 4, fitstat = c("n","r2")
-)
-
-model_tables_m0_m1 = etable(
-  m0, m1,
-  title = "Rent Price Regressions",
-  #caption = "Philadelphia, 2006-2019",
-  keep = "Eviction|Filing",
-  order = "Filing Rate",
-  # add lines for extra controls
-  extralines = list(
-    # "Polynomial Imputed Beds" = c("No", "Yes"),
-    # "Polynomial Imputed Baths" = c("No", "Yes"),
-    "Polynomial Year Built" = c("No", "Yes"),
-    "Polynomial Number of Stories" = c("No", "Yes"),
-    "Polynomial Number of Units" = c("No", "Yes")
-
+# Binned filing rate: 0, (0-5%], (5-10%], (10-20%], 20%+
+reg_dt[, filing_rate_bin := factor(
+  fcase(
+    filing_rate_longrun_pre2019 == 0,    "0",
+    filing_rate_longrun_pre2019 <= 0.05, "(0-5%]",
+    filing_rate_longrun_pre2019 <= 0.10, "(5-10%]",
+    filing_rate_longrun_pre2019 <= 0.20, "(10-20%]",
+    default = "20%+"
   ),
-  label = "tab:rent_regs",
+  levels = c("0", "(0-5%]", "(5-10%]", "(10-20%]", "20%+")
+)]
+reg_dt[, filing_rate_bin := relevel(filing_rate_bin, ref = "(5-10%]")]
+
+# ------------------------------------------------------------------
+# Hedonic specifications
+# ------------------------------------------------------------------
+
+# (1) Binned: relative rent levels by raw filing rate category
+m_bin <- feols(
+  log_med_rent ~ filing_rate_bin +
+    any_unsafe_dangerous_violation +
+    any_heat_fire_drainage_plumbing_complaint +
+    log(total_area) + log(market_value) |
+    year + GEOID + year_blt_decade + source + num_units_bin +
+    building_type + quality_grade_standard + num_stories_bin,
+  data    = reg_dt,
+  weights = ~ total_units,
+  cluster = ~ PID,
+  combine.quick = TRUE
+)
+
+# (2) Continuous: raw filing rate, same FE
+m_cont <- feols(
+  log_med_rent ~ filing_rate_longrun_pre2019 +
+    log(total_area) + log(market_value) |
+    year + GEOID + year_blt_decade + source + num_units_bin +
+    building_type + quality_grade_standard + num_stories_bin,
+  data    = reg_dt,
+  weights = ~ total_units,
+  cluster = ~ PID,
+  combine.quick = TRUE
+)
+
+# (3) Binned + tenant composition controls
+m_bin_tenant <- feols(
+  log_med_rent ~ filing_rate_bin +
+    any_unsafe_dangerous_violation +
+    any_heat_fire_drainage_plumbing_complaint +
+    log(total_area) + log(market_value) +
+    infousa_pct_black_imp + infousa_pct_female_imp +
+    infousa_pct_black_female_imp + infousa_share_persons_demog_ok_imp +
+    tenant_comp_missing |
+    year + GEOID + year_blt_decade + source + num_units_bin +
+    building_type + quality_grade_standard + num_stories_bin,
+  data    = reg_dt,
+  weights = ~ total_units,
+  cluster = ~ PID,
+  combine.quick = TRUE
+)
+
+# (4) Continuous + tenant composition controls
+m_cont_tenant <- feols(
+  log_med_rent ~ filing_rate_longrun_pre2019 +
+    log(total_area) + log(market_value) +
+    infousa_pct_black_imp + infousa_pct_female_imp +
+    infousa_pct_black_female_imp + infousa_share_persons_demog_ok_imp +
+    tenant_comp_missing |
+    year + GEOID + year_blt_decade + source + num_units_bin +
+    building_type + quality_grade_standard + num_stories_bin,
+  data    = reg_dt,
+  weights = ~ total_units,
+  cluster = ~ PID,
+  combine.quick = TRUE
+)
+
+# (5) Complaint x high-eviction interaction
+m_hb <- feols(
+  log_med_rent ~ any_heat_fire_drainage_plumbing_complaint * high_evict_raw +
+    log(total_area) + log(market_value) |
+    year + GEOID + num_units_bin,
+  data    = reg_dt,
+  weights = ~ total_units,
+  cluster = ~ PID,
+  combine.quick = TRUE
+)
+
+# ------------------------------------------------------------------
+# Tables
+# ------------------------------------------------------------------
+setFixest_dict(c(
+  "filing_rate_bin0" = "Filing rate = 0",
+  "filing_rate_bin(0-5%]" = "Filing rate (0, 5%]",
+  "filing_rate_bin(10-20%]" = "Filing rate (10, 20%]",
+  "filing_rate_bin20%+" = "Filing rate 20%+",
+  "filing_rate_longrun_pre2019" = "Filing rate (pre-2019)"
+))
+
+fixest::setFixest_etable(digits = 4, fitstat = c("n", "r2"))
+
+tab <- etable(
+  m_bin, m_cont,
+  title = "Hedonic rent regressions: raw long-run filing rate (pre-2019)",
+  keep  = "%filing_rate_bin|%filing_rate_longrun_pre2019",
+  order = "%filing_rate_bin|%filing_rate_longrun_pre2019",
+  tex   = TRUE
+)
+writeLines(tab, file.path(tab_dir, "hedonic_filing_rate_longrun.tex"))
+
+tab_tenant <- etable(
+  m_bin, m_cont, m_bin_tenant, m_cont_tenant,
+  title = "Hedonic rent regressions with tenant composition controls (raw filing rate)",
   tex = TRUE
 )
-writeLines(model_tables_m0_m1, p_out(cfg, "tables", "model_tables.tex"))
+writeLines(tab_tenant, file.path(tab_dir, "hedonic_filing_rate_longrun_with_tenant_composition.tex"))
 
-# export all models
-model_tables_all_models = etable(
-  m0, m1, m3, m4, #m5,
-  title = "Rent Price Regressions",
-  #caption = "Philadelphia, 2006-2019",
-  keep = "Eviction|Filing",
-  order = "Filing Rate",
-  # add lines for extra controls
-  extralines = list(
-    "Polynomial Imputed Beds" = c("No", "Yes","No","Yes","Yes"),
-    "Polynomial Imputed Baths" = c("No", "Yes","No","Yes","Yes"),
-    "Polynomial Year Built" = c("No", "Yes","No","Yes","Yes"),
-    "Polynomial Number of Stories" = c("No", "Yes","No","Yes","Yes"),
-    "Polynomial Number of Units" = c("No", "Yes","No","Yes","Yes")
+# ---- Coefficient comparison table ----
+extract_model_coefs <- function(model, model_name, term_pattern) {
+  ct <- as.data.table(summary(model)$coeftable, keep.rownames = "term")
+  setnames(ct, c("Estimate", "Std. Error", "Pr(>|t|)"), c("estimate", "std_error", "p_value"))
+  ct <- ct[grepl(term_pattern, term)]
+  if (!nrow(ct)) return(data.table())
+  ct[, model := model_name]
+  ct[, .(model, term, estimate, std_error, p_value)]
+}
 
+coef_compare <- rbindlist(
+  list(
+    extract_model_coefs(m_bin, "baseline_bin", "^filing_rate_bin"),
+    extract_model_coefs(m_bin_tenant, "tenant_bin", "^filing_rate_bin"),
+    extract_model_coefs(m_cont, "baseline_cont", "^filing_rate_longrun_pre2019$"),
+    extract_model_coefs(m_cont_tenant, "tenant_cont", "^filing_rate_longrun_pre2019$")
   ),
-  label = "tab:rent_regs",
-  tex = TRUE
+  use.names = TRUE,
+  fill = TRUE
+)
+if (!nrow(coef_compare)) {
+  coef_compare <- data.table(
+    model = character(), term = character(),
+    estimate = numeric(), std_error = numeric(), p_value = numeric()
+  )
+}
+fwrite(
+  coef_compare,
+  file.path(tab_dir, "hedonic_filing_rate_longrun_tenant_composition_coef_compare.csv")
 )
 
-writeLines(model_tables_all_models, p_out(cfg, "tables", "model_tables_all_models.tex"))
+# ---- Coefficient plot for binned model ----
+ct <- coeftable(m_bin, keep = "filing_rate_bin")
+coef_dt <- as.data.table(ct, keep.rownames = "term")
+if (nrow(coef_dt) > 0) {
+  # Clean up term names and add the reference category at 0
+  coef_dt[, term := gsub("^filing_rate_bin", "", term)]
+  ref_row <- data.table(term = "(5-10%]", Estimate = 0, `Std. Error` = 0,
+                         `t value` = NA_real_, `Pr(>|t|)` = NA_real_)
+  coef_dt <- rbind(coef_dt, ref_row, fill = TRUE)
+  bin_order <- c("0", "(0-5%]", "(5-10%]", "(10-20%]", "20%+")
+  coef_dt[, term := factor(term, levels = bin_order)]
 
-# now do share regs
-m0_share <- fixest::feols(
-  log_med_rent ~ share_units_evict + share_units_evict_sq | year,
-  data = analytic_df[share_units_evict>0 & filing_rate < 1 & !is.na(baths_first_pred) & !is.na(share_units_evict)],
-  cluster = ~PID
+  p <- ggplot(coef_dt, aes(x = term, y = Estimate)) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+    geom_point(size = 3) +
+    geom_errorbar(aes(ymin = Estimate - 1.96 * `Std. Error`,
+                      ymax = Estimate + 1.96 * `Std. Error`),
+                  width = 0.15) +
+    labs(
+      x = "Filing rate bin (pre-2019)",
+      y = "Effect on log rent (relative to (5-10%])",
+      title = "Hedonic penalty by filing rate bin (raw long-run rate)",
+      subtitle = "Tract and year FE; controls for units bin, decade built, building type, and source"
+    ) +
+    theme_minimal()
+
+  ggsave(file.path(fig_dir, "coefplot_hedonic_filing_rate_longrun.png"),
+         p, width = 8, height = 5, bg = "white")
+}
+
+# Console summaries
+print(summary(m_bin))
+print(summary(m_cont))
+print(summary(m_bin_tenant))
+print(summary(m_cont_tenant))
+
+logf(
+  "Built additive tenant-composition models. Non-missing share (raw): black=",
+  round(mean(!is.na(reg_dt$infousa_pct_black)), 4),
+  ", female=", round(mean(!is.na(reg_dt$infousa_pct_female)), 4),
+  ", black_female=", round(mean(!is.na(reg_dt$infousa_pct_black_female)), 4),
+  ", demog_ok=", round(mean(!is.na(reg_dt$infousa_share_persons_demog_ok)), 4),
+  log_file = log_file
 )
 
-summary(m0_share)
+# ------------------------------------------------------------------
+# Diagnostics: residual variation and spline filing curve
+# ------------------------------------------------------------------
 
-m1_share <- fixest::feols(
-  log_med_rent ~ share_units_evict+#share_units_evict_bins^2+
-   i(num_units_bins, ref = "1") +
-    #poly(log(num_units_evict),3)+
-    #poly(log(num_units),3)+
-    poly(number_stories,3) +
-    poly(num_units_imp,3)+
-    poly(year_built,3)
-    #poly(beds_imp_first_pred,2) + poly(baths_first_pred,2)|
-    |year^pm.zip +quality_grade_fixed,#+beds_imp_first_pred+baths_first_pred ,
- , data = bldg_panel[  filing_rate < 1 & share_units_evict> 0& !is.na(share_units_evict)],
-  weights = ~num_units_imp,
-  cluster = ~PID,
-  combine.quick = F
+## Residualize filing_rate_longrun_pre2019 on same controls/FE
+dt_resid <- copy(reg_dt)
+
+m_resid <- feols(
+  filing_rate_longrun_pre2019 ~ 1 + log(market_value) + log(total_area) |
+    year + GEOID + year_blt_decade + source + num_units_bin +
+    building_type + quality_grade_standard + num_stories_bin,
+  data    = dt_resid,
+  weights = ~ total_units
 )
 
-summary(m1_share)
+dt_resid[, filing_rate_longrun_pre2019_resid :=
+           filing_rate_longrun_pre2019 - predict(m_resid, newdata = dt_resid)]
 
-m1_share_alt <- fixest::feols(
-  log_med_rent ~ filing_rate*# share_units_zip_sq+
-    i(num_units_bins, ref = "1") +
-    (hhi_unit_bins)+
-    #log(num_units_zip)+
-    #poly(log(num_units),2)+
-    poly(number_stories,2) +
-    poly(year_built,2)|
-    #poly(beds_imp_first_pred,2) + poly(baths_first_pred,2)|
-    GEOID^year+source +quality_grade_fixed ,
-  , data = bldg_panel[source == "evict"&  filing_rate <= 1 & !is.na(share_units_evict)],
-  weights = ~num_units_imp,
-  cluster = ~PID,
-  combine.quick = F
+resid_sd <- sd(dt_resid$filing_rate_longrun_pre2019_resid, na.rm = TRUE)
+resid_p95 <- quantile(abs(dt_resid$filing_rate_longrun_pre2019_resid), 0.95, na.rm = TRUE)
+
+logf(
+  "Residualized raw filing rate: SD=", round(resid_sd, 4),
+  "; P95 abs(resid)=", round(resid_p95, 4),
+  "; R2=", round(r2(m_resid, "pr2"), 4),
+  log_file = log_file
 )
 
-summary(m1_share_alt)
-
-
-m3_share = fixest::feols(
-  log_med_rent ~ share_units_zip +share_units_zip_sq| year,
-  data = analytic_df[ filing_rate < 1 & !is.na(baths_first_pred) ],
-  #weights = ~num_units,
-  cluster = ~PID
-)
-
-m4_share = fixest::feols(
-  log_med_rent ~ share_units_zip +share_units_zip_sq  + poly(year_built,2)+poly(number_stories,2) +
-    poly(beds_imp_first_pred,2) + poly(baths_first_pred,2) +num_units_bins|
-    GEOID^year+type_heater +quality_grade_fixed +
-    view_type + source+
-    general_construction ,
-  data = analytic_df[filing_rate < 1& !is.na(baths_first_pred)],
-  #weights = ~num_units,
-  cluster = ~PID,
-  combine.quick = F
-)
-
-
-
-#bldg_panel[,high_filing := filing_rate > 0.15]
-bldg_panel[,post_covid := year >= 2021]
-bldg_panel[,placebo := year >= 2018 & year <= 2019]
-bldg_panel[,high_filing_uniqueN := uniqueN(high_filing), by = PID]
-bldg_panel[,.N, by = high_filing_uniqueN][order(high_filing_uniqueN)]
-bldg_panel[,corp_owner := str_detect(owner, "CORP|LLC|INC|ASSOC|PARTNERSHIP|COMPANY|CORPORATION")]
-(bldg_panel[,mean(med_price,na.rm=T), by = .(year,source)][order(source,year)][,yoy_change :=
-                                                                         round(V1/data.table::shift(V1,1, type = "lag") - 1,2), by = .(source)][order(source,year)])
-bldg_panel[,filing_rate_ntile := ntile(filing_rate_preCOVID, 5)]
-bldg_panel[,high_filing_preCOVID := filing_rate_preCOVID > 0.15]
-pre_post_covid = bldg_panel[year %in% c(2018, 2019, 2022,2023),list(
-  high_filing = first(high_filing),
-  log_med_rent = mean(log_med_rent),
-  num_units_bins = first(num_units_bins),
-  num_units_imp = first(num_units_imp),
-  filing_rate = first(filing_rate),
-  corp_owner = first(corp_owner),
-  year = max(year),
-  filing_rate_ntile = first(filing_rate_ntile),
-  num_years = uniqueN(year),
-  GEOID = first(GEOID),
-  CT_ID_10 = first(CT_ID_10)
-  #cumsum_filing_rate = max(cumsum_filing_rate)
-), by = .(PID, post_covid)]
-
-pre_post_covid[,high_filing_uniqueN := uniqueN(high_filing), by = PID]
-pre_post_covid[,.N, by = high_filing_uniqueN][order(high_filing_uniqueN)]
-pre_post_covid[,high_filing_post_covid := high_filing * post_covid]
-pre_post_covid[,filing_rate_ntile_post_covid := filing_rate_ntile * post_covid]
-pre_post_covid[order(PID, year),change_log_rent := log_med_rent - lag(log_med_rent), by = .(PID)]
-
-bldg_panel[,high_filing_post_covid := high_filing * post_covid]
-bldg_panel[,filing_rate_post_covid := filing_rate * post_covid]
-bldg_panel[,num_source := uniqueN(source), by = PID]
-bldg_panel[,num_source_year := uniqueN(source), by = .(PID, year)]
-bldg_panel[,num_corp_owner := uniqueN(corp_owner), by = PID]
-
-pid_resid_reg <- feols(log_med_rent ~1|PID, data = bldg_panel)
-bldg_panel[,price_resid := (log_med_rent) -(predict(pid_resid_reg, newdata = bldg_panel))]
-
-# get mean price by filing rate quintile by year
-mean_price_quintile = bldg_panel[filing_rate <= 1,list(
-mean_price_adj = weighted.mean(price_resid, w = num_units_imp, na.rm = T),
-mean_price = weighted.mean(med_price, w = num_units_imp, na.rm = T),
-log_med_rent =weighted.mean(price_resid, w = num_units_imp, na.rm = T),
-           mean_filing_rate = mean(filing_rate, na.rm = T),
-           n = .N
-), by = .(year, filing_rate_ntile= high_filing_preCOVID)]
-
-# index each t 2017
-mean_price_quintile[,log_med_rent_2017 := log_med_rent - log_med_rent[year == 2017], by = filing_rate_ntile]
-mean_price_quintile[,med_price_2017 := mean_price / mean_price[year == 2017], by = filing_rate_ntile]
-mean_price_quintile[,mean_price_2019 := mean_price / mean_price[year == 2019], by = filing_rate_ntile]
-mean_price_quintile[,mean_price_adj_2019 := mean_price_adj - mean_price_adj[year == 2019] , by = filing_rate_ntile]
-# plot
-mean_price_quintile[  year %in% c(2011:2023) & !is.na(filing_rate_ntile)] %>%
-  ggplot(aes(x = (year), y = mean_price_2019,group =factor(filing_rate_ntile),  color = factor(filing_rate_ntile))) +
-  geom_line(aes(linetype = "Raw Means")) +
-  #geom_line(aes(y = mean_price_adj_2019, linetype = "Repeat Rent Index")) +
-  scale_x_continuous(breaks = seq(2011, 2023, by = 1)) +
-  #scale_y_continuous(labels = scales::percent_format(accuracy = 1), breaks = seq(0,3,0.5)) +
-  labs(
-    title = "Mean Rent by High/Low Filing Rate Buildings",
-    subtitle = "Indexed to 2019; Weighted by Number of Units",
-    x = "Year",
-    y = "% Change in Rent",
-    color = "Filing Rate > 15%"
-  ) +
-  theme_philly_evict()
-
-ggsave(p_out(cfg, "figs", "mean_price_quintile.png"), width = 8, height = 6, bg = "white")
-
-bldg_panel[,change_log_med_rent := log_med_rent - data.table::shift(log_med_rent), by = PID]
-bldg_panel[,year_gap := year - data.table::shift(year), by = PID]
-bldg_panel[,change_log_med_rent_annualized := change_log_med_rent / year_gap]
-bldg_panel[,high_filing_preCOVID := filing_rate_preCOVID > 0.15]
-m1 <- fixest::feols(
-  log_med_rent ~ high_filing_preCOVID : i(year, ref = 2019) #+ num_units_bins * post_covid + corp_owner * post_covid
-  | year + high_filing + PID #+ CT_ID_10^year
-  , data = bldg_panel[#source == "evict" &
-    year %in% 2013:2023 #& abs(change_log_med_rent_annualized) <= 0.15 #&
-      #filing_rate <=0.75
-      &num_units_imp >5  ],
-  weights = ~(num_units_imp),
-  cluster = ~PID,
-  combine.quick = T
-)
-summary(m1)
-coefplot(m1)
-
-m2 <- fixest::feols(
-  log_med_rent ~ high_filing_preCOVID : i(year, ref = 2019) #+ num_units_bins * post_covid + corp_owner * post_covid
-  | pm.zip^year + high_filing + PID
-  , data = bldg_panel[#source == "evict" &
-    year %in% 2013:2023 #& abs(change_log_med_rent_annualized) <= 0.15 #&
-    #filing_rate <=0.75
-    &num_units_imp >=1  ],
-  weights = ~(num_units_imp),
-  cluster = ~PID,
-  combine.quick = T
-)
-summary(m2)
-coefplot(m2)
-
-# extract coefs and plot
-coef_df_m2 = broom::tidy(m2) %>%
-  filter(str_detect(term, "high_filing_preCOVID.+year::")) %>%
-  mutate(year = as.integer(str_remove(term, "high_filing_preCOVID:year::"))) %>%
-  mutate(
-    lower = estimate - 1.96 * std.error,
-    upper = estimate + 1.96 * std.error,
-  ) %>%
-  # add 2019 = 0
-  bind_rows(tibble(
-    term = "high_filing_preCOVID:year::2019",
-    estimate = 0,
-    std.error = 0,
-    year = 2019,
-    lower = 0,
-    upper = 0
-  ))
-
-coef_df_m1 = broom::tidy(m1) %>%
-  filter(str_detect(term, "high_filing_preCOVID.+year::")) %>%
-  mutate(year = as.integer(str_remove(term, "high_filing_preCOVID:year::"))) %>%
-  mutate(
-    lower = estimate - 1.96 * std.error,
-    upper = estimate + 1.96 * std.error,
-  ) %>%
-  # add 2019 = 0
-  bind_rows(tibble(
-    term = "high_filing_preCOVID:year::2019",
-    estimate = 0,
-    std.error = 0,
-    year = 2019,
-    lower = 0,
-    upper = 0
-  ))
-
-ggplot(
-  coef_df_m1, aes(x = year, y = estimate)
+# 1) Histogram (weighted by units)
+p_hist <- ggplot(
+  dt_resid[is.finite(filing_rate_longrun_pre2019_resid)],
+  aes(x = filing_rate_longrun_pre2019_resid, weight = total_units)
 ) +
-  geom_point() +
-  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
-  #geom_line() +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
-  scale_x_continuous(breaks = seq(2013, 2023, by = 1)) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1), breaks = seq(-0.1,0.2,0.05)) +
+  geom_histogram(bins = 80) +
+  scale_x_continuous(breaks = scales::pretty_breaks(10)) +
   labs(
-    title = "Event Study: High Filing Rate Buildings",
-    subtitle = "Relative to Low Filing Rate Buildings",
-    x = "Year",
-    y = "% Change in Rent"
+    title = "Residual variation in raw filing rate (pre-2019)",
+    subtitle = "Residualized on year + tract + size bin + decade built + source + log(market_value);\n weighted by imputed units",
+    x = "Residualized filing rate",
+    y = "Weighted count (units)"
   ) +
-  theme_philly_evict()
-
-ggsave(p_out(cfg, "figs", "event_study_high_filing_preCOVID.png"), width = 8, height = 6, bg = "white")
-
-# repeat m2
-ggplot(
-  coef_df_m2, aes(x = year, y = estimate)
-) +
-  geom_point() +
-  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
-  #geom_line() +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
-  scale_x_continuous(breaks = seq(2013, 2023, by = 1)) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1), breaks = seq(-0.1,0.05,0.01)) +
-  labs(
-    title = "Event Study: High Filing Rate Buildings",
-    subtitle = "Relative to Low Filing Rate Buildings: Controlling for Neighborhood Trends",
-    x = "Year",
-    y = "% Change in Rent"
-  ) +
-  theme_philly_evict()
-ggsave(p_out(cfg, "figs", "event_study_high_filing_preCOVID_m2.png"), width = 12, height = 8, bg = "white")
-
-
-setFixest_dict(
-  c(
-    "high_filing_preCOVIDTRUE"= "High Evictors",
-    "high_filing_preCOVID"= "High Evictors",
-    "CT_ID_10"= "Census Tract",
-    "year::2013" = "2013",
-    "year::2014" = "2014",
-    "year::2015" = "2015",
-    "year::2016" = "2016",
-    "year::2017" = "2017",
-    "year::2018" = "2018",
-    "year::2019" = "2019",
-    "year::2020" = "2020",
-    "year::2021" = "2021",
-    "year::2022" = "2022",
-    "year::2023" = "2023"
-  )
-)
-
-etable(m1,m2, drop = c("corp_ownerTRUE$|num_units_bins[0-9+-]+$") )
-
-summary(m2)
-m3 <- fixest::feols(
-  log_med_rent ~ high_filing_preCOVID : i(year, ref = 2019) #+ num_units_bins * post_covid + corp_owner * post_covid
-  | year + high_filing + PID + market_id
-  , data = bldg_panel[#source == "evict" &
-    year %in% 2011:2023  ],
-  weights = ~(num_units_imp),
-  cluster = ~PID,
-  combine.quick = T
-)
-
-m3
-coefplot(m3)
-
-
-m4 <- fixest::feols(
-  log_med_rent ~high_filing_post_covid + num_units_bins * post_covid + corp_owner * post_covid
-  |PID + CT_ID_10^year
-  , data = pre_post_covid[#source == "evict" &
-    filing_rate <=1  ],
-  weights = ~(num_units_imp),
-  cluster = ~PID,
-  combine.quick = T
-)
-
-etable(m1,m2,m3,m4)
-
-m5 <- feols(
-  log_med_rent ~i(filing_rate_ntile_post_covid, ref = 1)  + num_units_bins * post_covid + corp_owner * post_covid
-  |PID + year
-  , data = pre_post_covid[#source == "evict" &
-    filing_rate <=1  ],
-  weights = ~(num_units_imp),
-  cluster = ~PID,
-  combine.quick = T
-)
-
-m6 <- feols(
-  log_med_rent ~i(filing_rate_ntile_post_covid, ref = 1) + num_units_bins * post_covid + corp_owner * post_covid
-  |PID + CT_ID_10^year
-  , data = pre_post_covid[#source == "evict" &
-    filing_rate <=1  ],
-  weights = ~(num_units_imp),
-  cluster = ~PID,
-  combine.quick = T
-)
-
-etable(m3,m4,m5,m6, drop = c("corp_ownerTRUE$|num_units_bins[0-9+-]+$") )
-
-
-# set default style
-def_style = style.df(depvar.title = "", fixef.title = "",
-                     fixef.suffix = " fixed effect", yesNo = c("Yes","No"))
-
-fixest::setFixest_etable(
-  digits = 4, fitstat = c("n")
-)
-
-setFixest_dict(
-  c(
-    "PID"= "parcel",
-    "year" = "year",
-    "high_filing_post_covid" = "High Evictors",
-    "filing_rate_ntile_post_covid" = "Filing Rate Quintile",
-    "log_med_rent" = "Log Median Rent",
-    "num_units_imp" = "Number of Units",
-    "change_log_rent" = "Change in Log Rent",
-    "CT_ID_10" = "Census Tract",
-    "filing_rate" = "Filing Rate",
-    "filing_rate_ntile_post_covid" = "Filing Rate Quintile",
-    "filing_rate_ntile_post_covid::2" = "Filing Rate 2nd Quintile",
-    "filing_rate_ntile_post_covid::3" = "Filing Rate 3rd Quintile",
-    "filing_rate_ntile_post_covid::4" = "Filing Rate 4th Quintile",
-    "filing_rate_ntile_post_covid::5" = "Filing Rate 5th Quintile",
-    'num_units_bins101+' = "100+ Units",
-    'num_units_bins101+:post_covidTRUE' = "100+ Units (Post-COVID)",
-    'num_units_bins51-100' = "51-100 Units",
-    'num_units_bins51-100:post_covidTRUE' = "51-100 Units (Post-COVID)",
-    'num_units_bins6-50' = "6-50 Units",
-    'num_units_bins6-50:post_covidTRUE' = "6-50 Units (Post-COVID)",
-    'num_units_bins2-5' = "2-5 Units",
-    'num_units_bins2-5:post_covidTRUE' = "2-5 Units (Post-COVID)",
-    'num_units_bins1' = "1 Unit",
-    'num_units_bins1:post_covidTRUE' = "1 Unit (Post-COVID)",
-    "post_covidTRUE" = "Post-COVID Period",
-    "corp_ownerTRUE" = "Corporate Owner"
-
-
-  )
-)
-
-header_evict = c("High Evictors",
-                 "High Evictors (within Census Tract)",
-                 "High Evictors (quintiles)",
-                 "High Evictors (quintiles within Census Tract)")
-
-evict_models <- list(#m3,m4,
-                     m5,m6)
-
-
-evict_tables = etable(
-  evict_models,
-  headers = header_evict[3:4],
-  digits = 3,digits.stats = 3,
-  keep = "%ost_covid",
-  order = c("%high_filing_post_covid","%filing_rate_ntile_post_covid",
-            "%num_units_bins","%corp_ownerTRUE","%post_covidTRUE"),
-  #extralines = append("Wald Stat for Pre-Trends",owner_wald),
-  title = "Price Change Regressions",
-  drop = "cohort",
-  tex = T)
-
-evict_tables
-writeLines(evict_tables, p_out(cfg, "tables", "covid_price_change_regs.tex"))
-
-library(fwlplot)
-
-fwlplot(
-  change_log_rent ~filing_rate#*i(source,ref = "evict")
-  | year
-  , data = pre_post_covid[#source == "evict" &
-    year %in% c(2022,2023) &
-      # year <= 2019 | year >= 2022 &
-      #year <= 2019 & year>=2014
-      # &num_units_imp > 50
-      #(last_obs == T) &
-      filing_rate <=1  ],
-  weights = ~(num_units_imp),
-  cluster = ~PID,
-  combine.quick = T
-)
-
-
-pre_post_covid[,filing_rate_round10 := round(filing_rate, 2) * 10]
-pre_post_covid[,filing_rate_round5 := round(filing_rate * 20) / 20]
-pre_post_covid_bin_scatter = pre_post_covid[filing_rate <= 1] %>%
-  group_by(filing_rate_round5) %>%
-  summarise(
-    mean_change_log_rent = weighted.mean(change_log_rent, na.rm = TRUE, w= num_units_imp),
-    n = n(),
-    num_units = sum(num_units_imp, na.rm = TRUE)
-  ) %>%
-  ungroup() %>%
-  as.data.table()
-
-pre_post_covid_bin_scatter[filing_rate_round5 <= 1 ] %>%
-  ggplot(aes( x = filing_rate_round5, y = mean_change_log_rent)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  #facet_wrap(~year) +
-  labs(
-    title = "Change in log rent by filing rate",
-    x = "Filing Rate",
-    y = "Change in Log Rent"
-  ) +
-  theme_minimal()
-
-placebo = bldg_panel[year %in% c(2018, 2019, 2017,2016),list(
-  high_filing = first(high_filing),
-  log_med_rent = mean(log_med_rent),
-  num_units_imp = first(num_units_imp),
-  filing_rate = first(filing_rate),
-  year = max(year),
-  filing_rate_ntile = first(filing_rate_ntile),
-  num_years = uniqueN(year),
-  GEOID = first(GEOID),
-  CT_ID_10 = first(CT_ID_10)
-  #cumsum_filing_rate = max(cumsum_filing_rate)
-), by = .(PID, placebo)]
-
-placebo[,high_filing_uniqueN := uniqueN(high_filing), by = PID]
-placebo[,.N, by = high_filing_uniqueN][order(high_filing_uniqueN)]
-placebo[,high_filing_post_placebo := high_filing * placebo]
-placebo[,filing_rate_ntile_post_placebo := filing_rate_ntile * placebo]
-placebo[order(PID, year),change_log_rent := log_med_rent - lag(log_med_rent), by = .(PID)]
-m7 <- fixest::feols(
-  log_med_rent ~high_filing_post_placebo#*i(source,ref = "evict")
-  |PID + year
-  , data = placebo[#source == "evict" &
-    year %in% c(2018,2019,2017,2016) &
-      filing_rate <=1  ],
-  weights = ~(num_units_imp),
-  cluster = ~PID,
-  combine.quick = T
-)
-
-m8 <- fixest::feols(
-  log_med_rent ~high_filing_post_placebo#*i(source,ref = "evict")
-  |PID + CT_ID_10^year
-  , data = placebo[#source == "evict" &
-    year %in% c(2018,2019,2017,2016) &
-      filing_rate <=1  ],
-  weights = ~(num_units_imp),
-  cluster = ~PID,
-  combine.quick = T
-)
-
-etable(m7,m8)
-setDT(philly_rentals_long)
-philly_rentals_long = rent_list
-rental_aggs = philly_rentals_long[,
-                    list(
-                       sum(numberofunits, na.rm = T),
-                      sum(numberofunits[PID %in% bldg_panel[high_filing == T, PID]],na.rm =T)
-                      ,.N,
-                      sum(PID %in% bldg_panel[high_filing == T, PID],na.rm =T)
-                      ),
-                    by = year][year %in% 2015:2024][order(year)]
-
-rental_aggs[,change_units_rel2019 := V1 / V1[year == 2019] - 1]
-rental_aggs[,change_high_filing_units_rel2019 := V2 / V2[year == 2019] - 1]
-rental_aggs[,change_parcels_rel2019 := N / N[year == 2019] - 1]
-rental_aggs[,change_high_filing_parcels_rel2019 := V4 / V4[year == 2019] - 1]
-# export as GT table
-library(gt)
-rental_aggs %>%
-  filter(year >= 2017 & year <= 2023)%>%
-  select(
-    Year = year,
-    `Total Units` = V1,
-    `Units in High Evictor Buildings` = V2,
-    `Total Rentals` = N,
-    `Rentals in High Evictor Buildings` = V4,
-    # `Change in Total Units Since 2019` = change_units_rel2019,
-    # `Change in High Evictor Units Since 2019` = change_high_filing_units_rel2019,
-    # `Change in Total Rentals Since 2019` = change_parcels_rel2019,
-    # `Change in High Evictor Rentals Since 2019` = change_high_filing_parcels_rel2019
-  ) %>%
-  gt() %>%
-  fmt_number(
-    columns = c(`Total Units`, `Units in High Evictor Buildings`,
-                `Total Rentals`, `Rentals in High Evictor Buildings`,
-
-                ),
-    decimals = 0,
-    use_seps = TRUE
-  ) %>%
-  # fmt_percent(
-  #   columns = c(`Change in Total Rentals Since 2019`, `Change in High Evictor Rentals Since 2019`,
-  #               `Change in Total Units Since 2019`, `Change in High Evictor Units Since 2019`),
-  #   decimals = 1
-  # ) %>%
-  tab_header(
-    title = "Philadelphia Rental Registry: Number of Units Registered",
-    subtitle = "2017-2023"
-  ) %>%
-  tab_source_note(
-    source_note = "Data from Philadelphia Housing Rental Registry and Eviction Lab"
-  ) %>%
-  as_latex()%>%
-  write_lines(p_out(cfg, "tables", "rental_stock_over_time.tex"))
-
-#### graveyard ####
-fixest::feols(violations_per_unit ~ filing_rate,
-              # offset = ~num_units_imp,
-              data = bldg_panel[year == 2018])
-
-
-# same thing but residualized plots
-# first unconditional prices vs filings
-# residualize out year fe
-year_resid_filing_reg<- fixest::feols(
-  filing_rate ~ 1|year,
-  data = analytic_df[ filing_rate < 1],
-  # weights = ~num_units,
-  cluster = ~PID
-)
-
-year_resid_price_reg<- fixest::feols(
-  log_med_rent ~ 1|year,
-  data = analytic_df[ filing_rate < 1],
-  # weights = ~num_units,
-  cluster = ~PID
-)
-
-analytic_df[,filings_year_resid := filing_rate - predict(year_resid_filing_reg, newdata = analytic_df) ]
-analytic_df[,prices_year_resid := log_med_rent - predict(year_resid_price_reg, newdata = analytic_df) ]
-
-ggplot(analytic_df[year %in% 2006:2019 & filing_rate < 1  ],
-       aes(y = prices_year_resid, x = filings_year_resid)) +
-  geom_point() +
-  geom_smooth() +
-  labs(
-    title = "Residualized log median rent vs Residualized filings",
-    subtitle = "Philadelphia, 2006-2019",
-    y = "log median rent",
-    x = "residualized filings"
-  ) +
-  theme_philly_evict() +
-  facet_wrap(~source)
-
-# same thing but residualize all property controls
-prop_resid_reg<- fixest::feols(
-  filing_rate ~ poly(num_units,2) + poly(year_built,2)+poly(number_stories,2) +
-    poly(beds_imp_first_pred,2) + poly(baths_first_pred,2)|
-    GEOID^year+type_heater +quality_grade_fixed +
-    view_type + building_code_description_new_fixed+
-    general_construction + source,
-  data = analytic_df[!is.na(beds_imp_first_pred)& filing_rate < 1],
-  combine.quick = F,
-  # weights = ~num_units,
-  cluster = ~PID
-)
-
-price_resid_reg<- fixest::feols(
-  log_med_rent ~ poly(num_units,2) + poly(year_built,2)+poly(number_stories,2) +
-    poly(beds_imp_first_pred,2) + poly(baths_first_pred,2)|
-    GEOID^year+type_heater +quality_grade_fixed +
-    view_type + building_code_description_new_fixed+
-    general_construction + source,
-  data = analytic_df[!is.na(beds_imp_first_pred) & filing_rate < 1],
-  combine.quick = F,
-  # weights = ~num_units,
-  cluster = ~PID
-)
-
-analytic_df[,filings_prop_resid := filing_rate - predict(prop_resid_reg, newdata = analytic_df) ]
-analytic_df[,prices_prop_resid := log_med_rent - predict(price_resid_reg, newdata = analytic_df) ]
-
-ggplot(analytic_df[year %in% 2006:2019 & filing_rate < 1 & abs(prices_prop_resid)<1   ],
-       aes(y = prices_prop_resid, x = filings_prop_resid)) +
-  geom_point() +
-  geom_smooth() +
-  labs(
-    title = "Residualized log median rent vs filings",
-    subtitle = "Philadelphia, 2006-2019",
-    y = "log median rent",
-    x = "residualized filings"
-  ) +
-  theme_minimal() +
-  facet_wrap(~source)
-
-
-fwlplot::fwlplot(
-  log_med_rent ~
-    +filing_rate |
-    GEOID+year  ,
-  data = analytic_df[filing_rate<=2 & source == "evict" ]
-)
-
-feols(
-  log_med_rent ~
-    +filing_rate |
-    GEOID^year  ,
-  data = analytic_df[filing_rate<=2 & source == "evict" ]
-)
-
-
-fwlplot::fwlplot(
-  log_med_rent ~
-    filing_rate|year
-  ,data = analytic_df[filing_rate<=2 & num_filings_total_source < 1000 ]
-)
-
-pred_df =
-  expand_grid(
-    share_units_evict = seq(0,1,0.1),
-    source = c("evict","altos")
-  ) %>%
-  group_by(source)%>%
-  mutate(
-    filing_rate = 1,
-    num_filings_total = seq(0,100,10),
-    filing_rate_sq = filing_rate^2,
-    filing_rate_cube = filing_rate^3,
-    num_filings_total_sq = num_filings_total^2,
-    num_units = mean(analytic_df$num_units),
-    year_built = mean(analytic_df$year_built),
-    number_stories = mean(analytic_df$number_stories),
-    quality_grade_fixed = first(analytic_df$quality_grade_fixed),
-    building_code_description_new_fixed = first(analytic_df$building_code_description_new_fixed),
-    zoning = first(analytic_df$zoning),
-    #source = "altos",
-    type_heater = first(analytic_df$type_heater),
-    GEOID = first(analytic_df$GEOID),
-    multi_source = first(analytic_df$multi_source),
-    year = 2019,
-    exterior_condition= first(analytic_df$exterior_condition),
-    general_construction = first(analytic_df$general_construction),
-    view_type = first(analytic_df$view_type),
-    beds_imp_first_pred = first(analytic_df$beds_imp_first_pred),
-    baths_first_pred = first(analytic_df$baths_first_pred)
-
-
-  )
-
-pred_df = pred_df %>%
-  ungroup()%>%
-  #group_by(source)%>%
-  mutate(
-    preds = predict(m1, newdata = pred_df),
-    preds_se = broom::tidy(m1) %>% filter(term == "filing_rate") %>% pull(std.error),
-    preds_m0 = predict(m0, newdata = pred_df),
-    preds_m0_se = broom::tidy(m0) %>% filter(term == "filing_rate") %>% pull(std.error),
-    preds_high = preds + 1.96*preds_se,
-    preds_low = preds - 1.96*preds_se,
-    preds_m0_high = preds_m0 + 1.96*preds_m0_se,
-    preds_m0_low = preds_m0 - 1.96*preds_m0_se
-    #se = (predict(m1, newdata = pred_df, type = "response")$se.fit)
-  )
-
-setDT(pred_df)
-pred_df[,preds_norm := preds - preds[share_units_evict == 0], by  = source]
-pred_df[,preds_norm_high := preds_norm + 1.96*preds_se, by  = source]
-pred_df[,preds_norm_low := preds_norm - 1.96*preds_se, by  = source]
-
-pred_df[,preds_norm_m0 := preds_m0 - preds_m0[share_units_evict == 0], by  = source]
-pred_df[,preds_norm_m0_high := preds_norm_m0 + 1.96*preds_m0_se, by  = source]
-pred_df[,preds_norm_m0_low := preds_norm_m0 - 1.96*preds_m0_se, by  = source]
-
-ggplot(pred_df[], aes(x = share_units_evict, y = preds_norm,group = source, color = source)) +
-  geom_line(aes(linetype = "m1")) +
-  geom_line(aes( y = preds_norm_m0,group = source, color = source, linetype = "m0")) +
-  #geom_ribbon(aes(ymin = preds_norm_low, ymax = preds_norm_high)) +
-  #geom_ribbon(aes(ymin = preds_norm_m0_low, ymax = preds_norm_m0_high)) +
-  #geom_smooth(method = "lm") +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  theme_minimal()
-
-ggplot(analytic_df[year %in% c(2018,2019)], aes( x= med_price, group = source, color = source)) +
-  geom_density() +
-  geom_density(data=pa_tract[GEOID %in% analytic_df$CT_ID_10] %>% mutate(med_price = gross_rentE, source ="Census Tract Median" ),
-               aes( color = "Census Tract Median"))+
-  labs(
-    title = "Density of median rents by data source",
-    subtitle = "Philadelphia, 2018-2019",
-    footnote = "Data from Eviction Lab and Altos Research",
-    x = "median rents are windsorized at 500 and 4000 for aesthetics"
-  ) +
-  scale_x_continuous(breaks = seq(500, 4000,500), limits = c(500, 4000))+
-  # make the x axis exponentiated
-  # scale_x_continuous(trans = "log",
-  #                    breaks =round(exp(seq(6,9,0.25))/100) * 100) +
-  # geom_vline(aes(xintercept = analytic_df[year %in% c(2018,2019) & source == "evict",
-  #                                         median(med_price, na.rm = T)],
-  #                color = "evict"
-  #                ),
-  #            ) +
-  # geom_vline(aes(xintercept = analytic_df[year %in% c(2018,2019) & source == "altos",
-  #                                         median(med_price, na.rm = T)],
-  #                color = "altos"
-  # ),
-  # ) +
   theme_philly_evict()
 
 ggsave(
-  filename = p_out(cfg, "figs", "density_rent_prices.png"),
-  width = 10,
-  height = 6,
-  dpi = 300,
-  bg = "white"
+  filename = file.path(fig_dir, "resid_filing_rate_longrun_pre2019_hist.png"),
+  plot = p_hist, width = 9, height = 5, dpi = 300
 )
 
-ggplot(analytic_df[year %in% c(2018,2019)], aes( x= med_price, group = source, color = source)) +
-  stat_ecdf() +
+# 2) Density by source
+p_dens <- ggplot(
+  dt_resid[is.finite(filing_rate_longrun_pre2019_resid)],
+  aes(x = filing_rate_longrun_pre2019_resid, color = source, weight = total_units)
+) +
+  geom_density() +
   labs(
-    title = "CDF of rent prices by data source",
-    subtitle = "Philadelphia, 2018-2019",
-    x = "log median rent"
-  ) +
-  scale_x_continuous(breaks = seq(500, 4000,500), limits = c(500,4000))+
-  theme_philly_evict()
+    title = "Residualized raw filing rate by source",
+    subtitle = "Same residualization; weighted by units",
+    x = "Residualized filing rate",
+    y = "Weighted density"
+  )
 
-
-fwlplot::fwl_plot(
-  log_med_rent ~ share_units_evict + share_units_evict_sq |
-    year^GEOID+source  + quality_grade_fixed
-  , data = analytic_df[
-    num_units > 20 &
-      source == "evict"
-    # filing_rate <1 & filing_rate >0.2 & share_units_evict >0 &
-    #   share_units_evict < 1 & !is.na(baths_first_pred) & !is.na(share_units_evict)
-  ]
+ggsave(
+  filename = file.path(fig_dir, "resid_filing_rate_longrun_pre2019_density_by_source.png"),
+  plot = p_dens, width = 10, height = 5, dpi = 300
 )
 
+# 3) Residual SD by size bin
+sd_by_size <- dt_resid[
+  is.finite(filing_rate_longrun_pre2019_resid),
+  .(sd_resid = sd(filing_rate_longrun_pre2019_resid), n = .N),
+  by = num_units_bin
+][order(num_units_bin)]
 
-# bin scatter
-#put filing rate to 0.05 buckets
-bldg_panel[, filing_rate_round := round(filing_rate, 2)]
+fwrite(sd_by_size, file.path(tab_dir, "resid_filing_rate_longrun_sd_by_units_bin.csv"))
 
-bldg_panel_bins <- bldg_panel[ filing_rate <= 1,list(
-  mean_med_rent = weighted.mean(med_price,w = num_units_imp, na.rm = T),
-  .N
-), by = .(filing_rate = round(1000*filing_rate / 25) * 25, source)]
+# ---- Residualized rent vs residualized filing rate ----
+m_price_resid <- feols(
+  log_med_rent ~ 1 + log(market_value) + log(total_area) |
+    year + GEOID + year_blt_decade + source + num_units_bin +
+    building_type + quality_grade_standard + num_stories_bin,
+  data    = dt_resid,
+  weights = ~ total_units
+)
 
-ggplot(bldg_panel_bins, aes(color = source,x = round(filing_rate, 2), y = mean_med_rent)) +
+dt_resid[, log_med_rent_resid := log_med_rent - predict(m_price_resid, newdata = dt_resid)]
+
+# Scatter
+p_scatter <- ggplot(
+  dt_resid[is.finite(filing_rate_longrun_pre2019_resid) &
+             is.finite(log_med_rent_resid) & total_units >= 10],
+  aes(x = filing_rate_longrun_pre2019_resid, y = log_med_rent_resid, weight = total_units)
+) +
   geom_point() +
-  geom_smooth(se = F) +
+  geom_smooth(method = "loess", span = 0.5, se = FALSE, aes(color = "Loess: Span = 0.5")) +
+  geom_smooth(method = "loess", span = 0.75, se = FALSE, aes(color = "Loess: Span = 0.75")) +
+  geom_smooth(method = "loess", span = 1, se = FALSE, aes(color = "Loess: Span = 1")) +
+  geom_smooth(method = "gam", se = FALSE, aes(color = "GAM")) +
+  geom_smooth(method = "lm", aes(color = "LM")) +
+  scale_y_continuous(breaks = scales::pretty_breaks(20)) +
   labs(
-    title = "Mean Rent by Filing Rate",
-    subtitle = "Philadelphia, 2018",
-    x = "Filing Rate",
-    y = "Mean Rent"
+    title = "Residualized log rent vs residualized raw filing rate",
+    subtitle = "Both residualized on same controls/FE; weighted by imputed units",
+    x = "Residualized filing rate (pre-2019)",
+    y = "Residualized log median rent"
   ) +
   theme_philly_evict()
 
+ggsave(file.path(fig_dir, "scatter_resid_rent_vs_filing_rate_longrun.png"),
+       p_scatter, width = 10, height = 6, dpi = 300, bg = "white")
 
+# Bin scatter
+dt_resid[, filing_rate_longrun_pre2019_resid_bin05 := cut(
+  filing_rate_longrun_pre2019_resid,
+  breaks = seq(-0.5, 0.5, by = 0.05),
+  include.lowest = TRUE
+)]
 
+bin_scatter <- dt_resid[
+  is.finite(filing_rate_longrun_pre2019_resid) & is.finite(log_med_rent_resid),
+  .(mean_filing_resid = weighted.mean(filing_rate_longrun_pre2019_resid, w = total_units, na.rm = TRUE),
+    mean_rent_resid = weighted.mean(log_med_rent_resid, w = total_units, na.rm = TRUE),
+    total_units = sum(total_units)),
+  by = filing_rate_longrun_pre2019_resid_bin05
+]
+
+p_bin_scatter <- ggplot(
+  bin_scatter[total_units > 500],
+  aes(x = mean_filing_resid, y = mean_rent_resid, size = total_units, weight = total_units)
+) +
+  geom_point(alpha = 0.7) +
+  geom_smooth(method = "loess", span = 1, se = FALSE) +
+  geom_smooth(method = "gam", aes(color = "GAM"), se = FALSE) +
+  labs(
+    title = "Binned: Residualized log rent vs residualized raw filing rate",
+    subtitle = "Both residualized on same controls/FE; weighted by imputed units",
+    x = "Residualized filing rate (pre-2019)",
+    y = "Residualized log median rent"
+  ) +
+  theme_philly_evict()
+
+ggsave(file.path(fig_dir, "binscatter_resid_rent_vs_filing_rate_longrun.png"),
+       p_bin_scatter, width = 10, height = 6, dpi = 300, bg = "white")
+
+# ------------------------------------------------------------------
+# Spline filing curves: linear, quadratic, cubic
+# ------------------------------------------------------------------
+library(splines)
+
+setDT(reg_dt)
+
+# Place knots manually: concentrate at low filing rates where most variation lives
+spline_knots <- c(0.01, 0.025, 0.05, 0.08, 0.12, 0.20)
+
+# Hurdle: never-filers vs ever-filers
+reg_dt[, never_filed_pre2019 := as.integer(replace(total_filings_pre2019, is.na(total_filings_pre2019), 0) == 0L)]
+reg_dt[, filing_rate_longrun_pre2019_filed :=
+         fifelse(never_filed_pre2019 == 1L, NA_real_, filing_rate_longrun_pre2019)]
+
+x_filed <- reg_dt$filing_rate_longrun_pre2019_filed
+bknots <- quantile(x_filed, c(0.005, 0.995), na.rm = TRUE)
+
+# ---- Helper: estimate one spline spec and return grid + model ----
+# Accepts custom FE string, extra RHS controls, and data subset
+estimate_spline_spec <- function(dt_in, degree, label, fe_str,
+                                  extra_rhs = NULL, hurdle = TRUE) {
+  dt <- copy(dt_in)
+  dt <- dt[, .SD, .SDcols = !grepl("^spline_", names(dt))]
+
+  if (hurdle) {
+    # Hurdle model: never-filer dummy + spline on ever-filers only
+    x_var <- dt$filing_rate_longrun_pre2019_filed
+    bk <- quantile(x_var, c(0.005, 0.995), na.rm = TRUE)
+  } else {
+    # No hurdle: spline spans full range including zero
+    x_var <- dt$filing_rate_longrun_pre2019
+    bk <- c(0, quantile(x_var[x_var > 0], 0.995, na.rm = TRUE))
+  }
+
+  if (degree == 3L) {
+    B <- ns(x_var, knots = spline_knots, Boundary.knots = bk)
+  } else {
+    B <- bs(x_var, knots = spline_knots, Boundary.knots = bk, degree = degree)
+  }
+  n_sp <- ncol(B)
+  sp_nm <- paste0("spline_", 1:n_sp)
+  dt[, (sp_nm) := as.data.table(B)]
+
+  if (hurdle) {
+    dt[never_filed_pre2019 == 1L, (sp_nm) := 0]
+    rhs_parts <- c("never_filed_pre2019", sp_nm,
+                    "log(market_value)", "log(total_area)", "log(total_units)")
+  } else {
+    rhs_parts <- c(sp_nm,
+                    "log(market_value)", "log(total_area)", "log(total_units)")
+  }
+  if (!is.null(extra_rhs)) rhs_parts <- c(rhs_parts, extra_rhs)
+  rhs <- paste(rhs_parts, collapse = " + ")
+  fml <- as.formula(paste0("log_med_rent ~ ", rhs, " | ", fe_str))
+  m <- feols(fml, data = dt, weights = ~ total_units, cluster = ~ PID)
+
+  # Extract coefficients
+  b_all <- coef(m)
+  b_sp <- b_all[sp_nm]
+
+  if (hurdle) {
+    never_name <- grep("^never_filed_pre2019", names(b_all), value = TRUE)
+    stopifnot(length(never_name) == 1)
+    beta_never <- as.numeric(b_all[never_name])
+  } else {
+    beta_never <- NA_real_
+  }
+
+  # Vcov for delta-method CI
+  V_all <- vcov(m, cluster = "PID")
+  V_sp <- V_all[sp_nm, sp_nm, drop = FALSE]
+
+  # Grid prediction: start at 0 for non-hurdle, or 0.5th pctile for hurdle
+  if (hurdle) {
+    x_vec <- dt$filing_rate_longrun_pre2019_filed
+    grid_lo <- quantile(x_vec, 0.01, na.rm = TRUE)
+  } else {
+    grid_lo <- 0
+  }
+  grid_hi <- quantile(dt$filing_rate_longrun_pre2019[dt$filing_rate_longrun_pre2019 > 0],
+                       0.9, na.rm = TRUE)
+  grid <- data.table(filing_rate = seq(grid_lo, grid_hi, length.out = 200))
+
+  if (degree == 3L) {
+    Bgrid <- ns(grid$filing_rate, knots = spline_knots, Boundary.knots = bk)
+  } else {
+    Bgrid <- bs(grid$filing_rate, knots = spline_knots,
+                Boundary.knots = bk, degree = degree)
+  }
+  colnames(Bgrid) <- sp_nm
+
+  g_hat <- as.vector(Bgrid %*% b_sp)
+
+  if (hurdle) {
+    # Relative to never-filer intercept
+    grid[, y := g_hat - beta_never]
+    var_never <- as.numeric(V_all[never_name, never_name])
+    cov_never_sp <- V_all[never_name, sp_nm, drop = FALSE]
+    var_g <- diag(Bgrid %*% V_sp %*% t(Bgrid))
+    cov_ng <- as.vector(cov_never_sp %*% t(Bgrid))
+    se_y <- sqrt(pmax(0, var_g + var_never - 2 * cov_ng))
+  } else {
+    # Relative to g(0): the spline value at filing_rate = 0
+    if (degree == 3L) {
+      B0 <- ns(0, knots = spline_knots, Boundary.knots = bk)
+    } else {
+      B0 <- bs(0, knots = spline_knots, Boundary.knots = bk, degree = degree)
+    }
+    g0 <- as.vector(B0 %*% b_sp)
+    grid[, y := g_hat - g0]
+    # Delta-method: var(g(x) - g(0)) = var(g(x)) + var(g(0)) - 2*cov(g(x),g(0))
+    Bdiff <- sweep(Bgrid, 2, as.vector(B0))  # Bgrid - B0 row-wise
+    var_diff <- diag(Bdiff %*% V_sp %*% t(Bdiff))
+    se_y <- sqrt(pmax(0, var_diff))
+  }
+  grid[, lo := y - 1.96 * se_y]
+  grid[, hi := y + 1.96 * se_y]
+  grid[, spec := label]
+
+  list(grid = grid, model = m, beta_never = beta_never,
+       b_sp = b_sp, sp_nm = sp_nm, dt = dt, bk = bk, hurdle = hurdle)
+}
+
+# ---- Prepare extra controls ----
+# num_years_pre2019: buildings observed longer have more chances to file
+if (!"num_years_pre2019" %in% names(reg_dt)) {
+  reg_dt[, num_years_pre2019 := sum(year <= 2019), by = PID]
+}
+
+# FE strings for different specs
+fe_base <- paste(c("year", "census_tract", "year_blt_decade", "num_units_bin",
+                    "building_type", "quality_grade_standard", "num_stories_bin"),
+                 collapse = " + ")
+fe_with_source <- paste(c(fe_base, "source"), collapse = " + ")
+
+# ---- A) Degree comparison (no hurdle, baseline FE) ----
+specs_degree <- list(
+  list(degree = 1L, label = "Linear (degree 1)"),
+  list(degree = 2L, label = "Quadratic (degree 2)"),
+  list(degree = 3L, label = "Cubic (ns, degree 3)")
+)
+
+spline_results <- lapply(specs_degree, function(s) {
+  estimate_spline_spec(reg_dt, degree = s$degree, label = s$label,
+                       fe_str = fe_base, hurdle = FALSE)
+})
+names(spline_results) <- c("linear", "quadratic", "cubic")
+
+# Combine grids for overlay plot
+all_grids <- rbindlist(lapply(spline_results, `[[`, "grid"))
+
+# ---- Non-hurdle cubic: spline through zero ----
+nohurdle_cubic <- estimate_spline_spec(
+  reg_dt, degree = 3L, label = "Cubic (no hurdle)",
+  fe_str = fe_base, hurdle = FALSE
+)
+
+# ---- Hurdle cubic: separate intercept for never-filers ----
+hurdle_cubic <- estimate_spline_spec(
+  reg_dt, degree = 3L, label = "Cubic (hurdle)",
+  fe_str = fe_base, hurdle = TRUE
+)
+
+# ---- Partial-residual bins (from NON-HURDLE cubic model) ----
+m_nh <- nohurdle_cubic$model
+dt_nh <- nohurdle_cubic$dt
+sp_nm_nh <- nohurdle_cubic$sp_nm
+b_sp_nh <- nohurdle_cubic$b_sp
+bk_nh <- nohurdle_cubic$bk
+
+sel_nh <- !is.na(weights(m_nh))
+dt_used <- dt_nh[sel_nh]
+dt_used[, g_i := as.vector(as.matrix(.SD) %*% b_sp_nh), .SDcols = sp_nm_nh]
+dt_used[, eps := resid(m_nh)]
+dt_used[, f_partial := g_i + eps]
+
+# Compute g(0) for reference
+B0_nh <- ns(0, knots = spline_knots, Boundary.knots = bk_nh)
+g0_nh <- as.vector(B0_nh %*% b_sp_nh)
+dt_used[, f_partial_rel := f_partial - g0_nh]
+
+# Bin all observations (including never-filers at 0)
+bin_brks <- c(-0.001, 0.001, 0.005, 0.01, 0.02, 0.03, 0.05, 0.075,
+              0.10, 0.15, 0.20, 0.30, Inf)
+dt_used[, bin := cut(filing_rate_longrun_pre2019, breaks = bin_brks,
+                     include.lowest = TRUE)]
+n_bins <- length(bin_brks) - 1
+
+bin_means <- dt_used[!is.na(bin), .(
+  x_bin = weighted.mean(filing_rate_longrun_pre2019, w = total_units, na.rm = TRUE),
+  y_bin = weighted.mean(f_partial_rel, w = total_units, na.rm = TRUE),
+  n_bin = .N,
+  w_bin = sum(total_units, na.rm = TRUE)
+), by = bin][order(x_bin)]
+
+# Trim to grid range
+grid_range_nh <- range(nohurdle_cubic$grid$filing_rate)
+bin_means <- bin_means[x_bin >= grid_range_nh[1] & x_bin <= grid_range_nh[2]]
+
+all_pts <- data.table(
+  x = bin_means$x_bin, y = bin_means$y_bin,
+  type = fifelse(bin_means$x_bin < 0.001, "Never-filers", "Ever-filers"),
+  w = bin_means$w_bin
+)
+
+# ---- Individual spline plot (no-hurdle cubic, anchored at zero) ----
+grid_cubic <- nohurdle_cubic$grid
+
+p_spline <- ggplot() +
+  geom_ribbon(
+    data = grid_cubic,
+    aes(x = filing_rate, ymin = lo, ymax = hi),
+    alpha = 0.2
+  ) +
+  geom_line(
+    data = grid_cubic,
+    aes(x = filing_rate, y = y),
+    linewidth = 1
+  ) +
+  geom_point(
+    data = all_pts,
+    aes(x = x, y = y, size = w), alpha = 0.85
+  ) +
+  scale_x_continuous(breaks = scales::pretty_breaks(20), limits = c(0, 0.25)) +
+  scale_y_continuous(breaks = scales::pretty_breaks(10)) +
+  labs(
+    x = "Raw filing rate (pre-2019)",
+    y = "Partial residual (filing component) vs rate = 0",
+    title = "Spline-implied filing curve (cubic)",
+    subtitle = paste0(
+      "Cubic natural spline; boundary knot at 0; ",
+      "points = binned partial residuals; weights = total_units"
+    )
+  ) +
+  theme_philly_evict()
+
+ggsave(file.path(fig_dir, "spline_filing_curve_raw.png"),
+       p_spline, width = 10, height = 6, dpi = 300, bg = "white")
+
+# ---- Hurdle vs non-hurdle comparison plot ----
+compare_hurdle_grids <- rbind(hurdle_cubic$grid, nohurdle_cubic$grid)
+
+p_hurdle_compare <- ggplot() +
+  geom_ribbon(
+    data = compare_hurdle_grids,
+    aes(x = filing_rate, ymin = lo, ymax = hi, fill = spec),
+    alpha = 0.12
+  ) +
+  geom_line(
+    data = compare_hurdle_grids,
+    aes(x = filing_rate, y = y, color = spec),
+    linewidth = 1
+  ) +
+  geom_point(
+    data = all_pts,
+    aes(x = x, y = y, size = w),
+    alpha = 0.6, color = "grey30"
+  ) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+  scale_x_continuous(breaks = scales::pretty_breaks(20), limits = c(0, 0.25)) +
+  scale_y_continuous(breaks = scales::pretty_breaks(10)) +
+  scale_color_manual(values = c("Cubic (hurdle)" = "#E41A1C",
+                                "Cubic (no hurdle)" = "#4DAF4A")) +
+  scale_fill_manual(values = c("Cubic (hurdle)" = "#E41A1C",
+                               "Cubic (no hurdle)" = "#4DAF4A")) +
+  labs(
+    x = "Raw filing rate (pre-2019)",
+    y = "Fitted filing component vs rate = 0",
+    title = "Hurdle vs no-hurdle spline: boundary artifact diagnostic",
+    subtitle = "Hurdle: never-filer dummy + spline on ever-filers; No hurdle: spline through zero",
+    color = "Specification",
+    fill = "Specification",
+    size = "Total units"
+  ) +
+  theme_philly_evict() +
+  theme(legend.position = "right")
+
+ggsave(file.path(fig_dir, "spline_hurdle_vs_nohurdle.png"),
+       p_hurdle_compare, width = 12, height = 7, dpi = 300, bg = "white")
+
+# ---- Overlay comparison: linear vs quadratic vs cubic ----
+p_compare <- ggplot() +
+  # CI ribbons for each spec
+  geom_ribbon(
+    data = all_grids,
+    aes(x = filing_rate, ymin = lo, ymax = hi, fill = spec),
+    alpha = 0.12
+  ) +
+  # Fitted curves
+  geom_line(
+    data = all_grids,
+    aes(x = filing_rate, y = y, color = spec),
+    linewidth = 1
+  ) +
+  # Binned partial residuals (from cubic)
+  geom_point(
+    data = all_pts,
+    aes(x = x, y = y, size = w),
+    alpha = 0.6, color = "grey30"
+  ) +
+  scale_x_continuous(breaks = scales::pretty_breaks(20), limits = c(0, 0.25)) +
+  scale_y_continuous(breaks = scales::pretty_breaks(10)) +
+  scale_color_manual(values = c("Linear (degree 1)" = "#E41A1C",
+                                "Quadratic (degree 2)" = "#377EB8",
+                                "Cubic (ns, degree 3)" = "#4DAF4A")) +
+  scale_fill_manual(values = c("Linear (degree 1)" = "#E41A1C",
+                               "Quadratic (degree 2)" = "#377EB8",
+                               "Cubic (ns, degree 3)" = "#4DAF4A")) +
+  labs(
+    x = "Raw filing rate (pre-2019), ever-filers",
+    y = "Fitted filing component vs never-filers",
+    title = "filing curve robustness: linear vs quadratic vs cubic splines",
+    subtitle = paste0(
+      "Knots at ", paste(spline_knots * 100, collapse = ", "), "%; ",
+      "shaded = 95% CI; points = binned partial residuals (cubic model)"
+    ),
+    color = "Spline degree",
+    fill = "Spline degree",
+    size = "Total units"
+  ) +
+  theme_philly_evict() +
+  theme(legend.position = "right")
+
+ggsave(file.path(fig_dir, "spline_filing_curve_comparison.png"),
+       p_compare, width = 12, height = 7, dpi = 300, bg = "white")
+
+logf(
+  "Spline comparison: linear R2=", round(r2(spline_results$linear$model, "wr2"), 4),
+  ", quadratic R2=", round(r2(spline_results$quadratic$model, "wr2"), 4),
+  ", cubic R2=", round(r2(spline_results$cubic$model, "wr2"), 4),
+  log_file = log_file
+)
+
+# ------------------------------------------------------------------
+# B) Robustness: cubic spline (no hurdle) under different controls
+# ------------------------------------------------------------------
+# All specs use hurdle=FALSE (spline through zero) to avoid boundary
+# artifacts from the hurdle parameterization.
+
+logf("Running spline robustness variants (no hurdle)...", log_file = log_file)
+
+hump_specs <- list(
+  list(
+    label = "Baseline",
+    dt = reg_dt,
+    fe = fe_base,
+    extra_rhs = NULL
+  ),
+  list(
+    label = "+ Source FE",
+    dt = reg_dt,
+    fe = fe_with_source,
+    extra_rhs = NULL
+  ),
+  list(
+    label = "+ Source FE + panel tenure",
+    dt = reg_dt,
+    fe = fe_with_source,
+    extra_rhs = "num_years_pre2019"
+  ),
+  list(
+    label = "Multi-family only",
+    dt = reg_dt[total_units > 1],
+    fe = fe_base,
+    extra_rhs = NULL
+  ),
+  list(
+    label = "+ Unit bin x Source FE",
+    dt = reg_dt,
+    fe = gsub("num_units_bin \\+ ", "num_units_bin^source + ",
+              gsub("\\+ source", "", fe_with_source)),
+    extra_rhs = NULL
+  )
+)
+
+hump_results <- lapply(hump_specs, function(s) {
+  estimate_spline_spec(s$dt, degree = 3L, label = s$label,
+                       fe_str = s$fe, extra_rhs = s$extra_rhs,
+                       hurdle = FALSE)
+})
+
+hump_grids <- rbindlist(lapply(hump_results, `[[`, "grid"))
+hump_grids[, spec := factor(spec, levels = sapply(hump_specs, `[[`, "label"))]
+
+# Log g(0) benchmark for each variant
+for (i in seq_along(hump_specs)) {
+  logf(
+    "Robustness variant '", hump_specs[[i]]$label,
+    "': n=", nobs(hump_results[[i]]$model),
+    log_file = log_file
+  )
+}
+
+# ---- Overlay plot: robustness ----
+hump_colors <- c(
+  "Baseline" = "#999999",
+  "+ Source FE" = "#E41A1C",
+  "+ Source FE + panel tenure" = "#377EB8",
+  "Multi-family only" = "#FF7F00",
+  "+ Unit bin x Source FE" = "#984EA3"
+)
+
+p_hump <- ggplot() +
+  geom_ribbon(
+    data = hump_grids,
+    aes(x = filing_rate, ymin = lo, ymax = hi, fill = spec),
+    alpha = 0.08
+  ) +
+  geom_line(
+    data = hump_grids,
+    aes(x = filing_rate, y = y, color = spec),
+    linewidth = 0.9
+  ) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+  scale_x_continuous(breaks = scales::pretty_breaks(20), limits = c(0, 0.15)) +
+  scale_y_continuous(breaks = scales::pretty_breaks(10)) +
+  scale_color_manual(values = hump_colors) +
+  scale_fill_manual(values = hump_colors) +
+  labs(
+    x = "Raw filing rate (pre-2019)",
+    y = "Fitted filing component vs rate = 0",
+    title = "Spline robustness: cubic (no hurdle) under alternative controls",
+    subtitle = "Cubic natural spline with boundary knot at 0; all weighted by total_units",
+    color = "Specification",
+    fill = "Specification"
+  ) +
+  theme_philly_evict() +
+  theme(legend.position = "right")
+
+ggsave(file.path(fig_dir, "spline_hump_diagnostic.png"),
+       p_hump, width = 13, height = 7, dpi = 300, bg = "white")
+
+logf("Spline robustness plot saved.", log_file = log_file)
+
+# ------------------------------------------------------------------
+# Diagnostic: never-filer vs low-filer composition
+# ------------------------------------------------------------------
+# The spline curve shows a hump near 0: buildings with very low positive
+# filing rates have *higher* rents than never-filers. This diagnostic
+# checks whether never-filers differ systematically on observables.
+
+reg_dt[, filer_group := fcase(
+  never_filed_pre2019 == 1L, "Never filed",
+  filing_rate_longrun_pre2019 <= 0.01, "Filed: (0, 1%]",
+  filing_rate_longrun_pre2019 <= 0.03, "Filed: (1, 3%]",
+  filing_rate_longrun_pre2019 <= 0.05, "Filed: (3, 5%]",
+  filing_rate_longrun_pre2019 <= 0.10, "Filed: (5, 10%]",
+  default = "Filed: 10%+"
+)]
+reg_dt[, filer_group := factor(filer_group, levels = c(
+  "Never filed", "Filed: (0, 1%]", "Filed: (1, 3%]",
+  "Filed: (3, 5%]", "Filed: (5, 10%]", "Filed: 10%+"
+))]
+
+# Weighted means of key observables by filer group
+diag_vars <- c("log_med_rent", "total_units", "market_value", "total_area")
+# Add source shares and building type shares
+reg_dt[, is_altos := as.integer(source == "altos")]
+reg_dt[, is_sfh := as.integer(total_units <= 1)]
+reg_dt[, log_market_value := fifelse(market_value > 0, log(market_value), NA_real_)]
+reg_dt[, log_total_area := fifelse(total_area > 0, log(total_area), NA_real_)]
+
+comp_table <- reg_dt[, .(
+  n_pid_years       = .N,
+  n_pids            = uniqueN(PID),
+  mean_log_rent     = weighted.mean(log_med_rent, w = total_units, na.rm = TRUE),
+  mean_total_units  = weighted.mean(total_units, w = total_units, na.rm = TRUE),
+  median_total_units = as.double(median(total_units, na.rm = TRUE)),
+  mean_log_mkt_val  = weighted.mean(log_market_value, w = total_units, na.rm = TRUE),
+  mean_log_area     = weighted.mean(log_total_area, w = total_units, na.rm = TRUE),
+  pct_altos         = weighted.mean(is_altos, w = total_units, na.rm = TRUE),
+  pct_sfh           = weighted.mean(is_sfh, w = total_units, na.rm = TRUE),
+  pct_quality_A     = weighted.mean(quality_grade_standard == "A", w = total_units, na.rm = TRUE),
+  pct_quality_B     = weighted.mean(quality_grade_standard == "B", w = total_units, na.rm = TRUE),
+  pct_quality_C     = weighted.mean(quality_grade_standard == "C", w = total_units, na.rm = TRUE),
+  pct_quality_unknown = weighted.mean(quality_grade_standard == "Unknown", w = total_units, na.rm = TRUE),
+  pct_pre1900       = weighted.mean(year_blt_decade == "pre-1900", w = total_units, na.rm = TRUE),
+  pct_black_imp     = weighted.mean(infousa_pct_black_imp, w = total_units, na.rm = TRUE),
+  pct_tenant_missing = weighted.mean(tenant_comp_missing, w = total_units, na.rm = TRUE),
+  total_unit_years  = sum(total_units, na.rm = TRUE)
+), by = filer_group][order(filer_group)]
+
+# Round for readability
+num_cols <- setdiff(names(comp_table), "filer_group")
+comp_table[, (num_cols) := lapply(.SD, function(x) round(x, 4)), .SDcols = num_cols]
+
+fwrite(comp_table, file.path(tab_dir, "never_filer_vs_low_filer_composition.csv"))
+
+logf("Never-filer vs low-filer composition table written.", log_file = log_file)
+
+# Also print to console for quick inspection
+cat("\n===== Never-filer vs low-filer composition =====\n")
+print(comp_table)
+cat("\n")
+
+logf("=== Finished price-regs.R ===", log_file = log_file)
