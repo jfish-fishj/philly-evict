@@ -1,0 +1,527 @@
+---
+title: "Filing Rate Decomposition and Back-Rent Analysis"
+subtitle: "Philadelphia Evictions, 2011--2019"
+date: today
+format:
+  pdf:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    geometry: margin=1in
+    fontsize: 11pt
+    colorlinks: true
+    header-includes: |
+      \usepackage{booktabs}
+      \usepackage{longtable}
+      \usepackage{array}
+      \usepackage{multirow}
+      \usepackage[normalem]{ulem}
+      \usepackage{wrapfig}
+      \usepackage{float}
+      \usepackage{colortbl}
+      \usepackage{pdflscape}
+      \usepackage{tabu}
+      \usepackage{threeparttable}
+      \usepackage{threeparttablex}
+      \usepackage{makecell}
+      \usepackage{xcolor}
+      \usepackage{adjustbox}
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+library(data.table)
+library(ggplot2)
+library(kableExtra)
+
+fd <- here::here("output/filing_decomposition")
+p_fd <- function(...) file.path(fd, ...)
+
+# Include a pre-written .tex file (from fixest etable) verbatim
+include_tex <- function(path) {
+  cat(paste(readLines(path), collapse = "\n"), "\n")
+}
+```
+
+# Overview
+
+This report summarizes two analyses of the Philadelphia eviction record (2011--2019):
+
+1. **Entity consolidation** (`build-ownership-panel.R`): A two-phase owner linkage pipeline mapping RTT transfers and OPA parcels to legal entities and conglomerates.
+
+2. **Filing rate decomposition** (`analyze-filing-decomposition.R`):
+   - *Part A*: What fraction of cross-sectional variation in building-level filing rates is attributable to building characteristics, neighborhood, tenant composition, and landlord type?
+   - *Part B*: Do corporate or high-filing landlords file evictions with less accumulated back rent? Is the plaintiff (often a management company) different from the owner?
+
+**Commercial case filter (Part B):** Commercial cases are identified by the defendant in position 1 of the party-names table, not by the self-reported `commercial` flag in the evictions data (which is unreliable). Counterclaim parties (e.g.\ a corporate landlord counter-sued by a tenant) are excluded from the defendant classification. This is produced by `impute-race-preflight.R` (`eviction_case_commercial` product).
+
+**Sample restrictions (Part B):** non-commercial cases, `ongoing_rent` 300--6000, `total_rent` 300--15000, `months >= 1`, single-parcel PID match, 2011--2019.
+
+---
+
+# Part 0: Entity Consolidation
+
+## Two-phase owner linkage
+
+Phase 1 normalizes raw RTT grantee names (stripping entity suffixes, roman numerals, bank/trust fragments)
+and groups exact-match normalized names into **entities**. Persons and trusts are grouped by *(name, PID)*
+rather than name alone, preventing common names from forming spurious hubs.
+
+Phase 2 uses a name+address self-join on OPA mailing data: corporations match on *(business\_short\_name, address)*
+where `business_short_name` further strips functional descriptor words (PROPERTIES, MANAGEMENT, REALTY, etc.);
+persons/trusts match on *(exact name, address)*. A registered-agent filter drops addresses linked to more than 300
+distinct entities. Connected components of the resulting name+address graph form **conglomerates**.
+
+Phase 3 adds one-shot RTT→OPA transitive edges (last RTT grantee vs.\ 2024 OPA owner for each PID),
+subject to a name-similarity gate: corporations must share the same `business_short_name` (≥4 chars);
+persons must share ≥1 token of ≥5 characters. This prevents government entities (City of Philadelphia,
+PHA) from absorbing hundreds of unrelated parcels acquired by tax-exempt conveyances not captured in RTT.
+
+```{r consolidation-table}
+consol <- data.table(
+  Stage = c(
+    "Phase 1 entities (RTT exact-name match)",
+    "OPA-only entity additions",
+    "Total entities",
+    "Registered-agent addresses dropped (>300 entities each)",
+    "Entities entering mailing-address graph",
+    "Conglomerates formed",
+    "Multi-entity conglomerates",
+    "Phase 1 entities merged by Phase 2",
+    "Name lookup entries (all sources)"
+  ),
+  Count = c(
+    "451,346", "262,935", "714,281",
+    "44 (all SIMPLIFILE LC E-RECORDING variants)",
+    "64,461", "49,651", "3,063", "4,464", "719,215"
+  )
+)
+kbl(consol, booktabs = TRUE, linesep = "",
+    caption = "Entity consolidation summary") |>
+  kable_styling(latex_options = c("striped", "hold_position"),
+                full_width = FALSE, font_size = 9) |>
+  column_spec(1, width = "9cm") |>
+  column_spec(2, width = "5cm")
+```
+
+## PID $\times$ year coverage
+
+```{r coverage-table}
+cov <- data.table(
+  Metric = c(
+    "PID x year panel rows",
+    "RTT-sourced owner rows",
+    "OPA-fallback owner rows",
+    "Entity ID coverage",
+    "Portfolio bin: 1 PID",
+    "Portfolio bin: 2--4 PIDs",
+    "Portfolio bin: 5--19 PIDs",
+    "Portfolio bin: 20+ PIDs"
+  ),
+  Value = c(
+    "14,015,256 (583,969 PIDs x 24 years)",
+    "5,128,881 (36.6%)",
+    "8,886,375 (63.4%)",
+    "14,015,256 (100%)",
+    "3,522,595 (43.9% of 2011-19 PID-yrs)",
+    "981,376 (12.2%)",
+    "425,827 (5.3%)",
+    "325,923 (4.1%)"
+  )
+)
+kbl(cov, booktabs = TRUE, linesep = "",
+    caption = "PID x year ownership panel coverage") |>
+  kable_styling(latex_options = c("striped", "hold_position"),
+                full_width = FALSE, font_size = 9) |>
+  column_spec(1, width = "6cm") |>
+  column_spec(2, width = "7cm")
+```
+
+---
+
+# Part A: Cross-Sectional Filing Rate Decomposition
+
+**Sample:** ever-rental buildings in 2011--2019 with non-missing EB filing rate, zip, census tract, and `rental_share`. N reported in table below. No minimum unit count restriction --- if a building appears in eviction filings it is treated as a rental.
+
+**Rental share correction:** The EB filing rate denominator includes all observed unit-years, but single-family homes are sometimes rented only intermittently, deflating their apparent filing rates. All models (M1 onward) include `rental_share` = fraction of sample years with an active rental license, correcting for this. Philadelphia Housing Authority (PHA) buildings are exempt from the City licensing requirement; their `rental_share` is imputed to 1 (always fully rented).
+
+## A1: Descriptive means by owner type and portfolio
+
+```{r desc-landlord}
+desc <- fread(p_fd("filing_decomp_descriptives_by_landlord.csv"))
+
+if (!"mean_units_owned" %in% names(desc))
+  stop("Column 'mean_units_owned' missing from filing_decomp_descriptives_by_landlord.csv — re-run analyze-filing-decomposition.R")
+
+fmt_units <- function(x) ifelse(is.na(x), "---", format(round(x), big.mark = ","))
+
+desc_owner <- desc[group_var == "owner_type", .(
+  Group       = paste0("Owner: ", group_val),
+  N_pids      = format(n_pids, big.mark = ","),
+  Mean_units  = fmt_units(mean_units_owned),
+  Mean_rate   = round(mean_filing_rate, 3),
+  Median_rate = round(median_filing_rate, 3)
+)]
+
+desc_port <- desc[group_var == "portfolio_bin", .(
+  Group       = paste0("Entity: ", group_val, " prop."),
+  N_pids      = format(n_pids, big.mark = ","),
+  Mean_units  = fmt_units(mean_units_owned),
+  Mean_rate   = round(mean_filing_rate, 3),
+  Median_rate = round(median_filing_rate, 3)
+)]
+
+desc_port_cong <- desc[group_var == "portfolio_bin_conglomerate", .(
+  Group       = paste0("Cong.: ", group_val, " prop."),
+  N_pids      = format(n_pids, big.mark = ","),
+  Mean_units  = fmt_units(mean_units_owned),
+  Mean_rate   = round(mean_filing_rate, 3),
+  Median_rate = round(median_filing_rate, 3)
+)]
+
+desc_show <- rbind(desc_owner, desc_port, desc_port_cong)
+
+kbl_tbl <- kbl(desc_show, booktabs = TRUE, linesep = "",
+    col.names = c("Group", "N (PIDs)", "Mean units owned", "Mean EB rate", "Median EB rate"),
+    caption = "EB filing rate by owner type and portfolio (cross-section, 2011--2019). Mean units owned = avg total units across all properties in the landlord's portfolio.") |>
+  kable_styling(latex_options = c("striped", "hold_position"),
+                full_width = FALSE, font_size = 9) |>
+  column_spec(1, width = "4.5cm") |>
+  column_spec(3, width = "2.5cm") |>
+  pack_rows("Owner type (Person = reference)", 1, nrow(desc_owner)) |>
+  pack_rows("Entity portfolio (per LLC/name)",
+            nrow(desc_owner) + 1, nrow(desc_owner) + nrow(desc_port))
+
+if (nrow(desc_port_cong) == 0)
+  stop("No 'portfolio_bin_conglomerate' rows in descriptives CSV — re-run analyze-filing-decomposition.R")
+
+kbl_tbl <- kbl_tbl |>
+  pack_rows("Conglomerate portfolio (all linked LLCs)",
+            nrow(desc_owner) + nrow(desc_port) + 1, nrow(desc_show))
+
+kbl_tbl
+```
+
+Nonprofits stand out with a mean EB rate of 0.18 --- far above the other types and likely reflecting a small set of high-density affordable-housing buildings with concentrated poverty. PHA-owned buildings also exceed person-owned buildings (0.10 vs.\ 0.05). For-profit corporations file at 0.07, modestly above the 0.05 person baseline.
+
+## A2: Sequential $R^2$ Decomposition
+
+Six nested OLS models, weighted by `total_units`, outcome =
+`filing_rate_eb_pre_covid`. $\Delta R^2$ isolates the variance
+attributable to each group of factors added. M4 and M5 both branch from M3:
+M4 uses entity-level portfolio (per LLC/name); M5 uses conglomerate-level portfolio
+(across all linked LLCs under common ownership, from improved Phase 2/3 reconciliation).
+M5's $\Delta R^2$ is relative to M3.
+
+```{r r2-decomp}
+r2 <- fread(p_fd("filing_decomp_r2_decomposition.csv"))
+
+r2_show <- r2[, .(
+  Model       = model,
+  Description = gsub("_", "\\_", description, fixed = TRUE),
+  R2          = ifelse(is.na(r2),       "---", sprintf("%.4f", r2)),
+  AdjR2       = ifelse(is.na(adj_r2),   "---", sprintf("%.4f", adj_r2)),
+  DeltaR2     = ifelse(is.na(delta_r2), "---", sprintf("%.4f", delta_r2)),
+  N           = ifelse(is.na(n),        "---", format(n, big.mark = ","))
+)]
+
+kbl(r2_show, booktabs = TRUE, linesep = "", escape = FALSE,
+    col.names = c("Model", "Description",
+                  "$R^2$", "Adj.\\ $R^2$", "$\\Delta R^2$", "N"),
+    caption = paste0(
+      "Sequential $R^2$ decomposition. Between-neighborhood raw variance share: ",
+      round(r2$between_nhood_share_raw[1], 3), ".")) |>
+  kable_styling(latex_options = c("striped", "hold_position"),
+                full_width = FALSE, font_size = 9) |>
+  column_spec(2, width = "5.5cm") |>
+  footnote(general = "Weighted by mean total units. Cluster SE at tract.",
+           general_title = "Note:", footnote_as_chunk = TRUE)
+```
+
+**Interpretation.** Neighborhood (tract FE) contributes the dominant share of explained variance, roughly $9\times$ the landlord component. Tenant racial composition adds a further increment, suggesting neighborhood sorting by race is a distinct channel from simple geographic sorting. The `rental_share` covariate (included from M1) corrects for the deflated filing rates of intermittently-rented properties; its $\Delta R^2$ contribution is absorbed into M1 and is not separately isolated. The landlord-type effect is small but present; numbers updated after re-run.
+
+```{r r2-plot}
+#| fig-cap: "Incremental R-squared by component group. Outcome: EB filing rate. Weighted by unit count. Portfolio bars show delta from M3 for entity (M4) and conglomerate (M5) portfolio measures."
+#| fig-height: 3.5
+
+if (!"M5" %in% r2$model)
+  stop("M5 model missing from filing_decomp_r2_decomposition.csv — re-run analyze-filing-decomposition.R")
+
+r2_plot <- data.table(
+  component = c("Building +\nZip chars", "Neighborhood\n(Tract FE)",
+                "Tenant racial\ncomposition",
+                "Landlord +\nEntity portfolio",
+                "Landlord +\nCong. portfolio"),
+  delta     = c(
+    r2$r2[r2$model == "M1"],
+    r2$delta_r2[r2$model == "M2"],
+    r2$delta_r2[r2$model == "M3"],
+    r2$delta_r2[r2$model == "M4"],
+    r2$delta_r2[r2$model == "M5"]
+  ),
+  group = c("Building/Nhood", "Building/Nhood", "Tenant", "Portfolio", "Portfolio")
+)
+r2_plot[, component := factor(component, levels = component)]
+
+ggplot(r2_plot, aes(x = component, y = delta, fill = group)) +
+  geom_col(width = 0.55) +
+  geom_text(aes(label = sprintf("%.3f", delta)), vjust = -0.5, size = 3) +
+  scale_fill_manual(values = c(
+    "Building/Nhood" = "#2c7bb6",
+    "Tenant"         = "#d7191c",
+    "Portfolio"      = "#1a9641"
+  ), guide = "none") +
+  labs(x = NULL, y = expression(Delta * R^2)) +
+  theme_minimal(base_size = 10) +
+  theme(panel.grid.major.x = element_blank())
+```
+
+## A3: OLS Coefficient Table (M1--M5)
+
+M4 and M5 show entity vs.\ conglomerate portfolio on comparable samples. Note that M5 uses a
+separate sample from M1--M4 (see N row), so coefficient comparisons across M4/M5 are directional.
+
+```{r xsec-etable, results='asis'}
+include_tex(p_fd("filing_decomp_xsec_etable.tex"))
+```
+
+---
+
+# Part B: Case-Level Back-Rent Analysis
+
+## B0: Sample
+
+```{r sample-stats}
+sample_stats <- data.table(
+  Step = c(
+    "Eviction cases 2011--2019 (before commercial filter)",
+    "Commercial cases dropped (defendant #1 is a business entity)",
+    "Non-commercial cases retained",
+    "After rent/months filters (ongoing > 0, months >= 1)",
+    "After PID linkage (unique-parcel match)",
+    "After rent winsorization (ongoing 300--6000, total 300--15000)",
+    "Entity ID (building owner) linked",
+    "Plaintiff in name lookup",
+    "Plaintiff is building owner (exact entity match)",
+    "--- Plaintiff type breakdown (winsorized sample) ---",
+    "  For-profit corporate plaintiff",
+    "  Philadelphia Housing Authority (PHA) plaintiff",
+    "  Nonprofit / affordable-housing plaintiff",
+    "  Individual plaintiff",
+    "--- Owner type breakdown ---",
+    "  Person owner",
+    "  For-profit corp owner",
+    "  PHA owner",
+    "  Nonprofit owner"
+  ),
+  Value = c(
+    "207,244", "5,669", "201,575",
+    "163,644", "153,746 (76.3%)", "152,733",
+    "95.5%", "29.1%", "15.8%",
+    "",
+    "51.5% (78,615)", "4.1% (6,317)", "2.3% (3,518)", "42.1% (64,283)",
+    "",
+    "48.1% (73,467)", "46.6% (71,186)", "3.6% (5,560)", "1.7% (2,520)"
+  )
+)
+kbl(sample_stats, booktabs = TRUE, linesep = "",
+    caption = "Case-level sample construction") |>
+  kable_styling(latex_options = c("striped", "hold_position"),
+                full_width = FALSE, font_size = 9) |>
+  column_spec(1, width = "10cm") |>
+  column_spec(2, width = "3cm")
+```
+
+Only 15.8\% of cases have a plaintiff matching the building owner entity exactly, confirming that management companies file the majority of evictions.
+
+**Note on PHA plaintiff cases:** 6,317 PHA plaintiff cases survive the rent filter (4.1\% of the winsorized sample). PHA income-based rents have a median of \$221/month and roughly 78\% fall below the \$300 rent floor; the surviving cases represent above-poverty-line PHA tenants in higher-rent units.
+
+**Note on PHA owner type:** 5,560 cases are in PHA-owned buildings (3.6\%). The PHA-owned flag uses entity-ID matching through the name-lookup table, so it identifies the subset of cases where the building is formally owned by the Housing Authority regardless of who filed.
+
+## B1: Descriptive statistics
+
+```{r backrent-desc}
+bd <- fread(p_fd("backrent_descriptives_by_landlord.csv"))
+
+get_bd <- function(dt, gvar, col, labels) {
+  dt[group_var == gvar & !is.na(get(col)),
+    .(Category = labels[as.character(get(col))],
+      N        = format(n_cases, big.mark = ","),
+      `Med. months`  = round(median_months, 2),
+      `Mean rent`    = sprintf("$%.0f", mean_ongoing_rent),
+      `Mean cong. units` = sprintf("%.0f", mean_total_units_conglomerate_yr),
+      `Pct. win`     = sprintf("%.1f%%", 100 * pct_plaintiff_win))]
+}
+
+if (!"mean_total_units_conglomerate_yr" %in% names(bd))
+  stop("Column 'mean_total_units_conglomerate_yr' missing from backrent_descriptives_by_landlord.csv — re-run analyze-filing-decomposition.R")
+
+bd_show <- rbind(
+  get_bd(bd, "is_forprofit_corp_plaintiff", "is_forprofit_corp_plaintiff",
+         c("FALSE" = "Non-fp-corp plaintiff", "TRUE" = "For-profit corp plaintiff")),
+  get_bd(bd, "is_pha_plaintiff", "is_pha_plaintiff",
+         c("FALSE" = "Non-PHA plaintiff",     "TRUE" = "PHA plaintiff")),
+  get_bd(bd, "is_nonprofit_plaintiff", "is_nonprofit_plaintiff",
+         c("FALSE" = "Non-nonprofit plaint.", "TRUE" = "Nonprofit plaintiff")),
+  get_bd(bd, "is_corp_owner",     "is_corp_owner",
+         c("FALSE" = "Person owner",          "TRUE" = "Corporate owner")),
+  get_bd(bd, "is_pha_owner",      "is_pha_owner",
+         c("FALSE" = "Non-PHA owner",         "TRUE" = "PHA owner")),
+  get_bd(bd, "plaintiff_is_owner","plaintiff_is_owner",
+         c("FALSE" = "Mgmt co. filer",        "TRUE" = "Owner-filer")),
+  get_bd(bd, "high_filer_bldg",   "high_filer_bldg",
+         c("FALSE" = "Lower-filing bldg",     "TRUE" = "High-filing bldg"))
+)
+
+bd_scale <- bd[group_var == "total_units_conglomerate_yr_net_parcel_bin" &
+                 !is.na(total_units_conglomerate_yr_net_parcel_bin),
+  .(Category = paste0("Scale: ", total_units_conglomerate_yr_net_parcel_bin),
+    N        = format(n_cases, big.mark = ","),
+    `Med. months`  = round(median_months, 2),
+    `Mean rent`    = sprintf("$%.0f", mean_ongoing_rent),
+    `Mean cong. units` = sprintf("%.0f", mean_total_units_conglomerate_yr),
+    `Pct. win`     = sprintf("%.1f%%", 100 * pct_plaintiff_win))]
+
+if (nrow(bd_scale) == 0)
+  stop("No 'total_units_conglomerate_yr_net_parcel_bin' rows in descriptives CSV — re-run analyze-filing-decomposition.R")
+
+bd_show_all <- rbind(bd_show, bd_scale)
+
+n_main <- nrow(bd_show)
+n_all  <- nrow(bd_show_all)
+
+kbl(bd_show_all, booktabs = TRUE, linesep = "",
+    caption = "Back-rent descriptives by landlord/plaintiff type and landlord scale (winsorized sample). Mean cong.\\ units = mean total units across the conglomerate portfolio in the case year.") |>
+  kable_styling(latex_options = c("striped", "hold_position"),
+                full_width = FALSE, font_size = 9) |>
+  column_spec(1, width = "4.5cm") |>
+  pack_rows("By plaintiff/owner type", 1, n_main) |>
+  pack_rows("By landlord scale (units outside this building)", n_main + 1, n_all)
+```
+
+## B2: Months-of-Arrears Regressions
+
+Outcome: $\log(\text{months})$ of back rent at filing. Models use `plaintiff_type`
+(Individual = reference) and `owner_type` (Person = reference) as categorical variables
+rather than separate binary dummies, which keeps the reference group explicit and tests
+all plaintiff/owner types jointly. All specs include year $\times$ tract fixed effects.
+Specs B2--B4 add `total_units_conglomerate_yr_net_parcel_bin` --- a four-category
+measure of the landlord's portfolio units in \emph{other} buildings (i.e.\ the conglomerate
+total excluding the evicted parcel itself): single-property, small ($\leq$10 units),
+medium (10--49 units), large (50$+$ units). This isolates scale effects from building-level
+unit count already controlled by `num_units_bin`.
+Specs B3--B4 further add building type and unit-size controls. Spec B5 is the back-rent
+elasticity model with the same landlord scale control.
+Standard errors clustered at the building (PID) level.
+
+```{r months-etable, results='asis'}
+include_tex(p_fd("backrent_months_etable.tex"))
+```
+
+**Key results:**
+
+- **PHA plaintiff** files fastest: coefficient $\approx -0.41$ (B1) to $-0.48$ (B4),
+  stable and large across all specifications. The effect is stronger than previously
+  estimated, now that the sample includes single-unit rentals (PHA rarely evicts
+  single-family tenants, sharpening the contrast).
+- **Nonprofit plaintiff**: $\approx -0.14^{***}$ (B1), persisting at $\approx -0.10^{**}$
+  in B3. Nonprofits enforce noticeably faster than individual landlords even after
+  controlling for building type and neighborhood.
+- **For-profit corporate plaintiff**: $\approx -0.09^{***}$ (B1), shrinking to
+  $\approx -0.02^{*}$ ($p = 0.036$) in B3 with full controls. The effect is now
+  statistically significant --- for-profit corporations file for modestly less arrears
+  than individuals after conditioning on building characteristics and neighborhood.
+- **Owner type** (Person = reference): For-profit corp and Nonprofit owners are
+  indistinguishable from person owners ($p > 0.15$ in B3/B4). **PHA-owned buildings**
+  have significantly *more* months of arrears at filing ($+0.09^{*}$, $p = 0.03$ in B3):
+  tenants in PHA-owned buildings accumulate more debt before eviction is filed, consistent
+  with PHA's more deliberate enforcement process.
+- **High-filing buildings** evict sooner: main effect $-0.12$ (B3) to $-0.18$ (B4),
+  highly significant throughout.
+- **B4 interactions** (plaintiff type $\times$ high-filer building): All three corporate
+  plaintiff types show significant positive interactions with the high-filer indicator
+  (for-profit corp: $+0.085^{***}$; nonprofit: $+0.182^{***}$; PHA: $+0.326^{***}$).
+  This means that in high-filer buildings, corporate and institutional plaintiffs file for
+  *more* arrears relative to individual landlords in the same buildings --- the speed
+  advantage of institutional filers is attenuated in buildings where eviction is already
+  a routinized practice.
+- **Plaintiff-is-owner** near zero throughout ($p > 0.3$), consistent with management
+  companies acting as agents rather than behaving differently from owner-filers.
+
+## B3: Back-Rent Elasticity
+
+Outcome: $\log(\text{total rent})$. Tests whether the back-rent amount scales proportionally
+with monthly rent ($\hat{\beta} = 1$) and how landlord type shifts the relationship.
+
+```{r rent-etable, results='asis'}
+include_tex(p_fd("backrent_rent_etable.tex"))
+```
+
+The `log(ongoing rent)` elasticity is approximately **0.71** (significantly below 1 at
+any conventional level). This means higher-rent units are filed for proportionally
+*less* total back rent --- consistent with landlords filing sooner at higher rent levels,
+possibly because vacancy and legal costs loom larger relative to each month of arrears.
+Among plaintiff types, only PHA shows a significant total-rent discount ($-0.32^{***}$),
+partly mechanical because surviving PHA cases are already above the \$300 rent floor
+and PHA policy triggers filing after one missed payment.
+
+---
+
+# Summary
+
+```{r summary-table}
+summ <- data.table(
+  Finding = c(
+    "Neighborhood sorting is the dominant source of filing rate variation",
+    "Landlord type (owner type + entity portfolio) explains $\\approx$0.9\\% of cross-sectional variation",
+    "Conglomerate portfolio (M5) explains similar share to entity portfolio (M4)",
+    "PHA files fastest: 41--48\\% fewer log-months, highly stable across all specs",
+    "Nonprofits file faster; for-profit corp effect significant with full controls",
+    "High-filing buildings evict sooner; corporate types partially offset this in high-filer bldgs",
+    "PHA-owned buildings accumulate more arrears before filing ($+$0.09$^{*}$)",
+    "Back-rent elasticity w.r.t.\\ monthly rent = 0.71 (significantly below 1.0)",
+    "Plaintiff = building owner in only 15.8\\% of cases"
+  ),
+  Evidence = c(
+    "$\\Delta R^2$(tract FE) $\\approx$ 0.082 vs.\\ $\\Delta R^2$(landlord) $\\approx$ 0.009",
+    "M4 incremental $R^2$ from M3; robust to PPML",
+    "M5 $\\Delta R^2$ from M3 comparable to M4; conglomerate portfolio in B5 reg.",
+    "B1: $-0.41^{***}$; B4: $-0.48^{***}$; 6,317 cases survive \\$300 rent floor",
+    "Nonprofit B3: $-0.10^{**}$; for-profit corp B3: $-0.02^{*}$, $p = 0.036$",
+    "B4 interaction for-profit$\\times$high-filer: $+0.085^{***}$; nonprofit: $+0.182^{***}$",
+    "B3 owner\\_typePHA: $+0.090^{*}$, $p = 0.030$",
+    "Elasticity $\\approx$ 0.71; 95\\% CI excludes 1.0",
+    "Name lookup exact match: 29.1\\%; entity match: 15.8\\%"
+  )
+)
+kbl(summ, booktabs = TRUE, linesep = "", escape = FALSE,
+    caption = "Key findings summary") |>
+  kable_styling(latex_options = c("striped", "hold_position"),
+                full_width = FALSE, font_size = 9) |>
+  column_spec(1, width = "7.5cm") |>
+  column_spec(2, width = "6cm")
+```
+
+## Caveats
+
+1. **Plaintiff lookup rate (29.1\%):** Most eviction plaintiffs are management companies
+   not present in RTT or OPA by exact name. Fuzzy-name matching (Phase 3, deferred)
+   could substantially improve coverage.
+
+2. **OPA fallback ownership (63.4\% of PID-years):** Buildings with no RTT history
+   inherit their 2024 OPA owner for all years, introducing attenuation bias if
+   ownership changed during 2011--2019.
+
+3. **Improved entity reconciliation (Phase 2/3):** As of the 2026-03-10 pipeline update,
+   persons and trusts are grouped by (name, PID) rather than name alone. Phase 2 now
+   uses name+address matching (not pure address sharing) to prevent registered-agent
+   and government-hub explosion. Phase 3 adds a name-similarity gate preventing
+   tax-exempt government conveyances from polluting private landlord conglomerates.
+   These improvements make `portfolio_bin_conglomerate_yr` (M5/B5) a more reliable
+   measure of true landlord scale than entity-level portfolio (M4).
+
+4. **Racial disparity specs (B4):** Skipped --- defendant race imputation
+   (`race_imputed_case_sample`) not yet available for this run.

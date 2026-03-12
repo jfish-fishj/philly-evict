@@ -178,57 +178,76 @@ unit_draw_summary <- data.table(
 
 param_table <- data.table(
   block = c(
+    "Simulation", "Simulation", "Simulation",
     "Tenant-side anchors", "Tenant-side anchors", "Tenant-side anchors",
     "Built environment", "Built environment",
-    "Sorting",
+    "Building age", "Building age",
+    "Sorting", "Sorting",
     "Filing", "Filing", "Filing",
-    "Complaints", "Complaints", "Complaints", "Complaints",
-    "Maintenance", "Maintenance", "Maintenance",
+    "Complaints", "Complaints", "Complaints", "Complaints", "Complaints", "Complaints",
+    "Maintenance", "Maintenance", "Maintenance", "Maintenance", "Maintenance",
     "Numerics", "Numerics", "Numerics", "Numerics"
   ),
   parameter = c(
+    "B", "sim_year_from", "sim_year_to",
     "mu", "delta_L", "delta_H",
     "p_bad_shape1", "p_bad_shape2",
-    "Dalph",
+    "old_bldg_cutoff_year", "new_bldg_cutoff_year",
+    "Dalph", "sigma_eta_sort",
     "aF", "bF_theta", "bF_delta",
-    "aC", "bC_theta", "bC_s", "bC_M",
-    "aM", "bM_theta", "bM_C",
+    "aC", "bC_theta", "bC_s_bad", "bC_old", "bC_new", "bC_M",
+    "m0", "bM_theta", "bM_old", "bM_new", "bM_C",
     "lam", "tol", "max_iter", "high_filing_threshold"
   ),
   value = c(
+    outer_cfg$B, outer_cfg$sim_year_from, outer_cfg$sim_year_to,
     outer_cfg$mu, outer_cfg$delta_L, outer_cfg$delta_H,
     outer_cfg$p_bad_shape1, outer_cfg$p_bad_shape2,
-    outer_cfg$Dalph,
+    outer_cfg$old_bldg_cutoff_year, outer_cfg$new_bldg_cutoff_year,
+    outer_cfg$Dalph, outer_cfg$sigma_eta_sort,
     outer_cfg$aF, outer_cfg$bF_theta, outer_cfg$bF_delta,
-    outer_cfg$aC, outer_cfg$bC_theta, outer_cfg$bC_s, outer_cfg$bC_M,
-    outer_cfg$aM, outer_cfg$bM_theta, outer_cfg$bM_C,
+    outer_cfg$aC, outer_cfg$bC_theta, outer_cfg$bC_s_bad, outer_cfg$bC_old, outer_cfg$bC_new, outer_cfg$bC_M,
+    outer_cfg$m0, outer_cfg$bM_theta, outer_cfg$bM_old, outer_cfg$bM_new, outer_cfg$bM_C,
     outer_cfg$lam, outer_cfg$tol, outer_cfg$max_iter, outer_cfg$high_filing_threshold
   ),
   status = c(
     "Fixed", "Fixed", "Fixed",
+    "Fixed", "Fixed", "Fixed",
     "Calibrated", "Calibrated",
-    "Calibrated",
+    "Fixed", "Fixed",
+    "Calibrated", "Calibrated",
     "Calibrated", "Calibrated", "Calibrated",
-    "Calibrated", "Calibrated", "Calibrated", "Calibrated",
+    "Calibrated", "Calibrated", "Calibrated", "Calibrated", "Calibrated", "Calibrated",
+    "Calibrated", "Calibrated", "Calibrated", "Calibrated", "Calibrated",
     "Calibrated", "Calibrated", "Calibrated",
     "Numeric", "Numeric", "Numeric", "Fixed"
   ),
   note = c(
+    "Number of simulated buildings in the baseline run.",
+    "First year in the simulation window used to annualize simulated outcomes.",
+    "Last year in the simulation window used to annualize simulated outcomes.",
     "Citywide high-risk / precarious tenant share.",
     "Anchored low-risk default probability.",
     "Anchored high-risk default probability.",
     "Beta shape parameter for tract bad-type prevalence.",
     "Beta shape parameter for tract bad-type prevalence.",
+    "Observed-building threshold for old-building indicator.",
+    "Observed-building threshold for new-building indicator.",
     "Sorting strength in the logistic update.",
-    "Filing intercept.",
+    "Neighborhood sorting shifter standard deviation.",
+    "Filing log-rate intercept.",
     "Bad-type filing shift.",
     "Sensitivity of filings to average tenant default risk.",
     "Complaint intercept.",
     "Bad-type complaint shift.",
-    "Complaint-composition slope.",
+    "Complaint-composition slope for bad landlords only.",
+    "Complaint shift for older buildings.",
+    "Complaint shift for newer buildings.",
     "Complaint response to maintenance.",
-    "Maintenance intercept.",
+    "Baseline per-unit maintenance rate.",
     "Bad-type maintenance shift.",
+    "Maintenance shift for older buildings.",
+    "Maintenance shift for newer buildings.",
     "Maintenance response to complaint intensity.",
     "Damping parameter in the fixed-point iteration.",
     "Stopping tolerance on the composition update.",
@@ -277,7 +296,7 @@ eq_summary <- data.table(
     mom$sorting_coef_high_bin_nhood[1],
     mom$beta_ppml_s[1],
     mom$beta_ppml_s_x_high_filing[1],
-    mom$beta_maint_on_log1p_c_rate[1],
+    mom$beta_maint_on_c_rate[1],
     mom$filing_resid_sd_nhood_fe[1]
   )
 )
@@ -325,14 +344,14 @@ empirical_rate_check <- data.table(
 nhood_dist_summary <- rbindlist(list(
   data.table(
     sample = "Empirical neighborhoods",
-    metric = c("Neighborhood mean filing rate", "Neighborhood mean poverty share"),
+    metric = c("Neighborhood mean filing rate", "Neighborhood mean low-income share"),
     mean = c(mean(emp_nhood_summary$mean_f_rate), mean(emp_nhood_summary$mean_s)),
     p50 = c(stats::quantile(emp_nhood_summary$mean_f_rate, 0.50), stats::quantile(emp_nhood_summary$mean_s, 0.50)),
     p90 = c(stats::quantile(emp_nhood_summary$mean_f_rate, 0.90), stats::quantile(emp_nhood_summary$mean_s, 0.90))
   ),
   data.table(
     sample = "Simulated neighborhoods",
-    metric = c("Neighborhood mean filing rate", "Neighborhood mean poverty share"),
+    metric = c("Neighborhood mean filing rate", "Neighborhood mean low-income share"),
     mean = c(mean(nhood_summary$mean_f_rate), mean(nhood_summary$mean_s)),
     p50 = c(stats::quantile(nhood_summary$mean_f_rate, 0.50), stats::quantile(nhood_summary$mean_s, 0.50)),
     p90 = c(stats::quantile(nhood_summary$mean_f_rate, 0.90), stats::quantile(nhood_summary$mean_s, 0.90))
@@ -400,20 +419,24 @@ The baseline normalization is:
 $$
 \bar\delta_b = s_b\delta_H + (1 - s_b)\delta_L,
 \qquad
-\log \bar f_b = a_F + b_{F\theta}\mathbf{1}\{\theta_b = B\} + b_{F\delta}\bar\delta_b,
+\bar f_b = \exp\!\left(a_F + b_{F\theta}\mathbf{1}\{\theta_b = B\} + b_{F\delta}\bar\delta_b\right),
 \qquad
 x_b \equiv \bar f_b,
 \qquad
-s_b^\star(\xi) = \Lambda(\xi + \Delta \alpha \bar f_b).
+s_b^\star(\xi) = \Lambda(\xi + \Delta \alpha \bar f_b + \eta_{n(b)}).
 $$
 
-The filing block now maps building composition into expected filings through average tenant default risk rather than through a direct reduced-form composition slope. The sorting signal is still the expected filing rate, and the simulation iterates on expected maintenance, complaint, and filing rates until the building composition vector is a fixed point under the citywide mass constraint.
+The filing block maps building composition into expected filings through average tenant default risk using a single log-rate equation. The complaint-composition channel is restricted to bad landlords, and maintenance is parameterized directly in per-unit levels through `m0`. The sorting signal is still the expected filing rate, and the simulation iterates on expected maintenance, complaint, and filing rates until the building composition vector is a fixed point under the citywide mass constraint.
 
 # Simulation Setup
 
 The baseline parameterization fixes the citywide high-risk share at $\mu = `r sprintf("%.2f", mu)`$, interpretable as a rough renter-poverty / precarious-tenant share. The tenant default anchors are set to $\delta_L = `r sprintf("%.2f", delta_L)`$ and $\delta_H = `r sprintf("%.2f", delta_H)`$, implying an average anchored default probability of roughly `r sprintf("%.3f", avg_default)`.
 
-The baseline filing block now uses average default risk, $\bar\delta_b = s_b\delta_H + (1-s_b)\delta_L$, so the anchored tenant-side parameters are active inputs to the equilibrium. The first-pass design calibrates the outer-layer parameters governing sorting, tract-level bad-type dispersion, filing, complaints, and maintenance. Simulated building units are now drawn by empirical resampling from the observed PID-level average annual `total_units` distribution in `bldg_panel_blp` over `r emp_units_year_from`-`r emp_units_year_to`, rather than from the old stylized unit bins.
+The baseline filing block uses average default risk, $\bar\delta_b = s_b\delta_H + (1-s_b)\delta_L$, inside a single log-rate Poisson structure. Complaints depend on composition only through the interaction `s_b × 1{\theta_b = B}`, reflecting the current theoretical restriction that complaint suppression operates only for bad landlords. The maintenance block is parameterized with `m0`, the baseline expected maintenance rate per unit. Both the maintenance and complaint equations now also include exogenous old-building and new-building indicators derived from empirically resampled `year_built`, so age-related upkeep differences do not have to be absorbed entirely by landlord type or complaint-response coefficients. The sorting block still includes a neighborhood shifter $\eta_{n(b)}$, so the model does not need to push all low-income-share dispersion through the filing process. On the empirical side, the current composition proxy is a building-level InfoUSA low-income share based on `find_div_1000` and a fixed income threshold. Simulated building units and year-built observables are drawn jointly by empirical resampling from the observed PID-level BLP distribution over `r emp_units_year_from`-`r emp_units_year_to`, rather than from the old stylized unit bins.
+
+The realized simulation panel is now annualized over the configured simulation window rather than being a one-shot annual draw. For each simulated building, the code computes active exposure years from `year_built`, draws total counts over those unit-years from stationary Poisson processes, and divides back by exposure years. That makes the simulated `M`, `C`, `F`, `m_rate`, `c_rate`, and `f_rate` directly comparable to the empirical PID-level annualized objects built from `2011`-`2019`.
+
+One implementation detail is worth being explicit about: after the final exact citywide-mass projection of `s`, the simulator refreshes the expected maintenance, complaint, and filing rates once at that projected composition rather than fully re-solving the maintenance/complaint subsystem conditional on the projected `s`. Under the current tight tolerances, this should be a small numerical approximation rather than a material change in the reported equilibrium.
 
 ```{r parameter-table, results='asis'}
 include_tex_table(file.path(tab_dir, "outer_sorting_baseline_parameters.tex"), max_width = "\\tiny")
@@ -448,7 +471,7 @@ The simulation is solving the stationary equilibrium under the exact citywide ma
 The baseline equilibrium implies:
 
 - unit-weighted mean filing, maintenance, and complaint rates of about `r sprintf("%.3f", mom$mean_f_rate[1])`, `r sprintf("%.3f", mom$mean_m_rate[1])`, and `r sprintf("%.3f", mom$mean_c_rate[1])` per unit
-- substantial zero mass in all three outcomes, where zero shares are unweighted shares of buildings
+- substantial zero mass in the annualized outcomes, where zero shares are unweighted shares of buildings
 - higher group-1 shares and higher filing / complaint intensity in bad-type buildings than in good-type buildings
 
 ```{r equilibrium-table, results='asis'}
@@ -474,9 +497,29 @@ plot_dt[, rate_type := factor(rate_type, levels = c("f_rate", "c_rate", "m_rate"
                               labels = c("Filing rate", "Complaint rate", "Maintenance rate"))]
 
 ggplot(plot_dt, aes(x = rate)) +
-  geom_histogram(bins = 50, fill = "#28536B", color = "white") +
+  geom_density(fill = "#28536B", alpha = 0.70, color = NA, adjust = 1.1) +
   facet_wrap(~rate_type, scales = "free_x") +
-  labs(x = "Rate", y = "Buildings") +
+  labs(x = "Rate", y = "Density") +
+  coord_cartesian(xlim = c(0, 0.75)) +
+  theme_minimal(base_size = 11)
+```
+
+```{r empirical-vs-sim-rate-histograms, fig.cap="Empirical vs simulated building-level distributions of filing and complaint rates per unit.", fig.align='center', out.width='95%', fig.width=10, fig.height=7}
+compare_rate_dt <- rbindlist(list(
+  data.table(source = "Empirical", metric = "Filing rate per unit", value = emp_panel$f_rate),
+  data.table(source = "Simulated", metric = "Filing rate per unit", value = panel$f_rate),
+  data.table(source = "Empirical", metric = "Complaint rate per unit", value = emp_panel$c_rate),
+  data.table(source = "Simulated", metric = "Complaint rate per unit", value = panel$c_rate)
+))
+compare_rate_dt <- compare_rate_dt[is.finite(value)]
+
+ggplot(compare_rate_dt, aes(x = value, color = source, fill = source)) +
+  geom_density(alpha = 0.20, adjust = 1.1) +
+  facet_wrap(~metric, scales = "free_x") +
+  scale_fill_manual(values = c("Empirical" = "#264653", "Simulated" = "#D1495B")) +
+  scale_color_manual(values = c("Empirical" = "#264653", "Simulated" = "#D1495B")) +
+  labs(x = "Rate per unit", y = "Density", fill = NULL, color = NULL) +
+  coord_cartesian(xlim = c(0, 0.75)) +
   theme_minimal(base_size = 11)
 ```
 
@@ -496,11 +539,13 @@ plot_type_dt[, metric := factor(
   labels = c("Group-1 share", "Realized filing rate")
 )]
 
-ggplot(plot_type_dt, aes(x = value, fill = theta)) +
-  geom_histogram(bins = 45, alpha = 0.65, position = "identity") +
+ggplot(plot_type_dt, aes(x = value, color = theta, fill = theta)) +
+  geom_density(alpha = 0.20, adjust = 1.1) +
   facet_wrap(~metric, scales = "free_x") +
   scale_fill_manual(values = c("G" = "#2A9D8F", "B" = "#D1495B")) +
-  labs(x = NULL, y = "Buildings", fill = "Type") +
+  scale_color_manual(values = c("G" = "#2A9D8F", "B" = "#D1495B")) +
+  labs(x = NULL, y = "Density", fill = "Type", color = "Type") +
+  coord_cartesian(xlim = c(0, 0.75)) +
   theme_minimal(base_size = 11)
 ```
 
@@ -524,25 +569,28 @@ nhood_plot_dt[, metric := factor(
 )]
 
 ggplot(nhood_plot_dt, aes(x = value)) +
-  geom_histogram(bins = 35, fill = "#3D405B", color = "white") +
+  geom_density(fill = "#3D405B", alpha = 0.70, color = NA, adjust = 1.1) +
   facet_wrap(~metric, scales = "free_x") +
-  labs(x = NULL, y = "Neighborhoods") +
+  labs(x = NULL, y = "Density") +
+  coord_cartesian(xlim = c(0, 0.75)) +
   theme_minimal(base_size = 11)
 ```
 
-```{r nhood-empirical-vs-sim, fig.cap="Empirical vs simulated neighborhood distributions for unit-weighted neighborhood mean filing rates and neighborhood mean poverty shares.", fig.align='center', out.width='95%', fig.width=10, fig.height=7}
+```{r nhood-empirical-vs-sim, fig.cap="Empirical vs simulated neighborhood distributions for unit-weighted neighborhood mean filing rates and neighborhood mean low-income shares.", fig.align='center', out.width='95%', fig.width=10, fig.height=7}
 compare_nhood_dt <- rbindlist(list(
   data.table(source = "Empirical", metric = "Neighborhood mean filing rate", value = emp_nhood_summary$mean_f_rate),
   data.table(source = "Simulated", metric = "Neighborhood mean filing rate", value = nhood_summary$mean_f_rate),
-  data.table(source = "Empirical", metric = "Neighborhood mean poverty share", value = emp_nhood_summary$mean_s),
-  data.table(source = "Simulated", metric = "Neighborhood mean poverty share", value = nhood_summary$mean_s)
+  data.table(source = "Empirical", metric = "Neighborhood mean low-income share", value = emp_nhood_summary$mean_s),
+  data.table(source = "Simulated", metric = "Neighborhood mean low-income share", value = nhood_summary$mean_s)
 ))
 
-ggplot(compare_nhood_dt, aes(x = value, fill = source)) +
-  geom_histogram(bins = 35, alpha = 0.55, position = "identity") +
+ggplot(compare_nhood_dt, aes(x = value, color = source, fill = source)) +
+  geom_density(alpha = 0.20, adjust = 1.1) +
   facet_wrap(~metric, scales = "free_x") +
   scale_fill_manual(values = c("Empirical" = "#264653", "Simulated" = "#D1495B")) +
-  labs(x = NULL, y = "Neighborhoods", fill = NULL) +
+  scale_color_manual(values = c("Empirical" = "#264653", "Simulated" = "#D1495B")) +
+  labs(x = NULL, y = "Density", fill = NULL, color = NULL) +
+  coord_cartesian(xlim = c(0, 0.75)) +
   theme_minimal(base_size = 11)
 ```
 
@@ -559,6 +607,7 @@ p_scatter <- ggplot(nhood_summary, aes(x = mean_s, y = mean_f_rate, size = total
   geom_point(color = "#D1495B", alpha = 0.6) +
   geom_smooth(method = "lm", se = FALSE, color = "#3D405B", linewidth = 0.9) +
   labs(x = "Neighborhood mean group-1 share", y = "Neighborhood mean filing rate", size = "Units") +
+  coord_cartesian(ylim = c(0, 0.75)) +
   theme_minimal(base_size = 11)
 
 (p_rank + p_scatter) + patchwork::plot_layout(ncol = 1)
@@ -569,11 +618,13 @@ p_bad_share <- ggplot(nhood_summary, aes(x = mean_theta_bad, y = mean_f_rate, si
   geom_point(color = "#264653", alpha = 0.65) +
   geom_smooth(method = "lm", se = FALSE, color = "#E76F51", linewidth = 0.9) +
   labs(x = "Neighborhood mean bad-type share", y = "Neighborhood mean filing rate", size = "Units") +
+  coord_cartesian(ylim = c(0, 0.75)) +
   theme_minimal(base_size = 11)
 
 p_size_bin <- ggplot(nhood_summary[!is.na(size_bin)], aes(x = size_bin, y = mean_f_rate)) +
   geom_boxplot(fill = "#E9C46A", color = "#3D405B", outlier.alpha = 0.35) +
   labs(x = "Neighborhood total-units quartile", y = "Neighborhood mean filing rate") +
+  coord_cartesian(ylim = c(0, 0.75)) +
   theme_minimal(base_size = 11)
 
 (p_bad_share + p_size_bin) + patchwork::plot_layout(ncol = 1)
@@ -581,14 +632,19 @@ p_size_bin <- ggplot(nhood_summary[!is.na(size_bin)], aes(x = size_bin, y = mean
 
 # First-Pass Calibration Targets
 
-The first-pass calibration objective uses a compact 12-moment target set:
+The first-pass calibration objective now uses a 16-moment target set:
 
 1. Three marginal means: filing, maintenance, and complaint rates.
-2. Three zero shares: zero filings, zero maintenance, and zero complaints.
-3. Two sorting moments: composition on high filing within neighborhood, and composition for the top filing bin relative to the low filing bin within neighborhood.
-4. Two complaint-gradient moments: complaints on composition, and complaints on composition $\times$ high filing.
-5. One maintenance-discipline moment: maintenance on complaint intensity.
-6. One filing-dispersion moment: residual SD of filing rates after neighborhood fixed effects.
+2. Three maintenance-intensity moments: the positive-part mean maintenance rate and the positive-part 50th and 90th percentiles.
+3. Four neighborhood-dispersion moments: SD and 90-10 spread of neighborhood mean low-income shares and neighborhood mean filing rates.
+4. Two sorting moments: composition on high filing within neighborhood, and composition for the top filing bin relative to the low filing bin within neighborhood.
+5. Two complaint-gradient moments: complaints on composition, and complaints on composition $\times$ high filing.
+6. One maintenance-discipline moment: maintenance counts on the raw complaint rate per unit, with neighborhood fixed effects and a unit offset.
+7. One filing-dispersion moment: residual SD of filing rates after neighborhood fixed effects.
+
+The zero-filing, zero-complaint, and zero-maintenance shares are still reported below as diagnostics, but they are no longer targeted directly in the objective. Once the panel is annualized over multiple years, those extensive-margin zeros are less informative than the level and dispersion moments.
+
+The within-neighborhood sorting diagnostics are already in the calibration outputs: `sorting_coef_high_filing_nhood` and `sorting_coef_high_bin_nhood`. Those are the cleanest direct comparisons for whether the model is over- or under-sorting conditional on neighborhood fixed effects.
 
 The current calibration target product is `r cfg$run$outer_sorting$calibration$target_product_key`, so the moment comparison table below should be read as an empirical fit diagnostic rather than a self-calibration check.
 
@@ -620,4 +676,4 @@ The baseline equilibrium does the basic qualitative work the model is supposed t
 
 The empirical calibration results suggest that the current baseline is directionally coherent but still too aggressive relative to the data. The main gaps are in outcome levels, zero mass, sorting strength, and the complaint-maintenance discipline link.
 
-The next substantive question is whether these misses come mostly from the empirical target construction, from the poverty-share proxy for composition, or from the structural tightness of the filing, complaint, and maintenance blocks themselves.
+The next substantive question is whether these misses come mostly from the empirical target construction, from the InfoUSA low-income-share proxy for composition, or from the structural tightness of the filing, complaint, and maintenance blocks themselves.
