@@ -268,10 +268,13 @@ Rscript r/run-calibrate-outer-sorting.R
 # 9. Build renter poverty geography products for empirical outer sorting targets
 Rscript r/make-renter-poverty-geo.R
 
-# 10. Build empirical outer sorting target moments from bldg_panel_blp
+# 10. Build InfoUSA building-level income proxy for empirical outer sorting targets
+Rscript r/make-infousa-building-income-proxy.R
+
+# 11. Build empirical outer sorting target moments from bldg_panel_blp
 Rscript r/make-outer-sorting-empirical-moments.R
 
-# 11. Run outer sorting recovery / Monte Carlo
+# 12. Run outer sorting recovery / Monte Carlo
 Rscript r/run-outer-sorting-recovery.R
 
 # 9. BLP demand estimation

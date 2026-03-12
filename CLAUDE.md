@@ -29,10 +29,11 @@ Make the pipeline **portable, reproducible, and data-product oriented**:
    - Avoid mixing unless there’s a strong reason.
 5) **Analysis scripts must not write to processed products.**
    - analysis reads from `processed/` and writes to `output/` only.
-6) **Fail fast on missing required columns.**
-   - If a script expects a column, missing columns should raise `stop(...)`.
-   - Do not add optional-column fallback branches for required schema fields.
-   - Specifically avoid `intersect(required_cols, names(dt))` + `if (length(...)) ... else ...` when columns are required.
+6) **Fail loud. "Failing gracefully" is a bug.**
+   - A silent fallback — `NA` fill, skipped section, empty placeholder, conditional block that omits output — is always wrong for required data. It makes broken output look correct, which is worse than a visible error.
+   - If a pipeline script expects a column, missing columns must raise `stop(...)`. Do not add optional-column fallback branches for required schema fields. Specifically avoid `intersect(required_cols, names(dt))` + `if (length(...)) ... else ...` when columns are required.
+   - This rule applies equally to **QMD/Quarto reports and notebooks**. Do not add `if (!"col" %in% names(df)) df$col <- NA` or `if (nrow(x) > 0) { render_section() }` for required data. Use `stopifnot(...)` or `stop(...)` with a message telling the user which upstream script to re-run.
+   - The only exception: genuinely optional features behind a config flag or optional data product. Even then, emit a visible log warning — never silently skip.
 
 ## 3) Required safety checks for any meaningful refactor
 If you change anything in cleaning, make, or merge steps:

@@ -1,0 +1,130 @@
+Transfer–Evictions Quarterly Analysis Memo (Applied Micro / Housing Perspective)
+
+
+1) Too many transfers come from people/entities who “don’t own anything else”
+- I think this is a real concern, and likely reflects imperfect owner/entity linkage (name fragmentation, LLC variants, etc.).
+- This matters substantively because it creates measurement error in the acquirer-type bins (single-purchase, portfolio, corporate), which can attenuate heterogeneity estimates and understate concentration among professional operators.
+
+2) Estimates are noisy
+- Yes, especially in finer subgroup splits (e.g., 5+ and more granular acquirer bins).
+- I do not think this is fatal. It mostly argues for:
+  (i) more parsimonious subgrouping,
+  (ii) pooled post/pre windows in addition to full event plots,
+  (iii) clearer reporting of sample sizes and baseline means.
+
+3) Splitting filers by corporate status is a very good next step
+- This is high-value heterogeneity because it helps separate “scale/professionalization” from “legal form” from “selection” stories.
+- If dynamic event-study estimates are too noisy for this split, a pooled-window coefficient plot is likely the best format.
+
+4) Big dip at t = 1 likely reflects exit from rental market / vacancy transition
+- I agree.
+- The likely-rental restriction should be restored and moved back into a prominent robustness (possibly even part of the main results discussion).
+- This is important for interpretation because the core mechanism of interest concerns rental operations, not all post-transfer property trajectories.
+
+High-priority revisions (ranked)
+--------------------------------
+1) Buyer/entity classification robustness (highest priority)
+- Reframe “single-purchase” as “single-purchase under observed linkage” or “no other matched properties.”
+- Add sensitivity checks that separate high-confidence vs low-confidence singles.
+- Perform a targeted audit of “single-purchase corporate” buyers to quantify likely fragmentation.
+
+2) Restore and foreground likely-rental restrictions
+- Bring back a dedicated section on likely-rental subsamples.
+- Use it to evaluate whether the immediate post-transfer dip is consistent with rental exit / vacancy dynamics.
+- Consider making this a headline robustness rather than an appendix note.
+
+3) Reduce noise with pooled windows and simpler contrasts
+- Keep full dynamic event plots, but emphasize pooled post/pre windows for heterogeneity inference.
+- Example windows:
+  * Pre: q in [-8, -5]
+  * Transition: q in [-1, 0]
+  * Early post: q in [1, 4]
+  * Later post: q in [5, 12]
+- Also report average post effect (e.g., mean q = 1..8 or 4..12) for key subgroups.
+
+4) Add corporate × filer-bin heterogeneity
+- Within 2+ and/or 5+ properties, split:
+  * high-filer portfolio × corporate
+  * high-filer portfolio × individual
+  * low-filer portfolio × corporate
+  * low-filer portfolio × individual
+- If too noisy in event-time form, show pooled-window estimates with confidence intervals.
+
+5) Add overlap/no-repeat sensitivity specs
+- If properties transfer multiple times, overlapping event windows can contaminate dynamics.
+- Add sensitivity analyses that:
+  * drop overlapping windows,
+  * keep first transfer only,
+  * or require no subsequent transfer within X quarters.
+
+Important technical issues to fix/check in the script
+-----------------------------------------------------
+1) Quarter mapping via q * 91 days (important)
+- Approximating quarters with a fixed 91-day offset can misassign some observations near quarter boundaries.
+- This can blur event timing and add noise around q = -1, 0, 1.
+- Recommendation: use exact calendar-quarter arithmetic (year-quarter indexing), not day offsets.
+
+2) Overlapping event windows are flagged but may still be included in main regressions
+- If the script constructs overlap flags but keeps these observations in baseline regressions, interpretation of event time is less clean.
+- At minimum, show a sensitivity spec excluding overlaps.
+
+3) Potential mismatch between writeup and code for “known_rental” definition
+- The writeup appears to describe a broader likely-rental indicator (e.g., license / filing / InfoUSA / other indicators), but the script may use a narrower definition (e.g., one underlying flag only).
+- This should be reconciled before presenting results.
+- If prior versions included a broader likely-rental section and it disappeared, this may be part of why.
+
+Additional tables and figures that would be helpful
+---------------------------------------------------
+A) Event-study support / composition by event quarter (q)
+- A table or line plot showing, by q:
+  * number of observations
+  * number of unique properties (PIDs)
+  * share with total_units observed
+  * share in each size bin
+  * share flagged likely-rental
+  * share acquired by corporate / portfolio buyers
+- This helps diagnose whether changing composition is driving event-time patterns.
+
+B) Pre-transfer balance / selection table by eventual acquirer type
+- For eventual buyer categories (single-purchase, portfolio, high-filer, corporate, etc.), report pre-transfer characteristics:
+  * size / total_units
+  * likely-rental flag
+  * sheriff-deed indicator
+  * pre-period filing rate (EB or raw)
+  * neighborhood characteristics (if available)
+  * property value / sale price proxies (if available)
+- This clarifies sorting into buyer type and helps readers separate selection from post-transfer behavior.
+
+C) Levels + rates outcomes
+- In addition to filings per unit-quarter, show:
+  * number of filings (count)
+  * any filing indicator
+- This is helpful when denominator quality (total_units) may be noisy or missing for some properties.
+
+D) Stacked post-minus-pre summary plot (high value)
+- For each key subgroup (size, corporate, filer status, portfolio size), show:
+  * mean(q = 1..8) - mean(q = -8..-5)
+  with confidence intervals.
+- This is easier to read than many faceted dynamic figures and will likely be more precise.
+
+E) Sorting figure (rank-rank / binned scatter style)
+- Plot pre-transfer filing intensity (x-axis, deciles or ventiles) against probability of acquisition by:
+  * high-filer portfolio buyer
+  * corporate buyer
+  * large portfolio buyer
+- This visually communicates sorting patterns much better than cross-tabs alone.
+
+F) Single-purchase classification audit figure
+- A waterfall / flow figure focused on “single-purchase corporate” buyers:
+  * all SP corporates
+  * exact-name multi-property matches
+  * owner_group-based multi-property matches
+  * corp-suffix / likely-fragmented entities
+  * residual high-confidence singles
+- Turns a caveat into a credibility-strengthening diagnostic.
+
+G) Sheriff deed split / exclusion robustness
+- Since distress transfers likely differ mechanically from arms-length investor acquisitions:
+  * event study excluding sheriff deeds
+  * descriptive split sheriff vs non-sheriff
+- This is likely to matter for interpretation of both the dip and post-transfer filings.

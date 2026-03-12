@@ -1,5 +1,7 @@
+---
 name: docs-sync
 description: Keep docs and data-product contracts synchronized with code changes.
+---
 
 ## When to use
 Any time a change affects:
@@ -25,4 +27,3 @@ Any time a change affects:
 - **Keys:** ...
 - **Definition notes:** ...
 - **Version/date:** ...
-

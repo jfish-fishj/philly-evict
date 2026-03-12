@@ -219,6 +219,27 @@ Immediate next step (before interpreting demographic coefficients further):
 
 ## Address-History EB-First + Appendix Raw Update (2026-03-04)
 
+---
+
+## Outer Sorting Approximation + InfoUSA Income Proxy (2026-03-09)
+
+- Standalone note:
+  - `docs/notes/outer-sorting-final-projection-and-infousa-income-proxy-2026-03-09.md`
+- Issue:
+  - `issues/outer-sorting-final-projection-approximation.md`
+- Code changes:
+  - `r/build-outer-sorting-empirical-moments.R`
+    - removed tract poverty fallback; empirical outer-sorting target now uses BG composition proxy only
+  - `r/qa-infousa-income-fields.R`
+    - added QA script for modeled InfoUSA income / wealth fields against BG / tract poverty proxies
+- Verification:
+  - reran `r/make-outer-sorting-empirical-moments.R`
+  - ran `r/qa-infousa-income-fields.R`
+- Current read:
+  - BG-only empirical target drops `700` building-year rows from `8` BGs
+  - `find_div_1000` looks like the cleanest first-pass InfoUSA income proxy for future building-level composition work
+  - the simulator’s post-projection rate refresh remains a documented approximation kept for computational reasons
+
 - Shared memo note updated:
   - `docs/notes/eb-filing-rate-memo-2026-03-04.md`
 - Script updates:
@@ -471,3 +492,22 @@ Immediate next step (before interpreting demographic coefficients further):
   - `quarto render writeups/outer-sorting-baseline.qmd`
 - Iteration note:
   - `docs/notes/outer-sorting-memo-empirical-neighborhood-comparisons-2026-03-07.md`
+
+---
+
+## Outer Sorting InfoUSA Composition Proxy (2026-03-09)
+
+- Added `r/build-infousa-building-income-proxy.R` and `r/make-infousa-building-income-proxy.R`.
+- New product:
+  - `infousa_building_income_proxy_panel`
+- The default empirical composition proxy is now building-level:
+  - `infousa_find_low_income_share`
+  - defined as the share of linked primary households with `find_div_1000 <= 30`
+- Updated `r/build-outer-sorting-empirical-moments.R` to use the new PID-year proxy product and household-count weights when collapsing to one PID row over `2011-2019`.
+- Verified with:
+  - `Rscript r/make-infousa-building-income-proxy.R`
+  - `Rscript r/make-outer-sorting-empirical-moments.R`
+  - `Rscript r/run-calibrate-outer-sorting.R`
+  - `quarto render writeups/outer-sorting-baseline.qmd`
+- Iteration note:
+  - `docs/notes/outer-sorting-infousa-composition-proxy-2026-03-09.md`

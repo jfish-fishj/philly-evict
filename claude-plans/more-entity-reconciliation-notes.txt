@@ -1,0 +1,33 @@
+more notes on ~/Documents/GitHub/philly-evictions/r/build-owner-linkage.R and ~/Documents/GitHub/philly-evictions/r/build-ownership-panel.R
+
+1. us and u s bank should be matches, same w/ BANK OF NEW YORK MELLON TR / BANK OF NEW YORK (small issue)
+2. trailing \sTR should be removed
+3. trailing \sFA should be removed
+4. N A -> NA (and probably removed)
+5. (more generally, might be good to standardize bank names directly; this isnt the biggest thing as theyre being flagged as financial intermediaries so we dont care too much about how much they own)
+
+(big thing)
+
+in line 204, youre making owner entity id
+
+# Assign owner_group_id = unique integer per distinct owner_std
+
+this makes it sound like youre treating anyone with the same name as an entity? this is very bad. joe johnson is a common name and this will count all of them as the same.
+
+this is incongruent with the ownership panel that is made later and makes it seem like youre doing entity reconciliation in two places. it's doubly problematic since youre outputting something called "portfolios"
+
+you can see this in "/Users/joefish/Documents/GitHub/philly-evictions/output/qa/ownership_top_conglomerates_2015.csv"; it is extremely suspicious that ZHANG MU QIN; ZOU RUI KUN has 800+ entities in it's conglomerate. same with BROOKS ELLEN R at 500+. those are people names and should require name + address to match. something weird is happening.
+
+# minor stuff;
+
+- we might at some point want to actually parse the mailing addresses similarly to how we parse them in r/clean-altos-addresses.R. there's probably some amount of false negatives happening because of this
+
+notes on ~/Documents/GitHub/philly-evictions/r/analyze-filing-decomposition.R
+
+- dont use the commercial flag in the data, it's bad (this should be added to the docs)
+	- if you look in r/impute-race-preflight.R you see that i end up having to classify business cases directly using that file. it might be good to have that script output something that allows us to flag cases as commercial later (perhaps have it output all the cleaned names to the data/cleaned folder? with a commercial flag and associated case number (plus defendant/plaintiff signifier))
+		- a brief note: you probably only want to use defendant #1 as what defines commercial because tenants can counter sue their landlords, so a countersued corporate landlord would not represent a commercial case
+
+- for this one, i dont know that we actually want to restrict to 2+ unit homes; that was done because 1 unit homes move on / off the rental market, but if it's in an eviction filing, it was a rental.
+
+- i dont understand the reference year stuff. ownership is defined at the parcel-year level. if you have to assign a reference entity to a conglomerate, that is done during entity reconciliation

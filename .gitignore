@@ -4,6 +4,7 @@
 .Ruserdata
 .DS_Store
 */.DS_Store
+Rplots.pdf
 coc_msa_xwalk_ca_primary.csv
 data/*
 cache_acs/*
@@ -16,5 +17,12 @@ claude-chats/*
 Codex-chats/*
 scratch/
 tmp/
+_targets/
+python/__pycache__/
+r/r-scripts.zip
+latex/*.aux
+latex/*.log
+latex/*.out
+latex/*.zip
 **/smoke*/
 graveyard/

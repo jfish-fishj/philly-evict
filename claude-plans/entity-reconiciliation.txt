@@ -1,0 +1,30 @@
+Notes on ~/Documents/GitHub/philly-evictions/r/build-owner-linkage.R; r/build-ownership-panel.R
+
+we're making some changes to the entity reconcilation and ownership scripts. this should all get its own entry in the docs, btw. 
+
+I'll sketch out here apprxomiately how it should go. We're cleaning two primary datasets (plus any auxilliary ones that we might need later). The two primary datasets are the rtt transfers and parcel data. There are two issues. First, the parcel data are current as of 2024, however, we want to build a panel of ownership. this should be relatively simple. the rtt data contain the parcel and the date of a transfer, so we can create ownership panels at whatever frequency we desire (annual and quarterly, to start). there are two tricky parts, currenly not addressed by the script. 
+
+first, it's hard to handle foreclosures. r/process-rtt-data.R, which generates the data currently being read in, drops sheriff's deeds (foreclosure sales). this was fine for the orignal purposes of the script, but it makes things bad for what we currently want to do. consider the following. A forecloses, Bank B repossesses, Bank B sells to C. if you drop the sheriffs deeds, it'll look like Bank B owns up until it sells to C. this is wrong and will inflate B's ownership. Better in this case to keep the sheriffs deeds in, even if they make them a little more complicated. The second issue is how to handle mortgage originators. the most common grantor is fannie mae, federal mortgage association, and the like. i included in claude-chats/sample-ownership-transfer-pathway.png an example of how this can work (with a foreclosure sale). 
+
+MATTEO ROBERT; RITACCO GLORIA JEANNE sell to MELITO PHILIP ERNEST (note how the ; delineates multiple people on the deed. this will be important later) who takes out a mortgage with COMMERCE BANK/PENNSYLVANIA N A. MELITO PHILIP ERNEST sells to BLOCK GILAD who sells to MENASHEPUR SHAI. MENASHEPUR SHAI takes out a mortgage with jp morgan, goes into foreclosure, where the deed is bought by FEDERAL NATIONAL MORTGAGE ASSOCIATION, who then sells to KAHALON SAGEE S. so the "true ownership" would only have FEDERAL NATIONAL MORTGAGE ASSOCIATION owning while the property was in foreclosure limbo. 
+
+second, regardless of how careful we are, a bunch of properties will appear to be owned by banks / other mortgage originators even though they are not "owners" in an economic sense. im not quite sure how to fix this, so appreciate your thoughts.
+
+as a note, i mentioned before that names are ; delimited. so if there are three owners joe;john;james they should appear as such. sometimes, it will be fannie mae;joe;james. the tricky part is deciding how to seperate the names. i think doing the ; delimited is best, and well hope that people wrote their names in correctly. we'll also want to do some amount of name cleaning because, particularly for businesses that we care about, people sometimes write assoc and mean association, l.l.c. and mean llc, etc. i could be persuaded, however, to not ; delimit them and just have them as raw names, although that will create problems, which i will document later. 
+
+after carefully assining ownership, we should have something where each parcel is linked in each time-unit to one or more owners. the next part is entity reconciliation. what we're trying to do is build portfolios of ownership, particularly across businesses. we have two main data sources, the names in the transfer data and the names + mailing addresses in the parcel data. first, we want to clean all names in the same manner. then, begining with the parcel data, we want to consolidate parcel ownership. we can link on name or name + address. 
+
+when names are full businesses, we can just link on name ( we should use the corporate classifer to classify). for instance, philly realty (llc|inc|lp) can match any other philly realty company because those names are supposed to be unique in the business registry. however, philly investments and philly reality would need to be linked by name + mailing address. edge cases like philly realty i vs ii vs iii can be handled best in the name cleaning (removing i, ii, iii and those kinds of words).  for people, name + address is required. once the parcel data are combined, we should have a network of entities that are all part of the same conglomerate. we will use that to attach more names from the transfer data. since we don't have address data in the transfers, we have to be more judicious. the primary linkages will be the full business names and transitive matches. transitive matches are as follows. if A matches B in the parcel data, and we see B match C in the RTT data, then we also allow A to match C in any other transfer. these will all flow up to be one large conglomerate, while only B and C represent the same entity. 
+
+at the end of entity reconcilation, we will have an entity by parcel-time xwalk, an entity by conglomrate xwalk, and a conglomerate by parcel-time xwalk (the data products should be the same as ~/Documents/GitHub/philly-evictions/r/build-owner-linkage.R and r/build-ownership-panel.R)
+
+a misc notes on the names: one issue here is gonna be the ";" since the parcel data wont have them and the RTT data will. one way around this is to note that if we see someone own something in 2024 and see it was bought in 2020, we can infer that the names on the deed and the current owner are the same entity. we can then use that to expand the number of names associated with the entity to do further matching.
+
+lastly, the matching algo is something of a fixed point in that it should keep iterating on names + addresses until there is no more matching to be found. (a matches b who matches c who matches d should round up to just A, or whichever entity is designated the head)
+
+once this ownership reconciliation looks good, we'll want to update the scripts that use its products (anaylze rtt transfers; analyze-transfer-evictions-unified.R; analyze-filing-decomposition.R)
+
+
+
+
+
