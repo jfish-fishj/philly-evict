@@ -21,7 +21,7 @@ format:
 find_repo_root <- function(start = getwd()) {
   cur <- normalizePath(start, winslash = "/", mustWork = FALSE)
   for (i in 0:8) {
-    has_cfg <- file.exists(file.path(cur, "config.yml")) || file.exists(file.path(cur, "config.example.yml"))
+    has_cfg <- file.exists(file.path(cur, "config.yml"))
     has_markers <- file.exists(file.path(cur, "AGENTS.md")) || file.exists(file.path(cur, "README.md"))
     if (has_cfg && has_markers) return(cur)
     parent <- dirname(cur)
@@ -53,7 +53,7 @@ suppressPackageStartupMessages({
 })
 
 source(file.path(repo_root, "r", "config.R"))
-cfg_path <- file.path(repo_root, if (file.exists(file.path(repo_root, "config.yml"))) "config.yml" else "config.example.yml")
+cfg_path <- file.path(repo_root, "config.yml")
 cfg <- read_config(cfg_path, create_dirs = FALSE)
 
 retaliatory_time_unit <- tolower(as.character(cfg$run$retaliatory_time_unit %||% "quarter"))
@@ -107,6 +107,9 @@ to_writeups_rel <- function(path) {
 fmt_pct <- function(x) sprintf("%.1f%%", 100 * x)
 ```
 
+
+\newpage
+
 # Overview
 
 This writeup now reports only the retaliatory timing analysis from `r/retaliatory-evictions.r`:
@@ -117,6 +120,9 @@ This writeup now reports only the retaliatory timing analysis from `r/retaliator
 
 Complaint-suppression analysis was intentionally removed from this workflow and now lives in `r/comp-statics-annual-race.R` and `writeups/comp-statics-annual-race.qmd`.
 Unless explicitly overridden in the script call, outputs shown here are pre-COVID only (`<= 2019`).
+
+
+\newpage
 
 # Empirical Bayes Filing-Rate Memo
 
@@ -142,6 +148,9 @@ $$
 In the production pipeline (`r/make-analytic-sample.R`, section 6b), the city prior is estimated by method-of-moments; ZIP-specific priors are used when supported, otherwise the city prior is used as fallback. The raw long-run filing rate remains available for robustness and is reported in the appendix of this writeup.
 
 Reference memo for reuse: `docs/notes/eb-filing-rate-memo-2026-03-04.md`.
+
+
+\newpage
 
 # Estimating Equations
 
@@ -176,6 +185,9 @@ $$
 where $c_{\text{pre}}$ is computed from pre-2020 $(PID,year)$-unique observations using the configured rule (default: pre-COVID mean).
 
 The same distributed-lag equation is estimated on high- and low-$G_{it}$ subsamples.
+
+
+\newpage
 
 # Data and Sample
 
@@ -212,6 +224,9 @@ kable(filt_show, format = "latex", booktabs = TRUE,
   kable_styling(latex_options = c("hold_position", "striped"), font_size = 8)
 ```
 
+
+\newpage
+
 # Bandwidth Diagnostics
 
 ```{r bandwidth-summary}
@@ -234,6 +249,9 @@ kable(show, format = "latex", booktabs = TRUE,
   kable_styling(latex_options = c("hold_position", "striped"), font_size = 9)
 ```
 
+
+\newpage
+
 # Distributed-Lag Results
 
 ```{r distlag-plot, fig.cap="Distributed-lag coefficients (pre-COVID): effect of complaint indicators at lag/lead k on eviction filing indicator. Panels are labeled Full, Non-Severe, and Severe. PID and period FE; SE clustered by PID.", out.width="100%", fig.align="center"}
@@ -246,6 +264,8 @@ dist_plot <- require_existing(c(
 knitr::include_graphics(to_writeups_rel(dist_plot))
 ```
 
+\newpage
+
 # `% Black` Heterogeneity in Distributed Lags
 
 ```{r distlag-black-plot, fig.cap="Distributed-lag coefficients by high/low pct black split (cutoff from pre-COVID distribution rule configured in script).", out.width="100%", fig.align="center"}
@@ -257,6 +277,37 @@ dist_black_plot <- require_existing(c(
 
 knitr::include_graphics(to_writeups_rel(dist_black_plot))
 ```
+
+
+\newpage
+
+# Portfolio Eviction Group Heterogeneity
+
+Buildings are assigned to one of three portfolio eviction groups based on a **leave-one-out (LOO)** EB pre-COVID filing rate from the other buildings in the same conglomerate:
+
+- **Solo**: no other buildings in the conglomerate (LOO rate is undefined)
+- **Low-evicting portfolio**: LOO rate below the median across multi-building conglomerates
+- **High-evicting portfolio**: LOO rate at or above the median
+
+This framing asks whether retaliation is more common, more severe, and maintenance less responsive *when a building's landlord operates other high-evicting properties* — isolating a portfolio-level behavioral pattern rather than just the focal building's own filing history.
+
+## Distributed-Lag Results by Portfolio Eviction Group
+
+```{r distlag-port-plot, fig.cap="Distributed-lag coefficients by portfolio eviction group. Three groups: Solo (no conglomerate partners), Low-evicting portfolio (LOO EB rate below median), High-evicting portfolio (LOO EB rate at/above median). PID and period FE; SE clustered by PID.", out.width="100%", fig.align="center"}
+dist_port_plot <- pick_existing(c(
+  retaliatory_out("distlag_coefficients_evict_port_split.png"),
+  file.path(fig_out_dir, paste0(retaliatory_stub, "_distlag_coefficients_evict_port_split.png"))
+))
+
+if (!is.na(dist_port_plot)) {
+  knitr::include_graphics(to_writeups_rel(dist_port_plot))
+} else {
+  cat("\\textit{Portfolio eviction group distlag plot not found; re-run retaliatory-evictions.r.}\n")
+}
+```
+
+
+\newpage
 
 # One-Month Back-Rent Regressions
 
@@ -396,6 +447,44 @@ if (is.finite(lr_tab_start) && is.finite(lr_tab_end) && lr_tab_end >= lr_tab_sta
 }
 ```
 
+## Back-Rent Regressions by Portfolio Eviction Group
+
+Separate LPM (`one_month_back_rent`) and PPML (`months_back_rent`) regressions run for each portfolio eviction group. Specification mirrors the main models above (PID + year FE; SE clustered by PID; pre-COVID sample). This tests whether **high-evicting-portfolio landlords are more likely to file retaliatory cases with precisely one month of back rent claimed**.
+
+```{r back-rent-port-table, results='asis'}
+port_coef_path <- pick_existing(c(
+  retaliatory_out("case_one_month_retaliatory_evict_port_split_coefficients.csv"),
+  file.path(tab_out_dir, paste0(retaliatory_stub, "_case_one_month_retaliatory_evict_port_split_coefficients.csv"))
+))
+
+if (!is.na(port_coef_path)) {
+  pc <- fread(port_coef_path)
+  # Show LPM rows (one_month_back_rent outcome) with retaliatory status terms
+  pc_lpm <- pc[outcome == "one_month_back_rent" &
+                 grepl("retaliatory_status", term)]
+  if (nrow(pc_lpm)) {
+    pc_show <- pc_lpm[, .(
+      Group = portfolio_evict_group,
+      Term  = sub("retaliatory_status::", "", term),
+      Est   = round(estimate, 4),
+      SE    = round(std_error, 4),
+      `p-value` = round(p_value, 3),
+      N     = n_obs
+    )]
+    print(kable(pc_show, format = "latex", booktabs = TRUE,
+          caption = "LPM: one-month back rent ~ retaliatory status, by portfolio eviction group (pre-COVID; PID + year FE)") |>
+      kable_styling(latex_options = c("hold_position", "striped", "scale_down"), font_size = 8))
+  } else {
+    cat("\\textit{No LPM coefficient rows found for portfolio group split.}\n")
+  }
+} else {
+  cat("\\textit{Portfolio group back-rent coefficients not found; re-run retaliatory-evictions.r.}\n")
+}
+```
+
+
+\newpage
+
 # Equilibrium Maintenance Analysis
 
 This section examines whether landlords adjust maintenance investment (proxied by permit activity) in response to eviction pressure and tenant composition, and whether permit activity responds dynamically to severe complaints.
@@ -434,6 +523,81 @@ if (!is.na(maint_tex_path)) {
 }
 ```
 
+## Baseline Maintenance Regressions by Portfolio Eviction Group
+
+PPML regressions of `total_permits` on racial composition and **LOO portfolio eviction group** (`portfolio_evict_group`; reference = "Solo"), with and without the EB high-filing dummy. LOO classification uses a 0.05 threshold on other conglomerate buildings' EB pre-COVID filing rate (≥ 10 other units = "High-evicting portfolio"; < 10 other units = "Small portfolio").
+
+```{r maintenance-port-etable, results='asis'}
+maint_port_tex_path <- pick_existing(c(
+  retaliatory_out("maintenance_model_table_port.tex"),
+  file.path(tab_out_dir, paste0(retaliatory_stub, "_maintenance_model_table_port.tex"))
+))
+
+if (!is.na(maint_port_tex_path)) {
+  maint_port_lines <- readLines(maint_port_tex_path, warn = FALSE)
+  tab_start <- which(grepl("^\\\\begin\\{tabular\\}", maint_port_lines))[1]
+  tab_end   <- tail(which(grepl("^\\\\end\\{tabular\\}", maint_port_lines)), 1)
+  if (is.finite(tab_start) && is.finite(tab_end) && tab_end >= tab_start) {
+    cat("\\begin{center}\n")
+    cat("\\resizebox{\\linewidth}{!}{%\n")
+    cat(paste(maint_port_lines[tab_start:tab_end], collapse = "\n"))
+    cat("\n}\n")
+    cat("\\end{center}\n")
+  } else {
+    cat(paste(maint_port_lines, collapse = "\n"))
+  }
+} else {
+  cat("\\textit{Maintenance portfolio model table not found; re-run retaliatory-evictions.r.}\n")
+}
+```
+
+## Spell-Level Maintenance Regressions
+
+Each observation is a **PID × ownership-spell** — a contiguous block of years during which the same conglomerate owned the parcel (2011–2019). This collapses the ~1.6M-row annual panel to ~100–250 K spells, making the cross-sectional unit honest and covariates spell-specific (filing rate, rent, and % Black are averages during the landlord's tenure).
+
+**Design notes:**
+
+- **Filing intensity** (`high_filing_spell`): mean of `filing_rate_eb` (pooled pre-COVID EB rate) over spell years. Because this EB rate is a static PID-level scalar, the spell mean equals the PID EB rate. Spell-varying filing intensity is available via the raw rate robustness column.
+- **FE spec**: `building_type + start_year + GEOID`. `quality_grade`, `year_blt_decade`, and `num_units_bin` are included as RHS covariates rather than FEs. The 6-way FE spec from the annual model is too sparse at spell level (~267K spells vs ~72M possible cells → all PPML singletons); this 3-way spec gives ~14K cells and ~19 spells/cell. `start_year` absorbs permit trends by ownership-entry cohort.
+- **M4 (PID FE)**: identifies from within-parcel ownership transitions. `high_filing_spell` is collinear with PID FE (EB rate does not vary by year) and is dropped automatically by `fixest`. Identification comes from `portfolio_evict_group_cong` and `above_mean_pct_black_spell`, which vary across spells if conglomerate composition or pct\_Black changes at ownership transition.
+- **LOO classification** (`portfolio_evict_group_cong`): computed from the **full 2011–2019 panel** (not the spell window) via `compute_loo_filing_type()`. Landlord type is a structural attribute; full-period averaging reduces noise. Reference = "Solo". Threshold: 0.05 filings/unit-year; small-portfolio screen: `loo_min_units × 9` unit-years.
+
+```{r spell-maint-sample, results='asis'}
+spell_sum_path <- pick_existing(c(
+  retaliatory_out("spell_maintenance_sample_summary.csv"),
+  file.path(tab_out_dir, paste0(retaliatory_stub, "_spell_maintenance_sample_summary.csv"))
+))
+if (!is.na(spell_sum_path)) {
+  spell_sum <- fread(spell_sum_path)
+  knitr::kable(spell_sum, caption = "Spell-level maintenance sample summary", booktabs = TRUE)
+} else {
+  stop("Spell maintenance sample summary not found: re-run retaliatory-evictions.r with spell block enabled.")
+}
+```
+
+```{r spell-maint-etable, results='asis'}
+spell_maint_tex_path <- pick_existing(c(
+  retaliatory_out("spell_maintenance_model_table.tex"),
+  file.path(tab_out_dir, paste0(retaliatory_stub, "_spell_maintenance_model_table.tex"))
+))
+if (!is.na(spell_maint_tex_path)) {
+  spell_maint_lines <- readLines(spell_maint_tex_path, warn = FALSE)
+  tab_start <- which(grepl("^\\\\begin\\{tabular\\}", spell_maint_lines))[1]
+  tab_end   <- tail(which(grepl("^\\\\end\\{tabular\\}", spell_maint_lines)), 1)
+  if (is.finite(tab_start) && is.finite(tab_end) && tab_end >= tab_start) {
+    cat("\\begin{center}\n")
+    cat("\\resizebox{\\linewidth}{!}{%\n")
+    cat(paste(spell_maint_lines[tab_start:tab_end], collapse = "\n"))
+    cat("\n}\n")
+    cat("\\end{center}\n")
+  } else {
+    cat(paste(spell_maint_lines, collapse = "\n"))
+  }
+} else {
+  stop("Spell-level maintenance model table not found: re-run retaliatory-evictions.r with spell block enabled.")
+}
+```
+
 ## Landlord Response to Severe Complaints
 
 The following coefplot shows estimates from a PPML regression of `total_permits` on contemporaneous, lagged (past quarters), and lead (future quarters) severe complaint counts, with PID and year fixed effects. Lead terms serve as pre-trend checks.
@@ -452,11 +616,34 @@ if (!is.na(lr_plot_path)) {
 }
 ```
 
+## Landlord Maintenance Response by Portfolio Eviction Group
+
+Same PPML specification as above, estimated separately for each portfolio eviction group. This tests whether **high-evicting-portfolio landlords are less maintenance-responsive** to severe complaints than solo or low-evicting-portfolio landlords.
+
+```{r landlord-response-port-plot, fig.cap="Landlord maintenance response by portfolio eviction group: PPML event-study, faceted by Solo / Low-evicting portfolio / High-evicting portfolio. PID + year FE; offset = log(total_units); 95% CI.", out.width="100%", fig.align="center"}
+lr_port_plot_path <- pick_existing(c(
+  retaliatory_out("landlord_response_evict_port_split_plot.png"),
+  file.path(fig_out_dir, paste0(retaliatory_stub, "_landlord_response_evict_port_split_plot.png"))
+))
+
+if (!is.na(lr_port_plot_path)) {
+  knitr::include_graphics(to_writeups_rel(lr_port_plot_path))
+} else {
+  cat("\\textit{Portfolio group maintenance response plot not found; re-run retaliatory-evictions.r.}\n")
+}
+```
+
+
+\newpage
+
 # Notes
 
 - Raw long-run filing-rate maintenance regressions are moved to the appendix section below.
 - This writeup intentionally excludes same-period, targeting, LP-DiD, and complaint-suppression blocks.
 - For complaint-suppression specifications and interpretation, use `writeups/comp-statics-annual-race.qmd`.
+
+
+\newpage
 
 # Appendix: Raw Filing Robustness
 

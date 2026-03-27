@@ -1,8 +1,7 @@
 library(tidyverse)
 library(data.table)
 library(janitor)
-#library(sf)
-library(spatstat)
+# Note: spatstat removed — it was a dead import here. Load it in scripts that need it.
 
 theme_philly_evict <- function(){
   theme_bw() +
@@ -121,6 +120,14 @@ Mode <- function(x, na.rm = FALSE) {
   return(ux[which.max(tabulate(match(x, ux)))])
 }
 
+normalize_pid <- function(x) {
+  y <- trimws(as.character(x))
+  y[!nzchar(y) | y %in% c("NA", "NaN")] <- NA_character_
+  out <- stringr::str_pad(y, width = 9L, side = "left", pad = "0")
+  out[is.na(y)] <- NA_character_
+  out
+}
+
 normalize_owner_name <- function(x) {
   x |>
     as.character() |>
@@ -128,7 +135,25 @@ normalize_owner_name <- function(x) {
     stringr::str_squish()
 }
 
-pha_owner_regex <- function() {
+# Normalize a mailing address to "ADDR||ZIP5" format for exact-match joining.
+# Strips trailing unit/suite designations and squishes whitespace.
+# Used by both build-ownership-panel.R (OPA mailing addresses) and
+# build-business-networks.R (PA filing addresses) so both sides produce
+# identical keys for Phase 4 cross-dataset matching.
+normalize_mailing_addr <- function(addr1, zip) {
+  addr <- toupper(trimws(coalesce(as.character(addr1), "")))
+  addr <- stringr::str_remove(addr,
+    "(?i)\\s+(STE|SUITE|APT|UNIT|DEPT|#|FL(?:OOR)?|ROOM?|RM|PMB|PO\\s*BOX)\\s*\\S*\\s*$")
+  addr <- stringr::str_squish(addr)
+  zip_clean <- stringr::str_extract(
+    toupper(trimws(coalesce(as.character(zip), ""))), "^\\d{5}")
+  paste0(addr, "||", coalesce(zip_clean, "NOZIP"))
+}
+
+# NOTE: pha_owner_regex_legacy is a function for use with normalize_owner_name() in
+# is_pha_owner_name(). The compiled pha_owner_regex regex object (defined further below
+# in the ENTITY CLASSIFICATION section) is used by assign_owner_category() on owner_std.
+pha_owner_regex_legacy <- function() {
   stringr::regex(
     paste0(
       "PHILADELPHIA\\s+HOUSING",
@@ -173,7 +198,7 @@ university_owner_regex <- function() {
 }
 
 is_pha_owner_name <- function(owner_name) {
-  stringr::str_detect(normalize_owner_name(owner_name), pha_owner_regex())
+  stringr::str_detect(normalize_owner_name(owner_name), pha_owner_regex_legacy())
 }
 
 is_university_owner_name <- function(owner_name) {
@@ -510,6 +535,8 @@ business_words <- c(
   "VENTURE", "VENTURES",
   "GROUP", "GROUPS",
   "SOLUTIONS", "STRATEGIES",
+  "INVESTMENT", "INVESTM[A-Z]{1,5}",  # INVESTMENT, INVESTMENTS, and truncated forms (INVESTMEN etc.)
+  "PROPERTY", "PROPERTIES",
   "BROS", "BROTHERS",
   "FIRM", "FIRMS",
   "TRUST", "TRUSTS",
@@ -521,9 +548,11 @@ business_words <- c(
   # Additional near-certain non-person institution/commercial terms.
   "PHILADELPHIA", "SCHOOL", "SCHOOLS", "ACADEMY",
   "TAVERN", "INN", "HOTEL", "MOTEL", "BAR", "GRILL", "DINER", "CAFE",
-  "UNIVERSITY", "COLLEGE", "HOSPITAL", "CLINIC",
+  "UNIVERSITY", "UNIV",                                # UNIV covers abbrev forms like "TRS UNIV OF PENN"
+  "COLLEGE", "HOSPITAL", "CLINIC",
   "CHURCH", "TEMPLE", "MOSQUE", "MINISTRY", "MINISTRIES",
-  "DEPARTMENT", "DEPT", "AGENCY", "BUREAU", "OFFICE", "OFFICES",
+  "DEPARTMENT", "DEPT", "AUTHORITY", "AUTH",            # AUTH covers "HOUSING AUTH", "PORT AUTH" etc.
+  "AGENCY", "BUREAU", "OFFICE", "OFFICES",
   "CITY", "COUNTY", "BOROUGH", "TOWNSHIP", "COMMONWEALTH", "STATE",
   "BANK", "CREDIT", "UNION", "INSURANCE",
   # Additional business terms requested for non-person screening.
@@ -549,6 +578,406 @@ business_or_nonperson_regex <- regex(
   str_c("\\b(", str_c(unique(c(business_words, non_person_words)), collapse = "|"), ")\\b", collapse = "|"),
   ignore_case = TRUE
 )
+
+# ============================================================
+# Known major institution normalization
+# ============================================================
+# Maps common name variants of large anchor institutions (PHA, universities,
+# hospital systems) to a single canonical name BEFORE entity grouping.
+# Applied after standardize_corp_name() in build-owner-linkage.R (to RTT grantees)
+# and in build-ownership-panel.R (to OPA owner names).
+# This is intentionally semi-manual: institutions are listed explicitly so that
+# fragmented portfolio entities collapse into one conglomerate in Phase 1.
+#
+# NOTE: keep the PHA regex patterns in sync with pha_owner_regex (defined in the
+# ENTITY CLASSIFICATION section of this file) and pha_owner_regex_legacy (above).
+.known_institutions <- list(
+  # Philadelphia Housing Authority — all name variants → single canonical
+  list(
+    rx = paste(c(
+      "PHILADELPHIA\\s+HOUSING",
+      "PHILA[.\\s]?HOUS[A-Z\\s.]{0,20}AUTH",
+      "\\bPAPMC\\b",
+      "AFFILIATE\\s+OF\\s+THE\\s+PHILA\\s+HOUS"
+    ), collapse = "|"),
+    canonical = "PHILADELPHIA HOUSING AUTHORITY"
+  ),
+  # University of Pennsylvania (incl. "TRS UNIV OF PENN", "UPENN", "PENN MEDICINE")
+  list(
+    rx = paste(c(
+      "UNIVERSITY\\s+OF\\s+PENN[A-Z]{0,10}",
+      "UNIV\\.?\\s+OF\\s+PENN[A-Z]{0,10}",
+      "\\bUPENN\\b",
+      "PENN\\s+MEDICINE",
+      "TRS\\s+(UNIV|UNIVERSITY)\\s+OF\\s+PENN[A-Z]{0,10}"
+    ), collapse = "|"),
+    canonical = "UNIVERSITY OF PENNSYLVANIA"
+  ),
+  # Temple University (incl. health system subsidiaries)
+  list(
+    rx = paste(c(
+      "TEMPLE\\s+UNIV[A-Z]{0,7}",
+      "TEMPLE\\s+HEALTH[A-Z]{0,5}",
+      "TEMPLE\\s+HOSP[A-Z]{0,5}"
+    ), collapse = "|"),
+    canonical = "TEMPLE UNIVERSITY"
+  ),
+  # Drexel University
+  list(
+    rx = "DREXEL\\s+UNIV[A-Z]{0,7}",
+    canonical = "DREXEL UNIVERSITY"
+  ),
+  # Thomas Jefferson University / Jefferson Health
+  list(
+    rx = paste(c(
+      "JEFFERSON\\s+UNIV[A-Z]{0,7}",
+      "JEFFERSON\\s+HOSP[A-Z]{0,5}",
+      "JEFFERSON\\s+HEALTH",
+      "THOMAS\\s+JEFFERSON\\s+UNIV[A-Z]{0,7}"
+    ), collapse = "|"),
+    canonical = "THOMAS JEFFERSON UNIVERSITY"
+  ),
+  # Children's Hospital of Philadelphia
+  list(
+    rx = paste(c(
+      "CHILDREN[']?S\\s+HOSP[A-Z]{0,5}\\s+OF\\s+PHILA[A-Z]{0,7}",
+      "\\bCHOP\\b"
+    ), collapse = "|"),
+    canonical = "CHILDRENS HOSPITAL OF PHILADELPHIA"
+  )
+)
+
+# =============================================================================
+# ENTITY CLASSIFICATION: SUFFIXES, STANDARDIZATION, REGEXES, OWNER CATEGORY
+# =============================================================================
+# Shared by build-owner-linkage.R and build-ownership-panel.R.
+# Both scripts source helper-functions.R, so these definitions are available
+# to both without duplication.
+
+# Business name standardization
+# -----------------------------------------------------------------------
+# Strip only legal entity-type suffixes, NOT descriptive business words.
+# Stripping words like PROPERTIES/REALTY/DEVELOPMENT caused over-merging
+# (e.g., "PHILLY DEVELOPMENT LLC" and "PHILLY INVESTMENTS LLC" both → "PHILLY").
+#
+# Phrase patterns MUST come before single-word patterns so that multi-word
+# suffixes like "LIMITED LIABILITY COMPANY" are consumed as a unit. Without this,
+# "LIMITED" is removed first, leaving "LIABILITY COMPANY" and then "COMPANY" is
+# removed, stranding "LIABILITY" in the name — breaking Phase 3 entity matching.
+entity_suffixes <- c(
+  "LIMITED\\s+LIABILITY\\s+COMPANY", "LIMITED\\s+LIABILITY", "LIABILITY\\s+COMPANY",
+  "LLC", "L\\.L\\.C", "L L C",
+  "INC", "INCORPORATED",
+  "CORP", "CORPORATION",
+  "LP", "L\\.P\\.", "L P",
+  "LLP",
+  "LTD", "LIMITED",
+  "CO",
+  "COMPANY"
+)
+
+# Build a single regex for business suffix removal (word-boundary anchored)
+suffix_pattern <- paste0("\\b(", paste(entity_suffixes, collapse = "|"), ")\\b")
+
+standardize_corp_name <- function(name) {
+  x <- name
+  # Step 0a: Pre-normalize dotted abbreviations → plain forms so suffix patterns work.
+  # "L.L.C." → "LLC", "L.P." → "LP", etc.
+  x <- str_replace_all(x, regex("\\bL\\.L\\.C\\.?", ignore_case = TRUE), "LLC")
+  x <- str_replace_all(x, regex("\\bL\\.P\\.?",     ignore_case = TRUE), "LP")
+  x <- str_replace_all(x, regex("\\bL\\.L\\.P\\.?", ignore_case = TRUE), "LLP")
+  # Step 0b: Strip trailing dot from abbreviated street types ("ST." → "ST", etc.)
+  x <- str_replace_all(x, "\\bST\\.",   "ST")
+  x <- str_replace_all(x, "\\bRD\\.",   "RD")
+  x <- str_replace_all(x, "\\bAVE\\.",  "AVE")
+  x <- str_replace_all(x, "\\bDR\\.",   "DR")
+  x <- str_replace_all(x, "\\bBLVD\\.", "BLVD")
+  x <- str_replace_all(x, "\\bCT\\.",   "CT")
+  x <- str_replace_all(x, "\\bLN\\.",   "LN")
+  x <- str_replace_all(x, "\\bPL\\.",   "PL")
+  # Step 0c: Contract street type words to abbreviated canonical form.
+  x <- str_replace_all(x, "\\bSTREET\\b",    "ST")
+  x <- str_replace_all(x, "\\bAVENUE\\b",    "AVE")
+  x <- str_replace_all(x, "\\bBOULEVARD\\b", "BLVD")
+  x <- str_replace_all(x, "\\bROAD\\b",      "RD")
+  x <- str_replace_all(x, "\\bDRIVE\\b",     "DR")
+  x <- str_replace_all(x, "\\bLANE\\b",      "LN")
+  x <- str_replace_all(x, "\\bCOURT\\b",     "CT")
+  x <- str_replace_all(x, "\\bPLACE\\b",     "PL")
+
+  # Step 1: Remove business suffixes (phrase patterns consumed first)
+  x <- str_remove_all(x, regex(suffix_pattern, ignore_case = TRUE))
+
+  # Step 1b: Bank name normalization (applied after suffix removal so "BANK NA" → "BANK")
+  # "U S BANK" → "US BANK"; "WELLS FARGO FA" → "WELLS FARGO"; etc.
+  x <- str_replace_all(x, "\\bU\\s+S\\b", "US")     # spaced abbreviation
+  x <- str_replace(x, "\\bTRUS\\b\\s*$", "TRUST")   # normalize TRUS → TRUST (check before TR)
+  x <- str_replace(x, "\\bTR\\b\\s*$",   "TRUST")   # normalize TR   → TRUST
+  x <- str_remove(x, "\\bFA\\b\\s*$")                # federal association
+  x <- str_remove(x, "\\bN\\s+A\\b\\s*$")            # national association (spaced)
+  x <- str_squish(x)
+
+  # Step 2: Remove trailing punctuation (periods, commas, dashes)
+  x <- str_remove_all(x, "[.,;:\\-]+$")
+
+  # Step 2b: Strip truncated LLC/LP artifacts (OPA and RTT fields truncate ~30 chars,
+  # leaving "BEST PHILLY INVESTMENT LL" instead of "BEST PHILLY INVESTMENT LLC").
+  # " LL" at end of a corporate name is virtually always a truncated "LLC" or "LLP".
+  x <- str_remove(x, "\\s+LL$")
+
+  # Step 3: Remove leading "THE "
+  x <- str_remove(x, "^THE\\s+")
+
+  # Step 4: Strip trailing Roman numerals (LLC series identifiers)
+  x <- str_remove(x, "\\s+(VI{0,3}|IV|IX|XI{0,3}|III|II|I|V)\\s*$")
+
+  # Step 5: Collapse whitespace
+  x <- str_squish(x)
+
+  # Step 6: Remove trailing numbers (e.g., "SOME LLC 2" after LLC stripped)
+  x <- str_remove(x, "\\s+\\d+$")
+
+  x <- str_squish(x)
+  x
+}
+
+# Trust regex
+# -----------------------------------------------------------------------
+# Post-standardization (TR → TRUST already done by standardize_corp_name).
+# Trusts use person-style (name+PID) grouping to prevent over-merging via
+# mailing addresses (e.g., unrelated family trusts sharing a registered agent).
+trust_regex <- regex("\\bTRUST[S]?\\b", ignore_case = TRUE)
+
+# Financial intermediary detection
+# -----------------------------------------------------------------------
+# Banks, GSEs, and mortgage servicers hold properties during foreclosure limbo
+# but are NOT real landlords. Flagging them prevents their mailing addresses
+# from acting as hub nodes in the Phase 2 entity-linkage graph.
+# Applied to owner_std (post-standardization: suffixes like BANK/CORP stripped),
+# so "WELLS FARGO BANK NA" → "WELLS FARGO" is caught by the exact name match.
+fi_words <- c(
+  # GSEs
+  "FANNIE MAE", "FEDERAL NATIONAL MORTGAGE",
+  "FREDDIE MAC", "FEDERAL HOME LOAN", "FEDERAL HOME LOAN MORTGAGE",
+  # Major banks (post-suffix-stripping these reduce to core names)
+  "JP MORGAN", "JPMORGAN", "CHASE",
+  "WELLS FARGO", "BANK OF AMERICA", "CITIBANK", "CITIGROUP",
+  "PNC", "TD BANK", "CITIZENS BANK", "COMMERCE BANK",
+  # Servicers
+  "NATIONSTAR", "OCWEN", "SELECT PORTFOLIO", "CARRINGTON",
+  "PHH", "DITECH", "LAKEVIEW LOAN", "BAYVIEW LOAN",
+  # Government / HUD
+  "DEPARTMENT OF HOUSING", "DEPT OF HOUSING",
+  "HUD", "SECRETARY OF HOUSING", "SECRETARY OF VETERANS"
+)
+fi_generic <- c(
+  "\\bBANK\\b", "\\bBANKS\\b",
+  "\\bMORTGAGE ASSOC", "\\bMORTGAGE CORP\\b",
+  "\\bFEDERAL SAVINGS\\b", "\\bSAVINGS BANK\\b",
+  "\\bSAVINGS ASSOC\\b", "\\bNATIONAL ASSOC\\b"
+)
+financial_intermediary_regex <- regex(
+  paste(c(
+    paste0("(", paste(fi_words,   collapse = "|"), ")"),
+    paste(fi_generic, collapse = "|")
+  ), collapse = "|"),
+  ignore_case = TRUE
+)
+
+# Owner category regexes
+# -----------------------------------------------------------------------
+# Applied to owner_std (post-standardization, so entity suffixes are already stripped).
+# Priority order (highest first):
+#   Financial-Intermediary > Government-Federal > Government-Local >
+#   PHA > Nonprofit > Religious > Trust > For-profit corp > Person
+
+# PHA: Philadelphia Housing Authority and its affiliates / subsidiaries.
+# Tolerates abbreviation (PHILA) and omission of AUTHORITY.
+pha_owner_regex <- regex(paste(c(
+  "PHILADELPHIA\\s+HOUSING",
+  "PHILA[.\\s]?HOUS[A-Z\\s.]{0,20}AUTH",
+  "\\bPAPMC\\b",
+  "AFFILIATE\\s+OF\\s+THE\\s+PHILA"
+), collapse = "|"), ignore_case = TRUE)
+
+# Federal government entities (HUD, VA, SBA, IRS, FDIC, etc.)
+federal_gov_regex <- regex(paste(c(
+  "\\bHUD\\b",
+  "DEPT?\\.?\\s+OF\\s+HOU[A-Z]{0,5}",        # HUD long form
+  "SECRETARY\\s+OF\\s+HOU[A-Z]{0,5}",
+  "SECRETARY\\s+OF\\s+VET[A-Z]{0,4}",
+  "VETERANS?\\s+AFFAIR[S]?",
+  "SMALL\\s+BUSINESS\\s+ADM[A-Z]{0,3}",
+  # NOTE: bare \\bSBA\\b removed — it false-positive matches "SBA 2012 TC ASSETS LLC"
+  # (a private asset vehicle). The full "SMALL BUSINESS ADM..." pattern above is sufficient.
+  "DEPT?\\.?\\s+OF\\s+VET[A-Z]{0,4}",  # "DEPT OF VETERANS" (SECRETARY pattern exists but not DEPT variant)
+  "INTERNAL\\s+REVENUE",
+  "\\bFDIC\\b",
+  "FEDERAL\\s+DEPOSIT\\s+INS[A-Z]{0,6}",
+  "RESOLUTION\\s+TRUST",
+  "GOVERNMENT\\s+NATIONAL\\s+MORTGAGE",
+  "\\bGNMA\\b",
+  "UNITED\\s+STATES\\s+(GOVERNMENT|DEPT|DEPARTMENT|OF\\s+AMER)",
+  "U\\.?S\\.?\\s+GOVERNMENT"
+), collapse = "|"), ignore_case = TRUE)
+
+# Local/state government (Pennsylvania and Philadelphia-specific).
+# Uses PHILA[A-Z]{0,7} to tolerate PHILA/PHILAD/PHILADELPH/PHILADELPHIA variants.
+local_gov_regex <- regex(paste(c(
+  "CITY\\s+OF\\s+PHILA[A-Z]{0,7}",
+  "PHILA[A-Z]{0,7}\\s+CITY\\b",
+  "MUNICIPALITY\\s+OF\\s+PHILA[A-Z]{0,7}",
+  "COMMONWEALTH\\s+OF\\s+P[AE][A-Z]{0,10}",
+  "STATE\\s+OF\\s+P[AE][A-Z]{0,10}",
+  "REDEVELOPMENT\\s+AUTH[A-Z]{0,4}",       # PRA/RDA
+  "\\bR\\.?D\\.?A\\.?\\b",
+  "\\bP\\.?R\\.?A\\.?\\b(?!\\s+[A-Z]{4})", # PRA but not PRACTICE/PRAYER etc.
+  "PORT\\s+AUTH[A-Z]{0,5}",
+  "DELAWARE\\s+RIVER\\s+PORT",
+  "SCHOOL\\s+DIST[A-Z]{0,5}",
+  "BOARD\\s+OF\\s+EDUC[A-Z]{0,5}",
+  "\\bSEPTA\\b",
+  "SOUTHEASTERN\\s+PA[A-Z]{0,7}\\s+TRANSP[A-Z]{0,4}",
+  "WATER\\s+REV[A-Z]{0,5}",                # Water Revenue Bureau
+  "PHILA[A-Z]{0,7}\\s+WATER",
+  "\\bPENN\\s*DOT\\b|\\bPENNDOT\\b",
+  "TRANSIT\\s+AUTH[A-Z]{0,4}",
+  "PARKING\\s+AUTH[A-Z]{0,4}",
+  "FAIRMOUNT\\s+PARK",
+  "PHILA[A-Z]{0,7}\\s+PARK[A-Z]{0,3}\\s+AUTH",
+  "INDUSTRIAL\\s+DEV[A-Z]{0,4}",           # PIDC
+  "\\bPIDC\\b",
+  "COUNTY\\s+OF\\s+PHILA[A-Z]{0,7}",
+  "PHILA[A-Z]{0,7}\\s+COUNTY",
+  "HOUSING\\s+FINANC[A-Z]{0,5}\\s+AGENC[A-Z]{0,2}", # PHFA
+  "\\bPHFA\\b",
+  "PHILA[A-Z]{0,7}\\s+AUTH[A-Z]{0,5}",    # catch-all for unnamed Philly authorities
+  "\\bAMTRAK\\b"
+), collapse = "|"), ignore_case = TRUE)
+
+# Nonprofits: CDCs, community land trusts, affordable housing orgs, major charities,
+# and educational nonprofits (universities with known nonprofit status).
+nonprofit_regex <- regex(paste(c(
+  "\\bNON[\\s\\-]?PROFIT\\b",
+  "\\bCHARITABL[EY]\\b",
+  # COMMUNITY DEV: two patterns — one with suffix (pre-standardization safety net) and
+  # one without (post-standardization, since standardize_corp_name strips CORP/ORG/ASSOC).
+  "COMMUNITY\\s+DEV[A-Z]{0,6}\\s+(CORP[A-Z]{0,4}|ORG[A-Z]{0,4}|ASSOC[A-Z]{0,4})",
+  "COMMUNITY\\s+DEV[A-Z]{0,8}",  # suffix-free fallback for post-standardization names
+  "\\bCDC\\b",
+  "COMMUNITY\\s+LAND\\s+TRUST",
+  "\\bCLT\\b",
+  "AFFORDABLE\\s+HOUS[A-Z]{0,4}",
+  "WORKFORCE\\s+HOM[A-Z]{0,2}",
+  "NEIGHBORHOOD\\s+(REST[A-Z]{0,8}|PRES[A-Z]{0,10}|SERV[A-Z]{0,5})",
+  "\\bHABITAT\\s+FOR\\s+HUMAN[A-Z]{0,4}\\b",
+  "\\bUNITED\\s+WAY\\b",
+  "\\bSALVATION\\s+ARMY\\b",
+  "\\bRED\\s+CROSS\\b",
+  "\\bY[WM]CA\\b",
+  "PEOPLES?\\s+EMERGENCY",
+  "\\bIMPACT\\s+SERVICE[S]?\\b",
+  "HOUSING\\s+COUNSEL[A-Z]{0,4}",
+  "COMMUNITY\\s+FOUND[A-Z]{0,5}",
+  "HOUSING\\s+FOUND[A-Z]{0,5}",
+  # Affordable / supportive housing structure patterns (generalizable).
+  # NOTE: patterns avoid requiring CORP/INC suffixes since standardize_corp_name() strips them.
+  "HOUSING\\s+DEV[A-Z]{0,8}",                  # Housing Development (Corp/Inc, abbrev or full)
+  "\\bHDC\\b",                                  # Housing Development Corporation abbrev
+  "SECTION\\s+811",                             # Federal 811 supportive housing (nonprofit-only)
+  "TRANSITIONAL\\s+HOUS[A-Z]{0,4}",            # Transitional housing (overwhelmingly nonprofit)
+  "\\bINTERFAITH\\b",                           # Interfaith housing organizations
+  "ELDER\\s+SERVICE[S]?",                       # Elder services organizations
+  "REVITALI[ZS][A-Z]{0,5}",                    # Revitalization orgs (CORP stripped; enough signal alone)
+  # Named Philly nonprofits identified from NHPD active-property roster
+  "\\bPROJECT\\s+HOME\\b",
+  "\\bHELP\\s+USA\\b",
+  "MERCY.{0,3}DOUGLASS",                        # Mercy-Douglass Human Services (multiple entities)
+  "RESOURCES\\s+FOR\\s+HUMAN\\s+DEV[A-Z]{0,8}",  # Resources for Human Development
+  "\\bPRESBY\\s+INSPIRED",                      # Presby Inspired Life (fmr. Presbyterian Medical)
+  "\\bFRIENDS\\s+REHABIL[A-Z]{0,8}\\s+PROGRAM\\b",  # Friends Rehabilitation Program (ITATION=7 chars)
+  # Known Philly nonprofits from np_regex in analyze-filing-decomposition.R
+  "\\bOCTAVIA\\s+HILL",
+  "\\bSARAH\\s+ALLEN\\s+COMMUNITY",
+  "\\bMLK\\s+AFFORD",
+  "\\bNEW\\s+LIFE\\s+AFFORD",
+  "\\bRENAISSANCE\\s+COMMUNITY\\s+DEV",
+  "\\bHELP\\s+PA\\s+AFFORD",
+  # Educational nonprofits — checked before Religious so TEMPLE-related entities don't hit Religious.
+  # NOTE: known_institution_normalization (applied after standardize_corp_name) maps all Penn/
+  # Temple/Jefferson variants to canonical names, so these patterns primarily serve as a
+  # classification safety net for any variant that escaped normalization.
+  "UNIVERSITY\\s+OF\\s+PENN[A-Z]{0,10}",
+  "UNIV\\.?\\s+OF\\s+PENN[A-Z]{0,10}",   # catches "UNIV OF PENN" (abbreviated, not yet normalized)
+  "\\bUPENN\\b",
+  "DREXEL\\s+UNIV[A-Z]{0,7}",
+  "TEMPLE\\s+UNIV[A-Z]{0,7}",
+  "TEMPLE\\s+HEALTH[A-Z]{0,5}",           # Temple Health system subsidiaries
+  "TEMPLE\\s+HOSP[A-Z]{0,5}",             # Temple Hospital subsidiaries
+  "JEFFERSON\\s+(UNIV[A-Z]{0,7}|HOSP[A-Z]{0,5}|HEALTH)",
+  "PENN\\s+MEDICINE",
+  "CHILDREN[']?S\\s+HOSP[A-Z]{0,5}"
+), collapse = "|"), ignore_case = TRUE)
+
+# Religious organizations: denominations, congregations, parishes, etc.
+# Common abbreviations: CONG., PRESB., METH., BAPT., EVAN., A.M.E.
+religious_regex <- regex(paste(c(
+  "\\bCHURCH[ES]?\\b",
+  "\\bPARISH[ES]?\\b",
+  "\\bARCHDIOCES[EI][S]?\\b",
+  "\\bDIOCES[EI][S]?\\b",
+  "\\bCATHEDRAL[S]?\\b",
+  "\\bCONGREGATION[S]?\\b",
+  "\\bCONG\\.\\b",                          # abbrev
+  "\\bSYNAGOGU[ES]?\\b",
+  "\\bSYNAGOG\\b",                          # truncation
+  "\\bMOSQU[EY][S]?\\b",
+  "\\bMINISTR[YI][ES]?\\b|\\bMINISTR\\.\\b",
+  "\\bBAPTIST\\b|\\bBAPT\\.\\b",
+  "\\bMETHODIST\\b|\\bMETH\\.\\b",
+  "\\bPRESBYTERIAN[S]?\\b|\\bPRESBYTER[Y]?\\b|\\bPRESB\\.\\b",
+  "\\bLUTHERAN[S]?\\b",
+  "\\bCATHOLIC\\b",
+  "ROMAN\\s+CATH[A-Z]{0,6}",  # {0,6} covers "CATHOLIC" (CATH+OLIC=6 chars); {0,4} missed it
+  "\\bEPISCOPAL[A-Z]{0,3}\\b",
+  "\\bPENTECOSTAL\\b",
+  "\\bEVANGELICAL\\b|\\bEVANGEL\\.?\\b",
+  "\\bADVENTIST\\b",
+  "\\bQUAKER[S]?\\b",
+  "\\bSOCIETY\\s+OF\\s+FRIEND[S]?\\b",     # Quakers formal name
+  "\\bAME\\b",                              # African Methodist Episcopal
+  "AFRICAN\\s+METH[A-Z]{0,5}",
+  "\\bGOSPEL\\b",
+  "\\bBIBLE\\b",
+  "\\bZION[A-Z]{0,3}\\b",                  # many Zion churches in Philly
+  "JEHOVAH[']?S\\s+WITNESS[ES]?",
+  "LATTER[\\s\\-]DAY\\s+SAINT[S]?|\\bLDS\\b",
+  "MUSLIM[A-Z]{0,4}|ISLAM[A-Z]{0,4}",
+  "JEWISH\\s+(FED[A-Z]{0,6}|COMM[A-Z]{0,6}|CENTER|FAMILY)",
+  # Temple-as-religious: require a recognizable Jewish/religious context word after TEMPLE.
+  # Bare "\\bTEMPLE\\b" was too broad — it classified Temple University subsidiaries
+  # (e.g., "TEMPLE PROPERTIES LLC" -> owner_std "TEMPLE PROPERTIES") as Religious.
+  # Real religious temples are named like "TEMPLE BETH EL", "TEMPLE OF GOD", etc.
+  # and are also caught by CONGREGATION / SYNAGOGUE / other patterns above.
+  "\\bTEMPLE\\s+(OF|BETH|SHALOM|SINAI|ISRAEL|ZION|MOUNT|OLIVET|TABERNACLE|CHRISTIAN|ADAT|ADATH|BRITH|B[']?NAI|SHOLOM|SHARON)\\b"
+), collapse = "|"), ignore_case = TRUE)
+
+# assign_owner_category: priority-ordered classification using fcase().
+# Applied to owner_std (post-standardization), so entity suffixes are already stripped.
+assign_owner_category <- function(owner_std, is_corp, is_financial_intermediary, is_trust) {
+  nm <- coalesce(owner_std, "")
+  fcase(
+    is_financial_intermediary == TRUE,           "Financial-Intermediary",
+    str_detect(nm, federal_gov_regex),           "Government-Federal",
+    str_detect(nm, local_gov_regex),             "Government-Local",
+    str_detect(nm, pha_owner_regex),             "PHA",
+    str_detect(nm, nonprofit_regex),             "Nonprofit",
+    str_detect(nm, religious_regex),             "Religious",
+    is_trust == TRUE,                            "Trust",
+    is_corp == TRUE,                             "For-profit corp",
+    default =                                    "Person"
+  )
+}
 
 # Business-style initials pattern (e.g., "A & B"), with spouse abbreviations
 # explicitly carved out via spousal_marker_regex.
@@ -1024,4 +1453,86 @@ eb_shrink_poisson_gamma <- function(y, exposure, prior_year = NULL, year = NULL)
   rate_eb[ok2] <- (alpha_hat + y[ok2]) / (beta_hat + exposure[ok2])
 
   list(rate_eb = rate_eb, alpha = alpha_hat, beta = beta_hat, mu = mu)
+}
+
+# ============================================================
+# LOO FILING TYPE HELPER
+# ============================================================
+
+#' Compute conglomerate leave-one-out (LOO) eviction filing type for each PID.
+#'
+#' Given a building-year panel with conglomerate membership, computes the LOO
+#' filing rate — the conglomerate's filing rate among OTHER buildings (excluding
+#' the focal PID) — and classifies the result into four groups:
+#'   Solo              : no other buildings in conglomerate
+#'   Small portfolio   : other buildings present but loo_units < loo_min_unit_years
+#'   Low-evicting      : loo_units >= threshold AND rate < loo_filing_threshold
+#'   High-evicting     : loo_units >= threshold AND rate >= loo_filing_threshold
+#'
+#' Time-window agnostic: the caller is responsible for filtering pid_yr_dt to
+#' the desired window (e.g. full panel for structural classification, or
+#' pre-acquisition years only for causal event-study designs).
+#'
+#' @param pid_yr_dt  data.table with columns: PID (character), year (integer),
+#'                   conglomerate_id (character), num_filings (integer/numeric),
+#'                   total_units (numeric). One row per PID x year.
+#' @param loo_min_unit_years  Minimum LOO unit-years to be classified as
+#'                            Small vs. Low/High portfolio. Default 90 corresponds
+#'                            to 10 units x 9 years (a full 2011-2019 window).
+#'                            Callers using shorter windows may want a smaller value.
+#' @param loo_filing_threshold  Filing rate threshold for High vs. Low evicting
+#'                              (default 0.05, filings per unit-year).
+#'
+#' @return data.table with columns (PID, conglomerate_id,
+#'         loo_units_cong, loo_rate_cong, portfolio_evict_group_cong).
+#'         One row per (PID, conglomerate_id) pair — a PID that appears under
+#'         multiple conglomerates (ownership transitions) gets one row per
+#'         conglomerate.
+compute_loo_filing_type <- function(
+  pid_yr_dt,
+  loo_min_unit_years   = 90L,
+  loo_filing_threshold = 0.05
+) {
+  stopifnot(data.table::is.data.table(pid_yr_dt))
+  assert_has_cols(pid_yr_dt,
+    c("PID", "year", "conglomerate_id", "num_filings", "total_units"),
+    "compute_loo_filing_type: pid_yr_dt")
+
+  # Full-period totals by conglomerate (all PIDs and rows supplied)
+  cong_full <- pid_yr_dt[, .(
+    cong_filings_full = sum(num_filings,  na.rm = TRUE),
+    cong_units_full   = sum(total_units,  na.rm = TRUE)
+  ), by = conglomerate_id]
+
+  # Per (PID, conglomerate_id): focal PID's contribution within that conglomerate
+  pid_cong_full <- pid_yr_dt[, .(
+    pid_filings_cong = sum(num_filings,  na.rm = TRUE),
+    pid_units_cong   = sum(total_units,  na.rm = TRUE)
+  ), by = .(PID, conglomerate_id)]
+
+  out <- merge(pid_cong_full, cong_full, by = "conglomerate_id", all.x = TRUE)
+
+  out[, loo_units_cong := cong_units_full - pid_units_cong]
+  out[, loo_rate_cong  := data.table::fifelse(
+    loo_units_cong > 0,
+    (cong_filings_full - pid_filings_cong) / loo_units_cong,
+    NA_real_
+  )]
+
+  out[, portfolio_evict_group_cong := data.table::fcase(
+    is.na(loo_rate_cong) | loo_units_cong == 0L,
+      "Solo",
+    loo_units_cong > 0L & loo_units_cong < loo_min_unit_years,
+      "Small portfolio",
+    loo_units_cong >= loo_min_unit_years & loo_rate_cong >= loo_filing_threshold,
+      "High-evicting portfolio",
+    loo_units_cong >= loo_min_unit_years & loo_rate_cong <  loo_filing_threshold,
+      "Low-evicting portfolio",
+    default = "Low-evicting portfolio"
+  )]
+  out[, portfolio_evict_group_cong := factor(portfolio_evict_group_cong,
+    levels = c("Solo", "Small portfolio",
+               "Low-evicting portfolio", "High-evicting portfolio"))]
+
+  out[, .(PID, conglomerate_id, loo_units_cong, loo_rate_cong, portfolio_evict_group_cong)]
 }

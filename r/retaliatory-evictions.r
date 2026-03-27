@@ -38,6 +38,7 @@ suppressPackageStartupMessages({
 })
 
 source("r/config.R")
+source("r/helper-functions.R")
 
 parse_cli_args <- function(args) {
   out <- list()
@@ -451,6 +452,18 @@ black_split_quantile <- suppressWarnings(as.numeric(
 ))
 if (!is.finite(black_split_quantile)) black_split_quantile <- 0.75
 black_split_quantile <- min(max(black_split_quantile, 0), 1)
+loo_filing_threshold <- suppressWarnings(as.numeric(
+  opts$loo_filing_threshold %||%
+    cfg$run$retaliatory_loo_filing_threshold %||% 0.05
+))
+if (!is.finite(loo_filing_threshold) || loo_filing_threshold <= 0 || loo_filing_threshold >= 1) {
+  loo_filing_threshold <- 0.05
+}
+loo_min_units <- suppressWarnings(as.numeric(
+  opts$loo_min_portfolio_units %||%
+    cfg$run$retaliatory_loo_min_portfolio_units %||% 10
+))
+if (!is.finite(loo_min_units) || loo_min_units < 0) loo_min_units <- 10
 
 logf("=== Starting retaliatory-evictions.r ===", log_file = log_file)
 logf("Config: ", cfg$meta$config_path, log_file = log_file)
@@ -757,6 +770,82 @@ if (is.finite(black_split_cutoff_pre)) {
   dt[, high_black_split := NA_integer_]
   logf("WARNING: Could not compute pre-COVID infousa_pct_black split cutoff; dist-lag black-split heterogeneity disabled.",
        log_file = log_file)
+}
+
+# ── Portfolio eviction group (LOO) ───────────────────────────────────────────
+# Leave-one-out (LOO) EB pre-COVID filing rate from the other buildings in the
+# same conglomerate.  Three groups:
+#   "Solo"                   — no other buildings in conglomerate (LOO is NA)
+#   "Low-evicting portfolio" — LOO rate < median
+#   "High-evicting portfolio"— LOO rate >= median
+{
+  xwalk_cong_loo <- fread(p_product(cfg, "xwalk_pid_conglomerate"),
+                          select = c("PID", "year", "conglomerate_id"))
+  xwalk_cong_loo[, PID  := stringr::str_pad(as.character(PID), width = 9L, side = "left", pad = "0")]
+  xwalk_cong_loo[, year := as.integer(year)]
+
+  # Modal conglomerate per PID across pre-COVID years
+  pid_cong_modal_loo <- xwalk_cong_loo[year <= pre_covid_end,
+    .(conglomerate_id = names(sort(table(conglomerate_id), decreasing = TRUE))[1L]),
+    by = PID]
+
+  # PID-level EB filing rate — lightweight read (main tenant read is inside add_tenant_composition)
+  pid_eb_loo <- fread(bldg_panel_path, select = c("PID", "filing_rate_eb_pre_covid", "total_units"))
+  pid_eb_loo[, PID                   := stringr::str_pad(as.character(PID), width = 9L, side = "left", pad = "0")]
+  pid_eb_loo[, filing_rate_eb_pre_covid := suppressWarnings(as.numeric(filing_rate_eb_pre_covid))]
+  pid_eb_loo[, total_units           := pmax(suppressWarnings(as.integer(total_units)), 1L, na.rm = TRUE)]
+  pid_eb_loo <- unique(pid_eb_loo[!is.na(filing_rate_eb_pre_covid)], by = "PID")
+
+  pid_cong_eb <- merge(pid_cong_modal_loo, pid_eb_loo, by = "PID")
+
+  # Conglomerate-level weighted totals
+  cong_totals_loo <- pid_cong_eb[, .(
+    cong_wtd_rate = weighted.mean(filing_rate_eb_pre_covid, total_units, na.rm = TRUE),
+    cong_units    = sum(total_units, na.rm = TRUE)
+  ), by = conglomerate_id]
+  pid_cong_eb <- merge(pid_cong_eb, cong_totals_loo, by = "conglomerate_id")
+
+  # LOO: subtract the focal building's contribution
+  pid_cong_eb[, loo_units := cong_units - total_units]
+  pid_cong_eb[, loo_rate  := fifelse(
+    loo_units > 0L,
+    (cong_wtd_rate * cong_units - filing_rate_eb_pre_covid * total_units) / loo_units,
+    NA_real_
+  )]
+
+  # Four-group classification — mirrors analyze-transfer-evictions-unified.R / nhood-portfolio:
+  #   Solo             : no other buildings in conglomerate (loo_units == 0)
+  #   Small portfolio  : 0 < loo_units < loo_min_units  (< 10 other units)
+  #   Low-evicting     : loo_units >= loo_min_units AND loo_rate < loo_filing_threshold
+  #   High-evicting    : loo_units >= loo_min_units AND loo_rate >= loo_filing_threshold
+  # Threshold (0.05) and min-units (10) come from config for cross-script consistency.
+  pid_cong_eb[, portfolio_evict_group := fcase(
+    is.na(loo_rate) | loo_units == 0L,                                      "Solo",
+    loo_units > 0L & loo_units < loo_min_units,                             "Small portfolio",
+    loo_units >= loo_min_units & loo_rate >= loo_filing_threshold,          "High-evicting portfolio",
+    loo_units >= loo_min_units & loo_rate < loo_filing_threshold,           "Low-evicting portfolio",
+    default = "Low-evicting portfolio"
+  )]
+  pid_cong_eb[, portfolio_evict_group := factor(portfolio_evict_group,
+    levels = c("Solo", "Small portfolio", "Low-evicting portfolio", "High-evicting portfolio"))]
+  logf(
+    "  LOO threshold=", loo_filing_threshold, ", min_units=", loo_min_units,
+    "; LOO rate range among non-solo/non-small: [",
+    round(pid_cong_eb[loo_units >= loo_min_units, min(loo_rate, na.rm = TRUE)], 4), ", ",
+    round(pid_cong_eb[loo_units >= loo_min_units, max(loo_rate, na.rm = TRUE)], 4), "]",
+    log_file = log_file
+  )
+
+  dt <- merge(dt, pid_cong_eb[, .(PID, portfolio_evict_group)], by = "PID", all.x = TRUE)
+  # PIDs not in the conglomerate xwalk are single-building owners → Solo
+  dt[is.na(portfolio_evict_group), portfolio_evict_group :=
+    factor("Solo", levels = levels(pid_cong_eb$portfolio_evict_group))]
+  logf(
+    "  portfolio_evict_group distribution: ",
+    paste(capture.output(dt[, .N, by = portfolio_evict_group]), collapse = " | "),
+    log_file = log_file
+  )
+  rm(xwalk_cong_loo, pid_cong_modal_loo, pid_eb_loo, cong_totals_loo)
 }
 
 # ===========================================================================
@@ -1334,6 +1423,11 @@ logf(
 # drop cases with outlier rent ratios
 case_dt = case_dt[months_back_rent < 24 & ongoing_rent >= 300 & ongoing_rent <= 8000 ]
 
+# Join portfolio_evict_group to case-level data (by PID)
+case_dt <- merge(case_dt, pid_cong_eb[, .(PID, portfolio_evict_group)], by = "PID", all.x = TRUE)
+case_dt[is.na(portfolio_evict_group), portfolio_evict_group :=
+  factor("Solo", levels = levels(pid_cong_eb$portfolio_evict_group))]
+
 summ_case <- function(d, sample_name) {
   dd <- if (sample_name == "pre") d[year <= pre_covid_end] else d
   if (!nrow(dd)) return(data.table())
@@ -1661,6 +1755,44 @@ logf(
   log_file = log_file
 )
 
+# ── Case back-rent by portfolio eviction group ─────────────────────────────
+# Separate LPM (one_month_back_rent) + PPML (months_back_rent) per group.
+# Mirrors the high_black_split approach above.
+case_lpm_port_coefs <- rbindlist(lapply(levels(case_reg_base$portfolio_evict_group), function(grp) {
+  d <- case_reg_base[portfolio_evict_group == grp]
+  if (nrow(d) < 50L || uniqueN(d$retaliatory_status) < 2L) {
+    logf("  Skipping case back-rent port split (small/no-variation): ", grp, " | N=", nrow(d),
+         log_file = log_file)
+    return(NULL)
+  }
+  m_lpm  <- tryCatch(
+    feols(one_month_back_rent ~ i(retaliatory_status, ref = "non_retaliatory") | PID + year,
+          data = d, cluster = ~PID, lean = TRUE),
+    error = function(e) {
+      logf("  LPM port split error (", grp, "): ", conditionMessage(e), log_file = log_file); NULL
+    }
+  )
+  m_pois <- tryCatch(
+    fepois(months_back_rent ~ i(retaliatory_status, ref = "non_retaliatory") | PID + year,
+           data = d, cluster = ~PID),
+    error = function(e) {
+      logf("  PPML port split error (", grp, "): ", conditionMessage(e), log_file = log_file); NULL
+    }
+  )
+  lpm_rows  <- if (!is.null(m_lpm))
+    extract_lpm_coefs(m_lpm,  spec = paste0("one_month_on_retaliatory_severe_port_", grp),
+                      outcome = "one_month_back_rent")
+  else NULL
+  pois_rows <- if (!is.null(m_pois))
+    extract_pois_coefs(m_pois, spec = paste0("months_back_rent_on_retaliatory_severe_port_", grp),
+                       outcome = "months_back_rent")
+  else NULL
+  rows <- rbindlist(list(lpm_rows, pois_rows), use.names = TRUE, fill = TRUE)
+  if (nrow(rows)) rows[, portfolio_evict_group := grp]
+  logf("  Case back-rent port split: ", grp, " | N=", nrow(d), log_file = log_file)
+  rows
+}), use.names = TRUE, fill = TRUE)
+
 # ---------------------------------------------------------------------------
 # OLS log-rent regression: log(total_rent) ~ retaliatory_status + log(ongoing_rent)
 # Conditioning on log(ongoing_rent) removes rent-level variation across tenants.
@@ -1777,6 +1909,7 @@ coef_dist <- data.table(
   sample_label = character()
 )
 etable_dist_lines <- list()
+evict_port_samples <- character(0L)  # populated inside if (!skip_distlag) when portfolio group is available
 
 if (!skip_distlag) {
   model_specs_dist <- copy(model_specs)
@@ -1796,6 +1929,26 @@ if (!skip_distlag) {
     )
   }
 
+  if (!is.null(dt$portfolio_evict_group) && dt[!is.na(portfolio_evict_group), .N] > 0L) {
+    evict_port_samples <- if (include_full) {
+      c("full_hi_evict_port", "full_lo_evict_port", "full_small_port", "full_solo_port",
+        "pre_hi_evict_port",  "pre_lo_evict_port",  "pre_small_port",  "pre_solo_port")
+    } else {
+      c("pre_hi_evict_port", "pre_lo_evict_port", "pre_small_port", "pre_solo_port")
+    }
+    model_specs_dist <- rbind(
+      model_specs_dist,
+      data.table(
+        sample = rep(evict_port_samples, each = length(base_stems)),
+        stem   = rep(base_stems, times = length(evict_port_samples))
+      ),
+      use.names = TRUE
+    )
+  } else {
+    evict_port_samples <- character(0L)
+    logf("WARNING: portfolio_evict_group missing or empty; port-split distlag disabled.", log_file = log_file)
+  }
+
   subset_distlag_sample <- function(d, s_name) {
     if (s_name == "full") return(d)
     if (s_name == "pre") return(d[year <= pre_covid_end])
@@ -1803,6 +1956,14 @@ if (!skip_distlag) {
     if (s_name == "full_lo_black") return(d[high_black_split == 0L])
     if (s_name == "pre_hi_black") return(d[year <= pre_covid_end & high_black_split == 1L])
     if (s_name == "pre_lo_black") return(d[year <= pre_covid_end & high_black_split == 0L])
+    if (s_name == "full_hi_evict_port")   return(d[portfolio_evict_group == "High-evicting portfolio"])
+    if (s_name == "full_lo_evict_port")   return(d[portfolio_evict_group == "Low-evicting portfolio"])
+    if (s_name == "full_solo_port")       return(d[portfolio_evict_group == "Solo"])
+    if (s_name == "full_small_port")      return(d[portfolio_evict_group == "Small portfolio"])
+    if (s_name == "pre_hi_evict_port")    return(d[year <= pre_covid_end & portfolio_evict_group == "High-evicting portfolio"])
+    if (s_name == "pre_lo_evict_port")    return(d[year <= pre_covid_end & portfolio_evict_group == "Low-evicting portfolio"])
+    if (s_name == "pre_solo_port")        return(d[year <= pre_covid_end & portfolio_evict_group == "Solo"])
+    if (s_name == "pre_small_port")       return(d[year <= pre_covid_end & portfolio_evict_group == "Small portfolio"])
     d[0]
   }
 
@@ -1839,7 +2000,15 @@ if (!skip_distlag) {
     full_hi_black = paste0("Full: pct_black >= ", split_lbl, " (", cutoff_lbl, ")"),
     full_lo_black = paste0("Full: pct_black < ", split_lbl, " (", cutoff_lbl, ")"),
     pre_hi_black = paste0("Pre-COVID: pct_black >= ", split_lbl, " (", cutoff_lbl, ")"),
-    pre_lo_black = paste0("Pre-COVID: pct_black < ", split_lbl, " (", cutoff_lbl, ")")
+    pre_lo_black = paste0("Pre-COVID: pct_black < ", split_lbl, " (", cutoff_lbl, ")"),
+    full_hi_evict_port  = paste0("Full: High-evicting portfolio (LOO rate >= ", loo_filing_threshold, ")"),
+    full_lo_evict_port  = paste0("Full: Low-evicting portfolio (LOO rate < ", loo_filing_threshold, ")"),
+    full_small_port     = paste0("Full: Small portfolio (< ", loo_min_units, " other units)"),
+    full_solo_port      = "Full: Solo (no other portfolio buildings)",
+    pre_hi_evict_port   = paste0("Pre-COVID: High-evicting portfolio (LOO rate >= ", loo_filing_threshold, ")"),
+    pre_lo_evict_port   = paste0("Pre-COVID: Low-evicting portfolio (LOO rate < ", loo_filing_threshold, ")"),
+    pre_small_port      = paste0("Pre-COVID: Small portfolio (< ", loo_min_units, " other units)"),
+    pre_solo_port       = "Pre-COVID: Solo (no other portfolio buildings)"
   )
   coef_dist[, sample_label := unname(sample_label_lookup[sample])]
   coef_dist[is.na(sample_label), sample_label := sample]
@@ -1879,9 +2048,20 @@ path_maint_table_txt <- file.path(tab_dir, paste0(out_prefix, "_maintenance_mode
 path_maint_table_tex <- file.path(tab_dir, paste0(out_prefix, "_maintenance_model_table.tex"))
 path_maint_raw_table_txt <- file.path(tab_dir, paste0(out_prefix, "_maintenance_model_table_raw.txt"))
 path_maint_raw_table_tex <- file.path(tab_dir, paste0(out_prefix, "_maintenance_model_table_raw.tex"))
+path_maint_port_table_txt <- file.path(tab_dir, paste0(out_prefix, "_maintenance_model_table_port.txt"))
+path_maint_port_table_tex <- file.path(tab_dir, paste0(out_prefix, "_maintenance_model_table_port.tex"))
 path_filing_bin_summary <- file.path(tab_dir, paste0(out_prefix, "_maintenance_filing_bin_summary.csv"))
+path_spell_maint_table_txt  <- file.path(tab_dir, paste0(out_prefix, "_spell_maintenance_model_table.txt"))
+path_spell_maint_table_tex  <- file.path(tab_dir, paste0(out_prefix, "_spell_maintenance_model_table.tex"))
+path_spell_dt_summary       <- file.path(tab_dir, paste0(out_prefix, "_spell_maintenance_sample_summary.csv"))
+path_high_evict_stability   <- file.path(tab_dir, paste0(out_prefix, "_high_evict_status_stability.csv"))
 path_landlord_resp_coef <- file.path(tab_dir, paste0(out_prefix, "_landlord_response_coefficients.csv"))
 path_landlord_resp_plot <- file.path(fig_dir, paste0(out_prefix, "_landlord_response_plot.png"))
+path_dist_coef_evict_port <- file.path(tab_dir, paste0(out_prefix, "_distlag_coefficients_evict_port_split.csv"))
+path_dist_plot_evict_port <- file.path(fig_dir, paste0(out_prefix, "_distlag_coefficients_evict_port_split.png"))
+path_case_lpm_port_coefs <- file.path(tab_dir, paste0(out_prefix, "_case_one_month_retaliatory_evict_port_split_coefficients.csv"))
+path_landlord_resp_port_coef <- file.path(tab_dir, paste0(out_prefix, "_landlord_response_evict_port_split_coefficients.csv"))
+path_landlord_resp_port_plot <- file.path(fig_dir, paste0(out_prefix, "_landlord_response_evict_port_split_plot.png"))
 
 black_split_samples <- if (include_full) {
   c("full_hi_black", "full_lo_black", "pre_hi_black", "pre_lo_black")
@@ -1892,8 +2072,14 @@ main_samples <- if (include_full) c("full", "pre") else c("pre")
 coef_dist_black_split <- coef_dist[sample %chin% black_split_samples]
 coef_dist_main <- coef_dist[sample %chin% main_samples]
 
+coef_dist_evict_port_split <- if (length(evict_port_samples)) {
+  coef_dist[sample %chin% evict_port_samples]
+} else {
+  coef_dist[0L]
+}
 write_dt_maybe(coef_dist, path_dist_coef, "dist-lag coefficients", compact_outputs = compact_outputs, log_file = log_file)
 write_dt_maybe(coef_dist_black_split, path_dist_coef_black_split, "dist-lag black-split coefficients", compact_outputs = compact_outputs, log_file = log_file)
+write_dt_maybe(coef_dist_evict_port_split, path_dist_coef_evict_port, "dist-lag evict-port-split coefficients", compact_outputs = compact_outputs, log_file = log_file)
 write_dt_maybe(band_summary, path_band_summary, "bandwidth summary", compact_outputs = compact_outputs, force = TRUE, log_file = log_file)
 write_dt_maybe(band_status, path_band_status, "bandwidth status", compact_outputs = compact_outputs, force = TRUE, log_file = log_file)
 write_dt_maybe(case_back_rent_summary, path_case_back_rent_summary, "case back-rent summary", compact_outputs = compact_outputs, force = TRUE, log_file = log_file)
@@ -1904,6 +2090,7 @@ write_dt_maybe(case_lpm_sample_summary, path_case_lpm_sample, "case one-month re
 write_lines_maybe(etable_case_lpm_txt, path_case_lpm_table_txt, "case one-month retaliatory model table (txt)", compact_outputs = compact_outputs, force = TRUE, log_file = log_file)
 write_lines_maybe(etable_case_lpm_tex, path_case_lpm_table_tex, "case one-month retaliatory model table (tex)", compact_outputs = compact_outputs, force = TRUE, log_file = log_file)
 write_dt_maybe(case_pois_coefs, path_case_pois_coefs, "case months-back-rent Poisson coefficients", compact_outputs = compact_outputs, force = TRUE, log_file = log_file)
+write_dt_maybe(case_lpm_port_coefs, path_case_lpm_port_coefs, "case back-rent evict-port-split coefficients", compact_outputs = compact_outputs, force = TRUE, log_file = log_file)
 write_lines_maybe(etable_case_pois_txt, path_case_pois_table_txt, "case months-back-rent Poisson model table (txt)", compact_outputs = compact_outputs, force = TRUE, log_file = log_file)
 write_lines_maybe(etable_case_pois_tex, path_case_pois_table_tex, "case months-back-rent Poisson model table (tex)", compact_outputs = compact_outputs, force = TRUE, log_file = log_file)
 write_dt_maybe(case_log_rent_coefs, path_case_log_rent_coefs, "case log-rent retaliatory coefficients", compact_outputs = compact_outputs, force = TRUE, log_file = log_file)
@@ -1969,6 +2156,24 @@ distlag_black_split_note <- if (skip_distlag) {
   paste0("Wrote dist-lag black-split coefficients CSV: ", path_dist_coef_black_split, "; plot: ", path_dist_plot_black_split)
 }
 
+if (!skip_distlag && nrow(coef_dist_evict_port_split)) {
+  p_dist_port <- ggplot(coef_dist_evict_port_split, aes(x = timing, y = estimate)) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "gray45") +
+    geom_point(size = 1.3) +
+    geom_errorbar(aes(ymin = conf_low, ymax = conf_high), width = 0.15) +
+    facet_grid(stem_label ~ sample_label) +
+    scale_x_continuous(breaks = seq(-h, h, by = 1)) +
+    labs(
+      title = paste0(period_label_title, " Dist-Lag Heterogeneity by Portfolio Eviction Group"),
+      subtitle = paste0("LOO EB pre-COVID filing rate; High threshold = ", loo_filing_threshold, "; min portfolio units = ", loo_min_units),
+      x = paste0(tools::toTitleCase(period_label_plural), " relative to complaint indicator"),
+      y = "Coefficient"
+    ) +
+    theme_minimal()
+  ggsave(filename = path_dist_plot_evict_port, plot = p_dist_port, width = 14, height = 8, dpi = 300, bg = "white")
+  logf("Wrote dist-lag evict-port-split plot: ", path_dist_plot_evict_port, log_file = log_file)
+}
+
 
 # equilibrium maintenance
 # regressions are counts of permits as a function of building characteristics.
@@ -1980,13 +2185,20 @@ stop_missing_cols(
   names(blp),
   c("PID", "year", "GEOID", "building_type", "quality_grade", "year_blt_decade",
     "num_units_bin", "total_units", "total_permits", "infousa_pct_black", "log_med_rent",
-    "filing_rate_eb_pre_covid", "filing_rate_longrun_pre2019"),
+    "filing_rate_eb_pre_covid", "filing_rate_longrun_pre2019",
+    "filing_rate_eb", "num_filings"),
   "maintenance baseline (bldg_panel_blp)"
 )
 blp[, PID := stringr::str_pad(as.character(PID), width = 9L, side = "left", pad = "0")]
 blp[, year := suppressWarnings(as.integer(year))]
 blp[, filing_rate_eb_pre_covid := suppressWarnings(as.numeric(filing_rate_eb_pre_covid))]
 blp[, filing_rate_longrun_pre2019 := suppressWarnings(as.numeric(filing_rate_longrun_pre2019))]
+
+# Join portfolio_evict_group (built above in LOO block) to blp
+blp <- merge(blp, pid_cong_eb[, .(PID, portfolio_evict_group)], by = "PID", all.x = TRUE)
+# PIDs not in the conglomerate xwalk (no linkage) are single-building owners → Solo
+blp[is.na(portfolio_evict_group), portfolio_evict_group :=
+  factor("Solo", levels = levels(pid_cong_eb$portfolio_evict_group))]
 
 blp[, filing_bin_eb := make_filing_rate_bin(filing_rate_eb_pre_covid)]
 blp[, filing_bin_raw := make_filing_rate_bin(filing_rate_longrun_pre2019)]
@@ -2088,6 +2300,277 @@ baseline_maintenence_raw_bins_with_rent <- fepois(
   data = blp[year %in% 2011:2019 & !is.na(filing_bin_raw)]
 )
 
+# ── Portfolio-group maintenance regressions ─────────────────────────────────
+# Replace high_filing_eb with portfolio_evict_group (LOO-based), or include both.
+# Reference level = "Solo" (no other buildings in the conglomerate).
+baseline_maintenence_port <- fepois(
+  total_permits ~ above_mean_pct_black_bt + portfolio_evict_group |
+    building_type + year + quality_grade + year_blt_decade + num_units_bin + GEOID + has_rent_data,
+  offset = ~log(total_units),
+  data = blp[year %in% 2011:2019]
+)
+
+baseline_maintenence_eb_and_port <- fepois(
+  total_permits ~ above_mean_pct_black_bt + high_filing_eb + portfolio_evict_group |
+    building_type + year + quality_grade + year_blt_decade + num_units_bin + GEOID + has_rent_data,
+  offset = ~log(total_units),
+  data = blp[year %in% 2011:2019]
+)
+
+# ── Parcel × ownership-spell regressions ─────────────────────────────────────
+# One row per contiguous run of the same conglomerate_id at each PID (2011–2019).
+# This makes the cross-sectional unit of observation honest (~100–250 K spells),
+# makes filing intensity spell-specific, and enables a PID-FE robustness column
+# that identifies from ownership transitions within parcels.
+# NOTE: filing_rate_eb is a static PID-level EB rate (does not vary by year).
+#       mean(filing_rate_eb) over spell years = the PID's pooled EB rate.
+#       The raw-rate robustness (filing_rate_raw_spell = filings / unit-years)
+#       is the genuinely spell-varying measure.
+
+logf("=== Spell-level maintenance block START ===", log_file = log_file)
+
+{
+  # -- Load year-varying conglomerate xwalk --------------------------------
+  cong_yr_blp <- fread(p_product(cfg, "xwalk_pid_conglomerate"),
+                       select = c("PID", "year", "conglomerate_id"))
+  cong_yr_blp[, PID  := stringr::str_pad(as.character(PID), width = 9L, side = "left", pad = "0")]
+  cong_yr_blp[, year := as.integer(year)]
+
+  # Merge to blp (2011–2019 only)
+  blp_cong <- merge(
+    blp[year %in% 2011:2019],
+    cong_yr_blp[year %in% 2011:2019],
+    by = c("PID", "year"), all.x = TRUE
+  )
+  # Convert to character BEFORE solo assignment — xwalk stores conglomerate_id as
+  # integer, and paste0() produces a character string that would be coerced to NA.
+  blp_cong[, conglomerate_id := as.character(conglomerate_id)]
+  # Parcels with no xwalk entry → solo (unique conglomerate per PID)
+  blp_cong[is.na(conglomerate_id), conglomerate_id := paste0("solo_", PID)]
+
+  # Detect spell boundaries: contiguous years under the same conglomerate at each PID
+  setorder(blp_cong, PID, year)
+  blp_cong[, spell_id := paste0(PID, "_", rleid(conglomerate_id)), by = PID]
+
+  logf("  blp_cong rows (2011-2019): ", nrow(blp_cong),
+       " | unique spell_id: ", uniqueN(blp_cong$spell_id), log_file = log_file)
+
+  # -- Collapse to spell level ---------------------------------------------
+  spell_dt <- blp_cong[, {
+    spell_years       <- .N
+    total_units_val   <- mean(total_units, na.rm = TRUE)
+    unit_years_val    <- total_units_val * spell_years
+    .(
+      spell_years               = spell_years,
+      total_permits_sum         = sum(total_permits, na.rm = TRUE),
+      n_permit_years            = sum(!is.na(total_permits)),  # years with actual permit data
+      total_filings_sum         = sum(num_filings, na.rm = TRUE),
+      total_units               = total_units_val,
+      unit_years                = unit_years_val,
+      mean_filing_rate_eb       = mean(filing_rate_eb, na.rm = TRUE),
+      mean_pct_black            = mean(infousa_pct_black, na.rm = TRUE),
+      mean_log_rent_inf_adj     = mean(log_med_rent_inf_adj, na.rm = TRUE),
+      conglomerate_id           = first(conglomerate_id),
+      start_year                = min(year),
+      end_year                  = max(year),
+      building_type             = first(building_type),
+      quality_grade             = first(quality_grade),
+      year_blt_decade           = first(year_blt_decade),
+      num_units_bin             = first(num_units_bin),
+      GEOID                     = first(GEOID)
+    )
+  }, by = .(PID, spell_id)]
+  assert_unique(spell_dt, c("PID", "spell_id"), "spell_dt after collapse")
+
+  logf("  spell_dt total_permits_sum: min=", min(spell_dt$total_permits_sum),
+       " max=", max(spell_dt$total_permits_sum),
+       " n_spells_with_permit_data=", spell_dt[n_permit_years > 0, .N],
+       log_file = log_file)
+
+  logf("  spell_dt rows: ", nrow(spell_dt),
+       " | unique PIDs: ", uniqueN(spell_dt$PID), log_file = log_file)
+
+  # -- Spell-level covariates ----------------------------------------------
+  # Primary: EB rate (constant per PID — spell mean = PID EB rate)
+  spell_dt[, high_filing_spell  := as.integer(is.finite(mean_filing_rate_eb) &
+                                                mean_filing_rate_eb >= high_filing_threshold)]
+  spell_dt[, filing_bin_spell   := make_filing_rate_bin(mean_filing_rate_eb)]
+
+  # Robustness: raw spell filing rate = total filings / unit-years
+  spell_dt[, filing_rate_raw_spell := fifelse(unit_years > 0,
+                                               total_filings_sum / unit_years, NA_real_)]
+  spell_dt[, high_filing_raw_spell := as.integer(is.finite(filing_rate_raw_spell) &
+                                                    filing_rate_raw_spell >= high_filing_threshold)]
+
+  # Above-mean % Black (vs GEOID weighted mean)
+  spell_dt[, mean_pct_black_GEOID := weighted.mean(mean_pct_black, total_units, na.rm = TRUE), by = GEOID]
+  spell_dt[, above_mean_pct_black_spell := mean_pct_black > mean_pct_black_GEOID]
+  spell_dt[is.na(above_mean_pct_black_spell), above_mean_pct_black_spell := FALSE]
+
+  # Rent data flag
+  spell_dt[, has_rent_data_spell := !is.na(mean_log_rent_inf_adj)]
+
+  # -- Full-period conglomerate LOO classification -------------------------
+  # Landlord type is a structural attribute — classify from the full 2011-2019
+  # panel rather than the noise-prone spell-window snapshot. Uses shared helper
+  # from helper-functions.R. One LOO type per (PID, conglomerate_id); joined to
+  # spell_dt by those two keys (spell_dt.conglomerate_id = first(conglomerate_id)
+  # is constant within a spell by construction).
+  loo_type_dt <- compute_loo_filing_type(
+    pid_yr_dt            = blp_cong[, .(PID, year, conglomerate_id, num_filings, total_units)],
+    loo_min_unit_years   = loo_min_units * 9L,
+    loo_filing_threshold = loo_filing_threshold
+  )
+
+  spell_dt <- merge(spell_dt, loo_type_dt, by = c("PID", "conglomerate_id"), all.x = TRUE)
+  # PIDs with no conglomerate membership (solo_*) already have loo_units_cong == 0 → Solo
+  spell_dt[is.na(portfolio_evict_group_cong),
+    portfolio_evict_group_cong := factor("Solo",
+      levels = levels(loo_type_dt$portfolio_evict_group_cong))]
+
+  logf("  portfolio_evict_group_cong distribution (full-period LOO):",
+       paste(capture.output(spell_dt[, .N, by = portfolio_evict_group_cong]), collapse = " | "),
+       log_file = log_file)
+
+  # -- PIDs with multiple spells (identifying sample for M4 PID FE) --------
+  n_multi_spell_pids <- spell_dt[, .N, by = PID][N > 1, .N]
+  logf("  PIDs with >1 spell (M4 identifying sample): ", n_multi_spell_pids, log_file = log_file)
+
+  # -- Regressions ---------------------------------------------------------
+  # Restrict to spells with at least one year of observed permit data.
+  # Spells where all years are NA produce total_permits_sum = 0 (via na.rm=TRUE),
+  # which is indistinguishable from "0 permits observed" — analogous to how the
+  # annual regression drops NA rows rather than treating them as 0-permit years.
+  spell_dt_reg <- spell_dt[n_permit_years > 0]
+  logf("  spell_dt_reg (permit-data spells): ", nrow(spell_dt_reg),
+       " of ", nrow(spell_dt), " total spells | unique PIDs: ", uniqueN(spell_dt_reg$PID),
+       log_file = log_file)
+
+  # Spell FE note: the annual model uses 6 FEs (building_type + year + quality_grade +
+  # year_blt_decade + num_units_bin + GEOID). At spell level the panel is ~20× sparser
+  # (267K spells vs 1.7M annual rows), so the same 6-way FE yields ~72M possible cells
+  # for 267K observations — virtually every spell is a PPML singleton (PPML also drops
+  # all-zero-outcome cells), leaving 0 rows. Fix: keep the two theoretically essential
+  # absorbers (GEOID for neighbourhood and start_year for entry cohort) and move
+  # quality_grade, year_blt_decade, num_units_bin to the RHS as covariates.
+  # Cross-product after fix: building_type × start_year × GEOID ≈ 14K cells, 267K rows
+  # → ~19 spells/cell. Scientifically equivalent (linear FEs absorbed vs estimated).
+
+  # M1: EB filing dummy + racial composition; building_type + start_year + GEOID FE
+  spell_maint_m1 <- fepois(
+    total_permits_sum ~ above_mean_pct_black_spell + high_filing_spell +
+      has_rent_data_spell + quality_grade + year_blt_decade + num_units_bin |
+      building_type + start_year + GEOID,
+    offset = ~log(unit_years),
+    data   = spell_dt_reg
+  )
+
+  # M2: add mean inflation-adjusted rent (restricts to rent-observed spells)
+  spell_maint_m2 <- fepois(
+    total_permits_sum ~ above_mean_pct_black_spell + high_filing_spell +
+      mean_log_rent_inf_adj + quality_grade + year_blt_decade + num_units_bin |
+      building_type + start_year + GEOID,
+    offset = ~log(unit_years),
+    data   = spell_dt_reg[!is.na(mean_log_rent_inf_adj)]
+  )
+
+  # M3: add portfolio eviction group (full-period LOO via conglomerate)
+  spell_maint_m3 <- fepois(
+    total_permits_sum ~ above_mean_pct_black_spell + high_filing_spell +
+      has_rent_data_spell + quality_grade + year_blt_decade + num_units_bin +
+      portfolio_evict_group_cong |
+      building_type + start_year + GEOID,
+    offset = ~log(unit_years),
+    data   = spell_dt_reg
+  )
+
+  # M4: PID FE robustness — identifies from within-parcel ownership transitions.
+  # Note: high_filing_spell is static per PID (EB rate does not vary by year),
+  # so fixest will drop it as collinear with PID FE. Identifying variables are
+  # portfolio_evict_group_cong (varies if conglomerate composition changes) and
+  # above_mean_pct_black_spell (varies if pct_black or GEOID mean changes by spell).
+  spell_maint_m4 <- fepois(
+    total_permits_sum ~ above_mean_pct_black_spell + high_filing_spell +
+      portfolio_evict_group_cong |
+      PID + start_year,
+    offset = ~log(unit_years),
+    data   = spell_dt_reg
+  )
+
+  logf("  spell_maint_m1 nobs=", nobs(spell_maint_m1),
+       " | m2=", nobs(spell_maint_m2),
+       " | m3=", nobs(spell_maint_m3),
+       " | m4=", nobs(spell_maint_m4), log_file = log_file)
+
+  # -- Sample summary ------------------------------------------------------
+  spell_dt_summary <- spell_dt_reg[, .(
+    n_spells_reg          = .N,
+    n_pid_reg             = uniqueN(PID),
+    n_spells_total        = nrow(spell_dt),
+    n_pid_total           = uniqueN(spell_dt$PID),
+    n_pid_multi_spell     = spell_dt_reg[, .N, by = PID][N > 1, .N],
+    mean_spell_years      = round(mean(spell_years), 2),
+    median_spell_years    = median(spell_years),
+    mean_unit_years       = round(mean(unit_years, na.rm = TRUE), 1),
+    pct_high_filing       = round(mean(high_filing_spell, na.rm = TRUE), 4),
+    pct_has_rent          = round(mean(has_rent_data_spell), 4)
+  )]
+
+  # -- etables -------------------------------------------------------------
+  etable_spell_maint_txt <- capture.output(etable(
+    list(
+      "M1: EB dummy + race" = spell_maint_m1,
+      "M2: + Rent"          = spell_maint_m2,
+      "M3: + Portfolio LOO" = spell_maint_m3,
+      "M4: PID FE"          = spell_maint_m4
+    ),
+    se.below = TRUE,
+    digits   = 3
+  ))
+
+  etable_spell_maint_tex <- capture.output(etable(
+    list(
+      "M1: EB dummy + race" = spell_maint_m1,
+      "M2: + Rent"          = spell_maint_m2,
+      "M3: + Portfolio LOO" = spell_maint_m3,
+      "M4: PID FE"          = spell_maint_m4
+    ),
+    se.below = TRUE,
+    digits   = 3,
+    tex      = TRUE
+  ))
+
+  # -- Step 5b: High-evicting status stability diagnostic ------------------
+  # Check how often a PID's annual high-evicting status flips (EB rate is static,
+  # so this uses raw annual filing rate to detect noisy year-to-year changes).
+  blp_stability <- blp[year %in% 2011:2019 & !is.na(filing_rate_longrun_pre2019), .(
+    PID, year,
+    high_filing_yr_raw = as.integer(is.finite(filing_rate_longrun_pre2019) &
+                                      filing_rate_longrun_pre2019 >= high_filing_threshold)
+  )]
+  setorder(blp_stability, PID, year)
+  blp_stability[, status_change_raw := high_filing_yr_raw != shift(high_filing_yr_raw, 1L), by = PID]
+  blp_stability[is.na(status_change_raw), status_change_raw := FALSE]
+
+  stability_summary <- blp_stability[, .(
+    n_years      = .N,
+    n_flips_raw  = sum(status_change_raw),
+    always_high  = all(high_filing_yr_raw == 1L),
+    always_low   = all(high_filing_yr_raw == 0L),
+    mixed_status = any(status_change_raw)
+  ), by = PID]
+
+  high_evict_stability_overall <- stability_summary[, .N, by = .(always_high, always_low, mixed_status)]
+  logf("  Filing-status stability (raw rate): always_high=",
+       stability_summary[always_high == TRUE, .N],
+       " | always_low=", stability_summary[always_low == TRUE, .N],
+       " | mixed=", stability_summary[mixed_status == TRUE, .N], log_file = log_file)
+
+  rm(cong_yr_blp, loo_type_dt, blp_stability, stability_summary)
+}
+
+logf("=== Spell-level maintenance block END ===", log_file = log_file)
+
 # etables and export
 etable_baseline_maintenence_txt <- capture.output(etable(
   list(
@@ -2129,6 +2612,25 @@ etable_baseline_maintenence_raw_tex <- capture.output(etable(
     "Raw >=15% dummy + Rent" = baseline_maintenence_raw_with_rent,
     "Raw filing bins" = baseline_maintenence_raw_bins,
     "Raw filing bins + Rent" = baseline_maintenence_raw_bins_with_rent
+  ),
+  se.below = TRUE,
+  digits = 3,
+  tex = TRUE
+))
+
+etable_baseline_maintenence_port_txt <- capture.output(etable(
+  list(
+    "LOO portfolio group" = baseline_maintenence_port,
+    "EB >=15% + LOO portfolio" = baseline_maintenence_eb_and_port
+  ),
+  se.below = TRUE,
+  digits = 3
+))
+
+etable_baseline_maintenence_port_tex <- capture.output(etable(
+  list(
+    "LOO portfolio group" = baseline_maintenence_port,
+    "EB >=15% + LOO portfolio" = baseline_maintenence_eb_and_port
   ),
   se.below = TRUE,
   digits = 3,
@@ -2194,9 +2696,87 @@ write_lines_maybe(etable_baseline_maintenence_txt, path_maint_table_txt, "mainte
 write_lines_maybe(etable_baseline_maintenence_tex, path_maint_table_tex, "maintenance model table (tex)", compact_outputs = compact_outputs, force = TRUE, log_file = log_file)
 write_lines_maybe(etable_baseline_maintenence_raw_txt, path_maint_raw_table_txt, "maintenance raw-robustness model table (txt)", compact_outputs = compact_outputs, force = TRUE, log_file = log_file)
 write_lines_maybe(etable_baseline_maintenence_raw_tex, path_maint_raw_table_tex, "maintenance raw-robustness model table (tex)", compact_outputs = compact_outputs, force = TRUE, log_file = log_file)
+write_lines_maybe(etable_baseline_maintenence_port_txt, path_maint_port_table_txt, "maintenance portfolio model table (txt)", compact_outputs = compact_outputs, force = TRUE, log_file = log_file)
+write_lines_maybe(etable_baseline_maintenence_port_tex, path_maint_port_table_tex, "maintenance portfolio model table (tex)", compact_outputs = compact_outputs, force = TRUE, log_file = log_file)
+write_lines_maybe(etable_spell_maint_txt, path_spell_maint_table_txt, "spell-level maintenance model table (txt)", compact_outputs = compact_outputs, force = TRUE, log_file = log_file)
+write_lines_maybe(etable_spell_maint_tex, path_spell_maint_table_tex, "spell-level maintenance model table (tex)", compact_outputs = compact_outputs, force = TRUE, log_file = log_file)
+write_dt_maybe(spell_dt_summary, path_spell_dt_summary, "spell-level maintenance sample summary", compact_outputs = compact_outputs, force = TRUE, log_file = log_file)
+write_dt_maybe(high_evict_stability_overall, path_high_evict_stability, "high-evict status stability summary", compact_outputs = compact_outputs, force = TRUE, log_file = log_file)
 write_dt_maybe(lr_coef, path_landlord_resp_coef, "landlord response coefficients", compact_outputs = compact_outputs, force = TRUE, log_file = log_file)
 ggsave(filename = path_landlord_resp_plot, plot = p_landlord_resp, width = 9, height = 6, dpi = 300, bg = "white")
 logf("Wrote landlord response plot: ", path_landlord_resp_plot, log_file = log_file)
+
+# ── Landlord maintenance response by portfolio eviction group ──────────────
+# Same PPML spec as landlord_response_regs, run separately per portfolio group.
+lr_port_coefs <- rbindlist(lapply(levels(blp$portfolio_evict_group), function(grp) {
+  d <- blp[year %in% 2011:2019 & portfolio_evict_group == grp]
+  if (nrow(d) < 100L) {
+    logf("  Skipping landlord response port split (small): ", grp, " | N=", nrow(d), log_file = log_file)
+    return(NULL)
+  }
+  m <- tryCatch(
+    fepois(
+      total_permits ~
+        total_severe_complaints +
+        total_severe_complaints_lag_1 + total_severe_complaints_lag_2 + total_severe_complaints_lag_3 +
+        total_severe_complaints_lead_1 + total_severe_complaints_lead_2 + total_severe_complaints_lead_3
+      | PID + year,
+      offset = ~log(total_units),
+      data = d
+    ),
+    error = function(e) {
+      logf("  Permit PPML port split error (", grp, "): ", conditionMessage(e), log_file = log_file); NULL
+    }
+  )
+  if (is.null(m)) return(NULL)
+  ct <- as.data.frame(coeftable(m))
+  rows <- data.table(
+    portfolio_evict_group = grp,
+    term      = rownames(ct),
+    estimate  = ct[["Estimate"]],
+    std_error = ct[["Std. Error"]]
+  )
+  rows[, conf_low  := estimate - 1.96 * std_error]
+  rows[, conf_high := estimate + 1.96 * std_error]
+  rows[, timing := {
+    n <- suppressWarnings(as.integer(sub(".*_(\\d+)$", "\\1", term)))
+    fcase(
+      term == "total_severe_complaints", 0L,
+      grepl("_lag_",  term),  n,
+      grepl("_lead_", term), -n,
+      default = NA_integer_
+    )
+  }]
+  logf("  Landlord response port split: ", grp, " | N=", nobs(m), log_file = log_file)
+  rows
+}), use.names = TRUE, fill = TRUE)
+
+write_dt_maybe(lr_port_coefs, path_landlord_resp_port_coef,
+               "landlord response port-split coefficients",
+               compact_outputs = compact_outputs, force = TRUE, log_file = log_file)
+
+if (nrow(lr_port_coefs)) {
+  setorder(lr_port_coefs, portfolio_evict_group, timing)
+  p_lr_port <- ggplot(lr_port_coefs, aes(x = timing, y = estimate)) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "gray45") +
+    geom_vline(xintercept = 0, linetype = "dotted", color = "gray60") +
+    geom_point(size = 1.5) +
+    geom_errorbar(aes(ymin = conf_low, ymax = conf_high), width = 0.2) +
+    facet_wrap(~portfolio_evict_group) +
+    scale_x_continuous(breaks = -3:3,
+      labels = c("-3\n(future)", "-2\n(future)", "-1\n(future)", "0",
+                 "+1\n(past)", "+2\n(past)", "+3\n(past)")) +
+    labs(
+      title = "Landlord Maintenance Response by Portfolio Eviction Group",
+      subtitle = "PPML with PID + year FE; offset = log(total_units); 95% CI",
+      x = "Severe-complaint timing relative to permit period",
+      y = "Coefficient"
+    ) +
+    theme_minimal()
+  ggsave(filename = path_landlord_resp_port_plot, plot = p_lr_port,
+         width = 14, height = 6, dpi = 300, bg = "white")
+  logf("Wrote landlord response port-split plot: ", path_landlord_resp_port_plot, log_file = log_file)
+}
 
 
 qa_lines <- c(
@@ -2271,9 +2851,32 @@ qa_lines <- c(
   paste0("Wrote maintenance model table (tex): ", path_maint_table_tex),
   paste0("Wrote maintenance raw-robustness table (txt): ", path_maint_raw_table_txt),
   paste0("Wrote maintenance raw-robustness table (tex): ", path_maint_raw_table_tex),
+  paste0("Wrote maintenance portfolio table (txt): ", path_maint_port_table_txt),
+  paste0("Wrote maintenance portfolio table (tex): ", path_maint_port_table_tex),
   paste0("Wrote maintenance filing-bin summary CSV: ", path_filing_bin_summary),
   paste0("Wrote landlord response coefficients CSV: ", path_landlord_resp_coef),
-  paste0("Wrote landlord response plot: ", path_landlord_resp_plot)
+  paste0("Wrote landlord response plot: ", path_landlord_resp_plot),
+  paste0("Portfolio LOO filing threshold (config): ", loo_filing_threshold, "; min portfolio units: ", loo_min_units),
+  paste0("portfolio_evict_group distribution: ",
+         paste(capture.output(dt[, .N, by = portfolio_evict_group]), collapse = " | ")),
+  paste0("Wrote dist-lag evict-port-split coefficients CSV: ", path_dist_coef_evict_port),
+  paste0("Wrote case back-rent evict-port-split coefficients CSV: ", path_case_lpm_port_coefs),
+  paste0("Wrote landlord response evict-port-split coefficients CSV: ", path_landlord_resp_port_coef),
+  paste0("Wrote landlord response evict-port-split plot: ", path_landlord_resp_port_plot),
+  "",
+  "Spell-level maintenance regressions:",
+  paste0("  spell_dt rows: ", nrow(spell_dt), " | unique PIDs: ", uniqueN(spell_dt$PID)),
+  paste0("  PIDs with >1 spell (M4 identifying sample): ", spell_dt[, .N, by = PID][N > 1, .N]),
+  paste0("  portfolio_evict_group_cong distribution (full-period LOO): ",
+         paste(capture.output(spell_dt[, .N, by = portfolio_evict_group_cong]), collapse = " | ")),
+  paste0("  spell_maint_m1 nobs=", nobs(spell_maint_m1),
+         " | m2=", nobs(spell_maint_m2),
+         " | m3=", nobs(spell_maint_m3),
+         " | m4=", nobs(spell_maint_m4)),
+  paste0("  Wrote spell-level maintenance model table (txt): ", path_spell_maint_table_txt),
+  paste0("  Wrote spell-level maintenance model table (tex): ", path_spell_maint_table_tex),
+  paste0("  Wrote spell-level maintenance sample summary CSV: ", path_spell_dt_summary),
+  paste0("  Wrote high-evict status stability CSV: ", path_high_evict_stability)
 )
 
 qa_lines <- c(qa_lines, module_a_qa_lines)
