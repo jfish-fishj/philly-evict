@@ -2396,12 +2396,17 @@ logf("=== Spell-level maintenance block START ===", log_file = log_file)
                                                 mean_filing_rate_eb >= high_filing_threshold)]
   spell_dt[, filing_bin_spell   := make_filing_rate_bin(mean_filing_rate_eb)]
 
+
+  spell_dt[, total_permits_sum := as.numeric(total_permits_sum)]
+  spell_dt[, GEOID := as.character(GEOID)]
+
   # Robustness: raw spell filing rate = total filings / unit-years
   spell_dt[, filing_rate_raw_spell := fifelse(unit_years > 0,
                                                total_filings_sum / unit_years, NA_real_)]
   spell_dt[, high_filing_raw_spell := as.integer(is.finite(filing_rate_raw_spell) &
                                                     filing_rate_raw_spell >= high_filing_threshold)]
 
+  setorder(spell_dt,'PID', 'start_year')
   # Above-mean % Black (vs GEOID weighted mean)
   spell_dt[, mean_pct_black_GEOID := weighted.mean(mean_pct_black, total_units, na.rm = TRUE), by = GEOID]
   spell_dt[, above_mean_pct_black_spell := mean_pct_black > mean_pct_black_GEOID]
@@ -2432,6 +2437,14 @@ logf("=== Spell-level maintenance block START ===", log_file = log_file)
        paste(capture.output(spell_dt[, .N, by = portfolio_evict_group_cong]), collapse = " | "),
        log_file = log_file)
 
+  # Spell-level ownership transition vars (require portfolio_evict_group_cong to be merged first)
+  setorder(spell_dt, 'PID', 'start_year')
+  spell_dt[, prev_owner        := shift(portfolio_evict_group_cong), by = PID]
+  spell_dt[, transfer_type     := paste(portfolio_evict_group_cong, prev_owner)]
+  spell_dt[, high_file_acquirer := portfolio_evict_group_cong == "High-evicting portfolio" & !is.na(prev_owner)]
+  spell_dt[, high_filer        := portfolio_evict_group_cong == "High-evicting portfolio"]
+  spell_dt[, acquirer          := !is.na(prev_owner)]
+
   # -- PIDs with multiple spells (identifying sample for M4 PID FE) --------
   n_multi_spell_pids <- spell_dt[, .N, by = PID][N > 1, .N]
   logf("  PIDs with >1 spell (M4 identifying sample): ", n_multi_spell_pids, log_file = log_file)
@@ -2456,10 +2469,12 @@ logf("=== Spell-level maintenance block START ===", log_file = log_file)
   # Cross-product after fix: building_type × start_year × GEOID ≈ 14K cells, 267K rows
   # → ~19 spells/cell. Scientifically equivalent (linear FEs absorbed vs estimated).
 
-  # M1: EB filing dummy + racial composition; building_type + start_year + GEOID FE
+  # M1: EB filing dummy + racial composition; building_type + start_year + GEOID FE.
+  # year_blt_decade and num_units_bin move to RHS to avoid PPML singleton explosion
+  # (5-way FE × 267K sparse spells → ~72M cells ≈ all singletons → empty sample).
   spell_maint_m1 <- fepois(
     total_permits_sum ~ above_mean_pct_black_spell + high_filing_spell +
-      has_rent_data_spell + quality_grade + year_blt_decade + num_units_bin |
+      has_rent_data_spell + year_blt_decade + num_units_bin |
       building_type + start_year + GEOID,
     offset = ~log(unit_years),
     data   = spell_dt_reg
@@ -2468,7 +2483,7 @@ logf("=== Spell-level maintenance block START ===", log_file = log_file)
   # M2: add mean inflation-adjusted rent (restricts to rent-observed spells)
   spell_maint_m2 <- fepois(
     total_permits_sum ~ above_mean_pct_black_spell + high_filing_spell +
-      mean_log_rent_inf_adj + quality_grade + year_blt_decade + num_units_bin |
+      mean_log_rent_inf_adj + year_blt_decade + num_units_bin |
       building_type + start_year + GEOID,
     offset = ~log(unit_years),
     data   = spell_dt_reg[!is.na(mean_log_rent_inf_adj)]
@@ -2477,11 +2492,12 @@ logf("=== Spell-level maintenance block START ===", log_file = log_file)
   # M3: add portfolio eviction group (full-period LOO via conglomerate)
   spell_maint_m3 <- fepois(
     total_permits_sum ~ above_mean_pct_black_spell + high_filing_spell +
-      has_rent_data_spell + quality_grade + year_blt_decade + num_units_bin +
-      portfolio_evict_group_cong |
+      has_rent_data_spell + portfolio_evict_group_cong +
+      year_blt_decade + num_units_bin |
       building_type + start_year + GEOID,
     offset = ~log(unit_years),
-    data   = spell_dt_reg
+    weights = ~unit_years,
+    data   = spell_dt_reg[total_units > 2]
   )
 
   # M4: PID FE robustness — identifies from within-parcel ownership transitions.
@@ -2490,11 +2506,13 @@ logf("=== Spell-level maintenance block START ===", log_file = log_file)
   # portfolio_evict_group_cong (varies if conglomerate composition changes) and
   # above_mean_pct_black_spell (varies if pct_black or GEOID mean changes by spell).
   spell_maint_m4 <- fepois(
-    total_permits_sum ~ above_mean_pct_black_spell + high_filing_spell +
-      portfolio_evict_group_cong |
+    total_permits_sum ~
+      i(portfolio_evict_group_cong, ref = "Small portfolio") |
       PID + start_year,
     offset = ~log(unit_years),
-    data   = spell_dt_reg
+    weights = ~unit_years,
+    data   = spell_dt_reg[has_rent_data_spell==1],
+    cluster = ~PID
   )
 
   logf("  spell_maint_m1 nobs=", nobs(spell_maint_m1),

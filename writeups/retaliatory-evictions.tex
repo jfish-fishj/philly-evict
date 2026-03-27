@@ -179,7 +179,7 @@
 
 \title{Retaliatory Evictions: Distributed-Lag Evidence}
 \author{Philly Evictions Project}
-\date{2026-03-04}
+\date{2026-03-27}
 \begin{document}
 \maketitle
 
@@ -189,6 +189,8 @@
 \setcounter{tocdepth}{3}
 \tableofcontents
 }
+
+\newpage
 
 \section{Overview}\label{overview}
 
@@ -212,6 +214,8 @@ workflow and now lives in \texttt{r/comp-statics-annual-race.R} and
 \texttt{writeups/comp-statics-annual-race.qmd}. Unless explicitly
 overridden in the script call, outputs shown here are pre-COVID only
 (\texttt{\textless{}=\ 2019}).
+
+\newpage
 
 \section{Empirical Bayes Filing-Rate
 Memo}\label{empirical-bayes-filing-rate-memo}
@@ -246,6 +250,8 @@ and is reported in the appendix of this writeup.
 
 Reference memo for reuse:
 \texttt{docs/notes/eb-filing-rate-memo-2026-03-04.md}.
+
+\newpage
 
 \section{Estimating Equations}\label{estimating-equations}
 
@@ -290,6 +296,8 @@ observations using the configured rule (default: pre-COVID mean).
 
 The same distributed-lag equation is estimated on high- and
 low-\(G_{it}\) subsamples.
+
+\newpage
 
 \section{Data and Sample}\label{data-and-sample}
 
@@ -348,15 +356,17 @@ format change in 2011.
 Step & Rows & Share of raw\\
 \midrule
 \cellcolor{gray!10}{raw\_evictions\_clean\_rows} & \cellcolor{gray!10}{796,440} & \cellcolor{gray!10}{100.0\%}\\
-unique\_parcel\_xwalk\_match & 535,757 & 67.3\%\\
-\cellcolor{gray!10}{drop\_commercial\_cases} & \cellcolor{gray!10}{534,826} & \cellcolor{gray!10}{67.2\%}\\
-drop\_non\_residential\_cases & 530,654 & 66.6\%\\
-\cellcolor{gray!10}{keep\_nonpayment\_of\_rent\_cases\_a\_flag} & \cellcolor{gray!10}{336,502} & \cellcolor{gray!10}{42.3\%}\\
+unique\_parcel\_xwalk\_match & 533,882 & 67.0\%\\
+\cellcolor{gray!10}{drop\_commercial\_cases} & \cellcolor{gray!10}{532,945} & \cellcolor{gray!10}{66.9\%}\\
+drop\_non\_residential\_cases & 528,750 & 66.4\%\\
+\cellcolor{gray!10}{keep\_nonpayment\_of\_rent\_cases\_a\_flag} & \cellcolor{gray!10}{338,850} & \cellcolor{gray!10}{42.5\%}\\
 \addlinespace
-keep\_year\_between\_2011\_and\_2019 & 174,940 & 22.0\%\\
+keep\_year\_between\_2011\_and\_2019 & 176,174 & 22.1\%\\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\newpage
 
 \section{Bandwidth Diagnostics}\label{bandwidth-diagnostics}
 
@@ -375,6 +385,8 @@ Bandwidth & Same period & Within bandwidth & Within bandwidth, not same period &
 \end{tabular}
 \end{table}
 
+\newpage
+
 \section{Distributed-Lag Results}\label{distributed-lag-results}
 
 \begin{figure}[H]
@@ -390,6 +402,8 @@ PID.}
 
 \end{figure}%
 
+\newpage
+
 \section{\texorpdfstring{\texttt{\%\ Black} Heterogeneity in Distributed
 Lags}{\% Black Heterogeneity in Distributed Lags}}\label{black-heterogeneity-in-distributed-lags}
 
@@ -403,6 +417,51 @@ Lags}{\% Black Heterogeneity in Distributed Lags}}\label{black-heterogeneity-in-
 (cutoff from pre-COVID distribution rule configured in script).}
 
 \end{figure}%
+
+\newpage
+
+\section{Portfolio Eviction Group
+Heterogeneity}\label{portfolio-eviction-group-heterogeneity}
+
+Buildings are assigned to one of three portfolio eviction groups based
+on a \textbf{leave-one-out (LOO)} EB pre-COVID filing rate from the
+other buildings in the same conglomerate:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Solo}: no other buildings in the conglomerate (LOO rate is
+  undefined)
+\item
+  \textbf{Low-evicting portfolio}: LOO rate below the median across
+  multi-building conglomerates
+\item
+  \textbf{High-evicting portfolio}: LOO rate at or above the median
+\end{itemize}
+
+This framing asks whether retaliation is more common, more severe, and
+maintenance less responsive \emph{when a building's landlord operates
+other high-evicting properties} --- isolating a portfolio-level
+behavioral pattern rather than just the focal building's own filing
+history.
+
+\subsection{Distributed-Lag Results by Portfolio Eviction
+Group}\label{distributed-lag-results-by-portfolio-eviction-group}
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=1\linewidth,height=\textheight,keepaspectratio]{../output/retaliatory-evictions/figs/retaliatory_quarterly_distlag_coefficients_evict_port_split.png}
+
+}
+
+\caption{Distributed-lag coefficients by portfolio eviction group. Three
+groups: Solo (no conglomerate partners), Low-evicting portfolio (LOO EB
+rate below median), High-evicting portfolio (LOO EB rate at/above
+median). PID and period FE; SE clustered by PID.}
+
+\end{figure}%
+
+\newpage
 
 \section{One-Month Back-Rent
 Regressions}\label{one-month-back-rent-regressions}
@@ -443,9 +502,9 @@ Case assignment for this block:
 \toprule
 Status & Cases & Share\\
 \midrule
-\cellcolor{gray!10}{non\_retaliatory} & \cellcolor{gray!10}{86770} & \cellcolor{gray!10}{61.7\%}\\
-same\_period\_severe & 25554 & 18.2\%\\
-\cellcolor{gray!10}{within\_bw\_severe\_not\_same\_period} & \cellcolor{gray!10}{28341} & \cellcolor{gray!10}{20.1\%}\\
+\cellcolor{gray!10}{non\_retaliatory} & \cellcolor{gray!10}{86927} & \cellcolor{gray!10}{61.6\%}\\
+same\_period\_severe & 25675 & 18.2\%\\
+\cellcolor{gray!10}{within\_bw\_severe\_not\_same\_period} & \cellcolor{gray!10}{28518} & \cellcolor{gray!10}{20.2\%}\\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -460,8 +519,8 @@ same\_period\_severe & 25554 & 18.2\%\\
 \toprule
 Spec & N & Mean(1 month rent) & Same-period severe share & Within-bw severe (not same period) share & Above-mean pct black share & Defendant race: Black & Defendant race: White & Defendant race: Unknown & Defendant race impute-ok share\\
 \midrule
-\cellcolor{gray!10}{Status dummies only} & \cellcolor{gray!10}{115107} & \cellcolor{gray!10}{0.1898} & \cellcolor{gray!10}{18.2\%} & \cellcolor{gray!10}{20.1\%} & \cellcolor{gray!10}{55.6\%} & \cellcolor{gray!10}{--} & \cellcolor{gray!10}{--} & \cellcolor{gray!10}{--} & \cellcolor{gray!10}{99.5\%}\\
-Status x building above-mean pct black & 90737 & 0.1885 & 18.4\% & 21.3\% & 55.6\% & -- & -- & -- & 99.5\%\\
+\cellcolor{gray!10}{Status dummies only} & \cellcolor{gray!10}{115491} & \cellcolor{gray!10}{0.1890} & \cellcolor{gray!10}{18.2\%} & \cellcolor{gray!10}{20.2\%} & \cellcolor{gray!10}{55.5\%} & \cellcolor{gray!10}{--} & \cellcolor{gray!10}{--} & \cellcolor{gray!10}{--} & \cellcolor{gray!10}{99.5\%}\\
+Status x building above-mean pct black & 93349 & 0.1872 & 18.4\% & 21.2\% & 55.5\% & -- & -- & -- & 99.6\%\\
 \bottomrule
 \end{tabular}}
 \end{table}
@@ -471,30 +530,30 @@ Status x building above-mean pct black & 90737 & 0.1885 & 18.4\% & 21.3\% & 55.6
 \begin{tabular}{lcc}
    \tabularnewline \midrule \midrule
    Dependent Variable: & \multicolumn{2}{c}{one\_month\_back\_rent}\\
-   Model:                                                      & (1)                    & (2)\\  
+   Model:                                                      & (1)          & (2)\\  
    \midrule
    \emph{Variables}\\
-   Same-period severe                                          & 0.017$^{***}$          & -0.011\\   
-                                                               & (0.006)                & (0.012)\\   
-   One-quarter pre/post severe                                 & $-5.95\times 10^{-5}$  & -0.019$^{*}$\\   
-                                                               & (0.006)                & (0.010)\\   
-   Above-mean building pct black                               &                        & -0.0003\\   
-                                                               &                        & (0.010)\\   
-   Same-period severe x above-mean building pct black          &                        & 0.046$^{***}$\\   
-                                                               &                        & (0.016)\\   
-   One-quarter pre/post severe x above-mean building pct black &                        & 0.032$^{**}$\\   
-                                                               &                        & (0.013)\\   
-   \% cases filed in quarter of complaint                      & 18.2                   & 18.4\\  
-   \% cases in one-quarter pre/post window                     & 20.1                   & 21.3\\  
+   Same-period severe                                          & 0.017$^{**}$ & -0.007\\   
+                                                               & (0.006)      & (0.013)\\   
+   One-quarter pre/post severe                                 & 0.0003       & -0.013\\   
+                                                               & (0.006)      & (0.010)\\   
+   Above-mean building pct black                               &              & -0.003\\   
+                                                               &              & (0.009)\\   
+   Same-period severe x above-mean building pct black          &              & 0.039$^{**}$\\   
+                                                               &              & (0.017)\\   
+   One-quarter pre/post severe x above-mean building pct black &              & 0.026$^{**}$\\   
+                                                               &              & (0.013)\\   
+   \% cases filed in quarter of complaint                      & 18.2         & 18.4\\  
+   \% cases in one-quarter pre/post window                     & 20.2         & 21.2\\  
    \midrule
    \emph{Fixed-effects}\\
-   PID                                                         & Yes                    & Yes\\  
-   year                                                        & Yes                    & Yes\\  
+   PID                                                         & Yes          & Yes\\  
+   year                                                        & Yes          & Yes\\  
    \midrule
    \emph{Fit statistics}\\
-   Observations                                                & 115,107                & 90,737\\  
-   R$^2$                                                       & 0.29134                & 0.29007\\  
-   Within R$^2$                                                & 0.00025                & 0.00063\\  
+   Observations                                                & 115,491      & 93,349\\  
+   R$^2$                                                       & 0.28980      & 0.29007\\  
+   Within R$^2$                                                & 0.00023      & 0.00048\\  
    \midrule \midrule
    \multicolumn{3}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
    \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
@@ -518,28 +577,28 @@ clustered by PID.
    Model:                                                      & (1)           & (2)\\  
    \midrule
    \emph{Variables}\\
-   Same-period severe                                          & -0.027$^{**}$ & 0.025\\   
-                                                               & (0.013)       & (0.026)\\   
-   One-quarter pre/post severe                                 & 0.005         & 0.028\\   
+   Same-period severe                                          & -0.027$^{**}$ & 0.017\\   
+                                                               & (0.013)       & (0.025)\\   
+   One-quarter pre/post severe                                 & 0.004         & 0.025\\   
                                                                & (0.010)       & (0.017)\\   
-   Above-mean building pct black                               &               & 0.017\\   
-                                                               &               & (0.023)\\   
-   Same-period severe x above-mean building pct black          &               & -0.080$^{**}$\\   
-                                                               &               & (0.031)\\   
-   One-quarter pre/post severe x above-mean building pct black &               & -0.047$^{**}$\\   
-                                                               &               & (0.022)\\   
+   Above-mean building pct black                               &               & 0.023\\   
+                                                               &               & (0.017)\\   
+   Same-period severe x above-mean building pct black          &               & -0.064$^{**}$\\   
+                                                               &               & (0.030)\\   
+   One-quarter pre/post severe x above-mean building pct black &               & -0.036$^{*}$\\   
+                                                               &               & (0.021)\\   
    \% cases filed in quarter of complaint                      & 18.2          & 18.4\\  
-   \% cases in one-quarter pre/post window                     & 20.1          & 21.3\\  
+   \% cases in one-quarter pre/post window                     & 20.2          & 21.2\\  
    \midrule
    \emph{Fixed-effects}\\
    PID                                                         & Yes           & Yes\\  
    year                                                        & Yes           & Yes\\  
    \midrule
    \emph{Fit statistics}\\
-   Observations                                                & 115,043       & 90,679\\  
-   Squared Correlation                                         & 0.48646       & 0.49284\\  
-   Pseudo R$^2$                                                & 0.16481       & 0.16303\\  
-   BIC                                                         & 605,399.7     & 465,151.8\\  
+   Observations                                                & 115,427       & 93,293\\  
+   Squared Correlation                                         & 0.48618       & 0.49386\\  
+   Pseudo R$^2$                                                & 0.16446       & 0.16349\\  
+   BIC                                                         & 607,408.0     & 482,032.2\\  
    \midrule \midrule
    \multicolumn{3}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
    \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
@@ -569,35 +628,70 @@ about recovering arrears.
    Model:                                                      & (1)           & (2)\\  
    \midrule
    \emph{Variables}\\
-   Same-period severe                                          & -0.025$^{**}$ & 0.018\\   
-                                                               & (0.012)       & (0.024)\\   
-   One-quarter pre/post severe                                 & 0.005         & 0.029$^{*}$\\   
+   Same-period severe                                          & -0.024$^{**}$ & 0.014\\   
+                                                               & (0.012)       & (0.023)\\   
+   One-quarter pre/post severe                                 & 0.004         & 0.028$^{*}$\\   
                                                                & (0.008)       & (0.015)\\   
-   log(ongoing\_rent)                                          & 0.693$^{***}$ & 0.695$^{***}$\\   
+   log(ongoing\_rent)                                          & 0.692$^{***}$ & 0.706$^{***}$\\   
                                                                & (0.019)       & (0.021)\\   
-   Above-mean building pct black                               &               & -0.001\\   
-                                                               &               & (0.017)\\   
-   Same-period severe x above-mean building pct black          &               & -0.068$^{**}$\\   
-                                                               &               & (0.028)\\   
-   One-quarter pre/post severe x above-mean building pct black &               & -0.051$^{***}$\\   
+   Above-mean building pct black                               &               & 0.008\\   
+                                                               &               & (0.015)\\   
+   Same-period severe x above-mean building pct black          &               & -0.056$^{**}$\\   
+                                                               &               & (0.027)\\   
+   One-quarter pre/post severe x above-mean building pct black &               & -0.045$^{**}$\\   
                                                                &               & (0.019)\\   
    \% cases filed in quarter of complaint                      & 18.2          & 18.4\\  
-   \% cases in one-quarter pre/post window                     & 20.1          & 21.3\\  
+   \% cases in one-quarter pre/post window                     & 20.2          & 21.2\\  
    \midrule
    \emph{Fixed-effects}\\
    PID                                                         & Yes           & Yes\\  
    year                                                        & Yes           & Yes\\  
    \midrule
    \emph{Fit statistics}\\
-   Observations                                                & 112,729       & 88,859\\  
-   R$^2$                                                       & 0.49715       & 0.50065\\  
-   Within R$^2$                                                & 0.04103       & 0.04208\\  
+   Observations                                                & 113,104       & 91,418\\  
+   R$^2$                                                       & 0.49717       & 0.50158\\  
+   Within R$^2$                                                & 0.04082       & 0.04247\\  
    \midrule \midrule
    \multicolumn{3}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
    \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
 \end{tabular}
 }
 \end{center}
+
+\subsection{Back-Rent Regressions by Portfolio Eviction
+Group}\label{back-rent-regressions-by-portfolio-eviction-group}
+
+Separate LPM (\texttt{one\_month\_back\_rent}) and PPML
+(\texttt{months\_back\_rent}) regressions run for each portfolio
+eviction group. Specification mirrors the main models above (PID + year
+FE; SE clustered by PID; pre-COVID sample). This tests whether
+\textbf{high-evicting-portfolio landlords are more likely to file
+retaliatory cases with precisely one month of back rent claimed}.
+
+\begin{table}[!h]
+\centering
+\caption{\label{tab:back-rent-port-table}LPM: one-month back rent ~ retaliatory status, by portfolio eviction group (pre-COVID; PID + year FE)}
+\centering
+\resizebox{\ifdim\width>\linewidth\linewidth\else\width\fi}{!}{
+\fontsize{8}{10}\selectfont
+\begin{tabular}[t]{llrrrr}
+\toprule
+Group & Term & Est & SE & p-value & N\\
+\midrule
+\cellcolor{gray!10}{Solo} & \cellcolor{gray!10}{same\_period\_severe} & \cellcolor{gray!10}{0.0338} & \cellcolor{gray!10}{0.0079} & \cellcolor{gray!10}{0.000} & \cellcolor{gray!10}{58749}\\
+Solo & within\_bw\_severe\_not\_same\_period & 0.0042 & 0.0071 & 0.552 & 58749\\
+\cellcolor{gray!10}{Small portfolio} & \cellcolor{gray!10}{same\_period\_severe} & \cellcolor{gray!10}{0.0088} & \cellcolor{gray!10}{0.0123} & \cellcolor{gray!10}{0.475} & \cellcolor{gray!10}{16356}\\
+Small portfolio & within\_bw\_severe\_not\_same\_period & 0.0004 & 0.0118 & 0.970 & 16356\\
+\cellcolor{gray!10}{Low-evicting portfolio} & \cellcolor{gray!10}{same\_period\_severe} & \cellcolor{gray!10}{0.0261} & \cellcolor{gray!10}{0.0246} & \cellcolor{gray!10}{0.290} & \cellcolor{gray!10}{8553}\\
+\addlinespace
+Low-evicting portfolio & within\_bw\_severe\_not\_same\_period & -0.0025 & 0.0194 & 0.898 & 8553\\
+\cellcolor{gray!10}{High-evicting portfolio} & \cellcolor{gray!10}{same\_period\_severe} & \cellcolor{gray!10}{-0.0079} & \cellcolor{gray!10}{0.0137} & \cellcolor{gray!10}{0.566} & \cellcolor{gray!10}{31833}\\
+High-evicting portfolio & within\_bw\_severe\_not\_same\_period & -0.0050 & 0.0124 & 0.683 & 31833\\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\newpage
 
 \section{Equilibrium Maintenance
 Analysis}\label{equilibrium-maintenance-analysis}
@@ -635,20 +729,20 @@ PID over 2011--2019) to partial out rent-driven maintenance incentives.
    Model:                                    & (1)            & (2)            & (3)            & (4)\\  
    \midrule
    \emph{Variables}\\
-   above\_mean\_pct\_black\_btTRUE           & -0.375$^{***}$ & -0.327$^{***}$ & -0.379$^{***}$ & -0.335$^{***}$\\   
+   above\_mean\_pct\_black\_btTRUE           & -0.409$^{***}$ & -0.347$^{***}$ & -0.404$^{***}$ & -0.339$^{***}$\\   
                                              & (0.007)        & (0.009)        & (0.007)        & (0.009)\\   
-   high\_filing\_eb                          & -0.153$^{***}$ & -0.101$^{***}$ &                &   \\   
-                                             & (0.012)        & (0.012)        &                &   \\   
-   mean\_log\_med\_rent\_inf\_adj\_PID       &                & 0.376$^{***}$  &                & 0.383$^{***}$\\   
+   high\_filing\_eb                          & -0.119$^{***}$ & -0.044$^{***}$ &                &   \\   
+                                             & (0.011)        & (0.012)        &                &   \\   
+   mean\_log\_med\_rent\_inf\_adj\_PID       &                & 0.419$^{***}$  &                & 0.406$^{***}$\\   
                                              &                & (0.010)        &                & (0.010)\\   
-   filing\_bin\_eb $=$ [1,5)")               &                &                & 0.093$^{***}$  & -0.003\\   
-                                             &                &                & (0.008)        & (0.010)\\   
-   filing\_bin\_eb $=$ [5,10)")              &                &                & -0.154$^{***}$ & -0.130$^{***}$\\   
-                                             &                &                & (0.009)        & (0.011)\\   
-   filing\_bin\_eb $=$ [10,20)")             &                &                & -0.130$^{***}$ & -0.090$^{***}$\\   
+   filing\_bin\_eb $=$ [1,5)")               &                &                & 0.198$^{***}$  & 0.046$^{***}$\\   
+                                             &                &                & (0.009)        & (0.010)\\   
+   filing\_bin\_eb $=$ [5,10)")              &                &                & -0.199$^{***}$ & -0.174$^{***}$\\   
+                                             &                &                & (0.009)        & (0.010)\\   
+   filing\_bin\_eb $=$ [10,20)")             &                &                & -0.148$^{***}$ & -0.098$^{***}$\\   
                                              &                &                & (0.011)        & (0.012)\\   
-   filing\_bin\_eb $=$ [20,inf)")            &                &                & -0.219$^{***}$ & -0.179$^{***}$\\   
-                                             &                &                & (0.015)        & (0.016)\\   
+   filing\_bin\_eb $=$ [20,inf)")            &                &                & -0.174$^{***}$ & -0.130$^{***}$\\   
+                                             &                &                & (0.015)        & (0.015)\\   
    \midrule
    \emph{Fixed-effects}\\
    building\_type                            & Yes            & Yes            & Yes            & Yes\\  
@@ -660,12 +754,255 @@ PID over 2011--2019) to partial out rent-driven maintenance incentives.
    has\_rent\_data                           & Yes            &                & Yes            & \\  
    \midrule
    \emph{Fit statistics}\\
-   Observations                              & 1,703,026      & 750,270        & 1,683,789      & 743,824\\  
-   Squared Correlation                       & 0.31379        & 0.25057        & 0.32030        & 0.25933\\  
-   Pseudo R$^2$                              & 0.20782        & 0.26005        & 0.20954        & 0.26192\\  
-   BIC                                       & 1,144,296.2    & 615,091.5      & 1,121,025.3    & 602,300.0\\  
+   Observations                              & 1,683,222      & 749,684        & 1,673,765      & 748,855\\  
+   Squared Correlation                       & 0.30725        & 0.23903        & 0.30450        & 0.24125\\  
+   Pseudo R$^2$                              & 0.20489        & 0.25429        & 0.20529        & 0.25476\\  
+   BIC                                       & 1,133,920.2    & 609,995.0      & 1,126,208.3    & 607,192.0\\  
    \midrule \midrule
    \multicolumn{5}{l}{\emph{IID standard-errors in parentheses}}\\
+   \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+}
+\end{center}
+
+\subsection{Baseline Maintenance Regressions by Portfolio Eviction
+Group}\label{baseline-maintenance-regressions-by-portfolio-eviction-group}
+
+PPML regressions of \texttt{total\_permits} on racial composition and
+\textbf{LOO portfolio eviction group} (\texttt{portfolio\_evict\_group};
+reference = ``Solo''), with and without the EB high-filing dummy. LOO
+classification uses a 0.05 threshold on other conglomerate buildings' EB
+pre-COVID filing rate (≥ 10 other units = ``High-evicting portfolio'';
+\textless{} 10 other units = ``Small portfolio'').
+
+\begin{center}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lcc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{2}{c}{total\_permits}\\
+   Model:                                          & (1)            & (2)\\  
+   \midrule
+   \emph{Variables}\\
+   above\_mean\_pct\_black\_btTRUE                 & -0.415$^{***}$ & -0.411$^{***}$\\   
+                                                   & (0.007)        & (0.007)\\   
+   portfolio\_evict\_groupSmallportfolio           & -0.091$^{***}$ & -0.089$^{***}$\\   
+                                                   & (0.007)        & (0.007)\\   
+   portfolio\_evict\_groupLow-evictingportfolio    & 0.047$^{***}$  & 0.044$^{***}$\\   
+                                                   & (0.008)        & (0.008)\\   
+   portfolio\_evict\_groupHigh-evictingportfolio   & 0.042$^{***}$  & 0.063$^{***}$\\   
+                                                   & (0.011)        & (0.011)\\   
+   high\_filing\_eb                                &                & -0.125$^{***}$\\   
+                                                   &                & (0.011)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   building\_type                                  & Yes            & Yes\\  
+   year                                            & Yes            & Yes\\  
+   quality\_grade                                  & Yes            & Yes\\  
+   year\_blt\_decade                               & Yes            & Yes\\  
+   num\_units\_bin                                 & Yes            & Yes\\  
+   GEOID                                           & Yes            & Yes\\  
+   has\_rent\_data                                 & Yes            & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                    & 1,683,222      & 1,683,222\\  
+   Squared Correlation                             & 0.30549        & 0.30558\\  
+   Pseudo R$^2$                                    & 0.20498        & 0.20507\\  
+   BIC                                             & 1,133,823.1    & 1,133,715.3\\  
+   \midrule \midrule
+   \multicolumn{3}{l}{\emph{IID standard-errors in parentheses}}\\
+   \multicolumn{3}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+\end{tabular}
+}
+\end{center}
+
+\subsection{Spell-Level Maintenance
+Regressions}\label{spell-level-maintenance-regressions}
+
+Each observation is a \textbf{PID × ownership-spell} --- a contiguous
+block of years during which the same conglomerate owned the parcel
+(2011--2019). This collapses the \textasciitilde1.6M-row annual panel to
+\textasciitilde100--250 K spells, making the cross-sectional unit honest
+and covariates spell-specific (filing rate, rent, and \% Black are
+averages during the landlord's tenure).
+
+\textbf{Design notes:}
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Filing intensity} (\texttt{high\_filing\_spell}): mean of
+  \texttt{filing\_rate\_eb} (pooled pre-COVID EB rate) over spell years.
+  Because this EB rate is a static PID-level scalar, the spell mean
+  equals the PID EB rate. Spell-varying filing intensity is available
+  via the raw rate robustness column.
+\item
+  \textbf{FE spec}: \texttt{building\_type\ +\ start\_year\ +\ GEOID}.
+  \texttt{quality\_grade}, \texttt{year\_blt\_decade}, and
+  \texttt{num\_units\_bin} are included as RHS covariates rather than
+  FEs. The 6-way FE spec from the annual model is too sparse at spell
+  level (\textasciitilde267K spells vs \textasciitilde72M possible cells
+  → all PPML singletons); this 3-way spec gives \textasciitilde14K cells
+  and \textasciitilde19 spells/cell. \texttt{start\_year} absorbs permit
+  trends by ownership-entry cohort.
+\item
+  \textbf{M4 (PID FE)}: identifies from within-parcel ownership
+  transitions. \texttt{high\_filing\_spell} is collinear with PID FE (EB
+  rate does not vary by year) and is dropped automatically by
+  \texttt{fixest}. Identification comes from
+  \texttt{portfolio\_evict\_group\_cong} and
+  \texttt{above\_mean\_pct\_black\_spell}, which vary across spells if
+  conglomerate composition or pct\_Black changes at ownership
+  transition.
+\item
+  \textbf{LOO classification} (\texttt{portfolio\_evict\_group\_cong}):
+  computed from the \textbf{full 2011--2019 panel} (not the spell
+  window) via \texttt{compute\_loo\_filing\_type()}. Landlord type is a
+  structural attribute; full-period averaging reduces noise. Reference =
+  ``Solo''. Threshold: 0.05 filings/unit-year; small-portfolio screen:
+  \texttt{loo\_min\_units\ ×\ 9} unit-years.
+\end{itemize}
+
+\begin{longtable}[]{@{}
+  >{\raggedleft\arraybackslash}p{(\linewidth - 18\tabcolsep) * \real{0.0872}}
+  >{\raggedleft\arraybackslash}p{(\linewidth - 18\tabcolsep) * \real{0.0671}}
+  >{\raggedleft\arraybackslash}p{(\linewidth - 18\tabcolsep) * \real{0.1007}}
+  >{\raggedleft\arraybackslash}p{(\linewidth - 18\tabcolsep) * \real{0.0805}}
+  >{\raggedleft\arraybackslash}p{(\linewidth - 18\tabcolsep) * \real{0.1208}}
+  >{\raggedleft\arraybackslash}p{(\linewidth - 18\tabcolsep) * \real{0.1141}}
+  >{\raggedleft\arraybackslash}p{(\linewidth - 18\tabcolsep) * \real{0.1275}}
+  >{\raggedleft\arraybackslash}p{(\linewidth - 18\tabcolsep) * \real{0.1074}}
+  >{\raggedleft\arraybackslash}p{(\linewidth - 18\tabcolsep) * \real{0.1074}}
+  >{\raggedleft\arraybackslash}p{(\linewidth - 18\tabcolsep) * \real{0.0872}}@{}}
+\caption{Spell-level maintenance sample summary}\tabularnewline
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedleft
+n\_spells\_reg
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedleft
+n\_pid\_reg
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedleft
+n\_spells\_total
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedleft
+n\_pid\_total
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedleft
+n\_pid\_multi\_spell
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedleft
+mean\_spell\_years
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedleft
+median\_spell\_years
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedleft
+mean\_unit\_years
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedleft
+pct\_high\_filing
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedleft
+pct\_has\_rent
+\end{minipage} \\
+\midrule\noalign{}
+\endfirsthead
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedleft
+n\_spells\_reg
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedleft
+n\_pid\_reg
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedleft
+n\_spells\_total
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedleft
+n\_pid\_total
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedleft
+n\_pid\_multi\_spell
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedleft
+mean\_spell\_years
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedleft
+median\_spell\_years
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedleft
+mean\_unit\_years
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedleft
+pct\_high\_filing
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedleft
+pct\_has\_rent
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+267002 & 189554 & 267296 & 189848 & 57703 & 6.3 & 8 & 12.2 & 0.0725 &
+0.3405 \\
+\end{longtable}
+
+\begin{center}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lcccc}
+   \tabularnewline \midrule \midrule
+   Dependent Variable: & \multicolumn{4}{c}{total\_permits\_sum}\\
+   Model:                                                      & (1)            & (2)            & (3)            & (4)\\  
+   \midrule
+   \emph{Variables}\\
+   above\_mean\_pct\_black\_spellTRUE                          & -0.083$^{***}$ & -0.030$^{***}$ & -0.115$^{***}$ &   \\   
+                                                               & (0.006)        & (0.009)        & (0.0008)       &   \\   
+   high\_filing\_spell                                         & -0.127$^{***}$ & -0.068$^{***}$ & -0.137$^{***}$ &   \\   
+                                                               & (0.011)        & (0.013)        & (0.002)        &   \\   
+   has\_rent\_data\_spellTRUE                                  & 0.200$^{***}$  &                & 0.392$^{***}$  &   \\   
+                                                               & (0.006)        &                & (0.001)        &   \\   
+   year\_blt\_decade1910                                       & 0.300$^{***}$  & 0.229$^{***}$  & 0.870$^{***}$  &   \\   
+                                                               & (0.015)        & (0.019)        & (0.002)        &   \\   
+   year\_blt\_decade1920                                       & 0.143$^{***}$  & 0.091$^{***}$  & 0.132$^{***}$  &   \\   
+                                                               & (0.014)        & (0.017)        & (0.002)        &   \\   
+   year\_blt\_decade1930                                       & 0.100$^{***}$  & 0.024          & 0.271$^{***}$  &   \\   
+                                                               & (0.019)        & (0.024)        & (0.003)        &   \\   
+   year\_blt\_decade1940                                       & 0.155$^{***}$  & 0.150$^{***}$  & 0.437$^{***}$  &   \\   
+                                                               & (0.020)        & (0.026)        & (0.003)        &   \\   
+   year\_blt\_decade1950                                       & 0.121$^{***}$  & 0.077$^{***}$  & 0.454$^{***}$  &   \\   
+                                                               & (0.020)        & (0.025)        & (0.002)        &   \\   
+   year\_blt\_decade1960                                       & 0.366$^{***}$  & 0.318$^{***}$  & 0.622$^{***}$  &   \\   
+                                                               & (0.019)        & (0.023)        & (0.002)        &   \\   
+   year\_blt\_decade1970                                       & 0.285$^{***}$  & 0.314$^{***}$  & 0.446$^{***}$  &   \\   
+                                                               & (0.022)        & (0.026)        & (0.002)        &   \\   
+   year\_blt\_decade1980                                       & 0.786$^{***}$  & 0.717$^{***}$  & 0.801$^{***}$  &   \\   
+                                                               & (0.020)        & (0.024)        & (0.002)        &   \\   
+   year\_blt\_decade1990                                       & 0.099$^{***}$  & 0.131$^{***}$  & -0.483$^{***}$ &   \\   
+                                                               & (0.032)        & (0.036)        & (0.003)        &   \\   
+   year\_blt\_decade2000                                       & -0.326$^{***}$ & -0.431$^{***}$ & 0.019$^{***}$  &   \\   
+                                                               & (0.023)        & (0.027)        & (0.002)        &   \\   
+   year\_blt\_decade2010                                       & 0.521$^{***}$  & 0.401$^{***}$  & 0.203$^{***}$  &   \\   
+                                                               & (0.015)        & (0.020)        & (0.003)        &   \\   
+   year\_blt\_decademissing                                    & 0.403$^{***}$  & 0.132$^{***}$  & 1.12$^{***}$   &   \\   
+                                                               & (0.024)        & (0.035)        & (0.003)        &   \\   
+   year\_blt\_decadepre-1900                                   & 0.019          & -0.138$^{***}$ & -0.107$^{***}$ &   \\   
+                                                               & (0.017)        & (0.021)        & (0.002)        &   \\   
+   num\_units\_bin2-5                                          & -0.348$^{***}$ & -0.306$^{***}$ & 1.10$^{***}$   &   \\   
+                                                               & (0.008)        & (0.011)        & (0.010)        &   \\   
+   num\_units\_bin21-50                                        & -1.38$^{***}$  & -1.35$^{***}$  & 0.280$^{***}$  &   \\   
+                                                               & (0.014)        & (0.017)        & (0.010)        &   \\   
+   num\_units\_bin51+                                          & -2.31$^{***}$  & -2.61$^{***}$  & -0.786$^{***}$ &   \\   
+                                                               & (0.018)        & (0.021)        & (0.010)        &   \\   
+   num\_units\_bin6-20                                         & -1.28$^{***}$  & -1.16$^{***}$  & 0.207$^{***}$  &   \\   
+                                                               & (0.013)        & (0.017)        & (0.010)        &   \\   
+   mean\_log\_rent\_inf\_adj                                   &                & 0.447$^{***}$  &                &   \\   
+                                                               &                & (0.011)        &                &   \\   
+   portfolio\_evict\_group\_congSmallportfolio                 &                &                & -0.155$^{***}$ &   \\   
+                                                               &                &                & (0.002)        &   \\   
+   portfolio\_evict\_group\_congLow-evictingportfolio          &                &                & -0.419$^{***}$ &   \\   
+                                                               &                &                & (0.0010)       &   \\   
+   portfolio\_evict\_group\_congHigh-evictingportfolio         &                &                & -0.226$^{***}$ &   \\   
+                                                               &                &                & (0.002)        &   \\   
+   portfolio\_evict\_group\_cong $=$ Solo                      &                &                &                & 0.026\\   
+                                                               &                &                &                & (0.281)\\   
+   portfolio\_evict\_group\_cong $=$ Low-evictingportfolio     &                &                &                & 0.081\\   
+                                                               &                &                &                & (0.352)\\   
+   portfolio\_evict\_group\_cong $=$ High-evictingportfolio    &                &                &                & 0.213\\   
+                                                               &                &                &                & (0.362)\\   
+   \midrule
+   \emph{Fixed-effects}\\
+   building\_type                                              & Yes            & Yes            & Yes            & \\  
+   start\_year                                                 & Yes            & Yes            & Yes            & Yes\\  
+   GEOID                                                       & Yes            & Yes            & Yes            & \\  
+   PID                                                         &                &                &                & Yes\\  
+   \midrule
+   \emph{Fit statistics}\\
+   Observations                                                & 266,959        & 90,767         & 18,169         & 4,305\\  
+   Squared Correlation                                         & 0.35281        & 0.43803        & 0.49301        & 0.76284\\  
+   Pseudo R$^2$                                                & 0.29220        & 0.40718        & 1.5041         & 1.4926\\  
+   BIC                                                         & 664,971.3      & 292,928.9      & 17,397,421.1   & 406,964.1\\  
+   \midrule \midrule
    \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
 \end{tabular}
 }
@@ -692,6 +1029,29 @@ complaints. PID + year FE; offset = log(total\_units); 95\% CI.}
 
 \end{figure}%
 
+\subsection{Landlord Maintenance Response by Portfolio Eviction
+Group}\label{landlord-maintenance-response-by-portfolio-eviction-group}
+
+Same PPML specification as above, estimated separately for each
+portfolio eviction group. This tests whether
+\textbf{high-evicting-portfolio landlords are less
+maintenance-responsive} to severe complaints than solo or
+low-evicting-portfolio landlords.
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=1\linewidth,height=\textheight,keepaspectratio]{../output/retaliatory-evictions/figs/retaliatory_quarterly_landlord_response_evict_port_split_plot.png}
+
+}
+
+\caption{Landlord maintenance response by portfolio eviction group: PPML
+event-study, faceted by Solo / Low-evicting portfolio / High-evicting
+portfolio. PID + year FE; offset = log(total\_units); 95\% CI.}
+
+\end{figure}%
+
+\newpage
+
 \section{Notes}\label{notes}
 
 \begin{itemize}
@@ -706,6 +1066,8 @@ complaints. PID + year FE; offset = log(total\_units); 95\% CI.}
   For complaint-suppression specifications and interpretation, use
   \texttt{writeups/comp-statics-annual-race.qmd}.
 \end{itemize}
+
+\newpage
 
 \section{Appendix: Raw Filing
 Robustness}\label{appendix-raw-filing-robustness}
@@ -722,20 +1084,20 @@ high-filing cutoff and same bins), for robustness only.
    Model:                                    & (1)            & (2)            & (3)            & (4)\\  
    \midrule
    \emph{Variables}\\
-   above\_mean\_pct\_black\_btTRUE           & -0.373$^{***}$ & -0.326$^{***}$ & -0.362$^{***}$ & -0.316$^{***}$\\   
+   above\_mean\_pct\_black\_btTRUE           & -0.408$^{***}$ & -0.344$^{***}$ & -0.400$^{***}$ & -0.337$^{***}$\\   
                                              & (0.007)        & (0.009)        & (0.007)        & (0.009)\\   
-   high\_filing\_raw                         & -0.211$^{***}$ & -0.137$^{***}$ &                &   \\   
+   high\_filing\_raw                         & -0.199$^{***}$ & -0.123$^{***}$ &                &   \\   
                                              & (0.013)        & (0.014)        &                &   \\   
-   mean\_log\_med\_rent\_inf\_adj\_PID       &                & 0.375$^{***}$  &                & 0.352$^{***}$\\   
+   mean\_log\_med\_rent\_inf\_adj\_PID       &                & 0.415$^{***}$  &                & 0.399$^{***}$\\   
                                              &                & (0.010)        &                & (0.010)\\   
-   filing\_bin\_raw $=$ [1,5)")              &                &                & -0.150$^{***}$ & -0.184$^{***}$\\   
+   filing\_bin\_raw $=$ [1,5)")              &                &                & -0.137$^{***}$ & -0.151$^{***}$\\   
                                              &                &                & (0.010)        & (0.011)\\   
-   filing\_bin\_raw $=$ [5,10)")             &                &                & -0.197$^{***}$ & -0.137$^{***}$\\   
+   filing\_bin\_raw $=$ [5,10)")             &                &                & -0.212$^{***}$ & -0.146$^{***}$\\   
                                              &                &                & (0.009)        & (0.011)\\   
-   filing\_bin\_raw $=$ [10,20)")            &                &                & -0.217$^{***}$ & -0.151$^{***}$\\   
-                                             &                &                & (0.013)        & (0.014)\\   
-   filing\_bin\_raw $=$ [20,inf)")           &                &                & -0.324$^{***}$ & -0.232$^{***}$\\   
-                                             &                &                & (0.015)        & (0.016)\\   
+   filing\_bin\_raw $=$ [10,20)")            &                &                & -0.162$^{***}$ & -0.088$^{***}$\\   
+                                             &                &                & (0.012)        & (0.013)\\   
+   filing\_bin\_raw $=$ [20,inf)")           &                &                & -0.296$^{***}$ & -0.204$^{***}$\\   
+                                             &                &                & (0.014)        & (0.016)\\   
    \midrule
    \emph{Fixed-effects}\\
    building\_type                            & Yes            & Yes            & Yes            & Yes\\  
@@ -747,10 +1109,10 @@ high-filing cutoff and same bins), for robustness only.
    has\_rent\_data                           & Yes            &                & Yes            & \\  
    \midrule
    \emph{Fit statistics}\\
-   Observations                              & 1,703,026      & 750,270        & 1,703,026      & 750,270\\  
-   Squared Correlation                       & 0.31361        & 0.25042        & 0.31484        & 0.25360\\  
-   Pseudo R$^2$                              & 0.20788        & 0.26008        & 0.20841        & 0.26058\\  
-   BIC                                       & 1,144,210.6    & 615,062.0      & 1,143,500.9    & 614,705.9\\  
+   Observations                              & 1,683,222      & 749,684        & 1,683,222      & 749,684\\  
+   Squared Correlation                       & 0.30726        & 0.23920        & 0.30685        & 0.24032\\  
+   Pseudo R$^2$                              & 0.20498        & 0.25438        & 0.20546        & 0.25476\\  
+   BIC                                       & 1,133,791.3    & 609,927.4      & 1,133,158.6    & 609,663.5\\  
    \midrule \midrule
    \multicolumn{5}{l}{\emph{IID standard-errors in parentheses}}\\
    \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\

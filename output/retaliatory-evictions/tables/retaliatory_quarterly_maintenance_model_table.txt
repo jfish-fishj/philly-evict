@@ -1,19 +1,19 @@
                               EB >=15% du.. EB >=15% du...1 EB filing b..
 Dependent Var.:               total_permits   total_permits total_permits
                                                                          
-above_mean_pct_black_btTRUE       -0.375***       -0.327***     -0.379***
+above_mean_pct_black_btTRUE       -0.409***       -0.347***     -0.404***
                                   (0.007)         (0.009)       (0.007)  
-high_filing_eb                    -0.153***       -0.101***              
-                                  (0.012)         (0.012)                
-mean_log_med_rent_inf_adj_PID                      0.376***              
+high_filing_eb                    -0.119***       -0.044***              
+                                  (0.011)         (0.012)                
+mean_log_med_rent_inf_adj_PID                      0.419***              
                                                   (0.010)                
-filing_bin_eb = [1,5)")                                          0.093***
-                                                                (0.008)  
-filing_bin_eb = [5,10)")                                        -0.154***
+filing_bin_eb = [1,5)")                                          0.198***
                                                                 (0.009)  
-filing_bin_eb = [10,20)")                                       -0.130***
+filing_bin_eb = [5,10)")                                        -0.199***
+                                                                (0.009)  
+filing_bin_eb = [10,20)")                                       -0.148***
                                                                 (0.011)  
-filing_bin_eb = [20,inf)")                                      -0.219***
+filing_bin_eb = [20,inf)")                                      -0.174***
                                                                 (0.015)  
 Fixed-Effects:                -------------   ------------- -------------
 building_type                           Yes             Yes           Yes
@@ -25,28 +25,28 @@ GEOID                                   Yes             Yes           Yes
 has_rent_data                           Yes              No           Yes
 _____________________________ _____________   _____________ _____________
 S.E. type                               IID             IID           IID
-Observations                      1,703,026         750,270     1,683,789
-Squared Cor.                        0.31379         0.25057       0.32030
-Pseudo R2                           0.20782         0.26005       0.20954
-BIC                             1,144,296.2       615,091.5   1,121,025.3
+Observations                      1,683,222         749,684     1,673,765
+Squared Cor.                        0.30725         0.23903       0.30450
+Pseudo R2                           0.20489         0.25429       0.20529
+BIC                             1,133,920.2       609,995.0   1,126,208.3
 
                               EB filing b...1
 Dependent Var.:                 total_permits
                                              
-above_mean_pct_black_btTRUE         -0.335***
+above_mean_pct_black_btTRUE         -0.339***
                                     (0.009)  
 high_filing_eb                               
                                              
-mean_log_med_rent_inf_adj_PID        0.383***
+mean_log_med_rent_inf_adj_PID        0.406***
                                     (0.010)  
-filing_bin_eb = [1,5)")             -0.003   
+filing_bin_eb = [1,5)")              0.046***
                                     (0.010)  
-filing_bin_eb = [5,10)")            -0.130***
-                                    (0.011)  
-filing_bin_eb = [10,20)")           -0.090***
+filing_bin_eb = [5,10)")            -0.174***
+                                    (0.010)  
+filing_bin_eb = [10,20)")           -0.098***
                                     (0.012)  
-filing_bin_eb = [20,inf)")          -0.179***
-                                    (0.016)  
+filing_bin_eb = [20,inf)")          -0.130***
+                                    (0.015)  
 Fixed-Effects:                  -------------
 building_type                             Yes
 year                                      Yes
@@ -57,9 +57,9 @@ GEOID                                     Yes
 has_rent_data                              No
 _____________________________   _____________
 S.E. type                                 IID
-Observations                          743,824
-Squared Cor.                          0.25933
-Pseudo R2                             0.26192
-BIC                                 602,300.0
+Observations                          748,855
+Squared Cor.                          0.24125
+Pseudo R2                             0.25476
+BIC                                 607,192.0
 ---
 Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

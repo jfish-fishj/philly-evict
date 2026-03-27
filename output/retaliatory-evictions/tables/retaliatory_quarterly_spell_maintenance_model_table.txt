@@ -1,0 +1,277 @@
+                                                    M1: EB dummy + ..
+Dependent Var.:                                     total_permits_sum
+                                                                     
+above_mean_pct_black_spellTRUE                              -0.083***
+                                                            (0.006)  
+high_filing_spell                                           -0.127***
+                                                            (0.011)  
+has_rent_data_spellTRUE                                      0.200***
+                                                            (0.006)  
+year_blt_decade1910                                          0.300***
+                                                            (0.015)  
+year_blt_decade1920                                          0.143***
+                                                            (0.014)  
+year_blt_decade1930                                          0.100***
+                                                            (0.019)  
+year_blt_decade1940                                          0.155***
+                                                            (0.020)  
+year_blt_decade1950                                          0.121***
+                                                            (0.020)  
+year_blt_decade1960                                          0.366***
+                                                            (0.019)  
+year_blt_decade1970                                          0.285***
+                                                            (0.022)  
+year_blt_decade1980                                          0.786***
+                                                            (0.020)  
+year_blt_decade1990                                          0.099** 
+                                                            (0.032)  
+year_blt_decade2000                                         -0.326***
+                                                            (0.023)  
+year_blt_decade2010                                          0.521***
+                                                            (0.015)  
+year_blt_decademissing                                       0.403***
+                                                            (0.024)  
+year_blt_decadepre-1900                                      0.019   
+                                                            (0.017)  
+num_units_bin2-5                                            -0.348***
+                                                            (0.008)  
+num_units_bin21-50                                          -1.38*** 
+                                                            (0.014)  
+num_units_bin51+                                            -2.31*** 
+                                                            (0.018)  
+num_units_bin6-20                                           -1.28*** 
+                                                            (0.013)  
+mean_log_rent_inf_adj                                                
+                                                                     
+portfolio_evict_group_congSmallportfolio                             
+                                                                     
+portfolio_evict_group_congLow-evictingportfolio                      
+                                                                     
+portfolio_evict_group_congHigh-evictingportfolio                     
+                                                                     
+portfolio_evict_group_cong = Solo                                    
+                                                                     
+portfolio_evict_group_cong = Low-evictingportfolio                   
+                                                                     
+portfolio_evict_group_cong = High-evictingportfolio                  
+                                                                     
+Fixed-Effects:                                      -----------------
+building_type                                                     Yes
+start_year                                                        Yes
+GEOID                                                             Yes
+PID                                                                No
+________________________________________            _________________
+S.E. type                                                         IID
+Observations                                                  266,959
+Squared Cor.                                                  0.35281
+Pseudo R2                                                     0.29220
+BIC                                                         664,971.3
+
+                                                           M2: + Rent
+Dependent Var.:                                     total_permits_sum
+                                                                     
+above_mean_pct_black_spellTRUE                              -0.030***
+                                                            (0.009)  
+high_filing_spell                                           -0.068***
+                                                            (0.013)  
+has_rent_data_spellTRUE                                              
+                                                                     
+year_blt_decade1910                                          0.229***
+                                                            (0.019)  
+year_blt_decade1920                                          0.091***
+                                                            (0.017)  
+year_blt_decade1930                                          0.024   
+                                                            (0.024)  
+year_blt_decade1940                                          0.150***
+                                                            (0.026)  
+year_blt_decade1950                                          0.077** 
+                                                            (0.025)  
+year_blt_decade1960                                          0.318***
+                                                            (0.023)  
+year_blt_decade1970                                          0.314***
+                                                            (0.026)  
+year_blt_decade1980                                          0.717***
+                                                            (0.024)  
+year_blt_decade1990                                          0.131***
+                                                            (0.036)  
+year_blt_decade2000                                         -0.431***
+                                                            (0.027)  
+year_blt_decade2010                                          0.401***
+                                                            (0.020)  
+year_blt_decademissing                                       0.132***
+                                                            (0.035)  
+year_blt_decadepre-1900                                     -0.138***
+                                                            (0.021)  
+num_units_bin2-5                                            -0.306***
+                                                            (0.011)  
+num_units_bin21-50                                          -1.35*** 
+                                                            (0.017)  
+num_units_bin51+                                            -2.61*** 
+                                                            (0.021)  
+num_units_bin6-20                                           -1.16*** 
+                                                            (0.017)  
+mean_log_rent_inf_adj                                        0.447***
+                                                            (0.011)  
+portfolio_evict_group_congSmallportfolio                             
+                                                                     
+portfolio_evict_group_congLow-evictingportfolio                      
+                                                                     
+portfolio_evict_group_congHigh-evictingportfolio                     
+                                                                     
+portfolio_evict_group_cong = Solo                                    
+                                                                     
+portfolio_evict_group_cong = Low-evictingportfolio                   
+                                                                     
+portfolio_evict_group_cong = High-evictingportfolio                  
+                                                                     
+Fixed-Effects:                                      -----------------
+building_type                                                     Yes
+start_year                                                        Yes
+GEOID                                                             Yes
+PID                                                                No
+________________________________________            _________________
+S.E. type                                                         IID
+Observations                                                   90,767
+Squared Cor.                                                  0.43803
+Pseudo R2                                                     0.40718
+BIC                                                         292,928.9
+
+                                                    M3: + Portfolio..
+Dependent Var.:                                     total_permits_sum
+                                                                     
+above_mean_pct_black_spellTRUE                              -0.115***
+                                                            (0.0008) 
+high_filing_spell                                           -0.137***
+                                                            (0.002)  
+has_rent_data_spellTRUE                                      0.392***
+                                                            (0.001)  
+year_blt_decade1910                                          0.870***
+                                                            (0.002)  
+year_blt_decade1920                                          0.132***
+                                                            (0.002)  
+year_blt_decade1930                                          0.271***
+                                                            (0.003)  
+year_blt_decade1940                                          0.437***
+                                                            (0.003)  
+year_blt_decade1950                                          0.454***
+                                                            (0.002)  
+year_blt_decade1960                                          0.622***
+                                                            (0.002)  
+year_blt_decade1970                                          0.446***
+                                                            (0.002)  
+year_blt_decade1980                                          0.801***
+                                                            (0.002)  
+year_blt_decade1990                                         -0.483***
+                                                            (0.003)  
+year_blt_decade2000                                          0.019***
+                                                            (0.002)  
+year_blt_decade2010                                          0.203***
+                                                            (0.003)  
+year_blt_decademissing                                       1.12*** 
+                                                            (0.003)  
+year_blt_decadepre-1900                                     -0.107***
+                                                            (0.002)  
+num_units_bin2-5                                             1.10*** 
+                                                            (0.010)  
+num_units_bin21-50                                           0.280***
+                                                            (0.010)  
+num_units_bin51+                                            -0.786***
+                                                            (0.010)  
+num_units_bin6-20                                            0.207***
+                                                            (0.010)  
+mean_log_rent_inf_adj                                                
+                                                                     
+portfolio_evict_group_congSmallportfolio                    -0.155***
+                                                            (0.002)  
+portfolio_evict_group_congLow-evictingportfolio             -0.419***
+                                                            (0.0010) 
+portfolio_evict_group_congHigh-evictingportfolio            -0.226***
+                                                            (0.002)  
+portfolio_evict_group_cong = Solo                                    
+                                                                     
+portfolio_evict_group_cong = Low-evictingportfolio                   
+                                                                     
+portfolio_evict_group_cong = High-evictingportfolio                  
+                                                                     
+Fixed-Effects:                                      -----------------
+building_type                                                     Yes
+start_year                                                        Yes
+GEOID                                                             Yes
+PID                                                                No
+________________________________________            _________________
+S.E. type                                                         IID
+Observations                                                   18,169
+Squared Cor.                                                  0.49301
+Pseudo R2                                                      1.5041
+BIC                                                      17,397,421.1
+
+                                                           M4: PID FE
+Dependent Var.:                                     total_permits_sum
+                                                                     
+above_mean_pct_black_spellTRUE                                       
+                                                                     
+high_filing_spell                                                    
+                                                                     
+has_rent_data_spellTRUE                                              
+                                                                     
+year_blt_decade1910                                                  
+                                                                     
+year_blt_decade1920                                                  
+                                                                     
+year_blt_decade1930                                                  
+                                                                     
+year_blt_decade1940                                                  
+                                                                     
+year_blt_decade1950                                                  
+                                                                     
+year_blt_decade1960                                                  
+                                                                     
+year_blt_decade1970                                                  
+                                                                     
+year_blt_decade1980                                                  
+                                                                     
+year_blt_decade1990                                                  
+                                                                     
+year_blt_decade2000                                                  
+                                                                     
+year_blt_decade2010                                                  
+                                                                     
+year_blt_decademissing                                               
+                                                                     
+year_blt_decadepre-1900                                              
+                                                                     
+num_units_bin2-5                                                     
+                                                                     
+num_units_bin21-50                                                   
+                                                                     
+num_units_bin51+                                                     
+                                                                     
+num_units_bin6-20                                                    
+                                                                     
+mean_log_rent_inf_adj                                                
+                                                                     
+portfolio_evict_group_congSmallportfolio                             
+                                                                     
+portfolio_evict_group_congLow-evictingportfolio                      
+                                                                     
+portfolio_evict_group_congHigh-evictingportfolio                     
+                                                                     
+portfolio_evict_group_cong = Solo                              0.026 
+                                                              (0.281)
+portfolio_evict_group_cong = Low-evictingportfolio             0.081 
+                                                              (0.352)
+portfolio_evict_group_cong = High-evictingportfolio            0.213 
+                                                              (0.362)
+Fixed-Effects:                                      -----------------
+building_type                                                      No
+start_year                                                        Yes
+GEOID                                                              No
+PID                                                               Yes
+________________________________________            _________________
+S.E. type                                                     by: PID
+Observations                                                    4,305
+Squared Cor.                                                  0.76284
+Pseudo R2                                                      1.4926
+BIC                                                         406,964.1
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

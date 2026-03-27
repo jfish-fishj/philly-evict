@@ -1,0 +1,29 @@
+                                            LOO portfol.. EB >=15% + ..
+Dependent Var.:                             total_permits total_permits
+                                                                       
+above_mean_pct_black_btTRUE                     -0.415***     -0.411***
+                                                (0.007)       (0.007)  
+portfolio_evict_groupSmallportfolio             -0.091***     -0.089***
+                                                (0.007)       (0.007)  
+portfolio_evict_groupLow-evictingportfolio       0.047***      0.044***
+                                                (0.008)       (0.008)  
+portfolio_evict_groupHigh-evictingportfolio      0.042***      0.063***
+                                                (0.011)       (0.011)  
+high_filing_eb                                                -0.125***
+                                                              (0.011)  
+Fixed-Effects:                              ------------- -------------
+building_type                                         Yes           Yes
+year                                                  Yes           Yes
+quality_grade                                         Yes           Yes
+year_blt_decade                                       Yes           Yes
+num_units_bin                                         Yes           Yes
+GEOID                                                 Yes           Yes
+has_rent_data                                         Yes           Yes
+________________________________________    _____________ _____________
+S.E. type                                             IID           IID
+Observations                                    1,683,222     1,683,222
+Squared Cor.                                      0.30549       0.30558
+Pseudo R2                                         0.20498       0.20507
+BIC                                           1,133,823.1   1,133,715.3
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
