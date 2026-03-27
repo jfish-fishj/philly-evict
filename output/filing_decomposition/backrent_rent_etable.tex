@@ -2,58 +2,58 @@
 \begin{table}[htbp]
    \caption{\label{tab:backrent_rent} Back-Rent Elasticity Regression}
    \centering
-   \begin{tabular}{lc}
-      \tabularnewline \midrule \midrule
-      Dependent Variable:                       & log\_total\_rent\\    
-      Model:                                    & (1)\\  
-      \midrule
-      \emph{Variables}\\
-      log\_ongoing\_rent                        & 0.7389$^{***}$\\   
-                                                & (0.0089)\\   
-      plaintiff\_typeFor-profitcorp             & -0.0189$^{*}$\\   
-                                                & (0.0102)\\   
-      plaintiff\_typeNonprofit                  & -0.0516\\   
-                                                & (0.0362)\\   
-      plaintiff\_typePHA                        & -0.5265$^{***}$\\   
-                                                & (0.0402)\\   
-      owner\_typeFor-profitcorp                 & 0.0246$^{**}$\\   
-                                                & (0.0114)\\   
-      owner\_typeNonprofit                      & -0.0061\\   
-                                                & (0.0355)\\   
-      owner\_typePHA                            & 0.0971$^{*}$\\   
-                                                & (0.0502)\\   
-      owner\_typeReligious                      & -0.1439$^{*}$\\   
-                                                & (0.0802)\\   
-      owner\_typeTrust                          & -0.0441\\   
-                                                & (0.0399)\\   
-      owner\_typeGovernment-Local               & 0.0749\\   
-                                                & (0.1154)\\   
-      owner\_typeFinancial-Intermediary         & -0.0526\\   
-                                                & (0.0475)\\   
-      high\_filer\_bldgTRUE                     & -0.1247$^{***}$\\   
-                                                & (0.0071)\\   
-      log(portfolio\_size\_conglomerate\_yr)    & -0.0060$^{**}$\\   
-                                                & (0.0028)\\   
-      pct\_black                                & 0.0056\\   
-                                                & (0.0144)\\   
-      \midrule
-      \emph{Fixed-effects}\\
-      year                                      & Yes\\  
-      num\_units\_bin                           & Yes\\  
-      tract                                     & Yes\\  
-      building\_type                            & Yes\\  
-      \midrule
-      \emph{Fit statistics}\\
-      Observations                              & 113,405\\  
-      R$^2$                                     & 0.36882\\  
-      Adjusted R$^2$                            & 0.36657\\  
-      \midrule \midrule
-      \multicolumn{2}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
-      \multicolumn{2}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
-   \end{tabular}
-   
-   \par \raggedright 
-   Cluster SE at PID. Sample: non-commercial cases 2011--2019, ongoing\_rent 300--6000, total\_rent 300--15000.
+   \scriptsize
+   \begin{adjustbox}{max width=0.82\textwidth,center}
+      \begin{tabular}{lc}
+         \tabularnewline \midrule \midrule
+         Dependent Variable:             & Log total back rent\\  
+         Model:                          & (1)\\  
+         \midrule
+         \emph{Variables}\\
+         Log ongoing rent                & 0.7393$^{***}$\\   
+                                         & (0.0087)\\   
+         For-profit corporate plaintiff  & -0.0202$^{**}$\\   
+                                         & (0.0102)\\   
+         Nonprofit plaintiff             & -0.0703$^{*}$\\   
+                                         & (0.0378)\\   
+         PHA plaintiff                   & -0.5187$^{***}$\\   
+                                         & (0.0394)\\   
+         For-profit corporate owner      & 0.0317$^{***}$\\   
+                                         & (0.0116)\\   
+         Nonprofit owner                 & 0.0165\\   
+                                         & (0.0365)\\   
+         PHA owner                       & 0.1103$^{**}$\\   
+                                         & (0.0501)\\   
+         Religious owner                 & -0.1463$^{*}$\\   
+                                         & (0.0822)\\   
+         Trust owner                     & -0.0575\\   
+                                         & (0.0369)\\   
+         Local government owner          & 0.0899\\   
+                                         & (0.1098)\\   
+         Financial intermediary owner    & -0.0599\\   
+                                         & (0.0458)\\   
+         High-filer building             & -0.1262$^{***}$\\   
+                                         & (0.0070)\\   
+         Log conglomerate portfolio size & -0.0086$^{***}$\\   
+                                         & (0.0029)\\   
+         Building Black share            & 0.0015\\   
+                                         & (0.0117)\\   
+         \midrule
+         \emph{Fixed-effects}\\
+         Year                            & Yes\\  
+         Unit-count bin                  & Yes\\  
+         Tract                           & Yes\\  
+         Building type                   & Yes\\  
+         \midrule
+         \emph{Fit statistics}\\
+         Observations                    & 118,522\\  
+         R$^2$                           & 0.36508\\  
+         Adjusted R$^2$                  & 0.36287\\  
+         \midrule \midrule
+         \multicolumn{2}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+         \multicolumn{2}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+      \end{tabular}
+   \end{adjustbox}
 \end{table}
 
 

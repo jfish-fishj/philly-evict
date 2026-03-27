@@ -1,0 +1,12 @@
+phase4_conglomerate,portfolio_bin,n_transfers,pct_of_type,mean_portfolio,pct_corporate
+FALSE,10+,6093,4.1,105.1,88.7
+FALSE,2-4,15044,10.2,4.4,40.6
+FALSE,5-9,5245,3.6,10.9,70.6
+FALSE,Financial-Intermediary,699,0.5,653,66.1
+FALSE,Sheriff-only,8086,5.5,7.2,31.1
+FALSE,Single-purchase,111828,76.1,1.3,6.8
+TRUE,10+,5651,62.5,191.5,98.5
+TRUE,2-4,1342,14.8,52.5,93
+TRUE,5-9,1081,12,16,95.7
+TRUE,Sheriff-only,278,3.1,38.5,91.7
+TRUE,Single-purchase,692,7.7,19.3,97.3

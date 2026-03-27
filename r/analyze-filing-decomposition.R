@@ -32,6 +32,8 @@ suppressPackageStartupMessages({
   library(data.table)
   library(stringr)
   library(fixest)
+  library(ggplot2)
+  library(spatstat.univar)  # weighted.median
 })
 
 source("r/config.R")
@@ -52,6 +54,85 @@ fs::dir_create(out_dir, recurse = TRUE)
 
 p_fd <- function(...) file.path(out_dir, ...)
 
+safe_max <- function(x) {
+  if (length(x) == 0L || all(is.na(x))) return(NA_real_)
+  max(x, na.rm = TRUE)
+}
+
+write_table_tex <- function(dt, path, caption = NULL) {
+  if (!requireNamespace("knitr", quietly = TRUE)) {
+    logf("  knitr not available; skipping LaTeX table write for ", path, log_file = log_file)
+    return(invisible(NULL))
+  }
+  tex_lines <- capture.output(
+    knitr::kable(dt, format = "latex", booktabs = TRUE, linesep = "", caption = caption)
+  )
+  writeLines(tex_lines, path)
+  invisible(path)
+}
+
+etable_dict <- c(
+  "num_units_bin" = "Unit-count bin",
+  "num_units_bin2-5" = "2-5 units",
+  "num_units_bin6-20" = "6-20 units",
+  "num_units_bin21-50" = "21-50 units",
+  "num_units_bin51+" = "51+ units",
+  "rental_share" = "Rental-share correction",
+  "pct_black_mean" = "Mean Black share",
+  "pct_female_mean" = "Mean Female share",
+  "owner_type" = "Owner type",
+  "owner_typeFor-profitcorp" = "For-profit corporate owner",
+  "owner_typeNonprofit" = "Nonprofit owner",
+  "owner_typePHA" = "PHA owner",
+  "owner_typeReligious" = "Religious owner",
+  "owner_typeTrust" = "Trust owner",
+  "owner_typeGovernment-Local" = "Local government owner",
+  "owner_typeGovernment-Federal" = "Federal government owner",
+  "owner_typeFinancial-Intermediary" = "Financial intermediary owner",
+  "portfolio_bin_entity_yr" = "Entity portfolio bin",
+  "portfolio_bin_entity_yr2-4" = "Entity portfolio: 2-4 properties",
+  "portfolio_bin_entity_yr5-19" = "Entity portfolio: 5-19 properties",
+  "portfolio_bin_entity_yr20+" = "Entity portfolio: 20+ properties",
+  "portfolio_bin_conglomerate_yr" = "Conglomerate portfolio bin",
+  "portfolio_bin_conglomerate_yr2-4" = "Conglomerate portfolio: 2-4 properties",
+  "portfolio_bin_conglomerate_yr5-19" = "Conglomerate portfolio: 5-19 properties",
+  "portfolio_bin_conglomerate_yr20+" = "Conglomerate portfolio: 20+ properties",
+  "log_unit_years" = "Log unit-years",
+  "log_hhi_units" = "Log HHI",
+  "share_corp_units" = "Corporate unit share (%)",
+  "mean_log_income" = "Mean log income",
+  "log_total_units_market" = "Log market units",
+  "plaintiff_type" = "Plaintiff type",
+  "plaintiff_typeFor-profitcorp" = "For-profit corporate plaintiff",
+  "plaintiff_typeNonprofit" = "Nonprofit plaintiff",
+  "plaintiff_typePHA" = "PHA plaintiff",
+  "log_ongoing_rent" = "Log ongoing rent",
+  "plaintiff_is_owner" = "Plaintiff matches owner",
+  "plaintiff_is_ownerTRUE" = "Plaintiff matches owner",
+  "high_filer_bldg" = "High-filer building",
+  "high_filer_bldgTRUE" = "High-filer building",
+  "total_units_conglomerate_yr_net_parcel_bin" = "Other conglomerate units",
+  "total_units_conglomerate_yr_net_parcel_binsmalllandlord" = "Other conglomerate units: small landlord",
+  "total_units_conglomerate_yr_net_parcel_binmediumlandlord" = "Other conglomerate units: medium landlord",
+  "total_units_conglomerate_yr_net_parcel_binlargelandlord" = "Other conglomerate units: large landlord",
+  "log(portfolio_size_conglomerate_yr)" = "Log conglomerate portfolio size",
+  "plaintiff_typeFor-profitcorp:high_filer_bldgTRUE" = "For-profit plaintiff x high-filer building",
+  "plaintiff_typeNonprofit:high_filer_bldgTRUE" = "Nonprofit plaintiff x high-filer building",
+  "plaintiff_typePHA:high_filer_bldgTRUE" = "PHA plaintiff x high-filer building",
+  "case_race_black_prob" = "Case Black probability",
+  "case_race_black_prob:plaintiff_typeFor-profitcorp" = "Case Black probability x for-profit plaintiff",
+  "case_race_black_prob:plaintiff_typeNonprofit" = "Case Black probability x nonprofit plaintiff",
+  "case_race_black_prob:plaintiff_typePHA" = "Case Black probability x PHA plaintiff",
+  "pct_black" = "Building Black share",
+  "log_total_rent" = "Log total back rent",
+  "zip" = "ZIP",
+  "tract" = "Tract",
+  "building_type" = "Building type",
+  "year_blt_decade" = "Year built decade",
+  "quality_grade" = "Quality grade",
+  "year" = "Year"
+)
+
 # ============================================================
 # SECTION 0: Load data
 # ============================================================
@@ -63,7 +144,7 @@ bldg[, PID := str_pad(as.character(PID), 9, "left", "0")]
 assert_has_cols(bldg, c("PID", "year", "filing_rate_eb_pre_covid", "num_filings",
   "total_units", "num_units_bin", "building_type",
   "quality_grade", "year_blt_decade", "GEOID", "pm.zip",
-  "ever_rental_any_year"), "bldg")
+  "ever_rental_any_year", "infousa_pct_female"), "bldg")
 
 own_py <- fread(p_product(cfg, "xwalk_pid_entity"))
 own_py[, PID := str_pad(as.character(PID), 9, "left", "0")]
@@ -187,6 +268,11 @@ race_pid <- race_bldg[!is.na(pct_black),
   by = PID
 ]
 
+female_pid <- bldg[!is.na(infousa_pct_female),
+  .(pct_female_mean = mean(infousa_pct_female, na.rm = TRUE)),
+  by = PID
+]
+
 # From bldg: one row per PID
 pid_cs <- bldg[, {
   # EB rate: take any non-NA value (same for all years, or nearly so)
@@ -256,6 +342,135 @@ pid_cs <- merge(pid_cs,
   by = "PID", all.x = TRUE)
 
 pid_cs <- merge(pid_cs, race_pid, by = "PID", all.x = TRUE)
+pid_cs <- merge(pid_cs, female_pid, by = "PID", all.x = TRUE)
+
+# ------------------------------------------------------------
+# A1b: Largest entities / conglomerates by owner category
+# ------------------------------------------------------------
+logf("--- A1b: Largest entities and conglomerates by owner category ---",
+     log_file = log_file)
+
+entity_name_map <- nm_lookup[
+  !is.na(entity_id) & !is.na(name_raw) & nzchar(name_raw),
+  .N,
+  by = .(entity_id, name_raw)
+][order(entity_id, -N, name_raw)][
+  , .SD[1L], by = entity_id
+][
+  , .(entity_id, primary_entity_name = name_raw)
+]
+
+entity_cong_sample <- merge(
+  own_py_ot[, .(
+    PID, year, entity_id, owner_type,
+    portfolio_size_entity_yr, total_units_entity_yr
+  )],
+  own_cong[, .(PID, year, conglomerate_id)],
+  by = c("PID", "year"),
+  all.x = TRUE
+)
+
+entity_sample_stats <- entity_cong_sample[!is.na(entity_id), .(
+  owner_type = Mode(na.omit(owner_type)),
+  representative_conglomerate_id = as.integer(Mode(as.character(na.omit(conglomerate_id)))),
+  max_holdings_pids = safe_max(portfolio_size_entity_yr),
+  max_holdings_units = safe_max(total_units_entity_yr),
+  sample_pid_count = uniqueN(PID),
+  sample_pid_years = .N
+), by = entity_id]
+
+cg_entity_members <- unique(
+  entity_cong_sample[!is.na(conglomerate_id) & !is.na(entity_id),
+                     .(conglomerate_id, entity_id)]
+)
+cg_entity_counts <- cg_entity_members[, .(total_entities_in_cg = .N), by = conglomerate_id]
+
+cg_primary_entity <- merge(
+  entity_cong_sample[!is.na(conglomerate_id) & !is.na(entity_id), .(
+    owner_type = Mode(na.omit(owner_type)),
+    max_entity_pids = safe_max(portfolio_size_entity_yr),
+    max_entity_units = safe_max(total_units_entity_yr)
+  ), by = .(conglomerate_id, entity_id)],
+  entity_name_map,
+  by = "entity_id",
+  all.x = TRUE
+)[order(conglomerate_id, -max_entity_units, -max_entity_pids, entity_id)][
+  , .SD[1L], by = conglomerate_id
+][
+  , .(
+    conglomerate_id,
+    primary_entity_id = entity_id,
+    primary_entity_name,
+    primary_owner_type = owner_type
+  )
+]
+
+conglomerate_sample_stats <- own_cong[!is.na(conglomerate_id), .(
+  max_holdings_pids = safe_max(portfolio_size_conglomerate_yr),
+  max_holdings_units = safe_max(total_units_conglomerate_yr),
+  sample_pid_count = uniqueN(PID),
+  sample_pid_years = .N
+), by = conglomerate_id]
+
+entity_exemplars <- merge(entity_sample_stats, entity_name_map, by = "entity_id", all.x = TRUE)
+entity_exemplars <- merge(
+  entity_exemplars,
+  cg_entity_counts,
+  by.x = "representative_conglomerate_id",
+  by.y = "conglomerate_id",
+  all.x = TRUE
+)
+entity_exemplars <- entity_exemplars[!is.na(owner_type)]
+setorder(entity_exemplars, owner_type, -max_holdings_units, -max_holdings_pids, entity_id)
+entity_exemplars[, rank_in_category := seq_len(.N), by = owner_type]
+entity_exemplars_top <- entity_exemplars[rank_in_category <= 2L, .(
+  owner_type,
+  rank_in_category,
+  entity_id,
+  primary_entity_name,
+  max_holdings_pids,
+  max_holdings_units,
+  sample_pid_count,
+  sample_pid_years,
+  representative_conglomerate_id,
+  total_entities_in_cg
+)]
+fwrite(entity_exemplars_top, p_fd("largest_entities_by_owner_type.csv"))
+write_table_tex(
+  entity_exemplars_top,
+  p_fd("largest_entities_by_owner_type.tex"),
+  caption = "Largest entities by owner category"
+)
+
+conglomerate_exemplars <- merge(conglomerate_sample_stats, cg_entity_counts,
+  by = "conglomerate_id", all.x = TRUE)
+conglomerate_exemplars <- merge(conglomerate_exemplars, cg_primary_entity,
+  by = "conglomerate_id", all.x = TRUE)
+conglomerate_exemplars <- conglomerate_exemplars[!is.na(primary_owner_type)]
+setorder(conglomerate_exemplars,
+  primary_owner_type, -max_holdings_units, -max_holdings_pids, conglomerate_id
+)
+conglomerate_exemplars[, rank_in_category := seq_len(.N), by = primary_owner_type]
+conglomerate_exemplars_top <- conglomerate_exemplars[rank_in_category <= 2L, .(
+  primary_owner_type,
+  rank_in_category,
+  conglomerate_id,
+  primary_entity_id,
+  primary_entity_name,
+  total_entities_in_cg,
+  max_holdings_pids,
+  max_holdings_units,
+  sample_pid_count,
+  sample_pid_years
+)]
+fwrite(conglomerate_exemplars_top, p_fd("largest_conglomerates_by_owner_type.csv"))
+write_table_tex(
+  conglomerate_exemplars_top,
+  p_fd("largest_conglomerates_by_owner_type.tex"),
+  caption = "Largest conglomerates by primary owner category"
+)
+logf("  Wrote: largest_entities_by_owner_type.csv/.tex", log_file = log_file)
+logf("  Wrote: largest_conglomerates_by_owner_type.csv/.tex", log_file = log_file)
 
 # Rental share: fraction of observed sample years with a rental license.
 # PHA-owned buildings are exempt from the City's rental license requirement —
@@ -295,6 +510,8 @@ pid_cs[, num_units_bin     := factor(num_units_bin)]
 
 logf("  PIDs with pct_black_mean: ", pid_cs[!is.na(pct_black_mean), .N],
      log_file = log_file)
+logf("  PIDs with pct_female_mean: ", pid_cs[!is.na(pct_female_mean), .N],
+     log_file = log_file)
 logf("  PIDs with owner_type:     ", pid_cs[!is.na(owner_type), .N],
      log_file = log_file)
 logf("  PIDs with portfolio_bin_entity_yr:       ",
@@ -306,6 +523,14 @@ logf("  PIDs with portfolio_bin_conglomerate_yr: ",
 # A2: Descriptive means by landlord type
 # ============================================================
 logf("--- A2: Descriptive means by landlord type ---", log_file = log_file)
+
+safe_weighted_mean_desc <- function(x, w) {
+  ok <- is.finite(x) & is.finite(w) & w > 0
+  if (!any(ok)) return(NA_real_)
+  weighted.mean(x[ok], w[ok])
+}
+
+portfolio_owner_exclude <- c("PHA", "Government-Local", "Government-Federal")
 
 desc_groups <- list(
   is_corp_owner       = c(FALSE, TRUE),
@@ -320,7 +545,8 @@ desc_owner <- pid_cs[!is.na(owner_type), .(
   median_filing_rate      = median(filing_rate_eb_pre_covid, na.rm = TRUE),
   sd_filing_rate          = sd(filing_rate_eb_pre_covid, na.rm = TRUE),
   mean_bldg_units         = mean(total_units_mean, na.rm = TRUE),
-  mean_units_owned_entity = mean(mean_units_owned_entity, na.rm = TRUE)
+  mean_units_owned_entity = mean(mean_units_owned_entity, na.rm = TRUE),
+  mean_bldg_pct_black_unit_wtd = safe_weighted_mean_desc(pct_black_mean, total_units_mean)
 ), by = .(owner_type)]
 
 # do desc_owner but weight by total units
@@ -331,21 +557,67 @@ desc_owner_weighted = pid_cs[!is.na(owner_type), .(
   mean_units        = mean(total_units_mean, na.rm = TRUE)
 ), by = .(owner_type)]
 
-desc_port <- pid_cs[!is.na(portfolio_bin_entity_yr), .(
+desc_port <- pid_cs[!is.na(portfolio_bin_entity_yr) &
+                      !(as.character(owner_type) %chin% portfolio_owner_exclude), .(
   n_pids                  = .N,
   mean_filing_rate        = mean(filing_rate_eb_pre_covid, na.rm = TRUE),
   median_filing_rate      = median(filing_rate_eb_pre_covid, na.rm = TRUE),
   mean_bldg_units         = mean(total_units_mean, na.rm = TRUE),
-  mean_units_owned_entity = mean(mean_units_owned_entity, na.rm = TRUE)
+  mean_units_owned_entity = mean(mean_units_owned_entity, na.rm = TRUE),
+  mean_bldg_pct_black_unit_wtd = safe_weighted_mean_desc(pct_black_mean, total_units_mean)
 ), by = .(portfolio_bin_entity_yr)]
 
-desc_port_cong <- pid_cs[!is.na(portfolio_bin_conglomerate_yr), .(
+desc_port_cong <- pid_cs[!is.na(portfolio_bin_conglomerate_yr) &
+                           !(as.character(owner_type) %chin% portfolio_owner_exclude), .(
   n_pids               = .N,
   mean_filing_rate     = mean(filing_rate_eb_pre_covid, na.rm = TRUE),
   median_filing_rate   = median(filing_rate_eb_pre_covid, na.rm = TRUE),
   mean_bldg_units      = mean(total_units_mean, na.rm = TRUE),
-  mean_units_owned_cong = mean(mean_units_owned_cong, na.rm = TRUE)
+  mean_units_owned_cong = mean(mean_units_owned_cong, na.rm = TRUE),
+  mean_bldg_pct_black_unit_wtd = safe_weighted_mean_desc(pct_black_mean, total_units_mean)
 ), by = .(portfolio_bin_conglomerate_yr)]
+
+if (!has_race_cases || !"case_p_black" %in% names(race_cases)) {
+  stop("race_imputed_case_sample with case_p_black is required for race-augmented landlord descriptives.")
+}
+
+case_pid_desc <- merge(
+  ev_raw[, .(id)],
+  xwalk_case[num_parcels_matched == 1, .(id, PID)],
+  by = "id",
+  all = FALSE
+)
+case_pid_desc <- merge(
+  case_pid_desc,
+  race_cases[, .(id, case_p_black)],
+  by = "id",
+  all = FALSE
+)
+case_pid_desc <- merge(
+  case_pid_desc,
+  pid_cs[, .(PID, owner_type, portfolio_bin_entity_yr, portfolio_bin_conglomerate_yr)],
+  by = "PID",
+  all = FALSE
+)
+
+case_owner_desc <- case_pid_desc[!is.na(owner_type) & !is.na(case_p_black), .(
+  mean_case_pct_black_case_wtd = mean(case_p_black, na.rm = TRUE)
+), by = owner_type]
+desc_owner <- merge(desc_owner, case_owner_desc, by = "owner_type", all.x = TRUE)
+
+case_port_desc <- case_pid_desc[!is.na(portfolio_bin_entity_yr) &
+                                  !(as.character(owner_type) %chin% portfolio_owner_exclude) &
+                                  !is.na(case_p_black), .(
+  mean_case_pct_black_case_wtd = mean(case_p_black, na.rm = TRUE)
+), by = portfolio_bin_entity_yr]
+desc_port <- merge(desc_port, case_port_desc, by = "portfolio_bin_entity_yr", all.x = TRUE)
+
+case_port_cong_desc <- case_pid_desc[!is.na(portfolio_bin_conglomerate_yr) &
+                                       !(as.character(owner_type) %chin% portfolio_owner_exclude) &
+                                       !is.na(case_p_black), .(
+  mean_case_pct_black_case_wtd = mean(case_p_black, na.rm = TRUE)
+), by = portfolio_bin_conglomerate_yr]
+desc_port_cong <- merge(desc_port_cong, case_port_cong_desc, by = "portfolio_bin_conglomerate_yr", all.x = TRUE)
 
 desc_size <- pid_cs[!is.na(num_units_bin), .(
   n_pids           = .N,
@@ -364,28 +636,703 @@ desc_all <- rbind(
   cbind(group_var = "owner_type",
         group_val = as.character(desc_owner$owner_type),
         desc_owner[, .(n_pids, mean_filing_rate, median_filing_rate,
-                       mean_units_owned = mean_units_owned_entity)]),
+                       mean_units_owned = mean_units_owned_entity,
+                       mean_bldg_pct_black_unit_wtd,
+                       mean_case_pct_black_case_wtd)]),
   cbind(group_var = "portfolio_bin",
         group_val = as.character(desc_port$portfolio_bin_entity_yr),
         desc_port[, .(n_pids, mean_filing_rate, median_filing_rate,
-                      mean_units_owned = mean_units_owned_entity)]),
+                      mean_units_owned = mean_units_owned_entity,
+                      mean_bldg_pct_black_unit_wtd,
+                      mean_case_pct_black_case_wtd)]),
   cbind(group_var = "portfolio_bin_conglomerate",
         group_val = as.character(desc_port_cong$portfolio_bin_conglomerate_yr),
         desc_port_cong[, .(n_pids, mean_filing_rate, median_filing_rate,
-                           mean_units_owned = mean_units_owned_cong)]),
+                           mean_units_owned = mean_units_owned_cong,
+                           mean_bldg_pct_black_unit_wtd,
+                           mean_case_pct_black_case_wtd)]),
   cbind(group_var = "num_units_bin",
         group_val = as.character(desc_size$num_units_bin),
         desc_size[, .(n_pids, mean_filing_rate, median_filing_rate,
-                      mean_units_owned = NA_real_)]),
+                      mean_units_owned = NA_real_,
+                      mean_bldg_pct_black_unit_wtd = NA_real_,
+                      mean_case_pct_black_case_wtd = NA_real_)]),
   cbind(group_var = "building_type",
         group_val = as.character(desc_type$building_type),
         desc_type[, .(n_pids, mean_filing_rate, median_filing_rate,
-                      mean_units_owned = NA_real_)]),
+                      mean_units_owned = NA_real_,
+                      mean_bldg_pct_black_unit_wtd = NA_real_,
+                      mean_case_pct_black_case_wtd = NA_real_)]),
   fill = TRUE
 )
 
 fwrite(desc_all, p_fd("filing_decomp_descriptives_by_landlord.csv"))
 logf("  Wrote: filing_decomp_descriptives_by_landlord.csv", log_file = log_file)
+
+# ============================================================
+# A2b: Market concentration in ZIP x filing-rate markets
+# ============================================================
+logf("--- A2b: Market concentration in ZIP x filing-rate markets ---",
+     log_file = log_file)
+
+MARKET_HIGH_FILING_CUTOFF <- 0.05
+
+safe_weighted_mean <- function(x, w) {
+  ok <- is.finite(x) & is.finite(w) & w > 0
+  if (!any(ok)) return(NA_real_)
+  weighted.mean(x[ok], w[ok])
+}
+
+build_market_concentration_outputs <- function(
+  market_dt,
+  spec_name,
+  spec_subtitle,
+  group_order = NULL,
+  legacy_prefix = FALSE,
+  corp_plot = FALSE
+) {
+  assert_unique(market_dt, c("PID", "year", "market_id"),
+                paste0("market_base_", spec_name, " PID-year-market"))
+
+  owner_market_year <- market_dt[, .(
+    owner_units = sum(total_units, na.rm = TRUE),
+    owner_parcels = uniqueN(PID),
+    is_corp_conglomerate = any(is_corp_conglomerate == TRUE, na.rm = TRUE)
+  ), by = .(market_id, market_group, market_cluster, year, conglomerate_id)]
+
+  market_year <- owner_market_year[, {
+    total_units_market <- sum(owner_units, na.rm = TRUE)
+    total_parcels_market <- sum(owner_parcels, na.rm = TRUE)
+    share_units <- if (total_units_market > 0) owner_units / total_units_market else rep(NA_real_, .N)
+    share_parcels <- if (total_parcels_market > 0) owner_parcels / total_parcels_market else rep(NA_real_, .N)
+    share_units_pct <- 100 * share_units
+    share_sorted <- sort(share_units_pct, decreasing = TRUE)
+    .(
+      n_owners = .N,
+      total_units_market = total_units_market,
+      total_parcels_market = total_parcels_market,
+      hhi_units = sum(share_units_pct^2, na.rm = TRUE),
+      hhi_parcels = sum((100 * share_parcels)^2, na.rm = TRUE),
+      share_top1 = if (.N > 0L) share_sorted[1L] else NA_real_,
+      share_top3 = sum(head(share_sorted, 3L), na.rm = TRUE),
+      share_corp_units = fifelse(
+        total_units_market > 0,
+        100 * sum(owner_units[is_corp_conglomerate == TRUE], na.rm = TRUE) / total_units_market,
+        NA_real_
+      )
+    )
+  }, by = .(market_id, market_group, market_cluster, year)]
+
+  market_outcomes <- market_dt[, .(
+    n_buildings = uniqueN(PID),
+    total_units_outcomes = sum(total_units, na.rm = TRUE),
+    mean_log_rent = safe_weighted_mean(log_med_rent, total_units),
+    mean_log_income = safe_weighted_mean(log_income_proxy, total_units),
+    share_with_rent = mean(!is.na(log_med_rent)),
+    share_with_income = mean(!is.na(log_income_proxy)),
+    market_filing_rate = sum(num_filings, na.rm = TRUE) / sum(total_units, na.rm = TRUE)
+  ), by = .(market_id, market_group, market_cluster, year)]
+
+  market_year <- merge(
+    market_year,
+    market_outcomes,
+    by = c("market_id", "market_group", "market_cluster", "year"),
+    all.x = TRUE
+  )
+  if (market_year[abs(total_units_market - total_units_outcomes) > 1e-8, .N] > 0L) {
+    stop("market_year total_units mismatch after merging market outcomes for ", spec_name, ".")
+  }
+  market_year[, total_units_outcomes := NULL]
+  market_year[, log_hhi_units := fifelse(hhi_units > 0, log(hhi_units), NA_real_)]
+  market_year[, log_total_units_market := fifelse(total_units_market > 0, log(total_units_market), NA_real_)]
+
+  if (!is.null(group_order)) {
+  market_year[, market_group := factor(market_group, levels = group_order)]
+  }
+
+  prefix <- paste0("market_concentration_", spec_name)
+  fwrite(market_year, p_fd(paste0(prefix, "_market_year.csv")))
+  if (legacy_prefix) {
+    fwrite(market_year, p_fd("market_concentration_market_year.csv"))
+  }
+
+  market_summary_year <- market_year[, .(
+    n_markets = .N,
+    total_units = sum(total_units_market, na.rm = TRUE),
+    weighted_mean_hhi = weighted.mean(hhi_units, total_units_market, na.rm = TRUE),
+    weighted_mean_hhi_parcels = weighted.mean(hhi_parcels, total_units_market, na.rm = TRUE),
+    weighted_mean_top1 = weighted.mean(share_top1, total_units_market, na.rm = TRUE),
+    weighted_mean_top3 = weighted.mean(share_top3, total_units_market, na.rm = TRUE),
+    weighted_mean_corp_share = weighted.mean(share_corp_units, total_units_market, na.rm = TRUE),
+    weighted_mean_log_rent = safe_weighted_mean(mean_log_rent, total_units_market),
+    median_n_owners = as.numeric(median(n_owners, na.rm = TRUE))
+  ), by = .(year, market_group)]
+  setorder(market_summary_year, market_group, year)
+  fwrite(market_summary_year, p_fd(paste0(prefix, "_summary_by_year.csv")))
+  if (legacy_prefix) {
+    fwrite(market_summary_year, p_fd("market_concentration_summary_by_year.csv"))
+  }
+
+  endpoint_years <- range(market_year$year, na.rm = TRUE)
+  market_summary_endpoints <- market_year[
+    year %in% endpoint_years,
+    .(
+      n_markets = .N,
+      total_units = sum(total_units_market, na.rm = TRUE),
+      weighted_mean_hhi = weighted.mean(hhi_units, total_units_market, na.rm = TRUE),
+      weighted_mean_top1 = weighted.mean(share_top1, total_units_market, na.rm = TRUE),
+      weighted_mean_top3 = weighted.mean(share_top3, total_units_market, na.rm = TRUE),
+      weighted_mean_corp_share = weighted.mean(share_corp_units, total_units_market, na.rm = TRUE),
+      median_n_owners = as.numeric(median(n_owners, na.rm = TRUE))
+    ),
+    by = .(year, market_group)
+  ]
+  setorder(market_summary_endpoints, market_group, year)
+  fwrite(market_summary_endpoints, p_fd(paste0(prefix, "_summary_endpoints.csv")))
+  if (legacy_prefix) {
+    fwrite(market_summary_endpoints, p_fd("market_concentration_summary_endpoints.csv"))
+  }
+
+  p_hhi <- ggplot(
+    market_summary_year,
+    aes(x = year, y = weighted_mean_hhi, color = market_group)
+  ) +
+    geom_line(linewidth = 0.9) +
+    geom_point(size = 1.8) +
+    labs(
+      x = NULL,
+      y = "Unit-weighted mean HHI",
+      color = NULL,
+      title = "Market concentration over time",
+      subtitle = spec_subtitle
+    ) +
+    theme_minimal(base_size = 11) +
+    theme(
+      panel.grid.minor = element_blank(),
+      legend.position = "bottom",
+      legend.box = "horizontal",
+      plot.margin = margin(8, 18, 8, 8)
+    )
+  ggsave(
+    p_fd(paste0(prefix, "_hhi_over_time.png")),
+    p_hhi,
+    width = 7.6,
+    height = 5.4,
+    dpi = 300
+  )
+  if (legacy_prefix) {
+    ggsave(
+      p_fd("market_concentration_hhi_over_time.png"),
+      p_hhi,
+      width = 7.6,
+      height = 5.4,
+      dpi = 300
+    )
+  }
+
+  if (corp_plot) {
+    p_corp <- ggplot(
+      market_summary_year,
+      aes(x = year, y = weighted_mean_corp_share, color = market_group)
+    ) +
+      geom_line(linewidth = 0.9) +
+      geom_point(size = 1.8) +
+      labs(
+        x = NULL,
+        y = "Corporate-owned unit share (%)",
+        color = NULL,
+        title = "Corporate ownership over time",
+        subtitle = spec_subtitle
+      ) +
+      theme_minimal(base_size = 11) +
+      theme(
+        panel.grid.minor = element_blank(),
+        legend.position = "bottom",
+        legend.box = "horizontal",
+        plot.margin = margin(8, 18, 8, 8)
+      )
+    ggsave(
+      p_fd(paste0(prefix, "_corp_share_over_time.png")),
+      p_corp,
+      width = 7.6,
+      height = 5.4,
+      dpi = 300
+    )
+    if (legacy_prefix) {
+      ggsave(
+        p_fd("market_concentration_corp_share_over_time.png"),
+        p_corp,
+        width = 7.6,
+        height = 5.4,
+        dpi = 300
+      )
+    }
+  }
+
+  market_persistence <- merge(
+    market_year[year == endpoint_years[1L], .(
+      market_id, market_group,
+      hhi_units_start = hhi_units,
+      total_units_start = total_units_market
+    )],
+    market_year[year == endpoint_years[2L], .(
+      market_id, market_group,
+      hhi_units_end = hhi_units,
+      total_units_end = total_units_market
+    )],
+    by = c("market_id", "market_group"),
+    all = FALSE
+  )
+  market_persistence[, total_units_plot := pmax(total_units_start, total_units_end, na.rm = TRUE)]
+  market_persistence[, log_hhi_units_start := log(hhi_units_start)]
+  market_persistence[, log_hhi_units_end := log(hhi_units_end)]
+  fwrite(market_persistence, p_fd(paste0(prefix, "_persistence.csv")))
+  if (legacy_prefix) {
+    fwrite(market_persistence, p_fd("market_concentration_persistence.csv"))
+  }
+
+  p_persist <- ggplot(
+    market_persistence,
+    aes(x = log_hhi_units_start, y = log_hhi_units_end, size = total_units_plot)
+  ) +
+    geom_point(alpha = 0.65, color = "#2c3e50") +
+    geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "#7f7f7f") +
+    scale_size_continuous(name = "Units", range = c(1.2, 7)) +
+    labs(
+      x = paste0("log(HHI) in ", endpoint_years[1L]),
+      y = paste0("log(HHI) in ", endpoint_years[2L]),
+      title = "Persistence of market concentration",
+      subtitle = spec_subtitle
+    ) +
+    theme_minimal(base_size = 11) +
+    theme(
+      legend.position = "bottom",
+      legend.box = "horizontal",
+      panel.grid.minor = element_blank(),
+      plot.margin = margin(8, 18, 8, 8)
+    ) +
+    guides(size = guide_legend(title.position = "top"))
+  if (uniqueN(market_persistence$market_group) > 1L) {
+    p_persist <- p_persist +
+      facet_wrap(~ market_group) +
+      theme(strip.text = element_text(size = 10))
+  }
+  ggsave(
+    p_fd(paste0(prefix, "_hhi_persistence.png")),
+    p_persist,
+    width = 8.2,
+    height = 5.6,
+    dpi = 300
+  )
+  if (legacy_prefix) {
+    ggsave(
+      p_fd("market_concentration_hhi_persistence.png"),
+      p_persist,
+      width = 8.2,
+      height = 5.6,
+      dpi = 300
+    )
+  }
+
+  list(
+    market_year = market_year,
+    market_summary_year = market_summary_year,
+    market_summary_endpoints = market_summary_endpoints
+  )
+}
+
+assert_unique(bldg, c("PID", "year"), "bldg_panel_blp")
+assert_unique(own_cong, c("PID", "year"), "xwalk_pid_conglomerate")
+
+market_base <- merge(
+  bldg[, .(
+    PID, year, GEOID, pm.zip, total_units, num_filings,
+    filing_rate_eb_pre_covid, log_med_rent, infousa_find_mean_k
+  )],
+  own_cong[, .(PID, year, conglomerate_id, is_corp_conglomerate)],
+  by = c("PID", "year"),
+  all.x = TRUE
+)
+market_base <- market_base[
+  !is.na(filing_rate_eb_pre_covid) &
+    !is.na(conglomerate_id) &
+    !is.na(total_units) &
+    total_units > 0
+]
+market_base[, zip5 := fifelse(
+  !is.na(pm.zip),
+  str_pad(gsub("^_", "", as.character(pm.zip)), 5L, "left", "0"),
+  NA_character_
+)]
+market_base[, tract := fifelse(
+  !is.na(GEOID),
+  substr(as.character(GEOID), 1L, 11L),
+  NA_character_
+)]
+market_base[, prop_size_bin := fcase(
+  total_units == 1, "1",
+  total_units >= 2 & total_units <= 4, "2-4",
+  total_units >= 5 & total_units <= 49, "5-49",
+  total_units >= 50, "50+",
+  default = NA_character_
+)]
+market_base[, prop_size_bin := factor(prop_size_bin, levels = c("1", "2-4", "5-49", "50+"))]
+market_base[, log_income_proxy := fifelse(
+  !is.na(infousa_find_mean_k) & infousa_find_mean_k > 0,
+  log(infousa_find_mean_k),
+  NA_real_
+)]
+
+market_zip_filing <- market_base[!is.na(zip5)]
+market_zip_filing[, market_group := fifelse(
+  filing_rate_eb_pre_covid > MARKET_HIGH_FILING_CUTOFF,
+  "High-filing (>5%)",
+  "Lower-filing (<=5%)"
+)]
+market_zip_filing[, market_id := paste(zip5, fifelse(market_group == "High-filing (>5%)", "high", "low"), sep = "__")]
+market_zip_filing[, market_cluster := zip5]
+
+market_zip <- market_base[!is.na(zip5)]
+market_zip[, market_group := "All ZIPs"]
+market_zip[, market_id := zip5]
+market_zip[, market_cluster := zip5]
+
+market_tract <- market_base[!is.na(tract)]
+market_tract[, market_group := "All tracts"]
+market_tract[, market_id := tract]
+market_tract[, market_cluster := tract]
+
+market_zip_size <- market_base[!is.na(zip5) & !is.na(prop_size_bin)]
+market_zip_size[, market_group := as.character(prop_size_bin)]
+market_zip_size[, market_id := paste(zip5, market_group, sep = "__")]
+market_zip_size[, market_cluster := zip5]
+
+market_zip_size_no_sfh <- market_base[!is.na(zip5) & !is.na(prop_size_bin) & prop_size_bin != "1"]
+market_zip_size_no_sfh[, market_group := as.character(prop_size_bin)]
+market_zip_size_no_sfh[, market_id := paste(zip5, market_group, sep = "__")]
+market_zip_size_no_sfh[, market_cluster := zip5]
+
+zip_filing_out <- build_market_concentration_outputs(
+  market_zip_filing,
+  spec_name = "zip_filing",
+  spec_subtitle = "Markets defined as ZIP x 1{building EB filing rate > 5%}",
+  group_order = c("Lower-filing (<=5%)", "High-filing (>5%)"),
+  legacy_prefix = TRUE,
+  corp_plot = TRUE
+)
+
+zip_out <- build_market_concentration_outputs(
+  market_zip,
+  spec_name = "zip",
+  spec_subtitle = "Markets defined as ZIP codes",
+  group_order = "All ZIPs"
+)
+
+tract_out <- build_market_concentration_outputs(
+  market_tract,
+  spec_name = "tract",
+  spec_subtitle = "Markets defined as census tracts",
+  group_order = "All tracts"
+)
+
+zip_size_out <- build_market_concentration_outputs(
+  market_zip_size,
+  spec_name = "zip_prop_size",
+  spec_subtitle = "Markets defined as ZIP x property-size bin",
+  group_order = c("1", "2-4", "5-49", "50+")
+)
+
+zip_size_no_sfh_out <- build_market_concentration_outputs(
+  market_zip_size_no_sfh,
+  spec_name = "zip_prop_size_no_sfh",
+  spec_subtitle = "Markets defined as ZIP x property-size bin (excluding 1-unit buildings)",
+  group_order = c("2-4", "5-49", "50+")
+)
+
+summarize_market_typology <- function(market_year_dt, typology_label) {
+  market_year_dt[, .(
+    n_markets = .N,
+    total_units = sum(total_units_market, na.rm = TRUE),
+    weighted_mean_hhi = weighted.mean(hhi_units, total_units_market, na.rm = TRUE)
+  ), by = year][
+    , market_typology := typology_label
+  ]
+}
+
+market_typology_compare <- rbindlist(list(
+  summarize_market_typology(zip_out$market_year, "ZIP"),
+  summarize_market_typology(tract_out$market_year, "Tract"),
+  summarize_market_typology(zip_size_out$market_year, "ZIP x property size"),
+  summarize_market_typology(zip_size_no_sfh_out$market_year, "ZIP x property size (SFH excluded)")
+), use.names = TRUE)
+market_typology_compare[, market_typology := factor(
+  market_typology,
+  levels = c("ZIP", "Tract", "ZIP x property size", "ZIP x property size (SFH excluded)")
+)]
+setorder(market_typology_compare, market_typology, year)
+fwrite(market_typology_compare, p_fd("market_concentration_typology_hhi_by_year.csv"))
+
+zip_filing_hhi_panel <- copy(zip_filing_out$market_summary_year)[, .(
+  year,
+  series = as.character(market_group),
+  value = weighted_mean_hhi,
+  panel = "ZIP x filing-rate HHI"
+)]
+
+zip_filing_corp_panel <- copy(zip_filing_out$market_summary_year)[, .(
+  year,
+  series = as.character(market_group),
+  value = weighted_mean_corp_share,
+  panel = "ZIP x filing-rate corporate share"
+)]
+
+typology_panel <- copy(market_typology_compare)[, .(
+  year,
+  series = as.character(market_typology),
+  value = weighted_mean_hhi,
+  panel = "Alternative market HHI"
+)]
+
+market_hhi_panels <- rbindlist(
+  list(zip_filing_hhi_panel, typology_panel),
+  use.names = TRUE
+)
+market_hhi_panels[, panel := factor(
+  panel,
+  levels = c("ZIP x filing-rate HHI", "Alternative market HHI")
+)]
+fwrite(market_hhi_panels, p_fd("market_concentration_hhi_panels.csv"))
+
+hhi_label_dt <- market_hhi_panels[year == max(year, na.rm = TRUE)]
+hhi_label_dt <- merge(
+  hhi_label_dt,
+  data.table(
+    panel = factor(
+      c("ZIP x filing-rate HHI", "ZIP x filing-rate HHI",
+        "Alternative market HHI", "Alternative market HHI",
+        "Alternative market HHI", "Alternative market HHI"),
+      levels = levels(market_hhi_panels$panel)
+    ),
+    series = c(
+      "Lower-filing (<=5%)", "High-filing (>5%)",
+      "ZIP", "Tract", "ZIP x property size", "ZIP x property size (SFH excluded)"
+    ),
+    label_nudge = c(-3, 3, -8, 8, -14, 12)
+  ),
+  by = c("panel", "series"),
+  all.x = TRUE
+)
+hhi_label_dt[is.na(label_nudge), label_nudge := 0]
+hhi_label_dt[, label_y := value + label_nudge]
+
+market_corp_panels <- copy(zip_filing_corp_panel)
+fwrite(market_corp_panels, p_fd("market_concentration_corp_panels.csv"))
+
+corp_label_dt <- market_corp_panels[year == max(year, na.rm = TRUE)]
+corp_label_dt <- merge(
+  corp_label_dt,
+  data.table(
+    panel = "ZIP x filing-rate corporate share",
+    series = c("Lower-filing (<=5%)", "High-filing (>5%)"),
+    label_nudge = c(-0.6, 0.8)
+  ),
+  by = c("panel", "series"),
+  all.x = TRUE
+)
+corp_label_dt[is.na(label_nudge), label_nudge := 0]
+corp_label_dt[, label_y := value + label_nudge]
+
+panel_palette <- c(
+  "Lower-filing (<=5%)" = "#f46d43",
+  "High-filing (>5%)" = "#1bb6c9",
+  "ZIP" = "#1b9e77",
+  "Tract" = "#d95f02",
+  "ZIP x property size" = "#7570b3",
+  "ZIP x property size (SFH excluded)" = "#e7298a"
+)
+
+p_market_hhi <- ggplot(
+  market_hhi_panels,
+  aes(x = year, y = value, color = series, group = series)
+) +
+  geom_line(linewidth = 0.95) +
+  geom_point(size = 1.7) +
+  ggrepel::geom_text_repel(
+    data = hhi_label_dt,
+    aes(label = series),
+    direction = "y",
+    hjust = 0,
+    nudge_x = 0.35,
+    box.padding = 0.18,
+    point.padding = 0.1,
+    segment.color = "gray65",
+    segment.size = 0.25,
+    size = 3,
+    min.segment.length = 0,
+    seed = 42,
+    show.legend = FALSE
+  ) +
+  facet_wrap(~ panel, ncol = 1, scales = "free_y") +
+  scale_color_manual(values = panel_palette) +
+  scale_x_continuous(
+    breaks = sort(unique(market_hhi_panels$year)),
+    expand = expansion(mult = c(0.01, 0.22))
+  ) +
+  labs(
+    x = NULL,
+    y = NULL,
+    color = NULL,
+    title = "Market concentration over time"
+  ) +
+  coord_cartesian(clip = "off") +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor = element_blank(),
+    legend.position = "none",
+    strip.text = element_text(face = "bold"),
+    plot.margin = margin(8, 120, 8, 8)
+  )
+ggsave(
+  p_fd("market_concentration_hhi_combined_over_time.png"),
+  p_market_hhi,
+  width = 8.3,
+  height = 7.5,
+  dpi = 300
+)
+
+p_market_corp <- ggplot(
+  market_corp_panels,
+  aes(x = year, y = value, color = series, group = series)
+) +
+  geom_line(linewidth = 0.95) +
+  geom_point(size = 1.8) +
+  ggrepel::geom_text_repel(
+    data = corp_label_dt,
+    aes(label = series),
+    direction = "y",
+    hjust = 0,
+    nudge_x = 0.35,
+    box.padding = 0.18,
+    point.padding = 0.1,
+    segment.color = "gray65",
+    segment.size = 0.25,
+    size = 3,
+    min.segment.length = 0,
+    seed = 42,
+    show.legend = FALSE
+  ) +
+  scale_color_manual(values = panel_palette) +
+  scale_x_continuous(
+    breaks = sort(unique(market_corp_panels$year)),
+    expand = expansion(mult = c(0.01, 0.22))
+  ) +
+  labs(
+    x = NULL,
+    y = "Corporate-owned unit share (%)",
+    color = NULL,
+    title = "Corporate ownership over time in ZIP x filing-rate markets"
+  ) +
+  coord_cartesian(clip = "off") +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor = element_blank(),
+    legend.position = "none",
+    plot.margin = margin(8, 120, 8, 8)
+  )
+ggsave(
+  p_fd("market_concentration_corp_combined_over_time.png"),
+  p_market_corp,
+  width = 8.3,
+  height = 4.2,
+  dpi = 300
+)
+
+invisible(tract_out)
+invisible(zip_size_out)
+invisible(zip_out)
+invisible(zip_size_no_sfh_out)
+
+market_year <- copy(zip_filing_out$market_year)
+
+market_reg_base <- market_year[
+  !is.na(mean_log_rent) &
+    is.finite(log_hhi_units) &
+    is.finite(log_total_units_market) &
+    !is.na(market_cluster) &
+    total_units_market > 0
+]
+market_reg_income <- market_reg_base[!is.na(mean_log_income)]
+
+mc1 <- feols(
+  mean_log_rent ~ log_hhi_units | year,
+  data = market_reg_base,
+  weights = ~total_units_market,
+  cluster = ~market_cluster,
+  notes = FALSE
+)
+mc2 <- feols(
+  mean_log_rent ~ log_hhi_units + share_corp_units | year,
+  data = market_reg_base,
+  weights = ~total_units_market,
+  cluster = ~market_cluster,
+  notes = FALSE
+)
+mc3 <- feols(
+  mean_log_rent ~ log_hhi_units + share_corp_units | market_id + year,
+  data = market_reg_base,
+  weights = ~total_units_market,
+  cluster = ~market_cluster,
+  notes = FALSE
+)
+mc4 <- feols(
+  mean_log_rent ~ log_hhi_units + share_corp_units + mean_log_income | market_id + year,
+  data = market_reg_income,
+  weights = ~total_units_market,
+  cluster = ~market_cluster,
+  notes = FALSE
+)
+mc5 <- feols(
+  mean_log_rent ~ log_hhi_units + share_corp_units + mean_log_income + log_total_units_market | market_id + year,
+  data = market_reg_income,
+  weights = ~total_units_market,
+  cluster = ~market_cluster,
+  notes = FALSE
+)
+
+market_models <- list(
+  `Year FE` = mc1,
+  `+ Corp share` = mc2,
+  `Market + year FE` = mc3,
+  `+ Income` = mc4,
+  `+ Market size` = mc5
+)
+
+market_coef_dt <- rbindlist(lapply(names(market_models), function(nm) {
+  ct <- coeftable(market_models[[nm]])
+  data.table(
+    model = nm,
+    term = rownames(ct),
+    estimate = ct[, "Estimate"],
+    std_error = ct[, "Std. Error"],
+    statistic = ct[, if ("t value" %in% colnames(ct)) "t value" else "z value"],
+    p_value = ct[, if ("Pr(>|t|)" %in% colnames(ct)) "Pr(>|t|)" else "Pr(>|z|)"]
+  )
+}))
+fwrite(market_coef_dt, p_fd("market_concentration_rent_coefs.csv"))
+
+etable(
+  market_models,
+  file = p_fd("market_concentration_rent_etable.tex"),
+  title = "Market Concentration and Rent in ZIP x Filing-Rate Markets",
+  label = "tab:market_concentration_rent",
+  fitstat = c("n", "r2", "ar2"),
+  dict = etable_dict,
+  style.tex = style.tex("base"),
+  adjustbox = "max width=0.98\\textwidth,center",
+  fontsize = "scriptsize",
+  replace = TRUE
+)
+logf("  Wrote market concentration outputs and rent regressions", log_file = log_file)
 
 # ============================================================
 # A3: Sequential R² variance decomposition
@@ -445,6 +1392,112 @@ m5 <- feols(as.formula(paste0(
   "filing_rate_eb_pre_covid ~ ", bldg_cov,
   " + pct_black_mean + owner_type + portfolio_bin_conglomerate_yr | tract + ", bldg_fe)),
   data = pid_cs_m5, weights = ~total_units_mean, notes = FALSE)
+
+# Owner-type bridge: show how unconditional owner-type gaps shrink as controls enter.
+pid_cs_bridge <- pid_cs_r2[
+  !is.na(owner_type) &
+    !is.na(portfolio_bin_conglomerate_yr) &
+    !is.na(pct_black_mean) &
+    !is.na(pct_female_mean)
+]
+owner_bridge_l1 <- feols(
+  filing_rate_eb_pre_covid ~ owner_type + portfolio_bin_conglomerate_yr,
+  data = pid_cs_bridge,
+  weights = ~total_units_mean,
+  cluster = ~tract,
+  notes = FALSE
+)
+owner_bridge_l2 <- feols(
+  filing_rate_eb_pre_covid ~ pct_black_mean + pct_female_mean +
+    owner_type + portfolio_bin_conglomerate_yr | tract,
+  data = pid_cs_bridge,
+  weights = ~total_units_mean,
+  cluster = ~tract,
+  notes = FALSE
+)
+owner_bridge_l3 <- feols(as.formula(paste0(
+  "filing_rate_eb_pre_covid ~ pct_black_mean + pct_female_mean + ",
+  "owner_type + portfolio_bin_conglomerate_yr + ",
+  bldg_cov, " | tract + ", bldg_fe)),
+  data = pid_cs_bridge,
+  weights = ~total_units_mean,
+  cluster = ~tract,
+  notes = FALSE
+)
+
+owner_label_map <- c(
+  "For-profit corp" = "For-profit corporate owner",
+  "Nonprofit" = "Nonprofit owner",
+  "PHA" = "PHA owner",
+  "Religious" = "Religious owner",
+  "Trust" = "Trust owner",
+  "Government-Local" = "Local government owner",
+  "Government-Federal" = "Federal government owner",
+  "Financial-Intermediary" = "Financial intermediary owner"
+)
+
+owner_bridge_models <- list(
+  `Landlord only` = owner_bridge_l1,
+  `+ Neighborhood` = owner_bridge_l2,
+  `+ Building chars` = owner_bridge_l3
+)
+
+owner_bridge_coefs <- rbindlist(lapply(names(owner_bridge_models), function(spec_nm) {
+  ct <- coeftable(owner_bridge_models[[spec_nm]])
+  keep <- grepl("^owner_type", rownames(ct))
+  if (!any(keep)) return(NULL)
+  est <- ct[keep, "Estimate"]
+  se <- ct[keep, "Std. Error"]
+  owner_raw <- sub("^owner_type", "", rownames(ct)[keep])
+  owner_lbl <- unname(owner_label_map[owner_raw])
+  owner_lbl[is.na(owner_lbl)] <- owner_raw[is.na(owner_lbl)]
+  data.table(
+    spec = spec_nm,
+    owner_type = owner_raw,
+    owner_label = owner_lbl,
+    estimate = est,
+    std_error = se,
+    conf_low = est - 1.96 * se,
+    conf_high = est + 1.96 * se,
+    p_value = ct[keep, "Pr(>|t|)"]
+  )
+}))
+owner_bridge_coefs[, spec := factor(spec, levels = names(owner_bridge_models))]
+owner_bridge_coefs[, owner_label := factor(
+  owner_label,
+  levels = unique(owner_bridge_coefs[order(owner_type), owner_label])
+)]
+fwrite(owner_bridge_coefs, p_fd("filing_decomp_owner_bridge_coefs.csv"))
+
+owner_bridge_means <- pid_cs_bridge[, .(
+  n_pids = .N,
+  mean_filing_rate = mean(filing_rate_eb_pre_covid, na.rm = TRUE),
+  mean_units_owned = mean(mean_units_owned_cong, na.rm = TRUE)
+), by = owner_type][
+  , owner_label := {
+      owner_chr <- as.character(owner_type)
+      lbl <- unname(owner_label_map[owner_chr])
+      lbl[is.na(lbl)] <- owner_chr[is.na(lbl)]
+      lbl
+    }
+][order(match(owner_type, unique(owner_bridge_coefs$owner_type)))]
+fwrite(owner_bridge_means, p_fd("filing_decomp_owner_bridge_means.csv"))
+
+etable(
+  owner_bridge_models,
+  file = p_fd("filing_decomp_owner_bridge_etable.tex"),
+  title = "Owner-Type Bridge Regressions",
+  label = "tab:owner_bridge",
+  fitstat = c("n", "r2", "ar2"),
+  dict = etable_dict,
+  order = c("^pct_black_mean$", "^pct_female_mean$", "^owner_type", "^portfolio_bin_conglomerate_yr"),
+  style.tex = style.tex("base"),
+  adjustbox = "max width=0.98\\textwidth,center",
+  fontsize = "scriptsize",
+  replace = TRUE
+)
+logf("  Wrote: filing_decomp_owner_bridge_coefs.csv + filing_decomp_owner_bridge_means.csv",
+     log_file = log_file)
 
 # Compute R² values
 # fixest::r2() uses "r2" and "ar2" (adjusted); "adj_r2" is not a valid key
@@ -599,8 +1652,10 @@ etable(coef_models,
   title         = "Cross-Sectional Filing Rate Regressions",
   label         = "tab:xsec_filing",
   fitstat       = c("n", "r2", "ar2"),
-  notes         = "Weighted by total units. Cluster SE at tract. Sample: 2011--2019 rental PIDs.",
+  dict          = etable_dict,
   style.tex     = style.tex("base"),
+  adjustbox     = "max width=0.98\\textwidth,center",
+  fontsize      = "scriptsize",
   replace       = TRUE
 )
 logf("  Wrote: filing_decomp_xsec_etable.tex", log_file = log_file)
@@ -830,11 +1885,19 @@ if (has_race_cases) {
   if (!is.na(race_col)) {
     ev <- merge(ev, race_cases[, c("id", race_col), with = FALSE],
                 by = "id", all.x = TRUE)
-    setnames(ev, race_col, "case_race_group")
-    ev[, case_race_black := case_race_group == "Black" |
-         str_detect(tolower(coalesce(as.character(case_race_group), "")), "black")]
+    if (is.numeric(ev[[race_col]]) || is.integer(ev[[race_col]])) {
+      setnames(ev, race_col, "case_race_black_prob")
+      ev[, case_race_black_prob := pmin(pmax(as.numeric(case_race_black_prob), 0), 1)]
+    } else {
+      setnames(ev, race_col, "case_race_group")
+      ev[, case_race_black_prob := fifelse(
+        case_race_group == "Black" |
+          str_detect(tolower(coalesce(as.character(case_race_group), "")), "black"),
+        1, 0
+      )]
+    }
     logf("  Defendant race merged: ",
-         ev[!is.na(case_race_black), .N], " cases", log_file = log_file)
+         ev[!is.na(case_race_black_prob), .N], " cases", log_file = log_file)
   }
 }
 
@@ -985,8 +2048,10 @@ etable(months_models,
   title     = "Back-Rent Months of Arrears Regressions",
   label     = "tab:backrent_months",
   fitstat   = c("n", "r2", "ar2"),
-  notes     = "Cluster SE at PID. Sample: non-commercial cases 2011--2019 with months >= 1.",
+  dict      = etable_dict,
   style.tex = style.tex("base"),
+  adjustbox = "max width=0.98\\textwidth,center",
+  fontsize  = "scriptsize",
   replace   = TRUE
 )
 logf("  Wrote: backrent_months_etable.tex", log_file = log_file)
@@ -1026,8 +2091,10 @@ etable(brent1,
   title     = "Back-Rent Elasticity Regression",
   label     = "tab:backrent_rent",
   fitstat   = c("n", "r2", "ar2"),
-  notes     = "Cluster SE at PID. Sample: non-commercial cases 2011--2019, ongoing\\_rent 300--6000, total\\_rent 300--15000.",
+  dict      = etable_dict,
   style.tex = style.tex("base"),
+  adjustbox = "max width=0.82\\textwidth,center",
+  fontsize  = "scriptsize",
   replace   = TRUE
 )
 logf("  log_ongoing_rent coefficient (elasticity): ",
@@ -1038,14 +2105,24 @@ logf("  Wrote: backrent_rent_coefs.csv + backrent_rent_etable.tex",
 # ============================================================
 # B4: Racial disparity specs (optional)
 # ============================================================
-if (has_race_cases && "case_race_black" %in% names(ev)) {
+if (has_race_cases && "case_race_black_prob" %in% names(ev)) {
   logf("--- B4: Racial disparity specs ---", log_file = log_file)
 
-  ev_race <- ev_reg[!is.na(case_race_black) & !is.na(owner_type) &
-                      !is.na(pct_black) & !is.na(building_type)]
+  ev_race <- ev_reg[
+    !is.na(case_race_black_prob) & !is.na(owner_type) &
+      !is.na(pct_black) & !is.na(building_type) &
+      plaintiff_type != "PHA" &
+      owner_type != "PHA" &
+      is_pha_owner != TRUE
+  ]
 
-  brace <- feols(log_months ~ case_race_black + plaintiff_type +
-                   case_race_black:plaintiff_type +
+  brace_base <- feols(log_months ~ case_race_black_prob,
+    data    = ev_race,
+    cluster = ~PID,
+    notes   = FALSE
+  )
+
+  brace_controls <- feols(log_months ~ case_race_black_prob + plaintiff_type +
                    owner_type + plaintiff_is_owner +
                    log_ongoing_rent + pct_black |
                    year + tract + building_type,
@@ -1054,17 +2131,61 @@ if (has_race_cases && "case_race_black" %in% names(ev)) {
     notes   = FALSE
   )
 
-  race_ct <- coeftable(brace)
-  race_dt <- data.table(
-    term      = rownames(race_ct),
-    estimate  = race_ct[, "Estimate"],
-    std_error = race_ct[, "Std. Error"],
-    t_stat    = race_ct[, "t value"],
-    p_value   = race_ct[, "Pr(>|t|)"]
+  brace_int <- feols(log_months ~ case_race_black_prob + plaintiff_type +
+                   case_race_black_prob:plaintiff_type +
+                   owner_type + plaintiff_is_owner +
+                   log_ongoing_rent + pct_black |
+                   year + tract + building_type,
+    data    = ev_race,
+    cluster = ~PID,
+    notes   = FALSE
   )
+
+  brace_no_tract <- feols(log_months ~ case_race_black_prob + plaintiff_type +
+                   owner_type + plaintiff_is_owner +
+                   log_ongoing_rent + pct_black |
+                   year + building_type,
+    data    = ev_race,
+    cluster = ~PID,
+    notes   = FALSE
+  )
+
+  race_models <- list(
+    `Case Black prob.` = brace_base,
+    `+ FE + controls` = brace_controls,
+    `+ Interactions` = brace_int,
+    `No tract FE` = brace_no_tract
+  )
+
+  race_dt <- rbindlist(lapply(names(race_models), function(model_nm) {
+    race_ct <- coeftable(race_models[[model_nm]])
+    data.table(
+      model = model_nm,
+      term = rownames(race_ct),
+      estimate = race_ct[, "Estimate"],
+      std_error = race_ct[, "Std. Error"],
+      t_stat = race_ct[, "t value"],
+      p_value = race_ct[, "Pr(>|t|)"]
+    )
+  }))
   fwrite(race_dt, p_fd("backrent_race_coefs.csv"))
-  logf("  Racial disparity regression N: ", nobs(brace), log_file = log_file)
-  logf("  Wrote: backrent_race_coefs.csv", log_file = log_file)
+  etable(race_models,
+    file = p_fd("backrent_race_etable.tex"),
+    title = "Racial Disparity Regressions",
+    label = "tab:backrent_race",
+    fitstat = c("n", "r2", "ar2"),
+    dict = etable_dict,
+    order = c("^case_race_black_prob$", "^case_race_black_prob:plaintiff_type", "^plaintiff_type", "^owner_type", "^pct_black$"),
+    style.tex = style.tex("base"),
+    adjustbox = "max width=0.92\\textwidth,center",
+    fontsize = "scriptsize",
+    replace = TRUE
+  )
+  logf("  Racial disparity regression N: base=", nobs(brace_base),
+       " controls=", nobs(brace_controls),
+       " interactions=", nobs(brace_int),
+       " no_tract=", nobs(brace_no_tract), log_file = log_file)
+  logf("  Wrote: backrent_race_coefs.csv + backrent_race_etable.tex", log_file = log_file)
 } else {
   logf("--- B4: Skipped (race_imputed_case_sample not available) ---",
        log_file = log_file)

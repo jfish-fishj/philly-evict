@@ -1,0 +1,10 @@
+owner_type,n_pids,mean_filing_rate,mean_units_owned,owner_label
+For-profit corp,35170,0.0685264364074224,49.8213091966009,For-profit corporate owner
+Nonprofit,1068,0.174204143649821,258.466916354558,Nonprofit owner
+PHA,3772,0.0119636260159143,9953.16646046913,PHA owner
+Religious,337,0.0406835348088377,10.6185295087372,Religious owner
+Trust,689,0.0668697762962568,7.78116432833414,Trust owner
+Government-Local,182,0.0481399456649526,2474.278998779,Local government owner
+Government-Federal,5,0.00289153570371298,24.6,Federal government owner
+Financial-Intermediary,871,0.0579115513279326,42.9332823064166,Financial intermediary owner
+Person,130777,0.0418106351860372,4.34137416280305,Person

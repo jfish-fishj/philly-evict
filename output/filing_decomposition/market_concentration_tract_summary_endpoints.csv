@@ -1,0 +1,3 @@
+year,market_group,n_markets,total_units,weighted_mean_hhi,weighted_mean_top1,weighted_mean_top3,weighted_mean_corp_share,median_n_owners
+2011,All tracts,384,346775,374.931024271583,11.2081320741115,20.578184701896,37.9756326148079,399.5
+2019,All tracts,384,373854,371.316712935055,11.0730392078191,20.5607001663751,42.3135769578499,411

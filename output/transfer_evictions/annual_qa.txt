@@ -1,5 +1,5 @@
 === Transfer-Eviction Event Study QA (annual) ===
-Run date: 2026-03-11 15:37:36.679358
+Run date: 2026-03-13 14:48:23.597581
 Frequency: annual
 Reference period: event_time = -1
 
@@ -11,46 +11,52 @@ Single-transfer PIDs: 178768
 
 --- Acquirer classification (pre-acquisition temporal) ---
 Median pre-acq rate (among filers): 0.04545
-               acq_filer_bin n_transfers n_owners n_pids mean_units
-                      <char>       <int>    <int>  <int>      <num>
-1:           Single-purchase      460319   434351 292060        1.5
-2: Non-filer (has portfolio)       22065     7202  20960        1.5
-3:       Low-filer portfolio       18716     2036  17995        1.3
-4:      High-filer portfolio       18318     3044  17204        1.6
+               acq_filer_bin n_transfers n_conglomerates n_pids mean_units
+                      <char>       <int>           <int>  <int>      <num>
+1:           Single-purchase      438893          408619 280677        1.5
+2: Non-filer (has portfolio)       30502           13115  29201        1.5
+3:       Low-filer portfolio       21990            2835  21120        1.5
+4:      High-filer portfolio       21439            4890  20081        1.7
    total_units_sum pct_corporate mean_portfolio median_price mean_acq_rate
              <int>         <num>          <num>        <num>         <num>
-1:          188934          12.5           14.2        92000           NaN
-2:           18757          99.7           20.7        45850       0.00000
-3:           16133          99.8          238.8        33000       0.02622
-4:           20822          95.8          484.1        40000       0.09490
+1:          169825          12.7           14.9        94500           NaN
+2:           26896          69.2           14.9        55524       0.00000
+3:           21644          92.6          231.8        36000       0.02505
+4:           26287          82.1          434.7        41000       0.10520
    mean_n_other pct_of_transfers pct_of_units
           <num>            <num>        <num>
-1:          0.0             88.6         77.2
-2:          4.5              4.2          7.7
-3:        106.5              3.6          6.6
-4:        361.7              3.5          8.5
+1:          0.0             85.6         69.4
+2:          3.7              5.9         11.0
+3:        100.9              4.3          8.8
+4:        144.5              4.2         10.7
 
 --- Acquirer x Corporate cross-tab ---
-               acq_filer_bin is_corp n_transfers n_owners mean_units
-                      <char>  <lgcl>       <int>    <int>      <num>
-1:      High-filer portfolio    TRUE       17549     3032        1.6
-2:      High-filer portfolio   FALSE         769       14        1.1
-3:       Low-filer portfolio    TRUE       18679     2029        1.3
-4:       Low-filer portfolio   FALSE          37        9        1.4
-5: Non-filer (has portfolio)    TRUE       21995     7178        1.5
-6: Non-filer (has portfolio)   FALSE          70       25        2.0
-7:           Single-purchase    TRUE       57597    32546        3.2
-8:           Single-purchase   FALSE      402722   401809        1.3
-   total_units_sum mean_portfolio mean_acq_rate pct_of_bin
-             <int>          <num>         <num>      <num>
-1:           20245          464.3       0.09628       95.8
-2:             577          936.0       0.06336        4.2
-3:           16092          239.2       0.02621       99.8
-4:              41           66.4       0.03350        0.2
-5:           18672           20.7       0.00000       99.7
-6:              85            9.4       0.00000        0.3
-7:           50332           97.7           NaN       12.5
-8:          138602            2.4           NaN       87.5
+                acq_filer_bin is_corp n_transfers n_conglomerates mean_units
+                       <char>  <lgcl>       <int>           <int>      <num>
+ 1:      High-filer portfolio      NA           1               1        3.0
+ 2:      High-filer portfolio    TRUE       17606            3174        1.8
+ 3:      High-filer portfolio   FALSE        3832            1845        1.3
+ 4:       Low-filer portfolio      NA           1               1        3.0
+ 5:       Low-filer portfolio    TRUE       20368            2186        1.5
+ 6:       Low-filer portfolio   FALSE        1621             755        1.4
+ 7: Non-filer (has portfolio)    TRUE       21114            7236        1.5
+ 8: Non-filer (has portfolio)   FALSE        9388            6103        1.3
+ 9:           Single-purchase      NA           3               3        NaN
+10:           Single-purchase    TRUE       55522           32262        2.9
+11:           Single-purchase   FALSE      383368          376661        1.3
+    total_units_sum mean_portfolio mean_acq_rate pct_of_bin
+              <int>          <num>         <num>      <num>
+ 1:               3         1733.0       0.05992        0.0
+ 2:           22540          484.1       0.10114       82.1
+ 3:            3744          207.1       0.12385       17.9
+ 4:               3          178.0       0.04531        0.0
+ 5:           19753          247.5       0.02492       92.6
+ 6:            1888           34.6       0.02667        7.4
+ 7:           17889           19.7       0.00000       69.2
+ 8:            9007            3.9       0.00000       30.8
+ 9:               0            1.0           NaN        0.0
+10:           45159          103.3           NaN       12.7
+11:          124666            2.1           NaN       87.3
 
 --- Composition by event time ---
    event_time  n_obs n_pids pct_units_observed mean_units pct_rental_pre
@@ -78,18 +84,12 @@ Median pre-acq rate (among filers): 0.04545
 
 --- Pre-transfer balance by acquirer type ---
 Key: <acq_filer_bin>
-               acq_filer_bin mean_filing_rate mean_units       n
-                      <char>            <num>      <num>   <int>
-1:      High-filer portfolio          0.06918        1.6   43481
-2:       Low-filer portfolio          0.03072        1.4   43838
-3: Non-filer (has portfolio)          0.02488        1.5   51918
-4:           Single-purchase          0.03171        1.6 1041597
-   mean_violations
-             <num>
-1:            0.52
-2:            0.46
-3:            0.44
-4:            0.36
+               acq_filer_bin mean_filing_rate mean_units      n mean_violations
+                      <char>            <num>      <num>  <int>           <num>
+1:      High-filer portfolio          0.06571        1.7  51791            0.50
+2:       Low-filer portfolio          0.02980        1.5  52306            0.46
+3: Non-filer (has portfolio)          0.02531        1.5  71925            0.41
+4:           Single-purchase          0.03179        1.5 991624            0.36
 
 --- Pre-transfer balance by buyer type ---
 Key: <buyer_type>

@@ -1,0 +1,44 @@
+
+\begingroup
+\centering
+\begin{tabular}{lcc}
+   \toprule
+    & \multicolumn{2}{c}{filing\_rate}\\
+                                              & (1)            & (2)\\  
+   \midrule 
+   et\_m3 $\times$ acq\_rate\_demean          & -0.1754        &   \\   
+                                              & (0.1454)       &   \\   
+   acq\_rate\_demean $\times$ et\_m1          & -0.1591$^{**}$ &   \\   
+                                              & (0.0762)       &   \\   
+   acq\_rate\_demean $\times$ et\_0           & -0.1395        &   \\   
+                                              & (0.1140)       &   \\   
+   acq\_rate\_demean $\times$ et\_1           & 0.0499         &   \\   
+                                              & (0.1309)       &   \\   
+   acq\_rate\_demean $\times$ et\_2           & 0.1148         &   \\   
+                                              & (0.2007)       &   \\   
+   acq\_rate\_demean $\times$ et\_3           & 0.0767         &   \\   
+                                              & (0.1515)       &   \\   
+   acq\_rate\_demean $\times$ et\_4           & -0.0619        &   \\   
+                                              & (0.1325)       &   \\   
+   acq\_rate\_demean $\times$ et\_5           & 0.0902         &   \\   
+                                              & (0.1230)       &   \\   
+   post\_treat                                &                & 0.0166$^{***}$\\   
+                                              &                & (0.0052)\\   
+   post\_treat $\times$ acq\_rate\_demean     &                & 0.1744$^{*}$\\   
+                                              &                & (0.0893)\\   
+   Treated PIDs                               & 4,822          & 4,815\\  
+   Control PIDs                               & 32,976         & 32,976\\  
+   SD(acq rate)                               & 0.0782         & 0.0782\\  
+   Mean(acq rate)                             & 0.0624         & 0.0624\\  
+    \\
+   Observations                               & 474,589        & 470,052\\  
+   R$^2$                                      & 0.53672        & 0.53773\\  
+   Within R$^2$                               & 0.00073        & 0.00056\\  
+    \\
+   PID fixed effects                          & $\checkmark$   & $\checkmark$\\   
+   year fixed effects                         & $\checkmark$   & $\checkmark$\\   
+   \bottomrule
+\end{tabular}
+\par\endgroup
+
+

@@ -1,0 +1,3 @@
+sample_group,n_pids,panel_rows,mean_units,pct_corporate,pct_sheriff,median_price,mean_filing_rate,pct_of_treated
+Dropped: repeat-transfer treated PIDs,79636,571040,1.4,36.6,22.2,73000,0.0316,33.8
+Kept: single-transfer treated PIDs,156039,912563,1.6,22.2,11,116000,0.0325,66.2

@@ -1,0 +1,69 @@
+
+\begin{table}[htbp]
+   \caption{\label{tab:owner_bridge} Owner-Type Bridge Regressions}
+   \centering
+   \scriptsize
+   \begin{adjustbox}{max width=0.98\textwidth,center}
+      \begin{tabular}{lccc}
+         \tabularnewline \midrule \midrule
+         Dependent Variable: & \multicolumn{3}{c}{filing\_rate\_eb\_pre\_covid}\\
+         Model:                                  & (1)             & (2)             & (3)\\  
+         \midrule
+         \emph{Variables}\\
+         Constant                                & 0.0417$^{***}$  &                 &   \\   
+                                                 & (0.0018)        &                 &   \\   
+         For-profit corporate owner              & 0.0474$^{***}$  & 0.0507$^{***}$  & 0.0204$^{***}$\\   
+                                                 & (0.0067)        & (0.0062)        & (0.0049)\\   
+         Nonprofit owner                         & 0.0430$^{***}$  & 0.0527$^{***}$  & 0.0060\\   
+                                                 & (0.0140)        & (0.0128)        & (0.0151)\\   
+         PHA owner                               & -0.0616$^{***}$ & -0.0537$^{***}$ & -0.0991$^{***}$\\   
+                                                 & (0.0143)        & (0.0106)        & (0.0130)\\   
+         Religious owner                         & 0.0085          & 0.0010          & -0.0226\\   
+                                                 & (0.0259)        & (0.0270)        & (0.0233)\\   
+         Trust owner                             & 0.0328$^{**}$   & 0.0397$^{***}$  & 0.0210\\   
+                                                 & (0.0166)        & (0.0149)        & (0.0142)\\   
+         Local government owner                  & -0.0377$^{***}$ & -0.0211         & -0.0161\\   
+                                                 & (0.0135)        & (0.0135)        & (0.0136)\\   
+         Federal government owner                & -0.0674$^{***}$ & -0.1335$^{***}$ & -0.1049$^{**}$\\   
+                                                 & (0.0127)        & (0.0444)        & (0.0454)\\   
+         Financial intermediary owner            & 0.0247          & 0.0216          & 0.0094\\   
+                                                 & (0.0304)        & (0.0240)        & (0.0144)\\   
+         Conglomerate portfolio: 2-4 properties  & 0.0056          & 0.0033          & -0.0010\\   
+                                                 & (0.0067)        & (0.0063)        & (0.0055)\\   
+         Conglomerate portfolio: 5-19 properties & 0.0083          & 0.0023          & -0.0022\\   
+                                                 & (0.0067)        & (0.0051)        & (0.0042)\\   
+         Conglomerate portfolio: 20+ properties  & 0.0316$^{**}$   & 0.0271$^{**}$   & 0.0219$^{**}$\\   
+                                                 & (0.0145)        & (0.0110)        & (0.0104)\\   
+         Mean Black share                        &                 & 0.0463$^{***}$  & 0.0351$^{***}$\\   
+                                                 &                 & (0.0053)        & (0.0050)\\   
+         Mean Female share                       &                 & 0.0097$^{***}$  & 0.0017\\   
+                                                 &                 & (0.0025)        & (0.0023)\\   
+         2-5 units                               &                 &                 & 0.0011\\   
+                                                 &                 &                 & (0.0019)\\   
+         21-50 units                             &                 &                 & 0.0237$^{***}$\\   
+                                                 &                 &                 & (0.0091)\\   
+         51+ units                               &                 &                 & 0.0202$^{*}$\\   
+                                                 &                 &                 & (0.0103)\\   
+         6-20 units                              &                 &                 & -0.0035\\   
+                                                 &                 &                 & (0.0062)\\   
+         Rental-share correction                 &                 &                 & 0.0527$^{***}$\\   
+                                                 &                 &                 & (0.0035)\\   
+         \midrule
+         \emph{Fixed-effects}\\
+         Tract                                   &                 & Yes             & Yes\\  
+         Building type                           &                 &                 & Yes\\  
+         Year built decade                       &                 &                 & Yes\\  
+         Quality grade                           &                 &                 & Yes\\  
+         \midrule
+         \emph{Fit statistics}\\
+         Observations                            & 172,871         & 172,870         & 172,870\\  
+         R$^2$                                   & 0.03558         & 0.15841         & 0.23210\\  
+         Adjusted R$^2$                          & 0.03551         & 0.15648         & 0.23012\\  
+         \midrule \midrule
+         \multicolumn{4}{l}{\emph{Clustered (Tract) standard-errors in parentheses}}\\
+         \multicolumn{4}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+      \end{tabular}
+   \end{adjustbox}
+\end{table}
+
+

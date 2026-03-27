@@ -1,0 +1,37 @@
+
+\begin{table}[htbp]
+   \caption{\label{tab:market_concentration_rent} Market Concentration and Rent in ZIP x Filing-Rate Markets}
+   \centering
+   \scriptsize
+   \begin{adjustbox}{max width=0.98\textwidth,center}
+      \begin{tabular}{lccccc}
+         \tabularnewline \midrule \midrule
+         Dependent Variable: & \multicolumn{5}{c}{mean\_log\_rent}\\
+         Model:                     & (1)      & (2)      & (3)            & (4)            & (5)\\  
+         \midrule
+         \emph{Variables}\\
+         Log HHI                    & 0.0250   & -0.0051  & -0.0259        & -0.0280        & 0.0069\\   
+                                    & (0.0270) & (0.0376) & (0.0818)       & (0.0829)       & (0.0674)\\   
+         Corporate unit share (\%)  &          & 0.0031   & 0.0074$^{***}$ & 0.0074$^{***}$ & 0.0060$^{**}$\\   
+                                    &          & (0.0029) & (0.0026)       & (0.0026)       & (0.0025)\\   
+         Mean log income            &          &          &                & -0.0190        & -0.0365\\   
+                                    &          &          &                & (0.0279)       & (0.0281)\\   
+         Log market units           &          &          &                &                & 0.2290$^{**}$\\   
+                                    &          &          &                &                & (0.1103)\\   
+         \midrule
+         \emph{Fixed-effects}\\
+         Year                       & Yes      & Yes      & Yes            & Yes            & Yes\\  
+         market\_id                 &          &          & Yes            & Yes            & Yes\\  
+         \midrule
+         \emph{Fit statistics}\\
+         Observations               & 869      & 869      & 865            & 860            & 860\\  
+         R$^2$                      & 0.07468  & 0.08424  & 0.90592        & 0.90597        & 0.90675\\  
+         Adjusted R$^2$             & 0.06499  & 0.07357  & 0.89248        & 0.89245        & 0.89320\\  
+         \midrule \midrule
+         \multicolumn{6}{l}{\emph{Clustered (market\_cluster) standard-errors in parentheses}}\\
+         \multicolumn{6}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+      \end{tabular}
+   \end{adjustbox}
+\end{table}
+
+

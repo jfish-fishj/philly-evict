@@ -1,0 +1,60 @@
+
+\begin{table}[htbp]
+   \caption{\label{tab:backrent_race} Racial Disparity Regressions}
+   \centering
+   \scriptsize
+   \begin{adjustbox}{max width=0.92\textwidth,center}
+      \begin{tabular}{lcccc}
+         \tabularnewline \midrule \midrule
+         Dependent Variable: & \multicolumn{4}{c}{log\_months}\\
+         Model:                                        & (1)            & (2)             & (3)             & (4)\\  
+         \midrule
+         \emph{Variables}\\
+         Constant                                      & 0.7371$^{***}$ &                 &                 &   \\   
+                                                       & (0.0149)       &                 &                 &   \\   
+         Case Black probability                        & 0.1039$^{***}$ & -0.0036         & -0.0181$^{*}$   & 0.0040\\   
+                                                       & (0.0189)       & (0.0077)        & (0.0107)        & (0.0087)\\   
+         For-profit corporate plaintiff                &                & -0.0285$^{***}$ & -0.0439$^{***}$ & -0.0441$^{***}$\\   
+                                                       &                & (0.0104)        & (0.0132)        & (0.0154)\\   
+         Nonprofit plaintiff                           &                & -0.0952$^{***}$ & -0.0992$^{*}$   & -0.0980$^{**}$\\   
+                                                       &                & (0.0355)        & (0.0561)        & (0.0386)\\   
+         For-profit corporate owner                    &                & -0.0006         & -0.0009         & 0.0031\\   
+                                                       &                & (0.0112)        & (0.0112)        & (0.0188)\\   
+         Nonprofit owner                               &                & -0.0275         & -0.0278         & 0.0185\\   
+                                                       &                & (0.0342)        & (0.0345)        & (0.0393)\\   
+         Religious owner                               &                & -0.1976$^{**}$  & -0.2019$^{**}$  & -0.1826$^{*}$\\   
+                                                       &                & (0.0833)        & (0.0832)        & (0.1108)\\   
+         Trust owner                                   &                & -0.0915$^{***}$ & -0.0915$^{**}$  & -0.0931$^{*}$\\   
+                                                       &                & (0.0353)        & (0.0355)        & (0.0515)\\   
+         Local government owner                        &                & 0.0394          & 0.0399          & 0.0231\\   
+                                                       &                & (0.1318)        & (0.1320)        & (0.1604)\\   
+         Financial intermediary owner                  &                & -0.0958$^{**}$  & -0.0954$^{**}$  & -0.0575\\   
+                                                       &                & (0.0477)        & (0.0478)        & (0.0415)\\   
+         Plaintiff matches owner                       &                & -0.0021         & -0.0026         & 0.0022\\   
+                                                       &                & (0.0112)        & (0.0112)        & (0.0160)\\   
+         Log ongoing rent                              &                & -0.3117$^{***}$ & -0.3116$^{***}$ & -0.3208$^{***}$\\   
+                                                       &                & (0.0086)        & (0.0086)        & (0.0106)\\   
+         Building Black share                          &                & -0.0167         & -0.0142         & 0.0125\\   
+                                                       &                & (0.0120)        & (0.0122)        & (0.0120)\\   
+         Case Black probability x for-profit plaintiff &                &                 & 0.0264$^{*}$    &   \\   
+                                                       &                &                 & (0.0136)        &   \\   
+         Case Black probability x nonprofit plaintiff  &                &                 & 0.0089          &   \\   
+                                                       &                &                 & (0.0523)        &   \\   
+         \midrule
+         \emph{Fixed-effects}\\
+         Year                                          &                & Yes             & Yes             & Yes\\  
+         Tract                                         &                & Yes             & Yes             & \\  
+         Building type                                 &                & Yes             & Yes             & Yes\\  
+         \midrule
+         \emph{Fit statistics}\\
+         Observations                                  & 113,119        & 113,118         & 113,118         & 113,119\\  
+         R$^2$                                         & 0.00506        & 0.14517         & 0.14524         & 0.10863\\  
+         Adjusted R$^2$                                & 0.00505        & 0.14210         & 0.14216         & 0.10841\\  
+         \midrule \midrule
+         \multicolumn{5}{l}{\emph{Clustered (PID) standard-errors in parentheses}}\\
+         \multicolumn{5}{l}{\emph{Signif. Codes: ***: 0.01, **: 0.05, *: 0.1}}\\
+      \end{tabular}
+   \end{adjustbox}
+\end{table}
+
+

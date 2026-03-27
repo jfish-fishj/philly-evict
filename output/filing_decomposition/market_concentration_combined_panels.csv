@@ -1,0 +1,73 @@
+year,series,value,panel
+2011,Lower-filing (<=5%),113.493661823393,ZIP x filing-rate HHI
+2012,Lower-filing (<=5%),111.634500903554,ZIP x filing-rate HHI
+2013,Lower-filing (<=5%),118.062071158228,ZIP x filing-rate HHI
+2014,Lower-filing (<=5%),116.172979858335,ZIP x filing-rate HHI
+2015,Lower-filing (<=5%),115.279492544769,ZIP x filing-rate HHI
+2016,Lower-filing (<=5%),115.322063989737,ZIP x filing-rate HHI
+2017,Lower-filing (<=5%),113.549508081192,ZIP x filing-rate HHI
+2018,Lower-filing (<=5%),113.653536356611,ZIP x filing-rate HHI
+2019,Lower-filing (<=5%),112.296774148536,ZIP x filing-rate HHI
+2011,High-filing (>5%),203.200735611914,ZIP x filing-rate HHI
+2012,High-filing (>5%),205.583539292615,ZIP x filing-rate HHI
+2013,High-filing (>5%),203.815028355024,ZIP x filing-rate HHI
+2014,High-filing (>5%),208.82348037758,ZIP x filing-rate HHI
+2015,High-filing (>5%),211.759510863488,ZIP x filing-rate HHI
+2016,High-filing (>5%),211.806792031627,ZIP x filing-rate HHI
+2017,High-filing (>5%),210.264094479782,ZIP x filing-rate HHI
+2018,High-filing (>5%),208.677611777785,ZIP x filing-rate HHI
+2019,High-filing (>5%),208.652356570689,ZIP x filing-rate HHI
+2011,Lower-filing (<=5%),35.8703337672146,ZIP x filing-rate corporate share
+2012,Lower-filing (<=5%),36.045181982987,ZIP x filing-rate corporate share
+2013,Lower-filing (<=5%),36.5380991268296,ZIP x filing-rate corporate share
+2014,Lower-filing (<=5%),37.0321881806528,ZIP x filing-rate corporate share
+2015,Lower-filing (<=5%),37.40536886458,ZIP x filing-rate corporate share
+2016,Lower-filing (<=5%),37.9748951431524,ZIP x filing-rate corporate share
+2017,Lower-filing (<=5%),38.6580569548216,ZIP x filing-rate corporate share
+2018,Lower-filing (<=5%),39.4784282514946,ZIP x filing-rate corporate share
+2019,Lower-filing (<=5%),40.0108619468572,ZIP x filing-rate corporate share
+2011,High-filing (>5%),43.3360914467837,ZIP x filing-rate corporate share
+2012,High-filing (>5%),43.7951525265064,ZIP x filing-rate corporate share
+2013,High-filing (>5%),44.3578702061908,ZIP x filing-rate corporate share
+2014,High-filing (>5%),45.3999399339273,ZIP x filing-rate corporate share
+2015,High-filing (>5%),46.2769396015873,ZIP x filing-rate corporate share
+2016,High-filing (>5%),47.0335032630472,ZIP x filing-rate corporate share
+2017,High-filing (>5%),47.7922513999032,ZIP x filing-rate corporate share
+2018,High-filing (>5%),48.1608288110508,ZIP x filing-rate corporate share
+2019,High-filing (>5%),48.5110622305955,ZIP x filing-rate corporate share
+2011,ZIP,84.1221946577595,Alternative market HHI
+2012,ZIP,83.0216035633598,Alternative market HHI
+2013,ZIP,87.997019195241,Alternative market HHI
+2014,ZIP,87.2299002609368,Alternative market HHI
+2015,ZIP,86.7176157105182,Alternative market HHI
+2016,ZIP,86.5234838677678,Alternative market HHI
+2017,ZIP,85.4890926053521,Alternative market HHI
+2018,ZIP,85.7909620528724,Alternative market HHI
+2019,ZIP,85.1660484612202,Alternative market HHI
+2011,Tract,374.931024271583,Alternative market HHI
+2012,Tract,372.820913495606,Alternative market HHI
+2013,Tract,374.899011562173,Alternative market HHI
+2014,Tract,377.665768682724,Alternative market HHI
+2015,Tract,377.641519149475,Alternative market HHI
+2016,Tract,373.681681630343,Alternative market HHI
+2017,Tract,371.266293091287,Alternative market HHI
+2018,Tract,374.183461201086,Alternative market HHI
+2019,Tract,371.316712935055,Alternative market HHI
+2011,ZIP x property size,262.765984210723,Alternative market HHI
+2012,ZIP x property size,260.812936351327,Alternative market HHI
+2013,ZIP x property size,264.716384857231,Alternative market HHI
+2014,ZIP x property size,264.678062195591,Alternative market HHI
+2015,ZIP x property size,261.945861087931,Alternative market HHI
+2016,ZIP x property size,260.693804834163,Alternative market HHI
+2017,ZIP x property size,258.529604319251,Alternative market HHI
+2018,ZIP x property size,259.735742540749,Alternative market HHI
+2019,ZIP x property size,256.817784974521,Alternative market HHI
+2011,ZIP x property size (SFH excluded),400.376752502557,Alternative market HHI
+2012,ZIP x property size (SFH excluded),396.220150774847,Alternative market HHI
+2013,ZIP x property size (SFH excluded),400.493556634026,Alternative market HHI
+2014,ZIP x property size (SFH excluded),399.081225932496,Alternative market HHI
+2015,ZIP x property size (SFH excluded),392.754286300183,Alternative market HHI
+2016,ZIP x property size (SFH excluded),389.499053476233,Alternative market HHI
+2017,ZIP x property size (SFH excluded),384.207872458929,Alternative market HHI
+2018,ZIP x property size (SFH excluded),384.277658984015,Alternative market HHI
+2019,ZIP x property size (SFH excluded),378.775806968238,Alternative market HHI
