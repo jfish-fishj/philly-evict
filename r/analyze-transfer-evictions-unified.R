@@ -148,7 +148,7 @@ logf("=== Starting analyze-transfer-evictions-unified.R (", fp$label, ") ===",
 
 # Output directories
 out_dir <- p_out(cfg, "transfer_evictions")
-fig_dir <- p_out(cfg, "figs")
+fig_dir <- p_out(cfg, "transfer_evictions", "figs")
 fs::dir_create(out_dir, recurse = TRUE)
 fs::dir_create(fig_dir, recurse = TRUE)
 
