@@ -1,0 +1,3 @@
+nhood_type,n_units,n_buildings,wtd_mean_cong_props,wtd_mean_cong_units,wtd_mean_cong_tracts,wtd_mean_cong_sd_inc,wtd_mean_pct_below
+Above-median-income nhood,178334,74721,37.6692554420357,103.715606670629,2.71049827851111,8544.28964969651,0.0387344265197319
+Below-median-income nhood,175861,106570,27.4904214123655,70.0099226093335,4.10513985477167,6806.45735588327,0.905930409983735

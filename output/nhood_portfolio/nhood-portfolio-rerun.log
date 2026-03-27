@@ -1,0 +1,335 @@
+── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
+✔ dplyr     1.1.4     ✔ readr     2.1.5
+✔ forcats   1.0.0     ✔ stringr   1.5.2
+✔ lubridate 1.9.4     ✔ tibble    3.3.0
+✔ purrr     1.1.0     ✔ tidyr     1.3.1
+── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
+✖ dplyr::between()     masks data.table::between()
+✖ readr::col_factor()  masks scales::col_factor()
+✖ purrr::discard()     masks scales::discard()
+✖ dplyr::filter()      masks stats::filter()
+✖ dplyr::first()       masks data.table::first()
+✖ lubridate::hour()    masks data.table::hour()
+✖ lubridate::isoweek() masks data.table::isoweek()
+✖ dplyr::lag()         masks stats::lag()
+✖ dplyr::last()        masks data.table::last()
+✖ lubridate::mday()    masks data.table::mday()
+✖ lubridate::minute()  masks data.table::minute()
+✖ lubridate::month()   masks data.table::month()
+✖ lubridate::quarter() masks data.table::quarter()
+✖ lubridate::second()  masks data.table::second()
+✖ purrr::transpose()   masks data.table::transpose()
+✖ lubridate::wday()    masks data.table::wday()
+✖ lubridate::week()    masks data.table::week()
+✖ lubridate::yday()    masks data.table::yday()
+✖ lubridate::year()    masks data.table::year()
+ℹ Use the conflicted package (<http://conflicted.r-lib.org/>) to force all conflicts to become errors
+
+Attaching package: ‘janitor’
+
+The following objects are masked from ‘package:stats’:
+
+    chisq.test, fisher.test
+
+[1] TRUE
+[2026-03-27 11:51:59] === analyze-nhood-portfolio-transitions.R ===
+[2026-03-27 11:51:59] SECTION 1: Load data
+[2026-03-27 11:52:02]   rtt_clean [ 2006 , 2019 ]:  368978  rows,  235675  PIDs
+[2026-03-27 11:52:08]   bldg_panel_blp:  3560446  rows,  191703  PIDs
+[2026-03-27 11:52:16]   xwalk_pid_conglomerate:  14015256  rows
+[2026-03-27 11:52:24]   nhood_zip_year_panel:    848  rows
+[2026-03-27 11:52:24]   nhood_tract_year_panel:  6144  rows
+[2026-03-27 11:52:24] SECTION 2: Geography crosswalk
+[2026-03-27 11:52:31]   PID geo xwalk:  191703  PIDs |  191388  with tract |  191689  with ZIP
+[2026-03-27 11:52:31] SECTION 3: Classify transfers by filer type
+[2026-03-27 11:52:32]   bldg_loo panel span:  2006 - 2023  ( 18  years) | loo_min_unit_years =  180
+[2026-03-27 11:52:32]   LOO filer type distribution (full-period  2006 - 2019 ):
+Key: <filer_type>
+        filer_type      N
+            <fctr>  <int>
+1:      High-filer  12392
+2:       Low-filer  25834
+3: Small portfolio  62942
+4: Single-purchase 219819
+[2026-03-27 11:52:34]   Buyer filer type distribution:
+Key: <filer_type>
+        filer_type      N
+            <fctr>  <int>
+1:      High-filer   7920
+2:       Low-filer  12564
+3: Small portfolio  39231
+4: Single-purchase 309263
+[2026-03-27 11:52:35]   Seller filer type distribution:
+Key: <filer_type>
+        filer_type      N
+            <fctr>  <int>
+1:      High-filer   5908
+2:       Low-filer  11533
+3: Small portfolio  32435
+4: Single-purchase 319102
+[2026-03-27 11:52:35] SECTION 4: Net acquisitions
+[2026-03-27 11:52:36]   Annual net_acq (tract):  21448  rows
+[2026-03-27 11:52:36]   Annual net_acq (ZIP):    2688  rows
+[2026-03-27 11:52:36] SECTION 5: Neighborhood PCA
+Warning messages:
+1: In max(get(pop_var), na.rm = TRUE) :
+  no non-missing arguments to max; returning -Inf
+2: In max(get(pop_var), na.rm = TRUE) :
+  no non-missing arguments to max; returning -Inf
+3: In max(get(pop_var), na.rm = TRUE) :
+  no non-missing arguments to max; returning -Inf
+4: In max(get(pop_var), na.rm = TRUE) :
+  no non-missing arguments to max; returning -Inf
+5: In max(get(pop_var), na.rm = TRUE) :
+  no non-missing arguments to max; returning -Inf
+[2026-03-27 11:52:36]   After population/crime filter — tract:  361   ZIP:  47
+[2026-03-27 11:52:36]   Tract PCA: PC1 =  35.6 % variance  PC2 =  14.9 %
+[2026-03-27 11:52:36]   PC1 loadings (signed → positive = gentrifying):
+   d_income      d_rent  d_home_val d_pct_black   d_poverty     d_crime 
+      0.520       0.439       0.440      -0.320      -0.438      -0.080 
+    d_nanda 
+      0.208 
+[2026-03-27 11:52:36]   Gentrification status (threshold = + 10  pct-pt rank change):
+Key: <gent_status>
+        gent_status     N
+             <fctr> <int>
+1:       Gentrified    55
+2: Did not gentrify   123
+3: Not gentrifiable   178
+[2026-03-27 11:52:36]   Saved tract_gent_status.csv
+[2026-03-27 11:52:36]   ZIP PCA vars:  d_log_income, d_log_hp, d_crime, d_nanda
+[2026-03-27 11:52:36]   ZIP PCA: PC1 =  45.2 % variance
+[2026-03-27 11:52:36]   ZIP PC1 loadings (signed → positive = gentrifying):
+d_log_income     d_log_hp      d_crime      d_nanda 
+       0.675        0.251       -0.388        0.576 
+[2026-03-27 11:52:36] SECTION 6: Long-run cross-section
+[2026-03-27 11:52:36]   High-filer acq share — tract median:  0.025   ZIP median:  0.018
+[2026-03-27 11:52:36]   Tract cross-section:  1424  tracts
+[2026-03-27 11:52:36]   ZIP cross-section:    184  ZIPs
+[2026-03-27 11:52:36] SECTION 7: Scatter plots
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+Warning messages:
+1: Using `size` aesthetic for lines was deprecated in ggplot2 3.4.0.
+ℹ Please use `linewidth` instead. 
+2: The following aesthetics were dropped during statistical transformation: size.
+ℹ This can happen when ggplot fails to infer the correct grouping structure in
+  the data.
+ℹ Did you forget to specify a `group` aesthetic or to convert a numerical
+  variable into a factor? 
+3: The following aesthetics were dropped during statistical transformation: size.
+ℹ This can happen when ggplot fails to infer the correct grouping structure in
+  the data.
+ℹ Did you forget to specify a `group` aesthetic or to convert a numerical
+  variable into a factor? 
+4: The following aesthetics were dropped during statistical transformation: size.
+ℹ This can happen when ggplot fails to infer the correct grouping structure in
+  the data.
+ℹ Did you forget to specify a `group` aesthetic or to convert a numerical
+  variable into a factor? 
+5: The following aesthetics were dropped during statistical transformation: size.
+ℹ This can happen when ggplot fails to infer the correct grouping structure in
+  the data.
+ℹ Did you forget to specify a `group` aesthetic or to convert a numerical
+  variable into a factor? 
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+Warning messages:
+1: The following aesthetics were dropped during statistical transformation: size.
+ℹ This can happen when ggplot fails to infer the correct grouping structure in
+  the data.
+ℹ Did you forget to specify a `group` aesthetic or to convert a numerical
+  variable into a factor? 
+2: The following aesthetics were dropped during statistical transformation: size.
+ℹ This can happen when ggplot fails to infer the correct grouping structure in
+  the data.
+ℹ Did you forget to specify a `group` aesthetic or to convert a numerical
+  variable into a factor? 
+3: The following aesthetics were dropped during statistical transformation: size.
+ℹ This can happen when ggplot fails to infer the correct grouping structure in
+  the data.
+ℹ Did you forget to specify a `group` aesthetic or to convert a numerical
+  variable into a factor? 
+4: The following aesthetics were dropped during statistical transformation: size.
+ℹ This can happen when ggplot fails to infer the correct grouping structure in
+  the data.
+ℹ Did you forget to specify a `group` aesthetic or to convert a numerical
+  variable into a factor? 
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+Warning messages:
+1: The following aesthetics were dropped during statistical transformation: size.
+ℹ This can happen when ggplot fails to infer the correct grouping structure in
+  the data.
+ℹ Did you forget to specify a `group` aesthetic or to convert a numerical
+  variable into a factor? 
+2: The following aesthetics were dropped during statistical transformation: size.
+ℹ This can happen when ggplot fails to infer the correct grouping structure in
+  the data.
+ℹ Did you forget to specify a `group` aesthetic or to convert a numerical
+  variable into a factor? 
+3: The following aesthetics were dropped during statistical transformation: size.
+ℹ This can happen when ggplot fails to infer the correct grouping structure in
+  the data.
+ℹ Did you forget to specify a `group` aesthetic or to convert a numerical
+  variable into a factor? 
+4: The following aesthetics were dropped during statistical transformation: size.
+ℹ This can happen when ggplot fails to infer the correct grouping structure in
+  the data.
+ℹ Did you forget to specify a `group` aesthetic or to convert a numerical
+  variable into a factor? 
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+Warning messages:
+1: The following aesthetics were dropped during statistical transformation: size.
+ℹ This can happen when ggplot fails to infer the correct grouping structure in
+  the data.
+ℹ Did you forget to specify a `group` aesthetic or to convert a numerical
+  variable into a factor? 
+2: The following aesthetics were dropped during statistical transformation: size.
+ℹ This can happen when ggplot fails to infer the correct grouping structure in
+  the data.
+ℹ Did you forget to specify a `group` aesthetic or to convert a numerical
+  variable into a factor? 
+3: The following aesthetics were dropped during statistical transformation: size.
+ℹ This can happen when ggplot fails to infer the correct grouping structure in
+  the data.
+ℹ Did you forget to specify a `group` aesthetic or to convert a numerical
+  variable into a factor? 
+4: The following aesthetics were dropped during statistical transformation: size.
+ℹ This can happen when ggplot fails to infer the correct grouping structure in
+  the data.
+ℹ Did you forget to specify a `group` aesthetic or to convert a numerical
+  variable into a factor? 
+`geom_smooth()` using formula = 'y ~ x'
+Warning message:
+The following aesthetics were dropped during statistical transformation: size.
+ℹ This can happen when ggplot fails to infer the correct grouping structure in
+  the data.
+ℹ Did you forget to specify a `group` aesthetic or to convert a numerical
+  variable into a factor? 
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+[2026-03-27 11:52:40] SECTION 7b: Tract maps
+[2026-03-27 11:52:41]   Saved tract map figures to  /Users/joefish/Documents/GitHub/philly-evictions/output/nhood_portfolio/figs
+[2026-03-27 11:52:41] SECTION 8: Component scatter grids
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+`geom_smooth()` using formula = 'y ~ x'
+[2026-03-27 11:52:42] SECTION 9: Panel regressions
+[2026-03-27 11:52:42]   Panel reg (hf acq ~ log_income + log_rent + crime, two-way FE):
+OLS estimation, Dep. Var.: High_filer
+Observations: 3,600
+Weights: total_units
+Fixed-effects: tract_fips: 360,  year: 10
+Standard-errors: Clustered (tract_fips) 
+            Estimate Std. Error   t value Pr(>|t|) 
+log_income  0.791476   2.827299  0.279941  0.77968 
+log_rent   -1.467978   3.070679 -0.478063  0.63290 
+rate_total  0.009666   0.006198  1.559533  0.11975 
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+RMSE: 9.32294     Adj. R2: -0.012313
+                Within R2:  5.92e-4 
+[2026-03-27 11:52:42]   Panel reg models saved as RDS
+[2026-03-27 11:52:42] SECTION 9b: Cross-section pseudo first stage
+[2026-03-27 11:52:42]   Cross-section HF ~ nhood components:
+OLS estimation, Dep. Var.: net_units_high_filer
+Observations: 1,424
+Weights: total_units_mean
+Standard-errors: IID 
+              Estimate Std. Error   t value   Pr(>|t|)    
+(Intercept)  14.215957   1.537570  9.245729  < 2.2e-16 ***
+d_income    -13.136090   3.811013 -3.446876 5.8371e-04 ***
+d_rent       -1.519265   5.138362 -0.295671 7.6752e-01    
+d_home_val   -8.109444   3.434846 -2.360933 1.8364e-02 *  
+d_pct_black -48.527140   8.544548 -5.679311 1.6387e-08 ***
+d_poverty    15.123635  10.340068  1.462624 1.4379e-01    
+d_crime       0.002289   0.019981  0.114576 9.0880e-01    
+d_nanda     -10.634948   2.968973 -3.582029 3.5248e-04 ***
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+RMSE: 28.4   Adj. R2: 0.063775
+[2026-03-27 11:52:42]   Cross-section models saved
+[2026-03-27 11:52:42] SECTION 10: City-wide diagnostics
+[2026-03-27 11:52:42] SECTION 11: Portfolio composition from the tenant's perspective
+[2026-03-27 11:52:42]   PHA PIDs excluded:  5558
+[2026-03-27 11:52:44]   InfoUSA 2010 income:  132881  PIDs |  median = $ 33318
+[2026-03-27 11:52:44]   cong10:  578411  rows |  181291  with ACS income |  132881  with InfoUSA income
+[2026-03-27 11:52:56]   Rent:  114981  PIDs | median real rent (2010$) = $ 757
+=== Rent version ===
+               nhood_type                        panel n_units n_buildings
+                   <char>                       <char>   <int>       <int>
+1: Above-median-rent bldg                All landlords  148294       57399
+2: Below-median-rent bldg                All landlords  119039       57287
+3: Above-median-rent bldg Large portfolios (≥10 units)   80691        8642
+4: Below-median-rent bldg Large portfolios (≥10 units)   51860       10498
+   wtd_mean_cong_props wtd_mean_cong_units wtd_mean_cong_tracts
+                 <num>               <num>                <num>
+1:            51.02145           139.84638             3.492670
+2:            38.18230            93.80509             4.267417
+3:            92.58941           254.89314             5.427346
+4:            85.64258           211.99580             8.116699
+   wtd_mean_cong_sd_income wtd_mean_cong_mean_income wtd_mean_pct_below
+                     <num>                     <num>              <num>
+1:                326.2953                 1193.3261         0.05377005
+2:                176.2945                  639.0293         0.93301544
+3:                358.8005                 1242.7837         0.07881420
+4:                196.6723                  670.2335         0.87736990
+[2026-03-27 11:52:57]   Saved portfolio_composition_acs.csv, portfolio_composition_infousa.csv
+=== ACS version ===
+                  nhood_type                        panel n_units n_buildings
+                      <char>                       <char>   <int>       <int>
+1: Above-median-income nhood                All landlords  178334       74721
+2: Below-median-income nhood                All landlords  175861      106570
+3: Above-median-income nhood Large portfolios (≥10 units)   82362        8717
+4: Below-median-income nhood Large portfolios (≥10 units)   62220       17252
+   wtd_mean_cong_props wtd_mean_cong_units wtd_mean_cong_tracts
+                 <num>               <num>                <num>
+1:            37.66926           103.71561             2.710498
+2:            27.49042            70.00992             4.105140
+3:            80.00650           221.64184             4.528897
+4:            74.83912           193.59029             9.246866
+   wtd_mean_cong_sd_income wtd_mean_cong_mean_income wtd_mean_pct_below
+                     <num>                     <num>              <num>
+1:                8544.290                  52064.96         0.03873443
+2:                6806.457                  25543.90         0.90593041
+3:                8997.728                  53502.44         0.06009697
+4:                7783.206                  25918.24         0.83470820
+=== InfoUSA version ===
+                 nhood_type                        panel n_units n_buildings
+                     <char>                       <char>   <int>       <int>
+1: Above-median-income bldg                All landlords  120856       67634
+2: Below-median-income bldg                All landlords  120215       65247
+3: Above-median-income bldg Large portfolios (≥10 units)   39245        5711
+4: Below-median-income bldg Large portfolios (≥10 units)   48301        9987
+   wtd_mean_cong_props wtd_mean_cong_units wtd_mean_cong_tracts
+                 <num>               <num>                <num>
+1:            40.52232            92.78061             2.868298
+2:            25.20705            75.38743             3.746554
+3:           122.03302           281.31989             6.414677
+4:            60.41535           184.12031             7.397818
+   wtd_mean_cong_sd_income wtd_mean_cong_mean_income wtd_mean_pct_below
+                     <num>                     <num>              <num>
+1:                26.00953                  68.24822         0.05759446
+2:                16.50458                  19.07113         0.94209844
+3:                26.52608                  62.56974         0.12200673
+4:                17.32187                  19.66107         0.90086843
+[2026-03-27 11:52:57] === Done. Outputs in:  /Users/joefish/Documents/GitHub/philly-evictions/output/nhood_portfolio  ===

@@ -67,9 +67,16 @@ rtt <- fread(p_product(cfg, "rtt_clean"))
 rtt[, PID  := normalize_pid(PID)]
 rtt[, year := as.integer(year)]
 rtt <- rtt[!is.na(year) & year >= ANALYSIS_YEAR_MIN & year <= ANALYSIS_YEAR_MAX]
-# zip_code is stored as 9-digit ZIP+4 without hyphen; first 5 = ZIP
-rtt[, zip5 := substr(sprintf("%09d", as.integer(zip_code)), 1L, 5L)]
-rtt[, zip5 := fifelse(grepl("^[0-9]{5}$", zip5) & zip5 != "00000", zip5, NA_character_)]
+# zip_code is stored either as 9-digit ZIP+4 (no hyphen, e.g. "191041234") or
+# plain 5-digit ZIP. Do NOT cast to integer: sprintf("%09d", as.integer("19104"))
+# → "000019104" → first 5 chars = "00001" (wrong). Use string logic directly.
+rtt[, zip5 := {
+  z <- trimws(as.character(zip_code))
+  fifelse(nchar(z) >= 9L & grepl("^[0-9]{9}$", z), substr(z, 1L, 5L),
+  fifelse(grepl("^[0-9]{5}$", z), z, NA_character_))
+}]
+rtt[, zip5 := fifelse(!is.na(zip5) & zip5 != "00000" & as.integer(zip5) > 0L,
+                      zip5, NA_character_)]
 logf("  rtt_clean [", ANALYSIS_YEAR_MIN, ",", ANALYSIS_YEAR_MAX, "]: ",
      nrow(rtt), " rows, ", rtt[, uniqueN(PID)], " PIDs", log_file = LOG_FILE)
 
@@ -138,8 +145,6 @@ logf("SECTION 3: Classify transfers by filer type", log_file = LOG_FILE)
 # Uses actual num_filings (not EB proxy) over the full analysis panel.
 # Solo → "Single-purchase"; Small portfolio → "Small portfolio";
 # Low/High-evicting portfolio → "Low-filer" / "High-filer".
-n_analysis_years <- ANALYSIS_YEAR_MAX - ANALYSIS_YEAR_MIN + 1L
-
 bldg_loo <- merge(
   bldg[!is.na(total_units) & total_units > 0,
        .(PID, year,
@@ -151,9 +156,30 @@ bldg_loo <- merge(
 assert_has_cols(bldg_loo, c("PID", "year", "conglomerate_id", "num_filings", "total_units"),
                 "bldg_loo for compute_loo_filing_type")
 
+# Cap to analysis window before computing n_panel_years — bldg spans 2006-2023
+# but the classification should be consistent with the RTT analysis period.
+bldg_loo <- bldg_loo[year >= ANALYSIS_YEAR_MIN & year <= ANALYSIS_YEAR_MAX]
+
+n_panel_years <- bldg_loo[, max(year) - min(year) + 1L]
+logf("  bldg_loo panel span: ", bldg_loo[, min(year)], "-", bldg_loo[, max(year)],
+     " (", n_panel_years, " years) | loo_min_unit_years = ",
+     ACQ_SMALL_PORTFOLIO_MIN_OTHER * n_panel_years, log_file = LOG_FILE)
+
+# NOTE: xwalk_pid_conglomerate typically starts at 2011. Pre-2011 RTT transactions
+# get NA conglomerate_id → classified as "Single-purchase" regardless of true
+# ownership structure. The city-wide net chart shows this as a spike/dip in
+# Single-purchase around 2006-2010 that does NOT reflect actual slumlord behaviour.
+xwalk_min_year <- xwalk_cong[, min(year)]
+if (xwalk_min_year > ANALYSIS_YEAR_MIN) {
+  logf("  WARNING: xwalk_pid_conglomerate starts at ", xwalk_min_year,
+       " but RTT analysis starts at ", ANALYSIS_YEAR_MIN,
+       ". Pre-", xwalk_min_year, " transactions classified as Single-purchase by default.",
+       log_file = LOG_FILE)
+}
+
 loo_type_nhood <- compute_loo_filing_type(
   pid_yr_dt            = bldg_loo,
-  loo_min_unit_years   = ACQ_SMALL_PORTFOLIO_MIN_OTHER * n_analysis_years,
+  loo_min_unit_years   = ACQ_SMALL_PORTFOLIO_MIN_OTHER * n_panel_years,
   loo_filing_threshold = ACQ_HIGH_FILER_THRESHOLD
 )
 

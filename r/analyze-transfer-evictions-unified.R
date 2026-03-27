@@ -656,8 +656,6 @@ transfers[, buyer_type := fifelse(is_corp == TRUE, "Corporate", "Individual")]
 # panel. Landlord type is treated as a structural attribute, consistent with
 # retaliatory-evictions.r. One row per (PID, conglomerate_id) — same
 # classification regardless of transfer year.
-n_analysis_years <- ANALYSIS_YEAR_MAX - ANALYSIS_YEAR_MIN + 1L
-
 bldg_loo <- merge(
   bldg[!is.na(total_units) & total_units > 0,
        .(PID, year,
@@ -666,6 +664,14 @@ bldg_loo <- merge(
   xwalk_cong[, .(PID, year, conglomerate_id)],
   by = c("PID", "year")
 )
+
+# Use actual bldg_loo panel span as multiplier — not the RTT analysis year range.
+# This keeps the "small portfolio" unit-year threshold consistent with
+# retaliatory-evictions.r (which hardcodes 9L for its 2011-2019 bldg panel).
+n_analysis_years <- bldg_loo[, max(year) - min(year) + 1L]
+logf("  bldg_loo panel span: ", bldg_loo[, min(year)], "-", bldg_loo[, max(year)],
+     " (", n_analysis_years, " years) | loo_min_unit_years = ",
+     ACQ_SMALL_PORTFOLIO_MIN_OTHER_UNITS * n_analysis_years, log_file = log_file)
 
 loo_type <- compute_loo_filing_type(
   pid_yr_dt            = bldg_loo,

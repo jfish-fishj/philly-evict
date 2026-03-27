@@ -1,0 +1,13 @@
+[2026-03-27 11:55:32] === analyze-nhood-portfolio-transitions.R === 
+[2026-03-27 11:55:32] SECTION 1: Load data 
+[2026-03-27 11:55:35]   rtt_clean [ 2006 , 2019 ]:  368978  rows,  235675  PIDs 
+[2026-03-27 11:55:41]   bldg_panel_blp:  3560446  rows,  191703  PIDs 
+[2026-03-27 11:55:49]   xwalk_pid_conglomerate:  14015256  rows 
+[2026-03-27 11:55:57]   nhood_zip_year_panel:    848  rows 
+[2026-03-27 11:55:57]   nhood_tract_year_panel:  6144  rows 
+[2026-03-27 11:55:57] SECTION 2: Geography crosswalk 
+[2026-03-27 11:56:04]   PID geo xwalk:  191703  PIDs |  191388  with tract |  191689  with ZIP 
+[2026-03-27 11:56:04] SECTION 3: Classify transfers by filer type 
+[2026-03-27 11:56:05]   bldg_loo panel span:  2006 - 2019  ( 14  years) | loo_min_unit_years =  140 
+[2026-03-27 11:56:05]   LOO filer type distribution (full-period  2006 - 2019 ): 
+[2026-03-27 11:56:07]   Buyer filer type distribution: 
