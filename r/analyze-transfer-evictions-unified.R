@@ -75,16 +75,16 @@ FREQ_PARAMS <- list(
   annual = list(
     label        = "annual",
     et_var       = "event_time",
-    et_range     = -3L:5L,
+    et_range     = -3L:3L,
     ref_period   = -2L,
     fe_time      = "year",
     outcome_var  = "filing_rate",
     count_var    = "num_filings",
-    x_breaks     = -3:5,
+    x_breaks     = -3:3,
     pre_window        = -3L:-2L,
     transition_window = c(-1L, 0L),
     early_post_window = 1L:2L,
-    late_post_window  = 3L:5L,
+    late_post_window  = 3L:3L,
     size_bins    = c("2-4 units", "5-19 units", "20+ units"),
     needs_evictions_clean = FALSE,
     file_prefix  = "annual",
@@ -166,6 +166,15 @@ fs::dir_create(fig_dir, recurse = TRUE)
 # Convenience: prefixed output path
 out_path <- function(...) file.path(out_dir, paste0(fp$file_prefix, "_", ...))
 fig_path <- function(...) file.path(fig_dir, paste0("rtt_", fp$file_prefix, "_", ...))
+
+LEGACY_EVENT_COLORS <- c(
+  "#F8766D",
+  "#00BA38",
+  "#619CFF",
+  "#C77CFF",
+  "#E69F00",
+  "#00BFC4"
+)
 
 # ============================================================
 # Shared helpers
@@ -290,7 +299,8 @@ clean_spec_labels <- function(specs) {
 # Unified event study coefficient plot
 plot_event_coefs <- function(coef_dt, specs, title, filename, facet = FALSE,
                              y_label = fp$y_label, ncol = NULL,
-                             custom_labels = NULL) {
+                             custom_labels = NULL, colors = NULL,
+                             show_n_in_labels = TRUE) {
   et_pattern <- paste0(fp$et_var, "::")
   plot_dt <- coef_dt[spec %in% specs & grepl(et_pattern, term, fixed = TRUE)]
   if (nrow(plot_dt) == 0) {
@@ -310,8 +320,9 @@ plot_event_coefs <- function(coef_dt, specs, title, filename, facet = FALSE,
     n_lookup[spec %in% names(custom_labels), clean_label := unname(custom_labels[spec])]
   }
   plot_dt <- merge(plot_dt, n_lookup, by = "spec", all.x = TRUE, suffixes = c("", "_lkp"))
-  if (facet && "treated_pids" %in% names(plot_dt)) {
-    plot_dt[, spec := fifelse(
+  plot_dt[, spec_raw := spec]
+  if (show_n_in_labels && facet && "treated_pids" %in% names(plot_dt)) {
+    plot_dt[, spec_label := fifelse(
       !is.na(treated_pids),
       paste0(
         clean_label, "\nN=", formatC(n_lkp, format = "d", big.mark = ","),
@@ -319,24 +330,28 @@ plot_event_coefs <- function(coef_dt, specs, title, filename, facet = FALSE,
       ),
       paste0(clean_label, "\nN=", formatC(n_lkp, format = "d", big.mark = ","))
     )]
+  } else if (show_n_in_labels) {
+    plot_dt[, spec_label := paste0(clean_label, " (N=", formatC(n_lkp, format = "d", big.mark = ","), ")")]
   } else {
-    plot_dt[, spec := paste0(clean_label, " (N=", formatC(n_lkp, format = "d", big.mark = ","), ")")]
+    plot_dt[, spec_label := clean_label]
   }
-  spec_labels <- unique(plot_dt$spec)
+  spec_levels <- unique(plot_dt[, .(spec_raw, spec_label)])[match(specs, spec_raw), spec_label]
   plot_dt[, et := as.integer(str_extract(term, "-?\\d+"))]
   # Add reference point
   ref_rows <- data.table(
     et = fp$ref_period, estimate = 0, std_error = 0,
-    spec = spec_labels
+    spec_raw = specs,
+    spec_label = spec_levels
   )
   plot_dt <- rbindlist(list(
-    plot_dt[, .(et, estimate, std_error, spec)],
+    plot_dt[, .(et, estimate, std_error, spec_raw, spec_label)],
     ref_rows
   ), fill = TRUE)
-  setorder(plot_dt, spec, et)
-  single_spec <- length(spec_labels) == 1L
+  plot_dt[, spec_label := factor(spec_label, levels = spec_levels)]
+  setorder(plot_dt, spec_label, et)
+  single_spec <- length(spec_levels) == 1L
   facet_ncol <- if (is.null(ncol)) {
-    if (length(spec_labels) <= 4L) 2L else 3L
+    if (length(spec_levels) <= 4L) 2L else 3L
   } else {
     ncol
   }
@@ -349,7 +364,7 @@ plot_event_coefs <- function(coef_dt, specs, title, filename, facet = FALSE,
       geom_errorbar(aes(ymin = estimate - 1.96 * std_error,
                         ymax = estimate + 1.96 * std_error),
                     width = 0.2, color = "steelblue") +
-      facet_wrap(~spec, scales = "fixed", ncol = facet_ncol,
+      facet_wrap(~spec_label, scales = "fixed", ncol = facet_ncol,
                  labeller = label_wrap_gen(width = 25)) +
       scale_x_continuous(breaks = fp$x_breaks)
   } else if (single_spec) {
@@ -362,7 +377,7 @@ plot_event_coefs <- function(coef_dt, specs, title, filename, facet = FALSE,
                     width = 0.2, color = "steelblue") +
       scale_x_continuous(breaks = fp$x_breaks)
   } else {
-    p <- ggplot(plot_dt, aes(x = et, y = estimate, color = spec)) +
+    p <- ggplot(plot_dt, aes(x = et, y = estimate, color = spec_label)) +
       geom_hline(yintercept = 0, color = "gray60") +
       geom_vline(xintercept = fp$vline_x, linetype = "dashed", color = "gray40") +
       geom_point(position = position_dodge(width = 0.3), size = 2.5) +
@@ -370,6 +385,12 @@ plot_event_coefs <- function(coef_dt, specs, title, filename, facet = FALSE,
                         ymax = estimate + 1.96 * std_error),
                     position = position_dodge(width = 0.3), width = 0.2) +
       scale_x_continuous(breaks = fp$x_breaks)
+    if (!is.null(colors)) {
+      label_map_colors <- unique(plot_dt[, .(spec_raw, spec_label)])
+      color_values <- unname(colors[label_map_colors$spec_raw])
+      names(color_values) <- as.character(label_map_colors$spec_label)
+      p <- p + scale_color_manual(values = color_values, breaks = spec_levels)
+    }
   }
   p <- p +
     labs(title = title, subtitle = paste0("Reference period: ", fp$et_var, " = ", fp$ref_period),
@@ -391,7 +412,7 @@ plot_event_coefs <- function(coef_dt, specs, title, filename, facet = FALSE,
     p <- p + guides(color = guide_legend(nrow = 2, byrow = TRUE))
   }
   plot_width <- if (facet) 13.5 else 10.5
-  plot_height <- if (facet) if (length(spec_labels) <= 4L) 7.5 else 9 else 6.5
+  plot_height <- if (facet) if (length(spec_levels) <= 4L) 7.5 else 9 else 6.5
   ggsave(filename, p, width = plot_width, height = plot_height, dpi = 150)
   logf("  Saved ", basename(filename), log_file = log_file)
 }
@@ -3377,11 +3398,7 @@ if (freq == "annual" && !is.null(full_panel_main)) {
   logf("--- ANNUAL OVERRIDE: full-panel never-sold-control event studies ---",
        log_file = log_file)
 
-  filing_fml_main <- paste0("filing_rate ~ ", paste(et_dummies_main, collapse = " + "), " | PID + year")
   acq_bins_ordered <- ACQ_BIN_LABELS
-  portfolio_bins <- c("Single-purchase", "2-4", "5-9", "10+")
-  all_size_bins <- c("1 unit", fp$size_bins)
-  run_legacy_annual_outputs <- isTRUE(cfg$run$transfer_evictions_run_legacy_annual %||% FALSE)
 
   subset_panel_main <- function(panel, sample_filter = NULL, treated_filter = NULL,
                                 outcome_col = NULL, year_min = NULL) {
@@ -3420,14 +3437,52 @@ if (freq == "annual" && !is.null(full_panel_main)) {
          sample_filter = quote(total_units >= 10L & observed_rental_stock == TRUE),
          pretty = "10+ units, rental evidence")
   )
+  FILING_CORE_MAIN_PLOT_SPECS <- c(
+    "core_1unit",
+    "core_2plus",
+    "core_5plus",
+    "core_5plus_rental_evidence"
+  )
+  FILING_CORE_COLORS <- c(
+    core_1unit = LEGACY_EVENT_COLORS[1],
+    core_2plus = LEGACY_EVENT_COLORS[2],
+    core_5plus = LEGACY_EVENT_COLORS[3],
+    core_5plus_rental_evidence = LEGACY_EVENT_COLORS[4]
+  )
+  FILING_ACQ_MAIN_PLOT_SPECS <- c(
+    acq_bin_suffix("High-filer portfolio"),
+    acq_bin_suffix("Low-filer portfolio"),
+    acq_bin_suffix("Small portfolio"),
+    acq_bin_suffix("Single-purchase")
+  )
+  FILING_ACQ_COLORS <- c(
+    setNames(LEGACY_EVENT_COLORS[1], acq_bin_suffix("High-filer portfolio")),
+    setNames(LEGACY_EVENT_COLORS[2], acq_bin_suffix("Low-filer portfolio")),
+    setNames(LEGACY_EVENT_COLORS[3], acq_bin_suffix("Small portfolio")),
+    setNames(LEGACY_EVENT_COLORS[4], acq_bin_suffix("Single-purchase"))
+  )
   run_core_sample_grid <- function(panel, outcome_col, out_stem, plot_title, y_label,
-                                   specs = core_baseline_specs, weights = ~total_units) {
+                                   specs = core_baseline_specs, weights = ~total_units,
+                                   estimator = c("fullpanel", "stacked"),
+                                   plot_specs = NULL, plot_colors = NULL,
+                                   plot_facet = TRUE, plot_show_n = TRUE) {
+    estimator <- match.arg(estimator)
     coef_list <- list()
     fit_list <- list()
     label_map <- character()
     for (sp in specs) {
       .panel <- subset_panel_main(panel, sample_filter = sp$sample_filter, outcome_col = outcome_col)
-      .res <- run_named_fullpanel(.panel, sp$label, weights = weights, lhs = outcome_col)
+      .res <- if (estimator == "stacked") {
+        run_weighted_stacked_fit(
+          panel = .panel,
+          outcome_col = outcome_col,
+          spec_label = sp$label,
+          event_window = fp$et_range,
+          ref_period = ET_REF
+        )
+      } else {
+        run_named_fullpanel(.panel, sp$label, weights = weights, lhs = outcome_col)
+      }
       if (!is.null(.res)) {
         coef_list[[length(coef_list) + 1L]] <- .res$coefs
         fit_list[[sp$pretty]] <- .res$fit
@@ -3439,12 +3494,14 @@ if (freq == "annual" && !is.null(full_panel_main)) {
     fwrite(all_coefs, out_path(paste0(out_stem, "_coefs.csv")))
     plot_event_coefs(
       all_coefs,
-      unique(all_coefs$spec),
+      plot_specs %||% unique(all_coefs$spec),
       paste0(plot_title, " (", fp$label, ")"),
       fig_path(paste0(out_stem, ".png")),
-      facet = TRUE,
+      facet = plot_facet,
       y_label = y_label,
-      custom_labels = label_map
+      custom_labels = label_map,
+      colors = plot_colors,
+      show_n_in_labels = plot_show_n
     )
     etable(
       fit_list,
@@ -3454,65 +3511,16 @@ if (freq == "annual" && !is.null(full_panel_main)) {
     )
     all_coefs
   }
-  run_core_buyer_split <- function(panel, outcome_col, out_stem, plot_title, y_label,
-                                   sample_filter = quote(total_units >= 2L),
-                                   weights = ~total_units) {
-    coef_list <- list()
-    fit_list <- list()
-    label_map <- c(full = "All acquirers", corporate = "Corporate", individual = "Individual")
-    .full <- subset_panel_main(panel, sample_filter = sample_filter, outcome_col = outcome_col)
-    .res <- run_named_fullpanel(.full, "full", weights = weights, lhs = outcome_col)
-    if (!is.null(.res)) {
-      coef_list[[length(coef_list) + 1L]] <- .res$coefs
-      fit_list[["All acquirers"]] <- .res$fit
-    }
-    for (buyer_nm in c("corporate", "individual")) {
-      .treated_filter <- if (buyer_nm == "corporate") quote(is_corp == TRUE) else quote(is_corp == FALSE)
-      .panel <- subset_panel_main(
-        panel,
-        sample_filter = sample_filter,
-        treated_filter = .treated_filter,
-        outcome_col = outcome_col
-      )
-      .res <- run_named_fullpanel(.panel, buyer_nm, weights = weights, lhs = outcome_col)
-      if (!is.null(.res)) {
-        coef_list[[length(coef_list) + 1L]] <- .res$coefs
-        fit_list[[label_map[[buyer_nm]]]] <- .res$fit
-      }
-    }
-    if (length(coef_list) == 0L) return(invisible(NULL))
-    all_coefs <- rbindlist(coef_list, use.names = TRUE, fill = TRUE)
-    fwrite(all_coefs, out_path(paste0(out_stem, "_coefs.csv")))
-    plot_event_coefs(
-      all_coefs,
-      unique(all_coefs$spec),
-      paste0(plot_title, " (", fp$label, ")"),
-      fig_path(paste0(out_stem, ".png")),
-      facet = TRUE,
-      y_label = y_label,
-      ncol = 2L,
-      custom_labels = label_map
-    )
-    etable(
-      fit_list,
-      file = out_path(paste0(out_stem, "_etable.tex")),
-      style.tex = style.tex("aer"),
-      headers = list("Buyer type" = names(fit_list))
-    )
-    all_coefs
-  }
   run_core_acq_split <- function(panel, outcome_col, out_stem, plot_title, y_label,
                                  sample_filter = quote(total_units >= 2L),
-                                 weights = ~total_units) {
+                                 weights = ~total_units,
+                                 estimator = c("fullpanel", "stacked"),
+                                 plot_specs = NULL, plot_colors = NULL,
+                                 plot_facet = TRUE, plot_show_n = TRUE) {
+    estimator <- match.arg(estimator)
     coef_list <- list()
     fit_list <- list()
-    label_map <- c(full = "All acquirers")
-    .full <- subset_panel_main(panel, sample_filter = sample_filter, outcome_col = outcome_col)
-    .res <- run_named_fullpanel(.full, "full", weights = weights, lhs = outcome_col)
-    if (!is.null(.res)) {
-      coef_list[[length(coef_list) + 1L]] <- .res$coefs
-      fit_list[["All acquirers"]] <- .res$fit
-    }
+    label_map <- character()
     for (ab in acq_bins_ordered) {
       .panel <- subset_panel_main(
         panel,
@@ -3521,7 +3529,17 @@ if (freq == "annual" && !is.null(full_panel_main)) {
         outcome_col = outcome_col
       )
       .spec <- acq_bin_suffix(ab)
-      .res <- run_named_fullpanel(.panel, .spec, weights = weights, lhs = outcome_col)
+      .res <- if (estimator == "stacked") {
+        run_weighted_stacked_fit(
+          panel = .panel,
+          outcome_col = outcome_col,
+          spec_label = .spec,
+          event_window = fp$et_range,
+          ref_period = ET_REF
+        )
+      } else {
+        run_named_fullpanel(.panel, .spec, weights = weights, lhs = outcome_col)
+      }
       if (!is.null(.res)) {
         coef_list[[length(coef_list) + 1L]] <- .res$coefs
         fit_list[[ab]] <- .res$fit
@@ -3533,12 +3551,14 @@ if (freq == "annual" && !is.null(full_panel_main)) {
     fwrite(all_coefs, out_path(paste0(out_stem, "_coefs.csv")))
     plot_event_coefs(
       all_coefs,
-      unique(all_coefs$spec),
+      plot_specs %||% unique(all_coefs$spec),
       paste0(plot_title, " (", fp$label, ")"),
       fig_path(paste0(out_stem, ".png")),
-      facet = TRUE,
+      facet = plot_facet,
       y_label = y_label,
-      custom_labels = label_map
+      custom_labels = label_map,
+      colors = plot_colors,
+      show_n_in_labels = plot_show_n
     )
     etable(
       fit_list,
@@ -3573,126 +3593,32 @@ if (freq == "annual" && !is.null(full_panel_main)) {
     out
   }
 
-  # --- Baseline ---
-  baseline_override_specs <- list(
-    list(label = "full", sample_filter = NULL, weights = NULL, header = "All buildings"),
-    list(label = "full_wtd", sample_filter = NULL, weights = ~total_units, header = "All buildings (unit-weighted)"),
-    list(label = "1unit", sample_filter = quote(total_units == 1L), weights = NULL, header = "1-unit buildings"),
-    list(label = "2plus", sample_filter = quote(total_units >= 2L), weights = ~total_units, header = "2+ unit buildings (unit-weighted)"),
-    list(label = "5plus", sample_filter = quote(total_units >= 5L), weights = ~total_units, header = "5+ unit buildings (unit-weighted)"),
-    list(label = "2plus_rental_pre", sample_filter = quote(total_units >= 2L & observed_rental_stock == TRUE), weights = ~total_units, header = "2+ units, observed rental stock (unit-weighted)"),
-    list(label = "5plus_rental_pre", sample_filter = quote(total_units >= 5L & observed_rental_stock == TRUE), weights = ~total_units, header = "5+ units, observed rental stock (unit-weighted)")
-  )
-  run_baseline_override <- function(lhs, out_stem, plot_title, y_label) {
-    baseline_override_coefs <- list()
-    baseline_override_fits <- list()
-    for (bs in baseline_override_specs) {
-      .panel <- subset_panel_main(full_panel_main, sample_filter = bs$sample_filter, outcome_col = lhs)
-      .res <- run_named_fullpanel(.panel, bs$label, weights = bs$weights, lhs = lhs)
-      if (!is.null(.res)) {
-        baseline_override_coefs[[length(baseline_override_coefs) + 1L]] <- .res$coefs
-        baseline_override_fits[[bs$header]] <- .res$fit
-      }
-    }
-    if (length(baseline_override_coefs) == 0L) {
-      return(invisible(NULL))
-    }
-    baseline_all <- rbindlist(baseline_override_coefs, use.names = TRUE, fill = TRUE)
-    fwrite(baseline_all, out_path(paste0(out_stem, "_coefs.csv")))
-    plot_event_coefs(
-      baseline_all,
-      unique(baseline_all$spec),
-      paste0(plot_title, " (", fp$label, ")"),
-      fig_path(paste0(out_stem, ".png")),
-      facet = TRUE,
-      y_label = y_label
-    )
-    etable(
-      baseline_override_fits,
-      file = out_path(paste0(out_stem, "_etable.tex")),
-      style.tex = style.tex("aer"),
-      headers = list("Sample" = names(baseline_override_fits))
-    )
-    baseline_all
-  }
-  baseline_all <- run_baseline_override(
-    lhs = "filing_rate",
-    out_stem = "baseline",
-    plot_title = "Event Study: Filing Rate Around Transfer",
-    y_label = "Filing Rate (per unit-year)"
-  )
-  stacked_baseline_specs <- list(
-    list(
-      label = "stacked_full_wtd",
-      sample_filter = NULL,
-      header = "All buildings (weighted stacked)"
-    ),
-    list(
-      label = "stacked_2plus_wtd",
-      sample_filter = quote(total_units >= 2L),
-      header = "2+ unit buildings (weighted stacked)"
-    )
-  )
-  run_baseline_stacked_override <- function() {
-    stacked_coefs <- list()
-    stacked_fits <- list()
-    stacked_weights <- list()
-    for (bs in stacked_baseline_specs) {
-      .panel <- subset_panel_main(
-        full_panel_main,
-        sample_filter = bs$sample_filter,
-        outcome_col = "filing_rate"
-      )
-      .res <- run_weighted_stacked_fit(
-        panel = .panel,
-        outcome_col = "filing_rate",
-        spec_label = bs$label,
-        event_window = -3L:3L,
-        ref_period = ET_REF
-      )
-      stacked_coefs[[length(stacked_coefs) + 1L]] <- .res$coefs
-      stacked_fits[[bs$header]] <- .res$fit
-      .w <- copy(.res$cohort_weights)
-      .w[, spec := bs$label]
-      stacked_weights[[length(stacked_weights) + 1L]] <- .w
-    }
-    stacked_all <- rbindlist(stacked_coefs, use.names = TRUE, fill = TRUE)
-    stacked_weight_dt <- rbindlist(stacked_weights, use.names = TRUE, fill = TRUE)
-    fwrite(stacked_all, out_path("baseline_stacked_weighted_coefs.csv"))
-    fwrite(stacked_weight_dt, out_path("baseline_stacked_weighted_qweights.csv"))
-    plot_event_coefs(
-      stacked_all,
-      unique(stacked_all$spec),
-      paste0("Weighted Stacked Event Study: Filing Rate Around Transfer (", fp$label, ")"),
-      fig_path("baseline_stacked_weighted.png"),
-      facet = TRUE,
-      y_label = "Filing Rate (per unit-year)"
-    )
-    etable(
-      stacked_fits,
-      file = out_path("baseline_stacked_weighted_etable.tex"),
-      style.tex = style.tex("aer"),
-      headers = list("Sample" = names(stacked_fits))
-    )
-    stacked_all
-  }
-  baseline_stacked_all <- run_baseline_stacked_override()
   logf("--- ANNUAL CORE OUTPUTS: streamlined regression surface ---", log_file = log_file)
 
   filing_core_all <- run_core_sample_grid(
     panel = full_panel_main,
     outcome_col = "filing_rate",
     out_stem = "filing_core",
-    plot_title = "Event Study: Filing Rate Around Transfer",
-    y_label = "Filing Rate (per unit-year)"
+    plot_title = "Weighted Stacked Event Study: Filing Rate Around Transfer",
+    y_label = "Filing Rate (per unit-year)",
+    estimator = "stacked",
+    plot_specs = FILING_CORE_MAIN_PLOT_SPECS,
+    plot_colors = FILING_CORE_COLORS,
+    plot_facet = FALSE,
+    plot_show_n = FALSE
   )
   filing_acq_2plus <- run_core_acq_split(
     panel = full_panel_filer,
     outcome_col = "filing_rate",
     out_stem = "filing_acq_2plus",
-    plot_title = "Event Study: Filing Rate by Acquirer Filing Type",
+    plot_title = "Weighted Stacked Event Study: Filing Rate by Acquirer Type",
     y_label = "Filing Rate (per unit-year)",
-    sample_filter = quote(total_units >= 2L)
+    sample_filter = quote(total_units >= 2L),
+    estimator = "stacked",
+    plot_specs = FILING_ACQ_MAIN_PLOT_SPECS,
+    plot_colors = FILING_ACQ_COLORS,
+    plot_facet = FALSE,
+    plot_show_n = FALSE
   )
 
   for (.demo in list(
@@ -3770,15 +3696,9 @@ if (freq == "annual" && !is.null(full_panel_main)) {
     )
   }
 
-  if (run_legacy_annual_outputs) {
-    logf("--- ANNUAL LEGACY OUTPUTS: enabled by cfg$run$transfer_evictions_run_legacy_annual ---",
-         log_file = log_file)
-  } else {
-    logf("--- ANNUAL LEGACY OUTPUTS: skipped (set cfg$run$transfer_evictions_run_legacy_annual: true to enable) ---",
-         log_file = log_file)
-  }
-
-  if (run_legacy_annual_outputs) {
+  if (FALSE) {
+    # Deprecated annual output surface retained only as inert reference while the
+    # streamlined annual block above becomes the sole production path.
   baseline_poisson_specs <- list(
     list(label = "full", sample_filter = NULL, header = "All buildings"),
     list(label = "1unit", sample_filter = quote(total_units == 1L), header = "1-unit buildings"),

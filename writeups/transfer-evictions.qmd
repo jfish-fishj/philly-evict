@@ -52,6 +52,8 @@ fig_dir <- file.path(out_dir, "figs")
 sample_year_min <- 2006L
 sample_year_max <- 2019L
 event_ref_period <- -2L
+event_window_min <- -3L
+event_window_max <- 3L
 
 must_read <- function(path) {
   if (!file.exists(path)) stop("Missing required output: ", path)
@@ -115,11 +117,6 @@ label_map_acq <- c(
   smallportfolio_lt10_otherunits = "Small portfolio",
   singlepurchase = "Single-purchase"
 )
-label_map_stacked <- c(
-  stacked_full_wtd = "All buildings",
-  stacked_2plus_wtd = "2+ units"
-)
-
 fmt_num <- function(x, digits = 1) formatC(x, format = "f", digits = digits, big.mark = ",")
 fmt_int <- function(x) formatC(as.integer(round(x)), format = "d", big.mark = ",")
 
@@ -132,8 +129,6 @@ event_summary <- function(dt, spec_labels, ets = c(1L, 2L, 3L)) {
 
 filing_core <- add_et(must_read(file.path(out_dir, "annual_filing_core_coefs.csv")))
 filing_acq <- add_et(must_read(file.path(out_dir, "annual_filing_acq_2plus_coefs.csv")))
-stacked_wtd <- add_et(must_read(file.path(out_dir, "annual_baseline_stacked_weighted_coefs.csv")))
-stacked_qweights <- must_read(file.path(out_dir, "annual_baseline_stacked_weighted_qweights.csv"))
 
 occupancy <- add_et(must_read(file.path(out_dir, "annual_occupancy_2plus_coefs.csv")))
 pct_black <- add_et(must_read(file.path(out_dir, "annual_pct_black_2plus_coefs.csv")))
@@ -156,13 +151,23 @@ core_5plus_t1 <- filing_core[spec == "core_5plus" & et == 1L, estimate]
 core_10plus_t1 <- filing_core[spec == "core_10plus" & et == 1L, estimate]
 high_filer_t2 <- filing_acq[spec == "highfiler_portfolio_10plus_otherunits" & et == 2L, estimate]
 low_filer_t2 <- filing_acq[spec == "lowfiler_portfolio_10plus_otherunits" & et == 2L, estimate]
-stacked_2plus_t2 <- stacked_wtd[spec == "stacked_2plus_wtd" & et == 2L, estimate]
-stacked_2plus_pre3 <- stacked_wtd[spec == "stacked_2plus_wtd" & et == -3L, estimate]
 ```
 
 # Overview
 
-This note reports the streamlined annual transfer-evictions specification. The main outcome is `filing_rate = num_filings / total_units` in a full building-year panel from `r sample_year_min` to `r sample_year_max`, with single-transfer treated buildings compared against buildings never transferred in the RTT data. The omitted event time is `t = r event_ref_period`.
+This note reports the streamlined annual transfer-evictions specification. The main outcome is `filing_rate = num_filings / total_units` in a full building-year panel from `r sample_year_min` to `r sample_year_max`, with single-transfer treated buildings compared against buildings never transferred in the RTT data. All annual event studies are estimated on `t \in [r event_window_min, r event_window_max]`, with omitted event time `t = r event_ref_period`.
+
+For filing outcomes, the main specification is a weighted stacked event study:
+
+$$
+y_{i a t} = \sum_{k \in \{-3,-1,0,1,2,3\}} \beta_k \mathbf{1}\{\mathrm{rel\_time}_{ia}=k\}
+          + \alpha_{ia} + \lambda_{at} + \varepsilon_{iat},
+$$
+
+estimated on a cohort-stacked panel with weights `q_weight × total_units`, where `q_weight`
+is the Wing et al. corrective control weight and `\alpha_{ia}` and `\lambda_{at}` are
+stack-specific parcel and year fixed effects. Non-filing outcomes continue to use the
+annual `PID + year` event-study design on the same `-3:3` window.
 
 The annual surface has been pruned to four blocks:
 
@@ -175,7 +180,7 @@ Portfolio filing types are computed using the helper logic from the production s
 
 # Main Filing Results
 
-The filing sample grid now separates `1-unit` properties from the multifamily stock. The main justification for the `2+ unit` analysis sample is that the `2+` and `5+` estimates are close, while `1-unit` properties are shown separately as the single-family contrast and the `10+` cut is treated as a stricter appendix validation rather than the main specification.
+The main filing figures now use the weighted stacked estimator directly. The filing sample grid separates `1-unit` properties from the multifamily stock. The main justification for the `2+ unit` analysis sample is that the `2+` and `5+` estimates are close, while `1-unit` properties are shown separately as the single-family contrast and the `10+` cut is treated as a stricter appendix validation rather than the main specification.
 
 At `t = +1`, the filing-rate coefficient is `r fmt_num(core_2plus_t1, 4)` for `2+ units`, `r fmt_num(core_5plus_t1, 4)` for `5+ units`, and `r fmt_num(core_10plus_t1, 4)` for `10+ units`.
 
@@ -189,7 +194,7 @@ kable(
   kable_styling(latex_options = c("hold_position"))
 ```
 
-```{r filing-core-plot, fig.cap="Annual filing-rate event study by sample restriction. The main comparison is 2+ units versus 5+ units; 10+ is included as a stricter appendix check."}
+```{r filing-core-plot, fig.cap="Weighted stacked annual filing-rate event study by sample restriction. The main figure overlays 1-unit, 2+, 5+, and 5+ rental-evidence samples; 10+ remains a stricter appendix check in the tables."}
 must_graphic(file.path(fig_dir, "rtt_annual_filing_core.png"))
 ```
 
@@ -227,7 +232,7 @@ The main heterogeneity split uses four acquirer types:
 - `Small portfolio`
 - `Single-purchase`
 
-These categories are defined from the helper-function leave-one-out portfolio measures, while the regression itself is restricted to `2+ unit` buildings. In the current annual outputs, the `t = +2` coefficient is `r fmt_num(high_filer_t2, 4)` for high-filer portfolios and `r fmt_num(low_filer_t2, 4)` for low-filer portfolios.
+These categories are defined from the helper-function leave-one-out portfolio measures, while the regression itself is restricted to `2+ unit` buildings. In the current annual weighted stacked outputs, the `t = +2` coefficient is `r fmt_num(high_filer_t2, 4)` for high-filer portfolios and `r fmt_num(low_filer_t2, 4)` for low-filer portfolios.
 
 ```{r filing-acq-plot, fig.cap="Annual filing-rate event study for 2+ unit buildings, split by acquirer filing type. Controls are never-transferred buildings in the same 2+ unit sample."}
 must_graphic(file.path(fig_dir, "rtt_annual_filing_acq_2plus.png"))
@@ -248,32 +253,6 @@ kable(
   caption = "Selected 2+ unit filing-rate coefficients by acquirer type"
 ) |>
   kable_styling(latex_options = c("hold_position"))
-```
-
-# Weighted Stacked Robustness
-
-As a robustness check, the production script now runs a weighted stacked annual filing-rate estimator for the full sample and the `2+ unit` sample. This is not the main specification, but it provides a cleaner stacked benchmark than the earlier scratch implementation.
-
-For the `2+ unit` weighted stacked regression, the `t = -3` coefficient is `r fmt_num(stacked_2plus_pre3, 4)` and the `t = +2` coefficient is `r fmt_num(stacked_2plus_t2, 4)`.
-
-```{r filing-stacked-plot, fig.cap="Weighted stacked annual filing-rate event study. Corrective weights are applied at the cohort-control level; the main comparison is the full sample versus 2+ units."}
-must_graphic(file.path(fig_dir, "rtt_annual_baseline_stacked_weighted.png"))
-```
-
-```{r filing-stacked-table, results='asis'}
-include_tex_table(file.path(out_dir, "annual_baseline_stacked_weighted_etable.tex"), size = "scriptsize")
-```
-
-```{r filing-stacked-qweights}
-qweights_disp <- unique(stacked_qweights[, .(spec, cohort_year, treated_pids, control_pids, q_weight_control)])
-qweights_disp[, spec := label_map_stacked[spec]]
-qweights_disp[, q_weight_control := round(q_weight_control, 3)]
-kable(
-  qweights_disp,
-  col.names = c("Sample", "Cohort", "Treated PIDs", "Control PIDs", "Corrective weight"),
-  caption = "Weighted stacked annual filing-rate cohort weights"
-) |>
-  kable_styling(font_size = 8, latex_options = c("hold_position", "scale_down"))
 ```
 
 # Occupancy, Demographics, Complaints, and Permits
@@ -358,7 +337,6 @@ The streamlined annual writeup now depends on the following output families:
 
 - `annual_filing_core_*`
 - `annual_filing_acq_2plus_*`
-- `annual_baseline_stacked_weighted_*`
 - `annual_occupancy_2plus_*`
 - `annual_pct_*_2plus_*`
 - `annual_permit_rate_2plus_*`
