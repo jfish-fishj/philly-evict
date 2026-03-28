@@ -1,5 +1,5 @@
 ---
-title: "Ownership Transfers and Eviction Filing Rates: Event Study"
+title: "Ownership Transfers and Eviction Filing Rates"
 author: "Philly Evictions Project"
 date: today
 format:
@@ -14,11 +14,9 @@ format:
     include-in-header:
       text: |
         \usepackage{booktabs}
-        \usepackage{dcolumn}
         \usepackage{longtable}
         \usepackage{adjustbox}
         \usepackage{pdflscape}
-        \usepackage{amsmath}
 ---
 
 ```{r setup, include=FALSE}
@@ -37,11 +35,10 @@ knitr::opts_chunk$set(
 ```{r load-data}
 suppressPackageStartupMessages({
   library(data.table)
-  library(ggplot2)
   library(knitr)
   library(kableExtra)
-  library(here)
 })
+
 qmd_path <- knitr::current_input(dir = TRUE)
 proj_root <- normalizePath(file.path(dirname(qmd_path), ".."), winslash = "/", mustWork = FALSE)
 source(file.path(proj_root, "r", "config.R"))
@@ -51,19 +48,18 @@ on.exit(setwd(old_wd), add = TRUE)
 cfg <- read_config(file.path(proj_root, "config.yml"))
 
 out_dir <- file.path(proj_root, "output", "transfer_evictions")
-fig_dir <- file.path(proj_root, "output", "transfer_evictions", "figs")
-qa_dir  <- file.path(proj_root, "output", "qa")
+fig_dir <- file.path(out_dir, "figs")
 sample_year_min <- 2006L
 sample_year_max <- 2019L
 event_ref_period <- -2L
-acq_small_units_cutoff <- 10L
-acq_high_spec <- "full_highfiler_portfolio_10plus_otherunits"
-acq_low_spec <- "full_lowfiler_portfolio_10plus_otherunits"
-acq_small_spec <- "full_smallportfolio_lt10_otherunits"
-acq_single_spec <- "full_singlepurchase"
+
+must_read <- function(path) {
+  if (!file.exists(path)) stop("Missing required output: ", path)
+  fread(path)
+}
 
 include_tex_table <- function(path, max_width = "\\textwidth", landscape = FALSE, size = NULL) {
-  if (!file.exists(path)) { cat("Table not found:", path); return(invisible(NULL)) }
+  if (!file.exists(path)) stop("Missing required table: ", path)
   lines <- readLines(path)
   txt <- paste(lines, collapse = "\n")
   has_float <- grepl("\\\\begin\\{table\\}", txt)
@@ -71,7 +67,7 @@ include_tex_table <- function(path, max_width = "\\textwidth", landscape = FALSE
   if (landscape) cat("\\begin{landscape}\n")
   if (has_float) {
     is_float <- grepl("^\\s*\\\\begin\\{table\\}|^\\s*\\\\end\\{table\\}", lines)
-    is_meta  <- grepl("^\\s*\\\\caption|^\\s*\\\\label|^\\s*\\\\centering", lines)
+    is_meta <- grepl("^\\s*\\\\caption|^\\s*\\\\label|^\\s*\\\\centering", lines)
     cap_lines <- trimws(lines[is_meta])
     inner <- lines[!is_float & !is_meta]
     cat("\\begin{table}[htbp]\n\\centering\n")
@@ -89,15 +85,9 @@ include_tex_table <- function(path, max_width = "\\textwidth", landscape = FALSE
   if (landscape) cat("\\end{landscape}\n")
 }
 
-include_landscape_graphic <- function(path, caption, width = "0.97\\linewidth") {
-  if (!file.exists(path)) { cat("Figure not found:", path); return(invisible(NULL)) }
-  cat("\\begin{landscape}\n")
-  cat("\\begin{figure}[p]\n\\centering\n")
-  cat("\\includegraphics[width=", width, "]{",
-      normalizePath(path, winslash = "/", mustWork = FALSE), "}\n", sep = "")
-  cat("\\caption{", caption, "}\n", sep = "")
-  cat("\\end{figure}\n")
-  cat("\\end{landscape}\n")
+must_graphic <- function(path) {
+  if (!file.exists(path)) stop("Missing required figure: ", path)
+  knitr::include_graphics(path)
 }
 
 add_et <- function(dt) {
@@ -108,1259 +98,274 @@ add_et <- function(dt) {
   out
 }
 
+label_map_core <- c(
+  core_all_units = "All buildings",
+  core_1unit = "1-unit",
+  core_2plus = "2+ units",
+  core_2plus_rental_evidence = "2+ units, rental evidence",
+  core_5plus = "5+ units",
+  core_5plus_rental_evidence = "5+ units, rental evidence",
+  core_10plus = "10+ units",
+  core_10plus_rental_evidence = "10+ units, rental evidence"
+)
+label_map_acq <- c(
+  full = "All acquirers",
+  highfiler_portfolio_10plus_otherunits = "High-filer portfolio",
+  lowfiler_portfolio_10plus_otherunits = "Low-filer portfolio",
+  smallportfolio_lt10_otherunits = "Small portfolio",
+  singlepurchase = "Single-purchase"
+)
+label_map_stacked <- c(
+  stacked_full_wtd = "All buildings",
+  stacked_2plus_wtd = "2+ units"
+)
+
 fmt_num <- function(x, digits = 1) formatC(x, format = "f", digits = digits, big.mark = ",")
 fmt_int <- function(x) formatC(as.integer(round(x)), format = "d", big.mark = ",")
-fmt_pp <- function(x, digits = 1) paste0(fmt_num(100 * x, digits), " pp")
-fmt_pct <- function(x, digits = 1) paste0(fmt_num(x, digits), "%")
 
-est_at <- function(dt, spec_name, et_val) {
-  val <- dt[spec == spec_name & et == et_val, estimate]
-  if (length(val) == 0L) return(NA_real_)
-  val[[1]]
+event_summary <- function(dt, spec_labels, ets = c(1L, 2L, 3L)) {
+  out <- copy(dt)[et %in% ets & spec %in% names(spec_labels),
+                  .(spec, et, estimate = round(estimate, 4), std_error = round(std_error, 4))]
+  out[, spec := spec_labels[spec]]
+  dcast(out, spec ~ et, value.var = "estimate")
 }
 
-mean_est <- function(dt, spec_name, ets = 1:3) {
-  val <- dt[spec == spec_name & et %in% ets, estimate]
-  if (length(val) == 0L) return(NA_real_)
-  mean(val)
-}
+filing_core <- add_et(must_read(file.path(out_dir, "annual_filing_core_coefs.csv")))
+filing_acq <- add_et(must_read(file.path(out_dir, "annual_filing_acq_2plus_coefs.csv")))
+stacked_wtd <- add_et(must_read(file.path(out_dir, "annual_baseline_stacked_weighted_coefs.csv")))
+stacked_qweights <- must_read(file.path(out_dir, "annual_baseline_stacked_weighted_qweights.csv"))
 
-comp_at <- function(et_val, col) {
-  val <- composition[event_time == et_val, get(col)]
-  if (length(val) == 0L) return(NA_real_)
-  val[[1]]
-}
+occupancy <- add_et(must_read(file.path(out_dir, "annual_occupancy_2plus_coefs.csv")))
+pct_black <- add_et(must_read(file.path(out_dir, "annual_pct_black_2plus_coefs.csv")))
+pct_asian <- add_et(must_read(file.path(out_dir, "annual_pct_asian_2plus_coefs.csv")))
+pct_latino <- add_et(must_read(file.path(out_dir, "annual_pct_latino_2plus_coefs.csv")))
+pct_white <- add_et(must_read(file.path(out_dir, "annual_pct_white_2plus_coefs.csv")))
+permit <- add_et(must_read(file.path(out_dir, "annual_permit_rate_2plus_coefs.csv")))
+complaint <- add_et(must_read(file.path(out_dir, "annual_complaint_rate_2plus_coefs.csv")))
+rent_core <- add_et(must_read(file.path(out_dir, "annual_rent_core_coefs.csv")))
+rent_safe <- add_et(must_read(file.path(out_dir, "annual_rent_safe_core_coefs.csv")))
+rental_evidence_1unit <- add_et(must_read(file.path(out_dir, "annual_rental_evidence_1unit_coefs.csv")))
+rental_evidence_2plus <- add_et(must_read(file.path(out_dir, "annual_rental_evidence_2plus_coefs.csv")))
 
-desc_at <- function(buyer_type_val, col) {
-  val <- descriptives[buyer_type == buyer_type_val, get(col)]
-  if (length(val) == 0L) return(NA_real_)
-  val[[1]]
-}
+filing_sample_rows <- unique(filing_core[, .(spec, n, treated_pids, control_pids)])
+filing_sample_rows[, sample := label_map_core[spec]]
+filing_sample_rows <- filing_sample_rows[, .(sample, n, treated_pids, control_pids)]
 
-balance_at <- function(buyer_type_val, col) {
-  val <- balance[buyer_type == buyer_type_val, get(col)]
-  if (length(val) == 0L) return(NA_real_)
-  val[[1]]
-}
-
-raw_at <- function(et_val, col) {
-  val <- raw_means[event_time == et_val, get(col)]
-  if (length(val) == 0L) return(NA_real_)
-  val[[1]]
-}
-
-# Load results (unified output naming: annual_ prefix)
-baseline_coefs  <- fread(file.path(out_dir, "annual_baseline_coefs.csv"))
-buyer_coefs     <- fread(file.path(out_dir, "annual_buyer_type_coefs.csv"))
-size_coefs      <- fread(file.path(out_dir, "annual_size_coefs.csv"))
-corp_size_coefs <- fread(file.path(out_dir, "annual_corp_x_size_coefs.csv"))
-portfolio_coefs       <- fread(file.path(out_dir, "annual_portfolio_coefs.csv"))
-portfolio_units_coefs <- fread(file.path(out_dir, "annual_portfolio_units_coefs.csv"))
-robust_coefs    <- fread(file.path(out_dir, "annual_robustness_coefs.csv"))
-entry_coefs     <- fread(file.path(out_dir, "annual_rental_entry_coefs.csv"))
-acq_coefs       <- fread(file.path(out_dir, "annual_acq_filer_coefs.csv"))
-phase4_cons     <- fread(file.path(out_dir, "annual_phase4_consolidation.csv"))
-descriptives    <- fread(file.path(out_dir, "annual_descriptives.csv"))
-balance         <- fread(file.path(out_dir, "annual_balance_by_buyer.csv"))
-raw_means       <- fread(file.path(out_dir, "annual_pretrend_means.csv"))
-composition     <- fread(file.path(out_dir, "annual_composition_by_et.csv"))
-pooled_coefs    <- fread(file.path(out_dir, "annual_pooled_window_coefs.csv"))
-post_pre        <- fread(file.path(out_dir, "annual_post_minus_pre_summary.csv"))
-single_transfer_loss <- fread(file.path(out_dir, "annual_single_transfer_sample_loss.csv"))
-acq_cutoffs       <- fread(file.path(out_dir, "annual_acq_cutoffs.csv"))
-rent_coefs        <- fread(file.path(out_dir, "annual_rent_coefs.csv"))
-rent_robust_coefs <- fread(file.path(out_dir, "annual_rent_robustness_coefs.csv"))
-pct_black_coefs   <- fread(file.path(out_dir, "annual_pct_black_coefs.csv"))
-pct_asian_coefs   <- fread(file.path(out_dir, "annual_pct_asian_coefs.csv"))
-pct_latino_coefs  <- fread(file.path(out_dir, "annual_pct_latino_coefs.csv"))
-pct_female_coefs  <- fread(file.path(out_dir, "annual_pct_female_coefs.csv"))
-permit_coefs      <- fread(file.path(out_dir, "annual_permit_rate_coefs.csv"))
-complaint_coefs   <- fread(file.path(out_dir, "annual_complaint_rate_coefs.csv"))
-pct_male_coefs    <- fread(file.path(out_dir, "annual_pct_male_coefs.csv"))
-pct_white_coefs   <- fread(file.path(out_dir, "annual_pct_white_coefs.csv"))
-pct_other_coefs   <- fread(file.path(out_dir, "annual_pct_other_coefs.csv"))
-occ_coefs         <- fread(file.path(out_dir, "annual_occupancy_rate_coefs.csv"))
-income_coefs      <- fread(file.path(out_dir, "annual_log_income_coefs.csv"))
-tract_year_coefs  <- fread(file.path(out_dir, "annual_tract_year_robustness_coefs.csv"))
-race_share_diag   <- fread(file.path(out_dir, "annual_race_share_sum_diag.csv"))
-
-baseline_coefs  <- add_et(baseline_coefs)
-buyer_coefs     <- add_et(buyer_coefs)
-size_coefs      <- add_et(size_coefs)
-portfolio_coefs       <- add_et(portfolio_coefs)
-portfolio_units_coefs <- add_et(portfolio_units_coefs)
-robust_coefs    <- add_et(robust_coefs)
-entry_coefs     <- add_et(entry_coefs)
-acq_coefs       <- add_et(acq_coefs)
-rent_coefs       <- add_et(rent_coefs)
-rent_robust_coefs <- add_et(rent_robust_coefs)
-pct_black_coefs  <- add_et(pct_black_coefs)
-pct_asian_coefs  <- add_et(pct_asian_coefs)
-pct_latino_coefs <- add_et(pct_latino_coefs)
-pct_female_coefs <- add_et(pct_female_coefs)
-permit_coefs     <- add_et(permit_coefs)
-complaint_coefs  <- add_et(complaint_coefs)
-pct_male_coefs   <- add_et(pct_male_coefs)
-pct_white_coefs  <- add_et(pct_white_coefs)
-pct_other_coefs  <- add_et(pct_other_coefs)
-occ_coefs        <- add_et(occ_coefs)
-income_coefs     <- add_et(income_coefs)
-tract_year_coefs <- add_et(tract_year_coefs)
-
-post_only_range <- range(composition$pct_rental_post_only, na.rm = TRUE)
-acq_rate_cutoff      <- acq_cutoffs$high_filer_rate_cutoff[[1]]
-acq_rate_quantile_pct <- round(100 * acq_cutoffs$high_filer_rate_quantile[[1]], 1)
+core_2plus_t1 <- filing_core[spec == "core_2plus" & et == 1L, estimate]
+core_5plus_t1 <- filing_core[spec == "core_5plus" & et == 1L, estimate]
+core_10plus_t1 <- filing_core[spec == "core_10plus" & et == 1L, estimate]
+high_filer_t2 <- filing_acq[spec == "highfiler_portfolio_10plus_otherunits" & et == 2L, estimate]
+low_filer_t2 <- filing_acq[spec == "lowfiler_portfolio_10plus_otherunits" & et == 2L, estimate]
+stacked_2plus_t2 <- stacked_wtd[spec == "stacked_2plus_wtd" & et == 2L, estimate]
+stacked_2plus_pre3 <- stacked_wtd[spec == "stacked_2plus_wtd" & et == -3L, estimate]
 ```
 
 # Overview
 
-This document reports an event study of eviction filing rates around ownership transfers in Philadelphia rental properties.
+This note reports the streamlined annual transfer-evictions specification. The main outcome is `filing_rate = num_filings / total_units` in a full building-year panel from `r sample_year_min` to `r sample_year_max`, with single-transfer treated buildings compared against buildings never transferred in the RTT data. The omitted event time is `t = r event_ref_period`.
 
-The annual analysis now uses a **full building-year panel** over calendar years `r sample_year_min`--`r sample_year_max`. Treatment is a building's **only observed sale** in the RTT data within that window; controls are buildings **never sold** in RTT during the same window. We track treated buildings from 3 years before to 5 years after that sale, set all event-time dummies to zero for never-sold controls, and estimate building fixed effects models with common calendar-year shocks.
+The annual surface has been pruned to four blocks:
 
-# Data Construction
+- filing-rate event studies
+- occupancy, resident-composition, complaint, and permit outcomes
+- rent outcomes using the unified and safe series
+- rental-evidence event studies for `1-unit` and `2+ unit` buildings
 
-## Transfer events
+Portfolio filing types are computed using the helper logic from the production script, with portfolio size and filing rates defined using all holdings, including `1-unit` buildings. The filing and neighborhood-outcome regressions then restrict the estimation sample as needed.
 
-Transfer events come from the Philadelphia Real Estate Transfer Tax (RTT) records (`rtt_clean`), which log every deed transfer with buyer (grantee), seller (grantor), sale price, and document type.
+# Main Filing Results
 
-**Processing steps:**
+The filing sample grid now separates `1-unit` properties from the multifamily stock. The main justification for the `2+ unit` analysis sample is that the `2+` and `5+` estimates are close, while `1-unit` properties are shown separately as the single-family contrast and the `10+` cut is treated as a stricter appendix validation rather than the main specification.
 
-- Multiple transfers of the same PID in the same year are collapsed to one observation, keeping the transfer with the highest `total_consideration`.
-- **Sheriff's deeds** (foreclosures) are flagged via `document_type`. Approximately 10\% of all RTT records are sheriff's deeds. These are predominantly received by banks, servicers, and government-sponsored enterprises (Fannie Mae, Freddie Mac, HUD) --- entities that temporarily hold title after foreclosure, not active landlords.
+At `t = +1`, the filing-rate coefficient is `r fmt_num(core_2plus_t1, 4)` for `2+ units`, `r fmt_num(core_5plus_t1, 4)` for `5+ units`, and `r fmt_num(core_10plus_t1, 4)` for `10+ units`.
 
-## Owner linkage
-
-Buyer names are standardized and linked via a two-stage pipeline:
-
-**Stage 1 — Entity grouping** (`r/build-owner-linkage.R`):
-
-- **Corporate entities** are classified using `business_regex` (matching LLC, INC, CORP, TRUST, BANK, and ~40 other business keywords). Legal entity suffixes (LLC, INC, CORP, LP, LTD, CO, COMPANY) are stripped to group variants (e.g., "EMC MORTGAGE CORPORATION" and "EMC MORTGAGE LLC" map to the same owner group).
-- **Individual names** are *not* grouped across transfers --- matching "SMITH ROBERT" across properties without address verification would create false merges. For 10+ unit buildings, 97\% of top-evicting transfers are corporate, so this primarily affects small single-family properties where portfolio analysis is less relevant.
-
-**Stage 2 — Conglomerate formation** (`r/build-ownership-panel.R`):
-
-- Entity groups are merged into **conglomerates** via shared mailing addresses (Phase 2), transitive RTT grantee chains (Phase 3), and PA Dept of State business filing records (Phase 4). Phase 4 is the critical addition: it links shell company networks where legally distinct LLCs share a registered agent or officer but have completely different names and addresses.
-- **Portfolio size** is computed at the **conglomerate** level from non-sheriff acquisitions, so a landlord operating 10 shell LLCs is counted as a 10-property operator, not 10 separate single-purchase entities. Bins: Single-purchase, 2--4, 5--9, 10+, and Sheriff-only.
-- **Acquirer filing rate** is also computed at the conglomerate level: for each transfer, we look at all other PIDs in the same conglomerate in years before the transfer (using `xwalk_pid_conglomerate`), not just the PIDs acquired by that specific entity.
-
-## Event panel
-
-For the annual design, we restrict the sample window to `r sample_year_min`--`r sample_year_max`, keep treated PIDs with **exactly one observed transfer** in that window, and construct an event-time window $t \in \{-3, \ldots, +5\}$ around that sale. Buildings never sold in RTT during `r sample_year_min`--`r sample_year_max` remain in the panel as controls with all event-time indicators set to zero. We merge building-level outcomes from `bldg_panel_blp`:
-
-- **Filing rate**: $\text{num\_filings} / \text{total\_units}$ (contemporaneous, not the EB-smoothed pre-COVID rate)
-- **Violations**, **complaints**, **rent** as secondary outcomes
-- **Rental flags**: `rental_from_license`, `rental_from_altos`, `rental_from_evict`, `ever_rental_any_year_ever`
-
-```{r sample-stats}
-desc_buyer <- descriptives
-```
-
-**Sample:** `r format(baseline_coefs[spec == "full", n[1]], big.mark = ",")` building-year observations in the full baseline regression (after singleton removal). Among treated buildings, observed outcome coverage rises from `r fmt_pct(comp_at(-3, "pct_units_observed"))` at $t = -3$ to `r fmt_pct(comp_at(5, "pct_units_observed"))` at $t = +5$. All annual regressions restrict to calendar years `r sample_year_min`--`r sample_year_max`.
-
-The single-transfer restriction is now the default. Relative to keeping all treated PIDs' first sale, it keeps `r fmt_int(single_transfer_loss[grepl("^Kept", sample_group), n_pids])` treated buildings and drops `r fmt_int(single_transfer_loss[grepl("^Dropped", sample_group), n_pids])` repeat-transfer treated buildings, which would otherwise contribute `r fmt_int(single_transfer_loss[grepl("^Dropped", sample_group), panel_rows])` building-year rows. The dropped repeat-transfer properties are slightly more corporate (`r fmt_pct(single_transfer_loss[grepl("^Dropped", sample_group), pct_corporate])` vs. `r fmt_pct(single_transfer_loss[grepl("^Kept", sample_group), pct_corporate])`), somewhat larger (`r fmt_num(single_transfer_loss[grepl("^Dropped", sample_group), mean_units], 1)` vs. `r fmt_num(single_transfer_loss[grepl("^Kept", sample_group), mean_units], 1)` units), and have lower sale prices (`r paste0("$", fmt_int(single_transfer_loss[grepl("^Dropped", sample_group), median_price]))` vs. `r paste0("$", fmt_int(single_transfer_loss[grepl("^Kept", sample_group), median_price]))`).
-
-## Sample descriptives
-
-```{r desc-buyer}
-kable(desc_buyer[, .(buyer_type, n_transfers, mean_units, mean_filing_rate,
-                     mean_violations, median_price, pct_sheriff)],
-      col.names = c("Buyer Type", "N transfers", "Mean units", "Mean filing rate",
-                     "Mean violations", "Median price", "% Sheriff"),
-      digits = c(0, 0, 1, 4, 2, 0, 1),
-      format.args = list(big.mark = ","),
-      caption = "Transfer sample descriptives by buyer type (at t=0)") |>
+```{r filing-sample-table}
+kable(
+  filing_sample_rows,
+  col.names = c("Sample", "Rows", "Treated PIDs", "Control PIDs"),
+  format.args = list(big.mark = ","),
+  caption = "Sample sizes for the streamlined annual filing-rate event studies"
+) |>
   kable_styling(latex_options = c("hold_position"))
 ```
 
-```{r desc-portfolio}
-# Portfolio descriptives available in annual_acq_descriptives.csv
+```{r filing-core-plot, fig.cap="Annual filing-rate event study by sample restriction. The main comparison is 2+ units versus 5+ units; 10+ is included as a stricter appendix check."}
+must_graphic(file.path(fig_dir, "rtt_annual_filing_core.png"))
 ```
 
-# Specification
-
-The baseline event study estimates:
-
-$$
-\text{FilingRate}_{it} = \sum_{k \neq -2} \beta_k \cdot \mathbf{1}[\text{EventTime}_{it} = k] + \alpha_i + \gamma_t + \varepsilon_{it}
-$$
-
-where $i$ indexes buildings (PIDs), $t$ indexes calendar years, and EventTime $k \in \{-3, -1, 0, 1, 2, 3, 4, 5\}$ relative to the building's **single observed transfer year** in the `r sample_year_min`--`r sample_year_max` RTT window (with $k = -2$ as the omitted reference period). For never-sold controls, all event-time indicators equal zero in every year. $\alpha_i$ are building fixed effects and $\gamma_t$ are year fixed effects. Standard errors are clustered at the PID level.
-
-**Specifications:**
-
-| Spec | Sample | Fixed Effects | Notes |
-|------|--------|---------------|-------|
-| (1) Full | All buildings | PID + Year | Unweighted |
-| (2) Full (unit-wtd) | All buildings | PID + Year | Weighted by $\text{total\_units}$ |
-| (3) 1-unit buildings | Single-unit only | PID + Year | Tests conversion/selection channel |
-| (4) 2+ units | Buildings with 2+ units | PID + Year | Weighted by $\text{total\_units}$ |
-| (5) 5+ units | Buildings with 5+ units | PID + Year | Weighted by $\text{total\_units}$ |
-| (6) 2+ units, observed rental stock | 2+ units ever observed as rentals | PID + Year | Weighted by $\text{total\_units}$ |
-| (7) 5+ units, observed rental stock | 5+ units ever observed as rentals | PID + Year | Weighted by $\text{total\_units}$ |
-
-The building FE absorb time-invariant building characteristics (size, location, quality). **Specs (2) and (4)--(7)** are unit-weighted, so their estimand is the average change per rental unit rather than the average change per building. **Spec (3)** isolates single-unit rowhouses. **2+ units** (Spec 4) excludes single-family homes where a single filing produces a mechanically large filing rate; **observed rental stock** (Specs 6–7) restricts to buildings with direct rental-market evidence. Among treated buildings, roughly `r fmt_pct(post_only_range[1])` to `r fmt_pct(post_only_range[2])` are observed with rental evidence only after the sale.
-
-As a functional-form check, we also re-estimate the same baseline and buyer-type specifications using a Poisson event-study with outcome `\text{num\_filings}_{it}` and offset `\log(\text{total\_units}_{it})`. This keeps zero-filing building-years in sample while modeling filing intensity on the count scale with unit exposure absorbed by the offset.
-
-We do **not** stack multiple transfer events for the same PID in the main annual design. Instead, treatment is limited to PIDs with exactly one observed RTT transfer in `r sample_year_min`--`r sample_year_max`, and controls are PIDs with no RTT transfer in that same window.
-
-# Baseline Results
-
-## Raw means
-
-```{r raw-means-table}
-kable(raw_means,
-      digits = c(0, 5, 3, 0, 3),
-      format.args = list(big.mark = ","),
-      caption = "Raw outcome means by event time") |>
-  kable_styling(latex_options = c("hold_position"))
+```{r filing-core-table, results='asis'}
+include_tex_table(file.path(out_dir, "annual_filing_core_etable.tex"), size = "scriptsize")
 ```
 
-```{r raw-means-plot, fig.cap="Mean filing rate by event time (full sample). Shaded ribbon shows 95\\% CI; the dashed line marks the transfer year ($t=0$)."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_raw.png"))
-```
-
-```{r raw-means-plot-1unit-2plus, fig.cap="Mean filing rate by event time, split by 1-unit versus 2+ unit buildings. The dashed line marks the transfer year ($t=0$)."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_raw_by_1unit_2plus.png"))
-```
-
-## Stacked DiD: Baseline Estimates
-
-The stacked DiD design pairs each acquisition cohort with buildings that were **never transferred** over 2006--2019, stacks the cohort-specific panels, and absorbs building $\times$ cohort and calendar-year $\times$ cohort fixed effects (see Section\ \ref{sec-stacked-did} for the formal estimating equation). We show four baseline sub-samples:
-
-- **All units** --- full sample including single-family homes
-- **SFH only** (1-unit buildings)
-- **2+ units** --- multi-unit buildings only, unit-weighted
-- **2+ units, pre-period rental** --- 2+ unit buildings with at least one year of observed filings before acquisition
-
-```{r baseline-stacked-plot, fig.cap="Stacked DiD baseline: filing-rate event study by sample restriction. Reference: $t=-1$. Unit-weighted; SE clustered by building."}
-scratch_dir <- here::here("scratch")
-
-load_stacked_csv <- function(fname, spec_label) {
-  fpath <- file.path(scratch_dir, fname)
-  if (!file.exists(fpath)) stop(sprintf("Missing: %s — re-run benchmark-rental-stock-acs.R Section 8", fpath))
-  dt <- fread(fpath)
-  stopifnot(all(c("et","Estimate","se") %in% names(dt)))
-  dt <- rbind(dt, data.table(et = -1L, Estimate = 0, se = 0,
-                              tstat = NA_real_, pval = NA_real_, term = "reference"))
-  setorder(dt, et)
-  dt[, spec := spec_label]
-  dt
-}
-
-base_specs <- rbindlist(list(
-  load_stacked_csv("stacked_reg_baseline_all_filing_rate.csv",         "All units"),
-  load_stacked_csv("stacked_reg_baseline_sfh_filing_rate.csv",         "SFH (1-unit)"),
-  load_stacked_csv("stacked_reg_baseline_2plus_filing_rate.csv",       "2+ units"),
-  load_stacked_csv("stacked_reg_baseline_2plus_rental_filing_rate.csv","2+ units, pre-period rental")
-))
-base_specs[, ci_lo := Estimate - 1.96 * se]
-base_specs[, ci_hi := Estimate + 1.96 * se]
-base_specs[, spec := factor(spec, levels = c("All units","SFH (1-unit)",
-                                              "2+ units","2+ units, pre-period rental"))]
-
-base_colors <- c("All units"                  = "#888888",
-                 "SFH (1-unit)"               = "#BBBBBB",
-                 "2+ units"                   = "#4477AA",
-                 "2+ units, pre-period rental"= "#CC3311")
-
-pd4 <- position_dodge(width = 0.4)
-ggplot(base_specs, aes(x = et, y = Estimate, color = spec)) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
-  geom_vline(xintercept = -0.5, linetype = "dotted", color = "grey60") +
-  geom_point(size = 2.3, position = pd4) +
-  geom_errorbar(aes(ymin = ci_lo, ymax = ci_hi), width = 0.18, position = pd4) +
-  scale_x_continuous(breaks = -3:3) +
-  scale_color_manual(values = base_colors) +
-  labs(x = "Event time (years relative to acquisition)",
-       y = "Filing rate coefficient (filings / unit-year)",
-       color = NULL,
-       caption = "Controls: never-transferred buildings at same size threshold. FEs: building × cohort + calendar year × cohort.") +
-  theme_minimal(base_size = 11) +
-  theme(legend.position = "bottom", panel.grid.minor = element_blank())
-```
-# Heterogeneity by Acquirer Filing Rate
-
-We classify acquirers by their **pre-acquisition temporal filing rate** on the acquirer's *other* properties in years before the transfer. For each transfer of building $i$ by conglomerate $j$ in year $Y$, we pool the other buildings' pre-$Y$ filing counts and unit counts, then compute a **unit-weighted** filing rate:
-$$
-\text{AcqRate}_{jY} = \frac{\sum_{p \neq i,\, t < Y} \text{num\_filings}_{pt}}{\sum_{p \neq i,\, t < Y} \text{total\_units}_{pt}}.
-$$
-This avoids giving a single-family house the same weight as a large apartment building, and it avoids look-ahead bias because the classification uses no post-transfer data.
-
-Critically, the classification is now at the **conglomerate** level (post-Phase 4 matching). This means a landlord who made an acquisition via shell LLC "A" is classified using the pre-acquisition filing behavior of all other LLCs in the same conglomerate --- including shell companies "B", "C", and "D" that were linked to the same operator via PA business filing records. Under entity-level matching, each shell LLC would be classified as a single-purchase acquirer; under conglomerate-level matching, they are correctly identified as portfolio operators.
-
-Acquirers are classified into four bins:
-
-- **High-filer portfolio (10+ other units)**: Unit-weighted pre-acquisition filing rate above `r fmt_num(acq_rate_cutoff, 3)` filings per unit-year among portfolios with at least `r acq_small_units_cutoff` other units
-- **Low-filer portfolio (10+ other units)**: At or below that threshold among the same meaningful portfolios, including zero-filing operators
-- **Small portfolio (<10 other units)**: Has some other properties, but fewer than `r acq_small_units_cutoff` other units at acquisition
-- **Single-purchase**: No other properties in the conglomerate's history
-
-The high/low cutoff is fixed at **`r fmt_num(acq_rate_cutoff, 3)` filings per unit-year** (approximately `r acq_rate_quantile_pct`th percentile of the positive-rate meaningful-portfolio distribution). Using a fixed threshold rather than the sample median makes the classification invariant to sample composition and has a direct economic interpretation (roughly `r round(acq_rate_cutoff * 100)` eviction filings per 100 units per year).
-
-## Pre-Transfer Balance {#sec-balance}
-
-The table below shows pre-acquisition building characteristics by acquirer type, computed from observations strictly before the transfer year. Unit-weighted means weight each building-year by its `total_units`. The contrast confirms that high-filer acquirers target buildings that are already high-filing, majority-Black, and lower-income before any ownership change — a selection pattern, not a causal effect. The stacked DiD design (Section\ \ref{sec-stacked-did}) controls for this by comparing each treated building against never-transferred buildings within the same calendar-year cohort.
-
-```{r acq-balance-table}
-bal_ext  <- fread(file.path(here::here("scratch"), "balance_by_acq_filer_extended.csv"))
-bal_size <- fread(file.path(here::here("scratch"), "balance_by_acq_filer_by_size.csv"))
-stopifnot(nrow(bal_ext) > 0, nrow(bal_size) > 0)
-
-fmt_bal_rows <- function(dt) {
-  dt[, .(
-    `Acquirer type`         = acq_filer_bin,
-    `N bldgs`               = format(n_pids, big.mark = ","),
-    `Mean units`            = round(mean_units, 1),
-    `Filing rate`           = round(mean_filing_rt, 3),
-    `Violations/unit`       = round(mean_viol_rt,   3),
-    `Share Black`           = round(mean_pct_black, 2),
-    `Income ($k)`           = round(mean_income_k,  1)
+```{r filing-core-summary}
+core_summary <- event_summary(
+  filing_core,
+  spec_labels = label_map_core[c(
+    "core_1unit",
+    "core_2plus",
+    "core_2plus_rental_evidence",
+    "core_5plus",
+    "core_5plus_rental_evidence",
+    "core_10plus",
+    "core_10plus_rental_evidence"
   )]
-}
-
-# Panel A: 2+ units
-bal_2p   <- fmt_bal_rows(bal_size[size_filter == "2+ units"])
-# Panel B: 10+ units
-bal_10p  <- fmt_bal_rows(bal_size[size_filter == "10+ units"])
-
-bal_disp <- rbind(bal_2p, bal_10p)
-
-kable(bal_disp,
-      caption = "Pre-transfer balance by acquirer type (unit-weighted means of pre-acquisition building-years). Panels show 2+ unit buildings and 10+ unit buildings. Predicted income in \\$000s.") |>
-  kable_styling(latex_options = c("hold_position", "scale_down")) |>
-  pack_rows("2+ unit buildings", 1, nrow(bal_2p)) |>
-  pack_rows("10+ unit buildings", nrow(bal_2p) + 1, nrow(bal_disp))
-```
-
-## Market Dynamics {#sec-dynamics}
-
-### Seller–Buyer Transitions {#sec-transitions}
-
-Each cell shows the number of buildings (and share of that seller's total transfers) where a building previously held by the row type was acquired by the column type. Seller type is classified by the previous owner-conglomerate's overall portfolio filing rate and size over 2006–2019 (same thresholds as the buyer classification). "No OPA record" means the building had no ownership record in the year before transfer --- typically first-time OPA entrants or pre-2006 purchases.
-
-```{r transition-table}
-trans_long <- fread(file.path(here::here("scratch"), "transition_matrix_long.csv"))
-stopifnot(nrow(trans_long) > 0, all(c("seller_disp","buyer_disp","N","units_wt") %in% names(trans_long)))
-
-bin_order <- c("High-filer", "Low-filer", "Small portfolio", "Single-purchase")
-
-trans_long <- trans_long[seller_disp %in% bin_order & buyer_disp %in% bin_order]
-
-# Share of grand total (unit-weighted)
-grand_total <- sum(trans_long$units_wt)
-trans_long[, share_pct := 100 * units_wt / grand_total]
-
-# Pivot to wide: cells = "X%" of all unit-transfers
-trans_share <- dcast(trans_long, seller_disp ~ buyer_disp,
-                     value.var = "share_pct", fill = 0)
-for (bc in bin_order) if (!bc %in% names(trans_share)) trans_share[, (bc) := 0]
-setcolorder(trans_share, c("seller_disp", bin_order))
-
-# Row and column totals (unit-weighted %)
-trans_share[, `Row total` := rowSums(.SD), .SDcols = bin_order]
-col_tots <- trans_long[, .(col_tot = sum(share_pct)), by = buyer_disp]
-col_tot_row <- setNames(
-  as.list(c("Col. total",
-            sapply(bin_order, function(bc)
-              formatC(col_tots[buyer_disp == bc, col_tot], format="f", digits=1)),
-            formatC(sum(col_tots$col_tot), format="f", digits=1))),
-  c("seller_disp", bin_order, "Row total"))
-
-# Format cells as "X.X%"
-fmt_pct_cell <- function(x) formatC(x, format = "f", digits = 1)
-trans_share[, seller_disp := factor(seller_disp, levels = bin_order)]
-setorder(trans_share, seller_disp)
-
-disp_mat <- copy(trans_share)
-for (bc in c(bin_order, "Row total")) {
-  disp_mat[, (bc) := lapply(.SD, fmt_pct_cell), .SDcols = bc]
-}
-disp_mat <- rbind(disp_mat, as.data.table(col_tot_row), fill = TRUE)
-
-setnames(disp_mat, "seller_disp",    "Seller \\ Buyer →")
-setnames(disp_mat, "High-filer",     "High-filer")
-setnames(disp_mat, "Low-filer",      "Low-filer")
-setnames(disp_mat, "Small portfolio","Small portfolio")
-setnames(disp_mat, "Single-purchase","Single-purchase")
-
-kable(disp_mat,
-      caption = "Seller–buyer transition matrix (\\% of all unit-weighted transfers). Rows: prior owner type; columns: acquirer type. Read across a row to see where each seller type's units went; read down a column to see where each buyer type's units came from. 'No OPA record' = building had no prior OPA ownership entry.") |>
-  kable_styling(latex_options = c("hold_position", "scale_down")) |>
-  row_spec(nrow(disp_mat), bold = TRUE)
-```
-
-### Holdings by Owner Type {#sec-holdings}
-
-Total rental units (from `bldg_panel_blp`) held by each owner-type classification, summed across all buildings matched to a conglomerate in a given year. Owner-type is assigned retrospectively using each conglomerate's 2006–2019 filing rate and portfolio size. High-filer and low-filer portfolios both grew substantially over this period; individual/trust ownership was roughly stable.
-
-```{r holdings-plot, fig.cap="Top: total units held by owner type. Bottom: indexed to 2006 = 100, showing relative growth. Conglomerates classified by overall 2006--2019 filing rate and portfolio size."}
-library(patchwork)
-holdings <- fread(file.path(here::here("scratch"), "holdings_over_time.csv"))
-stopifnot(nrow(holdings) > 0)
-
-type_lvls <- c("High-filer", "Low-filer", "Small portfolio", "Individual/trust")
-type_cols <- c(
-  "High-filer"       = "#CC3311",
-  "Low-filer"        = "#4477AA",
-  "Small portfolio"  = "#AAAA44",
-  "Individual/trust" = "#888888"
 )
-type_lty <- c("High-filer"       = "solid",
-              "Low-filer"        = "solid",
-              "Small portfolio"  = "dashed",
-              "Individual/trust" = "dotted")
-
-holdings[, filer_type := factor(filer_type, levels = type_lvls)]
-holdings[, units_k := total_units / 1000]
-
-p_abs <- ggplot(holdings, aes(x = year, y = units_k,
-                               color = filer_type, linetype = filer_type)) +
-  geom_line(linewidth = 0.9) +
-  geom_point(size = 1.8) +
-  scale_color_manual(values = type_cols) +
-  scale_linetype_manual(values = type_lty) +
-  scale_x_continuous(breaks = seq(2006, 2019, 2)) +
-  scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
-  labs(x = NULL, y = "Total units (000s)", color = NULL, linetype = NULL) +
-  theme_minimal(base_size = 11) +
-  theme(legend.position = "none", panel.grid.minor = element_blank())
-
-# Indexed to 2006 = 100
-base_yr <- holdings[year == min(year), .(filer_type, base_u = units_k)]
-holdings_idx <- merge(holdings, base_yr, by = "filer_type")
-holdings_idx[, idx := 100 * units_k / base_u]
-
-p_idx <- ggplot(holdings_idx, aes(x = year, y = idx,
-                                   color = filer_type, linetype = filer_type)) +
-  geom_hline(yintercept = 100, linetype = "dashed", color = "grey60", linewidth = 0.4) +
-  geom_line(linewidth = 0.9) +
-  geom_point(size = 1.8) +
-  scale_color_manual(values = type_cols) +
-  scale_linetype_manual(values = type_lty) +
-  scale_x_continuous(breaks = seq(2006, 2019, 2)) +
-  scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
-  labs(x = NULL, y = "Index (first year = 100)",
-       color = NULL, linetype = NULL,
-       caption = "Buildings without a conglomerate match in the ownership panel are excluded.") +
-  theme_minimal(base_size = 11) +
-  theme(legend.position = "bottom", panel.grid.minor = element_blank())
-
-p_abs / p_idx
-```
-
-## Stacked DiD: Filing Rate Heterogeneity {#sec-stacked-did}
-
-To address the concern that post-acquisition filing changes reflect general time trends rather than causal acquisition effects, we implement a stacked difference-in-differences design. For each acquisition cohort $g$ (transfer year), we pair treated buildings with a clean control group of buildings that were **never transferred** over 2006--2019, then stack cohort-specific sub-panels. The estimating equation is:
-
-$$
-\text{FilingRate}_{it} = \sum_{k \neq -1} \beta_k \cdot \bigl(\text{Treated}_i \times \mathbf{1}[t - g_i = k]\bigr) + \alpha_{ig} + \delta_{tg} + \varepsilon_{it}
-$$
-
-where $\alpha_{ig}$ is a building $\times$ cohort fixed effect (absorbs the treated/control level difference within each cohort's panel), $\delta_{tg}$ is a calendar-year $\times$ cohort fixed effect (absorbs common time trends within each cohort), and $t=-1$ is the reference period. Standard errors are clustered by building. The event window is $k \in \{-3,\ldots,+3\}$ and the sample is restricted to calendar years 2006--2019. Controls appear once per cohort in the stacked dataset; clustering by raw PID across all cohort copies is conservative (treats repeated control observations as one cluster).
-
-The **treated** group in each specification is buildings acquired by a given acquirer type; the **control** group is always buildings matching the same size threshold that were never transferred. Crucially, "10+ units" refers to the **acquired building's own unit count** (not the acquirer's portfolio size) — this isolates the effect on large apartment buildings regardless of how the portfolio-size classification was derived. We report five specifications:
-
-1. **All acquirers, ≥2 units** --- average effect across all portfolio acquirers (high + low filer)
-2. **High-filer, ≥2 units** --- acquirer's pre-acquisition portfolio rate $>$ `r fmt_num(acq_rate_cutoff, 3)` filings/unit-year
-3. **Low-filer, ≥2 units** --- same portfolio threshold, rate $\leq$ `r fmt_num(acq_rate_cutoff, 3)`
-4. **High-filer, ≥10 units** --- high-filer acquirers of large (10+ unit) buildings only
-5. **Low-filer, ≥10 units** --- low-filer acquirers of large buildings (falsification)
-
-```{r acq-filer-stacked-plot, fig.cap="Stacked DiD: filing-rate event study by acquirer type. Reference: $t=-1$. Unit-weighted; SE clustered by building."}
-filer_specs <- rbindlist(list(
-  load_stacked_csv("stacked_reg_baseline.csv",        "All acquirers (≥2 units)"),
-  load_stacked_csv("stacked_reg_hi_filer_filing_rate.csv",  "High-filer (≥2 units)"),
-  load_stacked_csv("stacked_reg_lo_filer_2plus_filing_rate.csv","Low-filer (≥2 units)"),
-  load_stacked_csv("stacked_reg_hi_filer_10plus.csv", "High-filer (≥10 units)"),
-  load_stacked_csv("stacked_reg_lo_filer_10plus.csv", "Low-filer (≥10 units)")
-))
-filer_specs[, ci_lo := Estimate - 1.96 * se]
-filer_specs[, ci_hi := Estimate + 1.96 * se]
-filer_specs[, spec := factor(spec, levels = c(
-  "All acquirers (≥2 units)", "High-filer (≥2 units)", "Low-filer (≥2 units)",
-  "High-filer (≥10 units)", "Low-filer (≥10 units)"))]
-
-filer_colors <- c(
-  "All acquirers (≥2 units)" = "#888888",
-  "High-filer (≥2 units)"   = "#CC3311",
-  "Low-filer (≥2 units)"    = "#4477AA",
-  "High-filer (≥10 units)"  = "#EE6644",
-  "Low-filer (≥10 units)"   = "#88AADD"
-)
-
-pd5 <- position_dodge(width = 0.5)
-ggplot(filer_specs, aes(x = et, y = Estimate, color = spec)) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
-  geom_vline(xintercept = -0.5, linetype = "dotted", color = "grey60") +
-  geom_point(size = 2.3, position = pd5) +
-  geom_errorbar(aes(ymin = ci_lo, ymax = ci_hi), width = 0.18, position = pd5) +
-  scale_x_continuous(breaks = -3:3) +
-  scale_color_manual(values = filer_colors) +
-  labs(x = "Event time (years relative to acquisition)",
-       y = "Filing rate coefficient (filings / unit-year)",
-       color = NULL,
-       caption = "Controls: never-transferred buildings at same size threshold. FEs: building × cohort + calendar year × cohort.") +
-  theme_minimal(base_size = 11) +
-  theme(legend.position = "bottom", panel.grid.minor = element_blank())
-```
-
-High-filer acquirers of 2+ unit buildings show $\hat{\beta}_1 \approx 0.087$ at $t=+1$, roughly **seven times** the all-acquirer baseline ($\hat{\beta}_1 \approx 0.013$) and persistently significant through $t=+3$. The low-filer ≥2 unit spec shows near-zero post-acquisition coefficients, confirming the effect is driven by acquirer aggressiveness rather than the acquisition itself. The high-filer 10+ unit spec shows the largest point estimates ($\hat{\beta}_1 \approx 0.105$); the low-filer 10+ unit spec shows negative coefficients ($\hat{\beta}_1 \approx -0.025$, $\hat{\beta}_2 \approx -0.039$), consistent with regression-to-the-mean for large buildings sold by distressed operators. Pre-trends are flat across all five specifications.
-
-# Outcome Event Studies (Stacked DiD)
-
-The following outcome event studies use the same stacked DiD design as the filing-rate analysis above. For each outcome, we show two specifications on an **apples-to-apples** basis: **High-filer (≥2 units)** and **Low-filer (≥2 units, falsification)**. Both specs use 2+ unit buildings, differ only in acquirer type, and share the same never-transferred control group. Pre-trends flat in the low-filer spec and significant post-acquisition divergence in the high-filer spec identify the acquirer-type mechanism. All regressions use building $\times$ cohort and calendar-year $\times$ cohort fixed effects, are unit-weighted, and cluster standard errors by building. Reference period: $t = -1$.
-
-```{r stacked-outcome-helpers}
-scratch_dir <- here::here("scratch")
-
-load_stacked_outcome <- function(outcome, specs = c("hi_filer", "lo_filer_2plus"),
-                                  labels = c("High-filer (≥2 units)", "Low-filer (≥2 units, falsification)")) {
-  stopifnot(length(specs) == length(labels))
-  rows <- lapply(seq_along(specs), function(i) {
-    fname <- sprintf("stacked_reg_%s_%s.csv", specs[i], outcome)
-    fpath <- file.path(scratch_dir, fname)
-    if (!file.exists(fpath)) stop(sprintf("Missing stacked DiD output: %s\n  Re-run scratch/benchmark-rental-stock-acs.R Section 7", fpath))
-    dt <- fread(fpath)
-    stopifnot(all(c("et", "Estimate", "se") %in% names(dt)))
-    # Insert reference period
-    dt <- rbind(dt, data.table(et = -1L, Estimate = 0, se = 0,
-                                tstat = NA_real_, pval = NA_real_, term = "reference"))
-    setorder(dt, et)
-    dt[, spec := labels[i]]
-    dt
-  })
-  rbindlist(rows)
-}
-
-plot_stacked_outcome <- function(dt, outcome_label, y_label = "Coefficient") {
-  dt <- copy(dt)
-  dt[, ci_lo := Estimate - 1.96 * se]
-  dt[, ci_hi := Estimate + 1.96 * se]
-  spec_colors <- c("High-filer (≥2 units)"               = "#CC3311",
-                   "Low-filer (≥2 units, falsification)" = "#4477AA")
-  spec_levels <- c("High-filer (≥2 units)", "Low-filer (≥2 units, falsification)")
-  dt[, spec := factor(spec, levels = spec_levels)]
-  pd2 <- position_dodge(width = 0.3)
-  ggplot(dt, aes(x = et, y = Estimate, color = spec)) +
-    geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
-    geom_vline(xintercept = -0.5, linetype = "dotted", color = "grey60") +
-    geom_point(size = 2.3, position = pd2) +
-    geom_errorbar(aes(ymin = ci_lo, ymax = ci_hi), width = 0.18, position = pd2) +
-    scale_x_continuous(breaks = -3:3) +
-    scale_color_manual(values = spec_colors) +
-    labs(x = "Event time (years relative to acquisition)",
-         y = y_label,
-         title = outcome_label,
-         color = NULL,
-         caption = "Controls: never-transferred buildings at same size threshold. FEs: building × cohort + calendar year × cohort.") +
-    theme_minimal(base_size = 11) +
-    theme(legend.position = "bottom", panel.grid.minor = element_blank())
-}
-```
-
-## Log Median Rent (Stacked DiD)
-
-```{r stacked-rent, fig.cap="Stacked DiD: log median rent around acquisition. High-filer (≥2 units) vs. Low-filer 10+ falsification. Reference: t=-1."}
-dt_rent <- load_stacked_outcome("log_med_rent")
-plot_stacked_outcome(dt_rent, "Log Median Rent", y_label = "Log rent coefficient")
-```
-
-## Violation Rate (Stacked DiD)
-
-```{r stacked-violations, fig.cap="Stacked DiD: violation rate (violations per unit) around acquisition. Reference: t=-1."}
-dt_viol <- load_stacked_outcome("violation_rate")
-plot_stacked_outcome(dt_viol, "Violation Rate (violations/unit)", y_label = "Coefficient (violations/unit)")
-```
-
-## Permit Rate (Stacked DiD)
-
-```{r stacked-permits, fig.cap="Stacked DiD: permit rate (permits per unit) around acquisition. Reference: t=-1."}
-dt_perm <- load_stacked_outcome("permit_rate")
-plot_stacked_outcome(dt_perm, "Permit Rate (permits/unit)", y_label = "Coefficient (permits/unit)")
-```
-
-## Complaint Rate (Stacked DiD)
-
-```{r stacked-complaints, fig.cap="Stacked DiD: complaint rate (complaints per unit) around acquisition. Reference: t=-1."}
-dt_comp <- load_stacked_outcome("complaint_rate")
-plot_stacked_outcome(dt_comp, "Complaint Rate (complaints/unit)", y_label = "Coefficient (complaints/unit)")
-```
-
-## Tenant Composition (Stacked DiD)
-
-```{r stacked-pct-black, fig.cap="Stacked DiD: share of residents predicted Black around acquisition. Reference: t=-1."}
-dt_black <- load_stacked_outcome("infousa_pct_black")
-plot_stacked_outcome(dt_black, "Share Predicted Black", y_label = "Coefficient (share)")
-```
-
-```{r stacked-pct-hispanic, fig.cap="Stacked DiD: share of residents predicted Hispanic/Latino around acquisition. Reference: t=-1."}
-dt_hisp <- load_stacked_outcome("infousa_pct_hispanic")
-plot_stacked_outcome(dt_hisp, "Share Predicted Hispanic/Latino", y_label = "Coefficient (share)")
-```
-
-```{r stacked-pct-white, fig.cap="Stacked DiD: share of residents predicted White around acquisition. Reference: t=-1."}
-dt_white <- load_stacked_outcome("infousa_pct_white")
-plot_stacked_outcome(dt_white, "Share Predicted White", y_label = "Coefficient (share)")
-```
-
-```{r stacked-pct-female, fig.cap="Stacked DiD: share of residents predicted female around acquisition. Reference: t=-1."}
-dt_fem <- load_stacked_outcome("infousa_pct_female")
-plot_stacked_outcome(dt_fem, "Share Predicted Female", y_label = "Coefficient (share)")
-```
-
-## Log Household Income (Stacked DiD)
-
-```{r stacked-income, fig.cap="Stacked DiD: log predicted household income around acquisition. Reference: t=-1."}
-dt_inc <- load_stacked_outcome("log_income")
-plot_stacked_outcome(dt_inc, "Log Household Income", y_label = "Log income coefficient")
-```
-
-# Phase 4 Consolidation: Shell Company Networks
-
-Phase 4 of the ownership pipeline links entities whose PA Dept of State business filings share the same conglomerate (same officer network or registered agent), even when their names and addresses are completely different. This section quantifies how much the Phase 4 matching changed the transfer sample's classification.
-
-```{r phase4-table}
-# Pivot: Phase 4 flag × portfolio bin
-p4_wide <- dcast(phase4_cons,
-                 portfolio_bin ~ phase4_conglomerate,
-                 value.var = "n_transfers", fill = 0L)
-setnames(p4_wide, c("FALSE", "TRUE"), c("Standard conglomerate", "Phase 4 expanded"))
-p4_wide[, pct_phase4 := round(100 * `Phase 4 expanded` /
-                               (`Standard conglomerate` + `Phase 4 expanded`), 1)]
-kable(p4_wide,
-      col.names = c("Portfolio bin", "Standard conglomerate",
-                    "Phase 4 expanded", "% Phase 4"),
-      format.args = list(big.mark = ","),
-      caption = "Transfer counts by portfolio bin: Phase 4-expanded vs. standard conglomerates (at t=0)") |>
+setnames(core_summary, c("Sample", "t+1", "t+2", "t+3"))
+kable(
+  core_summary,
+  caption = "Selected filing-rate coefficients from the streamlined sample grid"
+) |>
   kable_styling(latex_options = c("hold_position"))
 ```
 
-"Phase 4 expanded" conglomerates are those where at least one entity was linked via PA business filing records (shell company network detection). For these transfers, the acquirer's portfolio bin and pre-acquisition filing rate reflect the full operator network rather than only the single purchasing entity.
-# Robustness
+# Filing Heterogeneity by Acquirer Type
 
-All robustness checks use the same **full-panel design**: the full building panel is merged with single-transfer timing, explicit event-time dummies are constructed for $k \in \{-3, \ldots, +5\}$ (omitting $k = -2$), and years outside the event window have all dummies set to zero. Never-sold buildings are retained as controls. All robustness specs use the **full sample, unit-weighted**, in calendar years `r sample_year_min`--`r sample_year_max`.
+The main heterogeneity split uses four acquirer types:
 
-```{r robustness-plot, fig.cap="Robustness checks: alternative transfer samples (full-panel design, all units, 2006--2019)."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_robustness.png"))
+- `High-filer portfolio`
+- `Low-filer portfolio`
+- `Small portfolio`
+- `Single-purchase`
+
+These categories are defined from the helper-function leave-one-out portfolio measures, while the regression itself is restricted to `2+ unit` buildings. In the current annual outputs, the `t = +2` coefficient is `r fmt_num(high_filer_t2, 4)` for high-filer portfolios and `r fmt_num(low_filer_t2, 4)` for low-filer portfolios.
+
+```{r filing-acq-plot, fig.cap="Annual filing-rate event study for 2+ unit buildings, split by acquirer filing type. Controls are never-transferred buildings in the same 2+ unit sample."}
+must_graphic(file.path(fig_dir, "rtt_annual_filing_acq_2plus.png"))
 ```
 
-```{r robustness-table, results='asis'}
-include_tex_table(file.path(out_dir, "annual_robustness_etable.tex"),
-                  landscape = TRUE, size = "scriptsize")
+```{r filing-acq-table, results='asis'}
+include_tex_table(file.path(out_dir, "annual_filing_acq_2plus_etable.tex"), size = "scriptsize")
 ```
 
-## No sheriff's deeds
-
-Sheriff's deed transfers are foreclosures, where the "buyer" is typically a bank or GSE (Fannie Mae, Freddie Mac) that temporarily holds title. These entities do not operate as landlords and are unlikely to file evictions. Excluding sheriff's deeds removes approximately 10\% of transfers.
-
-## Allow repeat-transfer PIDs
-
-The baseline now defaults to the single-transfer sample. As a robustness check, we re-introduce repeat-transfer PIDs by using each building's first observed sale in the analysis window even when that PID later sells again.
-
-## No nearby re-transfer
-
-We exclude transfers where the same PID has another transfer within 2 years, avoiding contamination from overlapping ownership spells.
-
-## Count outcome
-
-Using the raw count of eviction filings (`num_filings`) instead of the rate (per unit) confirms the direction of the effect. This addresses the concern that rate-based measures might be sensitive to changes in `total_units` around transfers.
-
-## Any-filing indicator
-
-A binary indicator for whether any eviction filings occurred in a given year tests whether the effect operates on the extensive margin (more buildings filing) rather than only the intensive margin (more filings per building).
-
-## Violations outcome
-
-Building code violations are examined as a secondary outcome. **Note:** Philadelphia L\&I violations data begins in 2007, so the violations regressions are additionally restricted to calendar years $\geq$ 2007 to avoid spurious zeros in the pre-period.
-
-```{r violations-buyer, fig.cap="Annual total violations around transfer by buyer type (year $\\geq$ 2007, full-panel design)."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_violations_by_buyer.png"))
-```
-# Appendix: Baseline Regression Estimates (Full-Panel Design)
-
-These estimates use the traditional two-way FE event study (building + year FEs, never-sold controls, unit-weighted) rather than the stacked DiD design. They are retained for comparison with the stacked DiD baseline in Section\ \ref{sec-stacked-did-4spec}.
-
-```{r appendix-baseline-coefplot, results='asis'}
-include_landscape_graphic(
-  file.path(fig_dir, "rtt_annual_baseline.png"),
-  "Event study coefficients: filing rate around ownership transfer. Reference period is t=-2; the dashed line marks the transfer year ($t=0$)."
+```{r filing-acq-summary}
+acq_summary <- event_summary(
+  filing_acq,
+  spec_labels = label_map_acq
 )
-```
-
-```{r appendix-baseline-table, results='asis'}
-include_tex_table(file.path(out_dir, "annual_baseline_etable.tex"),
-                  landscape = TRUE, size = "scriptsize")
-```
-
-## Baseline: Poisson with unit offset
-
-```{r appendix-baseline-poisson-coefplot, results='asis'}
-include_landscape_graphic(
-  file.path(fig_dir, "rtt_annual_baseline_poisson.png"),
-  "Poisson event study: log expected filings-per-unit around transfer. Reference period is t=-2."
-)
-```
-
-```{r appendix-baseline-poisson-table, results='asis'}
-include_tex_table(file.path(out_dir, "annual_baseline_poisson_etable.tex"),
-                  landscape = TRUE, size = "scriptsize")
-```
-
-## Acquirer Filing Rate: Poisson with unit offset
-
-```{r appendix-acq-poisson-plot, results='asis'}
-include_landscape_graphic(
-  file.path(fig_dir, "rtt_annual_by_acq_filer_poisson.png"),
-  "Poisson event study by acquirer pre-acquisition filing rate. Coefficients on log expected filings-per-unit scale; reference period is t=-2."
-)
-```
-
-```{r appendix-acq-poisson-table, results='asis'}
-include_tex_table(file.path(out_dir, "annual_acq_filer_poisson_etable.tex"),
-                  landscape = TRUE, size = "scriptsize")
-```
-
-# Appendix: 1-Unit vs 2+ Diagnostics
-
-These appendix figures isolate the size composition issue behind the lead patterns in the annual event studies. Each plot re-estimates the same full-panel, never-sold-control design separately for **1-unit** and **2+ unit** buildings.
-
-```{r appendix-filing-size-diag, fig.cap="Appendix diagnostic: filing-rate event studies for 1-unit versus 2+ unit buildings."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_filing_rate_size_diag.png"))
-```
-
-```{r appendix-occupancy-size-diag, fig.cap="Appendix diagnostic: occupancy-rate event studies for 1-unit versus 2+ unit buildings."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_occupancy_rate_size_diag.png"))
-```
-
-```{r appendix-race-size-diag, results='asis'}
-include_landscape_graphic(
-  file.path(fig_dir, "rtt_annual_race_shares_size_diag.png"),
-  "Appendix diagnostic: all five race-share event studies for 1-unit versus 2+ unit buildings."
-)
-```
-
-```{r appendix-permit-size-diag, fig.cap="Appendix diagnostic: permit-rate event studies for 1-unit versus 2+ unit buildings."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_permit_rate_size_diag.png"))
-```
-
-```{r appendix-rent-size-diag, fig.cap="Appendix diagnostic: log-rent event studies for 1-unit versus 2+ unit buildings."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_rent_size_diag.png"))
-```
-# Appendix: Heterogeneity by Buyer Type
-
-The main heterogeneity analyses use the same **full-panel, never-sold-control** design and are **unit-weighted** (`weights = total_units`). Each subgroup regression keeps the same never-sold control buildings and swaps in only the treated subgroup of interest. This shifts the estimand from the average change per building to the average change per rental unit, up-weighting large multi-unit properties. All regressions use calendar years `r sample_year_min`--`r sample_year_max`, and treated observations are limited to the single-transfer sample. The Poisson robustness below instead models `num_filings` with offset `\log(\text{total\_units})`, so it does not use separate unit weights.
-
-```{r buyer-coefplot, results='asis'}
-include_landscape_graphic(
-  file.path(fig_dir, "rtt_annual_by_buyer.png"),
-  "Event study by buyer type (full unit-weighted sample). Reference period is t=-2; the dashed line marks the transfer year ($t=0$)."
-)
-```
-
-```{r buyer-coefplot-2plus, results='asis'}
-include_landscape_graphic(
-  file.path(fig_dir, "rtt_annual_by_buyer_2plus.png"),
-  "Event study by buyer type for 2+ unit buildings. Reference period is t=-2; the dashed line marks the transfer year ($t=0$)."
-)
-```
-
-```{r buyer-table, results='asis'}
-include_tex_table(file.path(out_dir, "annual_buyer_type_etable.tex"),
-                  landscape = TRUE, size = "scriptsize")
-```
-
-## Buyer-type heterogeneity: Poisson with unit offset
-
-```{r buyer-poisson-coefplot, results='asis'}
-include_landscape_graphic(
-  file.path(fig_dir, "rtt_annual_by_buyer_poisson.png"),
-  "Poisson event study by buyer type with log(total units) offset. Coefficients are on the log expected filings-per-unit scale; reference period is t=-2 and the dashed line marks the transfer year ($t=0$)."
-)
-```
-
-```{r buyer-poisson-coefplot-2plus, results='asis'}
-include_landscape_graphic(
-  file.path(fig_dir, "rtt_annual_by_buyer_poisson_2plus.png"),
-  "Poisson event study by buyer type with log(total units) offset for 2+ unit buildings. Coefficients are on the log expected filings-per-unit scale; reference period is t=-2 and the dashed line marks the transfer year ($t=0$)."
-)
-```
-
-```{r buyer-poisson-table, results='asis'}
-include_tex_table(file.path(out_dir, "annual_buyer_type_poisson_etable.tex"),
-                  landscape = TRUE, size = "scriptsize")
-```
-
-## Pre-transfer balance
-
-```{r balance-table}
-bal_cols <- intersect(c("buyer_type", "mean_filing_rate", "mean_violations", "mean_units", "n"),
-                      names(balance))
-kable(balance[, ..bal_cols],
-      caption = "Pre-transfer balance by buyer type") |>
+setnames(acq_summary, c("Acquirer type", "t+1", "t+2", "t+3"))
+kable(
+  acq_summary,
+  caption = "Selected 2+ unit filing-rate coefficients by acquirer type"
+) |>
   kable_styling(latex_options = c("hold_position"))
 ```
 
-# Appendix: Heterogeneity by Building Size
+# Weighted Stacked Robustness
 
-We estimate the event study separately by building size bin in the unit-weighted `r sample_year_min`--`r sample_year_max` sample.
+As a robustness check, the production script now runs a weighted stacked annual filing-rate estimator for the full sample and the `2+ unit` sample. This is not the main specification, but it provides a cleaner stacked benchmark than the earlier scratch implementation.
 
-```{r size-coefplot, fig.cap="Event study by building size bin. Reference period is t=-2; the dashed line marks the transfer year ($t=0$)."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_by_size.png"))
+For the `2+ unit` weighted stacked regression, the `t = -3` coefficient is `r fmt_num(stacked_2plus_pre3, 4)` and the `t = +2` coefficient is `r fmt_num(stacked_2plus_t2, 4)`.
+
+```{r filing-stacked-plot, fig.cap="Weighted stacked annual filing-rate event study. Corrective weights are applied at the cohort-control level; the main comparison is the full sample versus 2+ units."}
+must_graphic(file.path(fig_dir, "rtt_annual_baseline_stacked_weighted.png"))
 ```
 
-```{r size-table, results='asis'}
-include_tex_table(file.path(out_dir, "annual_size_etable.tex"))
+```{r filing-stacked-table, results='asis'}
+include_tex_table(file.path(out_dir, "annual_baseline_stacked_weighted_etable.tex"), size = "scriptsize")
 ```
 
-## Corporate buyer effect by building size
-
-To confirm the corporate buyer effect isn't driven solely by small properties, we cross the buyer type and building size splits:
-
-```{r corp-size-table}
-# Summarize post-transfer effect (avg of t+1 to t+3) by corp x size
-cs <- corp_size_coefs[grepl("event_time::", term)]
-cs[, et := as.integer(stringr::str_extract(term, "-?\\d+"))]
-cs[, c("buyer", "size") := tstrsplit(spec, "_", fixed = TRUE, keep = 1:2)]
-cs[, size := gsub("^(corp|indiv)_", "", spec)]
-cs[, buyer := fifelse(grepl("^corp_", spec), "Corporate", "Individual")]
-cs[, size := gsub("^corp_|^indiv_", "", spec)]
-
-post_summary <- cs[et %in% 1:3, .(
-  mean_coef = round(mean(estimate), 4),
-  mean_se = round(mean(std_error), 4)
-), by = .(buyer, size)]
-setorder(post_summary, size, buyer)
-
-kable(post_summary,
-      col.names = c("Buyer type", "Size bin", "Mean coef (t+1 to t+3)", "Mean SE"),
-      caption = "Average post-transfer effect (t+1 to t+3) by buyer type and building size") |>
-  kable_styling(latex_options = c("hold_position"))
-```
-# Appendix: Heterogeneity by Portfolio Size
-
-```{r portfolio-coefplot, fig.cap="Event study by portfolio size (non-sheriff acquisitions). Reference period is t=-2; the dashed line marks the transfer year ($t=0$)."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_by_portfolio.png"))
-```
-
-```{r portfolio-coefplot-2plus, fig.cap="Event study by portfolio size for 2+ unit buildings (non-sheriff acquisitions). Reference period is t=-2; the dashed line marks the transfer year ($t=0$)."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_by_portfolio_2plus.png"))
-```
-
-```{r portfolio-table, results='asis'}
-include_tex_table(file.path(out_dir, "annual_portfolio_etable.tex"))
-```
-
-## Portfolio-size heterogeneity: Poisson with unit offset
-
-```{r portfolio-poisson-coefplot, results='asis'}
-include_landscape_graphic(
-  file.path(fig_dir, "rtt_annual_by_portfolio_poisson.png"),
-  "Poisson event study by portfolio size with log(total units) offset. Coefficients are on the log expected filings-per-unit scale; reference period is t=-2 and the dashed line marks the transfer year ($t=0$)."
-)
-```
-
-```{r portfolio-poisson-coefplot-2plus, results='asis'}
-include_landscape_graphic(
-  file.path(fig_dir, "rtt_annual_by_portfolio_poisson_2plus.png"),
-  "Poisson event study by portfolio size with log(total units) offset for 2+ unit buildings. Coefficients are on the log expected filings-per-unit scale; reference period is t=-2 and the dashed line marks the transfer year ($t=0$)."
-)
-```
-
-```{r portfolio-poisson-table, results='asis'}
-include_tex_table(file.path(out_dir, "annual_portfolio_poisson_etable.tex"),
-                  landscape = TRUE, size = "scriptsize")
-```
-
-## Portfolio heterogeneity by net units held
-
-The property-count portfolio bins above can conflate small-count portfolios of large apartment buildings with large-count portfolios of row homes. As an alternative measure of portfolio scale, the acquirer's total unit count across all other conglomerate buildings (net of the acquired parcel itself) is binned at acquisition.
-
-```{r portfolio-units-coefplot, fig.cap="Event study by portfolio net units held at acquisition (units in other conglomerate buildings, excluding the acquired parcel). Reference period is t=-2; the dashed line marks the transfer year ($t=0$)."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_by_portfolio_units.png"))
-```
-
-```{r portfolio-units-table, results='asis'}
-include_tex_table(file.path(out_dir, "annual_portfolio_units_etable.tex"))
-```
-# Appendix: Pooled Window Estimates
-
-We pool event-time periods into four windows to summarize the magnitude and significance of the transfer effect:
-
-- **Pre** ($t \in \{-3, -2\}$): Baseline period before transfer
-- **Transition** ($t \in \{-1, 0\}$): Transfer year and immediate lead
-- **Early post** ($t \in \{1, 2\}$): First two post-transfer years
-- **Late post** ($t \in \{3, 4, 5\}$): Three to five years after transfer
-
-```{r pooled-plot, fig.cap="Pooled window estimates: filing rate change relative to pre-transfer period."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_pooled_windows.png"))
-```
-
-```{r post-pre-plot, fig.cap="Post-minus-pre filing rate change by subgroup. Average of early and late post windows, relative to pre-transfer."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_post_minus_pre.png"))
-```
-
-```{r post-pre-table}
-if (nrow(post_pre) > 0) {
-  kable(post_pre[, .(subgroup, post_minus_pre, se, ci_lower, ci_upper, n)],
-        col.names = c("Subgroup", "Post-Pre", "SE", "CI Lower", "CI Upper", "N"),
-        digits = c(0, 5, 5, 5, 5, 0),
-        format.args = list(big.mark = ","),
-        caption = "Post-minus-pre filing rate change by subgroup") |>
-    kable_styling(latex_options = c("hold_position"))
-}
-```
-# Appendix: Composition Diagnostics
-
-```{r composition-table}
-if (nrow(composition) > 0) {
-  kable(composition,
-        col.names = c("Event time", "N obs", "N PIDs", "Units obs (%)",
-                      "Mean units", "Pre-rental (%)", "Post-only rental (%)",
-                      "Corporate (%)", "Large (%)"),
-        digits = c(0, 0, 0, 1, 1, 1, 1, 1, 1),
-        format.args = list(big.mark = ","),
-        caption = "Sample composition by event time (2006--2019 single-transfer treated sample)") |>
-    kable_styling(font_size = 8, latex_options = c("hold_position", "scale_down"))
-}
-```
-# Appendix: Selection Concern: Rental Market Presence
-
-A central concern is that corporate transfers may bring formerly owner-occupied properties into the observed rental market, mechanically increasing the population at risk for eviction filings. We test this directly using rental license, listing, and any-rental-evidence indicators as outcomes. These are **rental-market presence** measures, not literal first-entry hazards. The regressions use the same never-sold controls as the main filing-rate design, include all properties (including single-unit rowhouses, the primary owner-to-renter conversion target in Philadelphia), and restrict to calendar years `r max(2011L, sample_year_min)`--`r sample_year_max`.
-
-```{r entry-license, fig.cap="Probability of a rental license record around transfer, by buyer type. Reference period is t=-2; the dashed line marks the transfer year ($t=0$)."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_rental_license_entry.png"))
-```
-
-```{r entry-license-2plus-rental, fig.cap="Probability of a rental license record around transfer, by buyer type, for 2+ unit observed-rental-stock buildings. Reference period is t=-2; the dashed line marks the transfer year ($t=0$)."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_rental_license_entry_2plus_rental.png"))
-```
-
-```{r entry-any, fig.cap="Probability of any observed rental evidence around transfer, by buyer type. Reference period is t=-2; the dashed line marks the transfer year ($t=0$)."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_any_rental_entry.png"))
-```
-
-```{r entry-table}
-entry_summary <- entry_coefs[grepl("event_time::", term) & !grepl("^license_entry_2plus_rental_", spec)]
-entry_summary[, et := as.integer(stringr::str_extract(term, "-?\\d+"))]
-entry_key <- entry_summary[et %in% c(-3, 0, 1, 3),
-                           .(spec, et, estimate = round(estimate, 3),
-                             std_error = round(std_error, 3))]
-entry_wide <- dcast(entry_key, spec ~ et, value.var = "estimate")
-setnames(entry_wide, c("Specification", "t-3", "t=0", "t+1", "t+3"))
-kable(entry_wide,
-      caption = "Rental-market presence coefficients at key event times (reference period: t=-2)") |>
-  kable_styling(latex_options = c("hold_position", "scale_down"))
-```
-
-Note: rental license coverage begins around 2013 in the Philadelphia data. All rental-market presence regressions are restricted to year $\geq$ 2011. Altos listing data is available from 2006.
-
-# Appendix: Full-Panel Outcome Event Studies
-
-The following figures show the full-panel never-sold-control event studies (same specification as the baseline filing-rate analysis) for each secondary outcome. These complement the stacked DiD outcome results in the main text. All regressions use building + year fixed effects, are unit-weighted, and cluster standard errors at the PID level. Reference period: $t = -2$.
-
-## Neighborhood Gentrification Status Heterogeneity
-
-Buildings are classified by the gentrification trajectory of their census tract (2010--2019). **Gentrifiable** tracts are below the city-wide median household income in 2010. Among gentrifiable tracts, **Gentrified** = income percentile rank rose $\geq 10$ pp by 2019; **Did not gentrify** = rank change below threshold. **Not gentrifiable** (above-median 2010 income) serves as the comparison baseline. Classification from `analyze-nhood-portfolio-transitions.R`.
-
-```{r nhood-gent-plot, fig.cap="Filing-rate event study by neighborhood gentrification status. Full-panel never-sold-control design; unit-weighted; SE clustered by building. Reference: $t = -2$. Grey = all buildings (baseline)."}
-gent_coef_path <- file.path(out_dir, "annual_nhood_gent_coefs.csv")
-base_coef_path <- file.path(out_dir, "annual_baseline_coefs.csv")
-stopifnot(
-  "Run analyze-transfer-evictions-unified.R (annual) first" = file.exists(gent_coef_path),
-  "Run analyze-transfer-evictions-unified.R (annual) first" = file.exists(base_coef_path)
-)
-
-parse_et_col <- function(dt) {
-  dt[grepl("^event_time::", term), et := as.integer(sub(".*::", "", term))]
-  dt[!is.na(et)]
-}
-
-gent_coefs <- parse_et_col(fread(gent_coef_path))
-base_coefs  <- parse_et_col(fread(base_coef_path))[spec == "2plus"]
-
-combined <- rbind(gent_coefs, base_coefs, fill = TRUE)
-combined <- combined[et >= -3L & et <= 3L]
-
-# Add reference period row for each spec
-ref_rows <- combined[, .(et = event_ref_period, estimate = 0, std_error = 0,
-                          term = "reference", ci_lo = 0, ci_hi = 0), by = spec]
-combined[, ci_lo := estimate - 1.96 * std_error]
-combined[, ci_hi := estimate + 1.96 * std_error]
-combined <- rbind(combined, ref_rows, fill = TRUE)
-
-spec_labels <- c(
-  "2plus"                  = "All tracts (≥2 units, baseline)",
-  "nhood_gentrified"       = "Gentrified",
-  "nhood_did_not_gentrify" = "Did not gentrify",
-  "nhood_not_gentrifiable" = "Not gentrifiable (ref.)"
-)
-combined[, spec_label := factor(spec_labels[spec],
-                                 levels = unname(spec_labels))]
-combined <- combined[!is.na(spec_label) & !is.na(et)]
-
-spec_colors <- c(
-  "All tracts (≥2 units, baseline)" = "#888888",
-  "Gentrified"                 = "#CC3311",
-  "Did not gentrify"           = "#4477AA",
-  "Not gentrifiable (ref.)"    = "#2A9D8F"
-)
-
-pd <- position_dodge(width = 0.5)
-ggplot(combined, aes(x = et, y = estimate, color = spec_label)) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
-  geom_vline(xintercept = event_ref_period + 0.5, linetype = "dotted", color = "grey60") +
-  geom_point(size = 2.3, position = pd) +
-  geom_errorbar(aes(ymin = ci_lo, ymax = ci_hi), width = 0.18, position = pd) +
-  scale_x_continuous(breaks = -3:3) +
-  scale_color_manual(values = spec_colors) +
-  labs(x = "Event time (years relative to acquisition)",
-       y = "Filing rate coefficient (filings / unit-year)",
-       color = NULL) +
-  theme_minimal(base_size = 11) +
-  theme(legend.position = "bottom", panel.grid.minor = element_blank())
-```
-
-```{r nhood-gent-table, results='asis'}
-gent_etable <- file.path(out_dir, "annual_nhood_gent_etable.tex")
-stopifnot("Run analyze-transfer-evictions-unified.R (annual) first" = file.exists(gent_etable))
-include_tex_table(gent_etable, size = "small")
-```
-
-## Full-Panel Outcome Event Studies (Filing-Rate Specification)
-
-The following sections extend the event study to additional outcomes. All regressions use the same **full-panel, never-sold-control** specification (`weights = total_units`, `r sample_year_min`--`r sample_year_max` sample). Three splits are reported for each outcome: (1) full sample, (2) by acquirer pre-acquisition filing rate, and (3) by acquirer portfolio size.
-
-## Log Median Rent
-
-Rental price is measured as log median rent from `bldg_panel_blp`, combining listing rents and eviction-claimed rents. Because rent data is sparse (~25--45% annual coverage), the rent regressions use the same **full-panel DiD design** with an additional support restriction: never-sold buildings with at least 2 observed rent years serve as controls, while treated buildings are required to have at least 1 non-missing rent year both before and after acquisition. Explicit event-time dummies replace the `i()` interaction so that control-building observations anchor the year fixed effects.
-
-```{r rent-full, fig.cap="Log median rent around transfer (full sample, unit-weighted)."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_rent_full.png"))
-```
-
-```{r rent-by-acq, fig.cap="Log median rent by acquirer pre-acquisition filing rate."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_rent_by_acq_filer.png"))
-```
-
-```{r rent-by-port, fig.cap="Log median rent by acquirer portfolio size."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_rent_by_port.png"))
-```
-
-```{r rent-robustness, fig.cap="Log median rent robustness checks: tract-by-year fixed effects and stricter control support."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_rent_robustness.png"))
-```
-
-## Demographic Composition
-
-### Race Shares
-
-The race outcomes use the building-level probability-weighted shares of residents predicted Asian, Black, Latino/Hispanic, White, and Other from the InfoUSA-linked resident roster in `bldg_panel_blp`. Missingness is at the building-year level when there are no InfoUSA person-level observations.
-
-```{r race-shares-full, fig.cap="All five race-share event studies (full sample, unit-weighted)."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_race_shares_full.png"))
-```
-
-```{r race-shares-acq, fig.cap="All five race-share event studies for high-filer portfolio acquirers."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_race_shares_by_acq_filer.png"))
-```
-
-```{r race-shares-port, fig.cap="All five race-share event studies for 10+ property acquirers."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_race_shares_by_port.png"))
-```
-
-For all `r fmt_int(race_share_diag$n_complete)` building-year observations with complete race shares, `infousa_pct_asian + infousa_pct_black + infousa_pct_hispanic + infousa_pct_white + infousa_pct_other` sums to 1 up to machine precision (max absolute deviation `r formatC(race_share_diag$max_abs_dev, format = "e", digits = 2)`).
-
-### Gender Shares
-
-Female and male shares are reported together because they are complements.
-
-```{r gender-shares-full, fig.cap="Female and male share event studies (full sample, unit-weighted)."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_gender_shares_full.png"))
-```
-
-```{r gender-shares-acq, fig.cap="Female and male share event studies for high-filer portfolio acquirers."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_gender_shares_by_acq_filer.png"))
-```
-
-```{r gender-shares-port, fig.cap="Female and male share event studies for 10+ property acquirers."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_gender_shares_by_port.png"))
-```
-
-## Occupancy Rate
-
-Occupancy rate (`occupancy_rate` from `bldg_panel_blp`) = InfoUSA observed households / imputed total units. Post-transfer changes reflect occupancy transitions: an increase may indicate a formerly partially-vacant building being filled; a decrease may indicate displacement-driven vacancy.
-
-```{r occ-full, fig.cap="Occupancy rate around transfer (full sample, unit-weighted)."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_occupancy_rate_full.png"))
-```
-
-```{r occ-by-acq, fig.cap="Occupancy rate by acquirer pre-acquisition filing rate."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_occupancy_rate_by_acq_filer.png"))
-```
-
-```{r occ-by-port, fig.cap="Occupancy rate by acquirer portfolio size."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_occupancy_rate_by_port.png"))
-```
-
-## Log Household Income
-
-Log predicted household income (`log(infousa_find_mean_k)`, income in \$1,000s from InfoUSA) captures whether post-transfer tenant turnover selects for different kinds of households.
-
-```{r income-full, fig.cap="Log household income around transfer (full sample, unit-weighted)."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_log_income_full.png"))
-```
-
-```{r income-by-acq, fig.cap="Log household income by acquirer pre-acquisition filing rate."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_log_income_by_acq_filer.png"))
-```
-
-```{r income-by-port, fig.cap="Log household income by acquirer portfolio size."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_log_income_by_port.png"))
-```
-
-## Permit Rate
-
-Permit rate = `total_permits / total_units` from L\&I permit records. Post-transfer increases indicate renovation or capital investment; decreases indicate disinvestment.
-
-```{r permit-full, fig.cap="Permit rate around transfer (full sample, unit-weighted)."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_permit_rate_full.png"))
-```
-
-```{r permit-by-acq, fig.cap="Permit rate by acquirer pre-acquisition filing rate."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_permit_rate_by_acq_filer.png"))
-```
-
-```{r permit-by-port, fig.cap="Permit rate by acquirer portfolio size."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_permit_rate_by_port.png"))
-```
-
-## Complaint Rate
-
-Complaint rate = `total_complaints / total_units` from L\&I complaint records. Increases post-transfer indicate either deteriorating housing conditions (habitability complaints) or increased tenant-initiated complaint activity.
-
-```{r complaint-full, fig.cap="Complaint rate around transfer (full sample, unit-weighted)."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_complaint_rate_full.png"))
-```
-
-```{r complaint-by-acq, fig.cap="Complaint rate by acquirer pre-acquisition filing rate."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_complaint_rate_by_acq_filer.png"))
-```
-
-```{r complaint-by-port, fig.cap="Complaint rate by acquirer portfolio size."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_complaint_rate_by_port.png"))
-```
-
-## Neighborhood Trend Robustness for InfoUSA Outcomes
-
-To probe neighborhood trend differences, we re-estimate the full-sample unit-weighted event studies with **census tract $\times$ year fixed effects**, so identification comes from within-tract changes relative to other buildings in the same tract-year.
-
-```{r occ-tract-year, fig.cap="Occupancy rate around transfer with tract-by-year fixed effects (full sample, unit-weighted)."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_occupancy_rate_tract_year.png"))
-```
-
-```{r income-tract-year, fig.cap="Log household income around transfer with tract-by-year fixed effects (full sample, unit-weighted)."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_log_income_tract_year.png"))
-```
-
-```{r income-tract-year-buyer, fig.cap="Log household income around transfer with tract-by-year fixed effects, by buyer type."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_log_income_tract_year_by_buyer.png"))
-```
-
-```{r race-tract-year, fig.cap="All five race-share event studies with tract-by-year fixed effects (full sample, unit-weighted)."}
-knitr::include_graphics(file.path(fig_dir, "rtt_annual_race_shares_tract_year.png"))
-```
-# Appendix: Continuous Acquirer Filing Rate Interaction
-
-The event-study heterogeneity analysis in the main text bins acquirers by pre-acquisition filing rate. As a complementary specification, we pool the high- and low-filer bins into a single "portfolio acquirer" subsample (2+ unit buildings, acquirer has $\geq$ 10 other units at transfer) and treat the pre-acquisition filing rate as a continuous moderator. The estimating equation is:
-
-$$
-\text{FilingRate}_{it} = \sum_{k \neq -2} \beta_k \cdot \mathbf{1}[t_i = k] \times \widetilde{\text{AcqRate}}_i + \alpha_i + \alpha_t + \varepsilon_{it}
-$$
-
-where $\widetilde{\text{AcqRate}}_i = \text{AcqRate}_i - \bar{\text{AcqRate}}^w$ is the demeaned pre-acquisition filing rate, $\bar{\text{AcqRate}}^w$ is the unit-weighted mean across acquired buildings (one observation per PID, weighted by building size, matching the regression weights), and the sum runs over $k \in [-3, +5] \setminus \{-2\}$. This is the same filing-rate measure that determines placement into the high-filer bin (threshold: 0.05 filings/unit-year).
-
-```{r cont-interaction-plot}
-cont_coefs <- fread(file.path(out_dir, "annual_acq_filer_continuous_coefs.csv"))
-# Term format: "et_m3:acq_rate_demean" (negative) or "et_1:acq_rate_demean" (positive/zero)
-cont_coefs[, et := {
-  n <- as.integer(stringr::str_extract(term, "\\d+"))
-  ifelse(grepl("et_m", term), -n, n)  # et_m anywhere in term (fixest flips order sometimes)
-}]
-setorder(cont_coefs, et)
-
-ggplot(cont_coefs, aes(x = et, y = estimate)) +
-  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey50") +
-  geom_vline(xintercept = 0.5, linetype = "dotted", colour = "grey50") +
-  geom_ribbon(aes(ymin = estimate - 1.96 * std_error,
-                  ymax = estimate + 1.96 * std_error), alpha = 0.2) +
-  geom_line() +
-  geom_point(size = 2) +
-  scale_x_continuous(breaks = cont_coefs$et) +
-  labs(
-    x = "Event time (years relative to transfer)",
-    y = expression(hat(beta)[k] ~ "(interaction with demeaned acq rate)"),
-    title = "Continuous acq-rate interaction: portfolio acquirers (2+ units, 10+ other units)",
-    caption = "Reference period t=-2. Controls: never-sold buildings in same 2+ unit sample."
-  ) +
-  theme_bw(base_size = 10)
-```
-
-```{r cont-interaction-table, results='asis'}
-include_tex_table(file.path(out_dir, "annual_acq_filer_continuous_etable.tex"),
-                  landscape = FALSE, size = "scriptsize")
-```
-
-None of the interaction terms are statistically significant at conventional levels. The table reports treated and control PIDs, the unit-weighted mean and SD of the pre-acquisition filing rate, and within-R² for each specification. The large standard errors on the interaction terms reflect the modest cross-sectional dispersion in acquirer filing rates relative to the within-building variation in the outcome.
-
-## Pooled post-treatment DiD
-
-As a more parsimonious summary, we collapse the event study into a single post-treatment indicator:
-
-$$
-\text{FilingRate}_{it} = \gamma_0 \cdot \text{Post}_{it} + \gamma_1 \cdot \text{Post}_{it} \times \widetilde{\text{AcqRate}}_i + \alpha_i + \alpha_t + \varepsilon_{it}
-$$
-
-where $\text{Post}_{it} = 1$ for $t \geq 1$ (post-transfer), 0 for $t < 0$ and for never-sold controls. The transfer year ($t = 0$) is excluded. The pooled DiD column appears as column (2) in the table above.
-
-Neither the level effect ($\hat{\gamma}_0$) nor the heterogeneity interaction ($\hat{\gamma}_1$) is significant. This confirms that the dynamic binned patterns are not masking a detectable continuous gradient in post-transfer filing intensity with respect to acquirer aggressiveness.
-# Appendix: Data Pipeline
-
-**Scripts (run in order):**
-
-1. `r/build-owner-linkage.R` --- Owner name standardization, entity grouping (`owner_group_id`), is_corp classification
-2. `r/build-business-networks.R` --- PA Dept of State business filing conglomerates
-3. `r/build-ownership-panel.R` --- Phases 1--4: entity merging via addresses, RTT chains, and business filings; produces conglomerate assignments and `owner_portfolio`
-4. `r/analyze-transfer-evictions-unified.R` --- Event panel construction and all regressions
-
-**Key data products:**
-
-```{r appendix-products}
-appendix_products <- data.table(
-  Product = c("owner_linkage_xwalk.csv", "xwalk_pid_conglomerate.csv",
-              "owner_portfolio.csv", "xwalk_entity_conglomerate.csv"),
-  Key = c("(grantee_upper, PID)", "(PID, year)", "conglomerate_id", "entity_id"),
-  Description = c(
-    "Maps grantee names to owner_group_id and is_corp; PID is NA for corporate matches.",
-    "Maps parcels to conglomerate_id by year.",
-    "Portfolio sizes and bins at the conglomerate level.",
-    "Entity to conglomerate crosswalk with link_method flag."
-  )
-)
-
-kable(appendix_products,
-      caption = "Ownership-linkage data products") |>
+```{r filing-stacked-qweights}
+qweights_disp <- unique(stacked_qweights[, .(spec, cohort_year, treated_pids, control_pids, q_weight_control)])
+qweights_disp[, spec := label_map_stacked[spec]]
+qweights_disp[, q_weight_control := round(q_weight_control, 3)]
+kable(
+  qweights_disp,
+  col.names = c("Sample", "Cohort", "Treated PIDs", "Control PIDs", "Corrective weight"),
+  caption = "Weighted stacked annual filing-rate cohort weights"
+) |>
   kable_styling(font_size = 8, latex_options = c("hold_position", "scale_down"))
 ```
 
-**Config keys**
+# Occupancy, Demographics, Complaints, and Permits
 
-- `owner_linkage_xwalk`
-- `owner_portfolio`
-- `xwalk_pid_conglomerate`
-- `xwalk_entity_conglomerate`
+These outcomes are estimated on the `2+ unit` sample and split by the same acquirer-type bins as the filing regressions. The output surface here is intentionally narrower than the earlier report: the focus is occupancy, resident composition, complaints, and permits.
 
-All live under `products:` in `config.yml`.
+```{r occupancy-plot, fig.cap="Occupancy-rate event study for 2+ unit buildings, overall and by acquirer filing type."}
+must_graphic(file.path(fig_dir, "rtt_annual_occupancy_2plus.png"))
+```
 
-**Rental license coverage note:** Philadelphia's Open Data business license records begin substantive rental license coverage around 2013. All rental-market presence regressions are restricted to year $\geq$ 2011. Altos listing data begins in 2006.
+```{r occupancy-table, results='asis'}
+include_tex_table(file.path(out_dir, "annual_occupancy_2plus_etable.tex"), size = "scriptsize")
+```
+
+```{r race-black-plot, fig.cap="Share Black residents for 2+ unit buildings, overall and by acquirer filing type."}
+must_graphic(file.path(fig_dir, "rtt_annual_pct_black_2plus.png"))
+```
+
+```{r race-latino-plot, fig.cap="Share Latino residents for 2+ unit buildings, overall and by acquirer filing type."}
+must_graphic(file.path(fig_dir, "rtt_annual_pct_latino_2plus.png"))
+```
+
+```{r race-white-plot, fig.cap="Share White residents for 2+ unit buildings, overall and by acquirer filing type."}
+must_graphic(file.path(fig_dir, "rtt_annual_pct_white_2plus.png"))
+```
+
+```{r race-asian-plot, fig.cap="Share Asian residents for 2+ unit buildings, overall and by acquirer filing type."}
+must_graphic(file.path(fig_dir, "rtt_annual_pct_asian_2plus.png"))
+```
+
+```{r permit-plot, fig.cap="Permit-rate event study for 2+ unit buildings, overall and by acquirer filing type."}
+must_graphic(file.path(fig_dir, "rtt_annual_permit_rate_2plus.png"))
+```
+
+```{r complaint-plot, fig.cap="Complaint-rate event study for 2+ unit buildings, overall and by acquirer filing type."}
+must_graphic(file.path(fig_dir, "rtt_annual_complaint_rate_2plus.png"))
+```
+
+# Rent Outcomes
+
+The rent analysis is run on all units, but treated buildings are required to have both pre- and post-acquisition support in the relevant rent measure. The report keeps both the unified rent series and the safe single-source series.
+
+```{r rent-core-plot, fig.cap="Log median rent event study, all units, overall and by acquirer filing type."}
+must_graphic(file.path(fig_dir, "rtt_annual_rent_core.png"))
+```
+
+```{r rent-core-table, results='asis'}
+include_tex_table(file.path(out_dir, "annual_rent_core_etable.tex"), size = "scriptsize")
+```
+
+```{r rent-safe-plot, fig.cap="Log median rent (safe single-source series) event study, all units, overall and by acquirer filing type."}
+must_graphic(file.path(fig_dir, "rtt_annual_rent_safe_core.png"))
+```
+
+```{r rent-safe-table, results='asis'}
+include_tex_table(file.path(out_dir, "annual_rent_safe_core_etable.tex"), size = "scriptsize")
+```
+
+# Rental Evidence
+
+These regressions show the probability of observed rental evidence separately for `1-unit` and `2+ unit` buildings. This is the direct check on the concern that transfers mechanically enter properties into the observed rental market.
+
+```{r rental-evidence-1unit-plot, fig.cap="Probability of rental evidence for 1-unit buildings, overall and by acquirer filing type."}
+must_graphic(file.path(fig_dir, "rtt_annual_rental_evidence_1unit.png"))
+```
+
+```{r rental-evidence-1unit-table, results='asis'}
+include_tex_table(file.path(out_dir, "annual_rental_evidence_1unit_etable.tex"), size = "scriptsize")
+```
+
+```{r rental-evidence-2plus-plot, fig.cap="Probability of rental evidence for 2+ unit buildings, overall and by acquirer filing type."}
+must_graphic(file.path(fig_dir, "rtt_annual_rental_evidence_2plus.png"))
+```
+
+```{r rental-evidence-2plus-table, results='asis'}
+include_tex_table(file.path(out_dir, "annual_rental_evidence_2plus_etable.tex"), size = "scriptsize")
+```
+
+# Appendix: Output Inventory
+
+The streamlined annual writeup now depends on the following output families:
+
+- `annual_filing_core_*`
+- `annual_filing_acq_2plus_*`
+- `annual_baseline_stacked_weighted_*`
+- `annual_occupancy_2plus_*`
+- `annual_pct_*_2plus_*`
+- `annual_permit_rate_2plus_*`
+- `annual_complaint_rate_2plus_*`
+- `annual_rent_core_*`
+- `annual_rent_safe_core_*`
+- `annual_rental_evidence_1unit_*`
+- `annual_rental_evidence_2plus_*`
+
+Legacy annual outputs and scratch stacked CSVs are no longer required for this document.

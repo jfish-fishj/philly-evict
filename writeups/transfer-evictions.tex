@@ -121,11 +121,9 @@
 \usepackage{makecell}
 \usepackage{xcolor}
 \usepackage{booktabs}
-\usepackage{dcolumn}
 \usepackage{longtable}
 \usepackage{adjustbox}
 \usepackage{pdflscape}
-\usepackage{amsmath}
 \makeatletter
 \@ifpackageloaded{caption}{}{\usepackage{caption}}
 \AtBeginDocument{%
@@ -171,7 +169,7 @@
 \IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
 \urlstyle{same}
 \hypersetup{
-  pdftitle={Ownership Transfers and Eviction Filing Rates: Event Study},
+  pdftitle={Ownership Transfers and Eviction Filing Rates},
   pdfauthor={Philly Evictions Project},
   colorlinks=true,
   linkcolor={blue},
@@ -181,9 +179,9 @@
   pdfcreator={LaTeX via pandoc}}
 
 
-\title{Ownership Transfers and Eviction Filing Rates: Event Study}
+\title{Ownership Transfers and Eviction Filing Rates}
 \author{Philly Evictions Project}
-\date{2026-03-27}
+\date{2026-03-28}
 \begin{document}
 \maketitle
 
@@ -196,713 +194,203 @@
 
 \section{Overview}\label{overview}
 
-This document reports an event study of eviction filing rates around
-ownership transfers in Philadelphia rental properties.
+This note reports the streamlined annual transfer-evictions
+specification. The main outcome is
+\texttt{filing\_rate\ =\ num\_filings\ /\ total\_units} in a full
+building-year panel from 2006 to 2019, with single-transfer treated
+buildings compared against buildings never transferred in the RTT data.
+The omitted event time is \texttt{t\ =\ r\ event\_ref\_period}.
 
-The annual analysis now uses a \textbf{full building-year panel} over
-calendar years 2006--2019. Treatment is a building's \textbf{only
-observed sale} in the RTT data within that window; controls are
-buildings \textbf{never sold} in RTT during the same window. We track
-treated buildings from 3 years before to 5 years after that sale, set
-all event-time dummies to zero for never-sold controls, and estimate
-building fixed effects models with common calendar-year shocks.
-
-\section{Data Construction}\label{data-construction}
-
-\subsection{Transfer events}\label{transfer-events}
-
-Transfer events come from the Philadelphia Real Estate Transfer Tax
-(RTT) records (\texttt{rtt\_clean}), which log every deed transfer with
-buyer (grantee), seller (grantor), sale price, and document type.
-
-\textbf{Processing steps:}
+The annual surface has been pruned to four blocks:
 
 \begin{itemize}
 \tightlist
 \item
-  Multiple transfers of the same PID in the same year are collapsed to
-  one observation, keeping the transfer with the highest
-  \texttt{total\_consideration}.
+  filing-rate event studies
 \item
-  \textbf{Sheriff's deeds} (foreclosures) are flagged via
-  \texttt{document\_type}. Approximately 10\% of all RTT records are
-  sheriff's deeds. These are predominantly received by banks, servicers,
-  and government-sponsored enterprises (Fannie Mae, Freddie Mac, HUD)
-  --- entities that temporarily hold title after foreclosure, not active
-  landlords.
+  occupancy, resident-composition, complaint, and permit outcomes
+\item
+  rent outcomes using the unified and safe series
+\item
+  rental-evidence event studies for \texttt{1-unit} and
+  \texttt{2+\ unit} buildings
 \end{itemize}
 
-\subsection{Owner linkage}\label{owner-linkage}
-
-Buyer names are standardized and linked via a two-stage pipeline:
-
-\textbf{Stage 1 --- Entity grouping} (\texttt{r/build-owner-linkage.R}):
-
-\begin{itemize}
-\tightlist
-\item
-  \textbf{Corporate entities} are classified using
-  \texttt{business\_regex} (matching LLC, INC, CORP, TRUST, BANK, and
-  \textasciitilde40 other business keywords). Legal entity suffixes
-  (LLC, INC, CORP, LP, LTD, CO, COMPANY) are stripped to group variants
-  (e.g., ``EMC MORTGAGE CORPORATION'' and ``EMC MORTGAGE LLC'' map to
-  the same owner group).
-\item
-  \textbf{Individual names} are \emph{not} grouped across transfers ---
-  matching ``SMITH ROBERT'' across properties without address
-  verification would create false merges. For 10+ unit buildings, 97\%
-  of top-evicting transfers are corporate, so this primarily affects
-  small single-family properties where portfolio analysis is less
-  relevant.
-\end{itemize}
-
-\textbf{Stage 2 --- Conglomerate formation}
-(\texttt{r/build-ownership-panel.R}):
-
-\begin{itemize}
-\tightlist
-\item
-  Entity groups are merged into \textbf{conglomerates} via shared
-  mailing addresses (Phase 2), transitive RTT grantee chains (Phase 3),
-  and PA Dept of State business filing records (Phase 4). Phase 4 is the
-  critical addition: it links shell company networks where legally
-  distinct LLCs share a registered agent or officer but have completely
-  different names and addresses.
-\item
-  \textbf{Portfolio size} is computed at the \textbf{conglomerate} level
-  from non-sheriff acquisitions, so a landlord operating 10 shell LLCs
-  is counted as a 10-property operator, not 10 separate single-purchase
-  entities. Bins: Single-purchase, 2--4, 5--9, 10+, and Sheriff-only.
-\item
-  \textbf{Acquirer filing rate} is also computed at the conglomerate
-  level: for each transfer, we look at all other PIDs in the same
-  conglomerate in years before the transfer (using
-  \texttt{xwalk\_pid\_conglomerate}), not just the PIDs acquired by that
-  specific entity.
-\end{itemize}
-
-\subsection{Event panel}\label{event-panel}
-
-For the annual design, we restrict the sample window to 2006--2019, keep
-treated PIDs with \textbf{exactly one observed transfer} in that window,
-and construct an event-time window \(t \in \{-3, \ldots, +5\}\) around
-that sale. Buildings never sold in RTT during 2006--2019 remain in the
-panel as controls with all event-time indicators set to zero. We merge
-building-level outcomes from \texttt{bldg\_panel\_blp}:
-
-\begin{itemize}
-\tightlist
-\item
-  \textbf{Filing rate}: \(\text{num\_filings} / \text{total\_units}\)
-  (contemporaneous, not the EB-smoothed pre-COVID rate)
-\item
-  \textbf{Violations}, \textbf{complaints}, \textbf{rent} as secondary
-  outcomes
-\item
-  \textbf{Rental flags}: \texttt{rental\_from\_license},
-  \texttt{rental\_from\_altos}, \texttt{rental\_from\_evict},
-  \texttt{ever\_rental\_any\_year\_ever}
-\end{itemize}
-
-\textbf{Sample:} 2,598,476 building-year observations in the full
-baseline regression (after singleton removal). Among treated buildings,
-observed outcome coverage rises from 41.6\% at \(t = -3\) to 42.9\% at
-\(t = +5\). All annual regressions restrict to calendar years
-2006--2019.
-
-The single-transfer restriction is now the default. Relative to keeping
-all treated PIDs' first sale, it keeps 156,039 treated buildings and
-drops 79,636 repeat-transfer treated buildings, which would otherwise
-contribute 571,040 building-year rows. The dropped repeat-transfer
-properties are slightly more corporate (36.6\% vs.~22.2\%), somewhat
-larger (1.4 vs.~1.6 units), and have lower sale prices (\$73,000
-vs.~\$116,000).
-
-\subsection{Sample descriptives}\label{sample-descriptives}
-
-\begin{longtable}[t]{lrrrrrr}
-\caption{\label{tab:desc-buyer}Transfer sample descriptives by buyer type (at t=0)}\\
-\toprule
-Buyer Type & N transfers & Mean units & Mean filing rate & Mean violations & Median price & \% Sheriff\\
-\midrule
-Individual & 121,449 & 1.3 & 0.0293 & 0.36 & 129,000 & 5.6\\
-Corporate & 34,590 & 2.2 & 0.0402 & 0.64 & 51,000 & 30.1\\
-\bottomrule
-\end{longtable}
-
-\section{Specification}\label{specification}
-
-The baseline event study estimates:
-
-\[
-\text{FilingRate}_{it} = \sum_{k \neq -2} \beta_k \cdot \mathbf{1}[\text{EventTime}_{it} = k] + \alpha_i + \gamma_t + \varepsilon_{it}
-\]
-
-where \(i\) indexes buildings (PIDs), \(t\) indexes calendar years, and
-EventTime \(k \in \{-3, -1, 0, 1, 2, 3, 4, 5\}\) relative to the
-building's \textbf{single observed transfer year} in the 2006--2019 RTT
-window (with \(k = -2\) as the omitted reference period). For never-sold
-controls, all event-time indicators equal zero in every year.
-\(\alpha_i\) are building fixed effects and \(\gamma_t\) are year fixed
-effects. Standard errors are clustered at the PID level.
-
-\textbf{Specifications:}
-
-\begin{longtable}[]{@{}
-  >{\raggedright\arraybackslash}p{(\linewidth - 6\tabcolsep) * \real{0.1667}}
-  >{\raggedright\arraybackslash}p{(\linewidth - 6\tabcolsep) * \real{0.2222}}
-  >{\raggedright\arraybackslash}p{(\linewidth - 6\tabcolsep) * \real{0.4167}}
-  >{\raggedright\arraybackslash}p{(\linewidth - 6\tabcolsep) * \real{0.1944}}@{}}
-\toprule\noalign{}
-\begin{minipage}[b]{\linewidth}\raggedright
-Spec
-\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
-Sample
-\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
-Fixed Effects
-\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
-Notes
-\end{minipage} \\
-\midrule\noalign{}
-\endhead
-\bottomrule\noalign{}
-\endlastfoot
-(1) Full & All buildings & PID + Year & Unweighted \\
-(2) Full (unit-wtd) & All buildings & PID + Year & Weighted by
-\(\text{total\_units}\) \\
-(3) 1-unit buildings & Single-unit only & PID + Year & Tests
-conversion/selection channel \\
-(4) 2+ units & Buildings with 2+ units & PID + Year & Weighted by
-\(\text{total\_units}\) \\
-(5) 5+ units & Buildings with 5+ units & PID + Year & Weighted by
-\(\text{total\_units}\) \\
-(6) 2+ units, observed rental stock & 2+ units ever observed as rentals
-& PID + Year & Weighted by \(\text{total\_units}\) \\
-(7) 5+ units, observed rental stock & 5+ units ever observed as rentals
-& PID + Year & Weighted by \(\text{total\_units}\) \\
-\end{longtable}
-
-The building FE absorb time-invariant building characteristics (size,
-location, quality). \textbf{Specs (2) and (4)--(7)} are unit-weighted,
-so their estimand is the average change per rental unit rather than the
-average change per building. \textbf{Spec (3)} isolates single-unit
-rowhouses. \textbf{2+ units} (Spec 4) excludes single-family homes where
-a single filing produces a mechanically large filing rate;
-\textbf{observed rental stock} (Specs 6--7) restricts to buildings with
-direct rental-market evidence. Among treated buildings, roughly 19.2\%
-to 22.8\% are observed with rental evidence only after the sale.
-
-As a functional-form check, we also re-estimate the same baseline and
-buyer-type specifications using a Poisson event-study with outcome
-\texttt{\textbackslash{}text\{num\textbackslash{}\_filings\}\_\{it\}}
-and offset
-\texttt{\textbackslash{}log(\textbackslash{}text\{total\textbackslash{}\_units\}\_\{it\})}.
-This keeps zero-filing building-years in sample while modeling filing
-intensity on the count scale with unit exposure absorbed by the offset.
-
-We do \textbf{not} stack multiple transfer events for the same PID in
-the main annual design. Instead, treatment is limited to PIDs with
-exactly one observed RTT transfer in 2006--2019, and controls are PIDs
-with no RTT transfer in that same window.
-
-\section{Baseline Results}\label{baseline-results}
-
-\subsection{Raw means}\label{raw-means}
-
-\begin{longtable}[t]{rrrrr}
-\caption{\label{tab:raw-means-table}Raw outcome means by event time}\\
-\toprule
-event\_time & mean\_filing\_rate & mean\_filings & n & mean\_violations\\
-\midrule
--3 & 0.02844 & 0.051 & 49,880 & 0.272\\
--2 & 0.02783 & 0.050 & 53,730 & 0.322\\
--1 & 0.03716 & 0.062 & 58,998 & 0.378\\
-0 & 0.03253 & 0.058 & 65,455 & 0.444\\
-1 & 0.04782 & 0.079 & 59,464 & 0.400\\
-\addlinespace
-2 & 0.05344 & 0.084 & 53,020 & 0.318\\
-3 & 0.05257 & 0.087 & 46,828 & 0.265\\
-4 & 0.05577 & 0.090 & 40,965 & 0.255\\
-5 & 0.05242 & 0.089 & 36,070 & 0.250\\
-\bottomrule
-\end{longtable}
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_raw.png}
-
-}
-
-\caption{Mean filing rate by event time (full sample). Shaded ribbon
-shows 95\% CI; the dashed line marks the transfer year (\(t=0\)).}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_raw_by_1unit_2plus.png}
-
-}
-
-\caption{Mean filing rate by event time, split by 1-unit versus 2+ unit
-buildings. The dashed line marks the transfer year (\(t=0\)).}
-
-\end{figure}%
-
-\subsection{Stacked DiD: Baseline
-Estimates}\label{stacked-did-baseline-estimates}
-
-The stacked DiD design pairs each acquisition cohort with buildings that
-were \textbf{never transferred} over 2006--2019, stacks the
-cohort-specific panels, and absorbs building \(\times\) cohort and
-calendar-year \(\times\) cohort fixed effects (see
-Section~\ref{sec-stacked-did} for the formal estimating equation). We
-show four baseline sub-samples:
-
-\begin{itemize}
-\tightlist
-\item
-  \textbf{All units} --- full sample including single-family homes
-\item
-  \textbf{SFH only} (1-unit buildings)
-\item
-  \textbf{2+ units} --- multi-unit buildings only, unit-weighted
-\item
-  \textbf{2+ units, pre-period rental} --- 2+ unit buildings with at
-  least one year of observed filings before acquisition
-\end{itemize}
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{transfer-evictions_files/figure-pdf/baseline-stacked-plot-1.pdf}
-
-}
-
-\caption{Stacked DiD baseline: filing-rate event study by sample
-restriction. Reference: \(t=-1\). Unit-weighted; SE clustered by
-building.}
-
-\end{figure}%
-
-\section{Heterogeneity by Acquirer Filing
-Rate}\label{heterogeneity-by-acquirer-filing-rate}
-
-We classify acquirers by their \textbf{pre-acquisition temporal filing
-rate} on the acquirer's \emph{other} properties in years before the
-transfer. For each transfer of building \(i\) by conglomerate \(j\) in
-year \(Y\), we pool the other buildings' pre-\(Y\) filing counts and
-unit counts, then compute a \textbf{unit-weighted} filing rate: \[
-\text{AcqRate}_{jY} = \frac{\sum_{p \neq i,\, t < Y} \text{num\_filings}_{pt}}{\sum_{p \neq i,\, t < Y} \text{total\_units}_{pt}}.
-\] This avoids giving a single-family house the same weight as a large
-apartment building, and it avoids look-ahead bias because the
-classification uses no post-transfer data.
-
-Critically, the classification is now at the \textbf{conglomerate} level
-(post-Phase 4 matching). This means a landlord who made an acquisition
-via shell LLC ``A'' is classified using the pre-acquisition filing
-behavior of all other LLCs in the same conglomerate --- including shell
-companies ``B'', ``C'', and ``D'' that were linked to the same operator
-via PA business filing records. Under entity-level matching, each shell
-LLC would be classified as a single-purchase acquirer; under
-conglomerate-level matching, they are correctly identified as portfolio
-operators.
-
-Acquirers are classified into four bins:
-
-\begin{itemize}
-\tightlist
-\item
-  \textbf{High-filer portfolio (10+ other units)}: Unit-weighted
-  pre-acquisition filing rate above 0.050 filings per unit-year among
-  portfolios with at least 10 other units
-\item
-  \textbf{Low-filer portfolio (10+ other units)}: At or below that
-  threshold among the same meaningful portfolios, including zero-filing
-  operators
-\item
-  \textbf{Small portfolio (\textless10 other units)}: Has some other
-  properties, but fewer than 10 other units at acquisition
-\item
-  \textbf{Single-purchase}: No other properties in the conglomerate's
-  history
-\end{itemize}
-
-The high/low cutoff is fixed at \textbf{0.050 filings per unit-year}
-(approximately 64.3th percentile of the positive-rate
-meaningful-portfolio distribution). Using a fixed threshold rather than
-the sample median makes the classification invariant to sample
-composition and has a direct economic interpretation (roughly 5 eviction
-filings per 100 units per year).
-
-\subsection{Pre-Transfer Balance}\label{sec-balance}
-
-The table below shows pre-acquisition building characteristics by
-acquirer type, computed from observations strictly before the transfer
-year. Unit-weighted means weight each building-year by its
-\texttt{total\_units}. The contrast confirms that high-filer acquirers
-target buildings that are already high-filing, majority-Black, and
-lower-income before any ownership change --- a selection pattern, not a
-causal effect. The stacked DiD design (Section~\ref{sec-stacked-did})
-controls for this by comparing each treated building against
-never-transferred buildings within the same calendar-year cohort.
-
-\begin{longtable}[t]{llrrrrr}
-\caption{\label{tab:acq-balance-table}Pre-transfer balance by acquirer type (unit-weighted means of pre-acquisition building-years). Panels show 2+ unit buildings and 10+ unit buildings. Predicted income in \$000s.}\\
-\toprule
-Acquirer type & N bldgs & Mean units & Filing rate & Violations/unit & Share Black & Income (\$k)\\
-\midrule
-\addlinespace[0.3em]
-\multicolumn{7}{l}{\textbf{2+ unit buildings}}\\
-\hspace{1em}High-filer portfolio & 529 & 5.6 & 0.132 & 0.145 & 0.45 & 35.7\\
-\hspace{1em}Low-filer portfolio & 1,770 & 3.3 & 0.024 & 0.167 & 0.43 & 43.4\\
-\hspace{1em}Small portfolio & 4,809 & 3.5 & 0.046 & 0.137 & 0.33 & 42.8\\
-\hspace{1em}Never transferred & 25,945 & 5.6 & 0.032 & 0.050 & 0.23 & 56.9\\
-\addlinespace[0.3em]
-\multicolumn{7}{l}{\textbf{10+ unit buildings}}\\
-\hspace{1em}High-filer portfolio & 52 & 28.1 & 0.169 & 0.095 & 0.41 & 32.2\\
-\hspace{1em}Low-filer portfolio & 71 & 20.7 & 0.024 & 0.048 & 0.22 & 50.7\\
-\hspace{1em}Small portfolio & 159 & 34.7 & 0.079 & 0.045 & 0.28 & 39.8\\
-\hspace{1em}Never transferred & 2,493 & 35.8 & 0.037 & 0.023 & 0.21 & 57.8\\
-\bottomrule
-\end{longtable}
-
-\subsection{Market Dynamics}\label{sec-dynamics}
-
-\subsubsection{Seller--Buyer Transitions}\label{sec-transitions}
-
-Each cell shows the number of buildings (and share of that seller's
-total transfers) where a building previously held by the row type was
-acquired by the column type. Seller type is classified by the previous
-owner-conglomerate's overall portfolio filing rate and size over
-2006--2019 (same thresholds as the buyer classification). ``No OPA
-record'' means the building had no ownership record in the year before
-transfer --- typically first-time OPA entrants or pre-2006 purchases.
-
-\begin{longtable}[t]{llllll}
-\caption{\label{tab:transition-table}Seller–buyer transition matrix (\% of all unit-weighted transfers). Rows: prior owner type; columns: acquirer type. Read across a row to see where each seller type's units went; read down a column to see where each buyer type's units came from. 'No OPA record' = building had no prior OPA ownership entry.}\\
-\toprule
-Seller \textbackslash{} Buyer → & High-filer & Low-filer & Small portfolio & Single-purchase & Row total\\
-\midrule
-High-filer & 0.6 & 0.1 & 0.1 & 0.4 & 1.2\\
-Low-filer & 0.1 & 2.2 & 0.3 & 1.2 & 3.7\\
-Small portfolio & 0.1 & 0.4 & 7.2 & 4.1 & 11.8\\
-Single-purchase & 0.9 & 3.1 & 5.6 & 73.6 & 83.2\\
-\textbf{Col. total} & \textbf{1.8} & \textbf{5.8} & \textbf{13.1} & \textbf{79.3} & \textbf{100.0}\\
-\bottomrule
-\end{longtable}
-
-\subsubsection{Holdings by Owner Type}\label{sec-holdings}
-
-Total rental units (from \texttt{bldg\_panel\_blp}) held by each
-owner-type classification, summed across all buildings matched to a
-conglomerate in a given year. Owner-type is assigned retrospectively
-using each conglomerate's 2006--2019 filing rate and portfolio size.
-High-filer and low-filer portfolios both grew substantially over this
-period; individual/trust ownership was roughly stable.
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{transfer-evictions_files/figure-pdf/holdings-plot-1.pdf}
-
-}
-
-\caption{Top: total units held by owner type. Bottom: indexed to 2006 =
-100, showing relative growth. Conglomerates classified by overall
-2006--2019 filing rate and portfolio size.}
-
-\end{figure}%
-
-\subsection{Stacked DiD: Filing Rate
-Heterogeneity}\label{sec-stacked-did}
-
-To address the concern that post-acquisition filing changes reflect
-general time trends rather than causal acquisition effects, we implement
-a stacked difference-in-differences design. For each acquisition cohort
-\(g\) (transfer year), we pair treated buildings with a clean control
-group of buildings that were \textbf{never transferred} over 2006--2019,
-then stack cohort-specific sub-panels. The estimating equation is:
-
-\[
-\text{FilingRate}_{it} = \sum_{k \neq -1} \beta_k \cdot \bigl(\text{Treated}_i \times \mathbf{1}[t - g_i = k]\bigr) + \alpha_{ig} + \delta_{tg} + \varepsilon_{it}
-\]
-
-where \(\alpha_{ig}\) is a building \(\times\) cohort fixed effect
-(absorbs the treated/control level difference within each cohort's
-panel), \(\delta_{tg}\) is a calendar-year \(\times\) cohort fixed
-effect (absorbs common time trends within each cohort), and \(t=-1\) is
-the reference period. Standard errors are clustered by building. The
-event window is \(k \in \{-3,\ldots,+3\}\) and the sample is restricted
-to calendar years 2006--2019. Controls appear once per cohort in the
-stacked dataset; clustering by raw PID across all cohort copies is
-conservative (treats repeated control observations as one cluster).
-
-The \textbf{treated} group in each specification is buildings acquired
-by a given acquirer type; the \textbf{control} group is always buildings
-matching the same size threshold that were never transferred. Crucially,
-``10+ units'' refers to the \textbf{acquired building's own unit count}
-(not the acquirer's portfolio size) --- this isolates the effect on
-large apartment buildings regardless of how the portfolio-size
-classification was derived. We report five specifications:
-
-\begin{enumerate}
-\def\labelenumi{\arabic{enumi}.}
-\tightlist
-\item
-  \textbf{All acquirers, ≥2 units} --- average effect across all
-  portfolio acquirers (high + low filer)
-\item
-  \textbf{High-filer, ≥2 units} --- acquirer's pre-acquisition portfolio
-  rate \(>\) 0.050 filings/unit-year
-\item
-  \textbf{Low-filer, ≥2 units} --- same portfolio threshold, rate
-  \(\leq\) 0.050
-\item
-  \textbf{High-filer, ≥10 units} --- high-filer acquirers of large (10+
-  unit) buildings only
-\item
-  \textbf{Low-filer, ≥10 units} --- low-filer acquirers of large
-  buildings (falsification)
-\end{enumerate}
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{transfer-evictions_files/figure-pdf/acq-filer-stacked-plot-1.pdf}
-
-}
-
-\caption{Stacked DiD: filing-rate event study by acquirer type.
-Reference: \(t=-1\). Unit-weighted; SE clustered by building.}
-
-\end{figure}%
-
-High-filer acquirers of 2+ unit buildings show
-\(\hat{\beta}_1 \approx 0.087\) at \(t=+1\), roughly \textbf{seven
-times} the all-acquirer baseline (\(\hat{\beta}_1 \approx 0.013\)) and
-persistently significant through \(t=+3\). The low-filer ≥2 unit spec
-shows near-zero post-acquisition coefficients, confirming the effect is
-driven by acquirer aggressiveness rather than the acquisition itself.
-The high-filer 10+ unit spec shows the largest point estimates
-(\(\hat{\beta}_1 \approx 0.105\)); the low-filer 10+ unit spec shows
-negative coefficients (\(\hat{\beta}_1 \approx -0.025\),
-\(\hat{\beta}_2 \approx -0.039\)), consistent with
-regression-to-the-mean for large buildings sold by distressed operators.
-Pre-trends are flat across all five specifications.
-
-\section{Outcome Event Studies (Stacked
-DiD)}\label{outcome-event-studies-stacked-did}
-
-The following outcome event studies use the same stacked DiD design as
-the filing-rate analysis above. For each outcome, we show two
-specifications on an \textbf{apples-to-apples} basis: \textbf{High-filer
-(≥2 units)} and \textbf{Low-filer (≥2 units, falsification)}. Both specs
-use 2+ unit buildings, differ only in acquirer type, and share the same
-never-transferred control group. Pre-trends flat in the low-filer spec
-and significant post-acquisition divergence in the high-filer spec
-identify the acquirer-type mechanism. All regressions use building
-\(\times\) cohort and calendar-year \(\times\) cohort fixed effects, are
-unit-weighted, and cluster standard errors by building. Reference
-period: \(t = -1\).
-
-\subsection{Log Median Rent (Stacked
-DiD)}\label{log-median-rent-stacked-did}
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{transfer-evictions_files/figure-pdf/stacked-rent-1.pdf}
-
-}
-
-\caption{Stacked DiD: log median rent around acquisition. High-filer (≥2
-units) vs.~Low-filer 10+ falsification. Reference: t=-1.}
-
-\end{figure}%
-
-\subsection{Violation Rate (Stacked
-DiD)}\label{violation-rate-stacked-did}
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{transfer-evictions_files/figure-pdf/stacked-violations-1.pdf}
-
-}
-
-\caption{Stacked DiD: violation rate (violations per unit) around
-acquisition. Reference: t=-1.}
-
-\end{figure}%
-
-\subsection{Permit Rate (Stacked DiD)}\label{permit-rate-stacked-did}
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{transfer-evictions_files/figure-pdf/stacked-permits-1.pdf}
-
-}
-
-\caption{Stacked DiD: permit rate (permits per unit) around acquisition.
-Reference: t=-1.}
-
-\end{figure}%
-
-\subsection{Complaint Rate (Stacked
-DiD)}\label{complaint-rate-stacked-did}
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{transfer-evictions_files/figure-pdf/stacked-complaints-1.pdf}
-
-}
-
-\caption{Stacked DiD: complaint rate (complaints per unit) around
-acquisition. Reference: t=-1.}
-
-\end{figure}%
-
-\subsection{Tenant Composition (Stacked
-DiD)}\label{tenant-composition-stacked-did}
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{transfer-evictions_files/figure-pdf/stacked-pct-black-1.pdf}
-
-}
-
-\caption{Stacked DiD: share of residents predicted Black around
-acquisition. Reference: t=-1.}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{transfer-evictions_files/figure-pdf/stacked-pct-hispanic-1.pdf}
-
-}
-
-\caption{Stacked DiD: share of residents predicted Hispanic/Latino
-around acquisition. Reference: t=-1.}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{transfer-evictions_files/figure-pdf/stacked-pct-white-1.pdf}
-
-}
-
-\caption{Stacked DiD: share of residents predicted White around
-acquisition. Reference: t=-1.}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{transfer-evictions_files/figure-pdf/stacked-pct-female-1.pdf}
-
-}
-
-\caption{Stacked DiD: share of residents predicted female around
-acquisition. Reference: t=-1.}
-
-\end{figure}%
-
-\subsection{Log Household Income (Stacked
-DiD)}\label{log-household-income-stacked-did}
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{transfer-evictions_files/figure-pdf/stacked-income-1.pdf}
-
-}
-
-\caption{Stacked DiD: log predicted household income around acquisition.
-Reference: t=-1.}
-
-\end{figure}%
-
-\section{Phase 4 Consolidation: Shell Company
-Networks}\label{phase-4-consolidation-shell-company-networks}
-
-Phase 4 of the ownership pipeline links entities whose PA Dept of State
-business filings share the same conglomerate (same officer network or
-registered agent), even when their names and addresses are completely
-different. This section quantifies how much the Phase 4 matching changed
-the transfer sample's classification.
+Portfolio filing types are computed using the helper logic from the
+production script, with portfolio size and filing rates defined using
+all holdings, including \texttt{1-unit} buildings. The filing and
+neighborhood-outcome regressions then restrict the estimation sample as
+needed.
+
+\section{Main Filing Results}\label{main-filing-results}
+
+The filing sample grid now separates \texttt{1-unit} properties from the
+multifamily stock. The main justification for the \texttt{2+\ unit}
+analysis sample is that the \texttt{2+} and \texttt{5+} estimates are
+close, while \texttt{1-unit} properties are shown separately as the
+single-family contrast and the \texttt{10+} cut is treated as a stricter
+appendix validation rather than the main specification.
+
+At \texttt{t\ =\ +1}, the filing-rate coefficient is 0.0089 for
+\texttt{2+\ units}, 0.0117 for \texttt{5+\ units}, and 0.0125 for
+\texttt{10+\ units}.
 
 \begin{longtable}[t]{lrrr}
-\caption{\label{tab:phase4-table}Transfer counts by portfolio bin: Phase 4-expanded vs. standard conglomerates (at t=0)}\\
+\caption{\label{tab:filing-sample-table}Sample sizes for the streamlined annual filing-rate event studies}\\
 \toprule
-Portfolio bin & Standard conglomerate & Phase 4 expanded & \% Phase 4\\
+Sample & Rows & Treated PIDs & Control PIDs\\
 \midrule
-10+ & 6,093 & 5,651 & 48.1\\
-2-4 & 15,044 & 1,342 & 8.2\\
-5-9 & 5,245 & 1,081 & 17.1\\
-Financial-Intermediary & 699 & 0 & 0.0\\
-Sheriff-only & 8,086 & 278 & 3.3\\
+All buildings & 2,598,476 & 66,424 & 123,376\\
+1-unit & 1,956,298 & 51,378 & 90,413\\
+2+ units & 642,173 & 15,051 & 32,976\\
+2+ units, rental evidence & 340,761 & 13,319 & 28,792\\
+5+ units & 82,762 & 1,543 & 5,089\\
 \addlinespace
-Single-purchase & 111,828 & 692 & 0.6\\
+5+ units, rental evidence & 37,797 & 1,216 & 3,874\\
+10+ units & 38,376 & 713 & 2,551\\
+10+ units, rental evidence & 18,570 & 548 & 1,923\\
 \bottomrule
 \end{longtable}
 
-``Phase 4 expanded'' conglomerates are those where at least one entity
-was linked via PA business filing records (shell company network
-detection). For these transfers, the acquirer's portfolio bin and
-pre-acquisition filing rate reflect the full operator network rather
-than only the single purchasing entity. \# Robustness
-
-All robustness checks use the same \textbf{full-panel design}: the full
-building panel is merged with single-transfer timing, explicit
-event-time dummies are constructed for \(k \in \{-3, \ldots, +5\}\)
-(omitting \(k = -2\)), and years outside the event window have all
-dummies set to zero. Never-sold buildings are retained as controls. All
-robustness specs use the \textbf{full sample, unit-weighted}, in
-calendar years 2006--2019.
-
 \begin{figure}[H]
 
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_robustness.png}
+{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_filing_core.png}
 
 }
 
-\caption{Robustness checks: alternative transfer samples (full-panel
-design, all units, 2006--2019).}
+\caption{Annual filing-rate event study by sample restriction. The main
+comparison is 2+ units versus 5+ units; 10+ is included as a stricter
+appendix check.}
 
 \end{figure}%
 
-\begin{landscape}
 \scriptsize
-\begin{adjustbox}{max width=0.95\linewidth}
+\begin{adjustbox}{max width=\textwidth}
+
+\begingroup
+\centering
+\begin{tabular}{lcccccccc}
+   \toprule
+    & \multicolumn{8}{c}{filing\_rate}\\
+   Sample             & All buildings   & 1-unit          & 2+ units       & 2+ units, rental evidence & 5+ units       & 5+ units, rental evidence & 10+ units     & 10+ units, rental evidence \\   
+                      & (1)             & (2)             & (3)            & (4)                       & (5)            & (6)                       & (7)           & (8)\\  
+   \midrule 
+   et\_m3             & -0.0032$^{***}$ & -0.0045$^{***}$ & -0.0019        & 0.0019                    & -0.0037        & -0.0057                   & -0.0030       & -0.0045\\   
+                      & (0.0010)        & (0.0010)        & (0.0017)       & (0.0039)                  & (0.0035)       & (0.0076)                  & (0.0043)      & (0.0089)\\   
+   et\_m1             & 0.0023$^{**}$   & 0.0051$^{***}$  & -0.0003        & 0.0093$^{*}$              & -0.0033        & -0.0030                   & -0.0024       & -0.0023\\   
+                      & (0.0012)        & (0.0010)        & (0.0021)       & (0.0050)                  & (0.0044)       & (0.0092)                  & (0.0053)      & (0.0107)\\   
+   et\_0              & -0.0009         & -0.0015         & -0.0002        & 0.0042                    & -0.0013        & 0.0006                    & -0.0015       & 0.0002\\   
+                      & (0.0010)        & (0.0010)        & (0.0018)       & (0.0039)                  & (0.0037)       & (0.0074)                  & (0.0045)      & (0.0086)\\   
+   et\_1              & 0.0120$^{***}$  & 0.0151$^{***}$  & 0.0089$^{***}$ & 0.0165$^{***}$            & 0.0117$^{**}$  & 0.0212$^{**}$             & 0.0125$^{**}$ & 0.0228$^{**}$\\   
+                      & (0.0014)        & (0.0012)        & (0.0024)       & (0.0049)                  & (0.0050)       & (0.0093)                  & (0.0061)      & (0.0108)\\   
+   et\_2              & 0.0143$^{***}$  & 0.0216$^{***}$  & 0.0073$^{***}$ & 0.0103$^{**}$             & 0.0103$^{*}$   & 0.0160                    & 0.0080        & 0.0128\\   
+                      & (0.0015)        & (0.0013)        & (0.0027)       & (0.0051)                  & (0.0057)       & (0.0098)                  & (0.0066)      & (0.0112)\\   
+   et\_3              & 0.0146$^{***}$  & 0.0187$^{***}$  & 0.0107$^{***}$ & 0.0145$^{***}$            & 0.0145$^{**}$  & 0.0214$^{**}$             & 0.0126$^{*}$  & 0.0191$^{*}$\\   
+                      & (0.0016)        & (0.0014)        & (0.0028)       & (0.0051)                  & (0.0059)       & (0.0098)                  & (0.0068)      & (0.0113)\\   
+   et\_4              & 0.0146$^{***}$  & 0.0203$^{***}$  & 0.0091$^{***}$ & 0.0110$^{***}$            & 0.0095$^{*}$   & 0.0128$^{*}$              & 0.0073        & 0.0108\\   
+                      & (0.0015)        & (0.0015)        & (0.0025)       & (0.0040)                  & (0.0049)       & (0.0076)                  & (0.0056)      & (0.0087)\\   
+   et\_5              & 0.0126$^{***}$  & 0.0134$^{***}$  & 0.0117$^{***}$ & 0.0137$^{***}$            & 0.0143$^{***}$ & 0.0192$^{**}$             & 0.0139$^{**}$ & 0.0190$^{**}$\\   
+                      & (0.0015)        & (0.0015)        & (0.0026)       & (0.0041)                  & (0.0055)       & (0.0081)                  & (0.0064)      & (0.0095)\\   
+    \\
+   Observations       & 2,598,476       & 1,956,298       & 642,173        & 340,761                   & 82,762         & 37,797                    & 38,376        & 18,570\\  
+   R$^2$              & 0.33369         & 0.22100         & 0.52039        & 0.54546                   & 0.69746        & 0.69015                   & 0.70744       & 0.69125\\  
+   Within R$^2$       & 0.00039         & 0.00048         & 0.00036        & 0.00039                   & 0.00085        & 0.00114                   & 0.00086       & 0.00127\\  
+    \\
+   PID fixed effects  & $\checkmark$    & $\checkmark$    & $\checkmark$   & $\checkmark$              & $\checkmark$   & $\checkmark$              & $\checkmark$  & $\checkmark$\\   
+   year fixed effects & $\checkmark$    & $\checkmark$    & $\checkmark$   & $\checkmark$              & $\checkmark$   & $\checkmark$              & $\checkmark$  & $\checkmark$\\   
+   \bottomrule
+\end{tabular}
+\par\endgroup
+
+
+
+\end{adjustbox}
+
+\begin{longtable}[t]{lrrr}
+\caption{\label{tab:filing-core-summary}Selected filing-rate coefficients from the streamlined sample grid}\\
+\toprule
+Sample & t+1 & t+2 & t+3\\
+\midrule
+1-unit & 0.0151 & 0.0216 & 0.0187\\
+10+ units & 0.0125 & 0.0080 & 0.0126\\
+10+ units, rental evidence & 0.0228 & 0.0128 & 0.0190\\
+2+ units & 0.0089 & 0.0073 & 0.0107\\
+2+ units, rental evidence & 0.0165 & 0.0103 & 0.0145\\
+\addlinespace
+5+ units & 0.0117 & 0.0103 & 0.0145\\
+5+ units, rental evidence & 0.0212 & 0.0160 & 0.0214\\
+\bottomrule
+\end{longtable}
+
+\section{Filing Heterogeneity by Acquirer
+Type}\label{filing-heterogeneity-by-acquirer-type}
+
+The main heterogeneity split uses four acquirer types:
+
+\begin{itemize}
+\tightlist
+\item
+  \texttt{High-filer\ portfolio}
+\item
+  \texttt{Low-filer\ portfolio}
+\item
+  \texttt{Small\ portfolio}
+\item
+  \texttt{Single-purchase}
+\end{itemize}
+
+These categories are defined from the helper-function leave-one-out
+portfolio measures, while the regression itself is restricted to
+\texttt{2+\ unit} buildings. In the current annual outputs, the
+\texttt{t\ =\ +2} coefficient is 0.0237 for high-filer portfolios and
+-0.0062 for low-filer portfolios.
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_filing_acq_2plus.png}
+
+}
+
+\caption{Annual filing-rate event study for 2+ unit buildings, split by
+acquirer filing type. Controls are never-transferred buildings in the
+same 2+ unit sample.}
+
+\end{figure}%
+
+\scriptsize
+\begin{adjustbox}{max width=\textwidth}
 
 \begingroup
 \centering
 \begin{tabular}{lccccc}
    \toprule
-    & \multicolumn{3}{c}{filing\_rate} & num\_filings & any\_filing\\
-   Robustness         & No sheriff deeds & Single-transfer PIDs & No nearby re-transfer & Count outcome & Any filing \\   
-                      & (1)              & (2)                  & (3)                   & (4)           & (5)\\  
+    & \multicolumn{5}{c}{filing\_rate}\\
+   Acquirer type      & All acquirers  & High-filer portfolio & Low-filer portfolio   & Small portfolio & Single-purchase \\   
+                      & (1)            & (2)                  & (3)                   & (4)             & (5)\\  
    \midrule 
-   et\_m3             & -0.0012          & -0.0059$^{***}$      & -0.0072$^{***}$       & -0.1092       & 0.0014\\   
-                      & (0.0011)         & (0.0011)             & (0.0010)              & (0.3354)      & (0.0028)\\   
-   et\_m2             & -0.0009          & -0.0053$^{***}$      & -0.0070$^{***}$       & -0.0890       & -0.0034\\   
-                      & (0.0013)         & (0.0013)             & (0.0011)              & (0.3989)      & (0.0031)\\   
-   et\_0              & -0.0023$^{***}$  & -0.0024$^{*}$        & -0.0040$^{***}$       & -0.0294       & -0.0004\\   
-                      & (0.0008)         & (0.0012)             & (0.0015)              & (0.2230)      & (0.0030)\\   
-   et\_1              & 0.0084$^{***}$   & 0.0120$^{***}$       & 0.0115$^{***}$        & 0.0265        & 0.0039\\   
-                      & (0.0009)         & (0.0015)             & (0.0016)              & (0.2216)      & (0.0026)\\   
-   et\_2              & 0.0119$^{***}$   & 0.0156$^{***}$       & 0.0167$^{***}$        & 0.3281$^{**}$ & 0.0107$^{***}$\\   
-                      & (0.0008)         & (0.0018)             & (0.0016)              & (0.1566)      & (0.0027)\\   
-   et\_3              & 0.0102$^{***}$   & 0.0150$^{***}$       & 0.0152$^{***}$        & 0.5746$^{*}$  & 0.0126$^{***}$\\   
-                      & (0.0012)         & (0.0021)             & (0.0016)              & (0.3291)      & (0.0026)\\   
-   et\_4              & 0.0080$^{***}$   & 0.0123$^{***}$       & 0.0112$^{***}$        & 0.4655        & 0.0085$^{***}$\\   
-                      & (0.0011)         & (0.0016)             & (0.0011)              & (0.2869)      & (0.0027)\\   
-   et\_5              & 0.0043$^{***}$   & 0.0108$^{***}$       & 0.0072$^{***}$        & -0.1853       & 0.0155$^{***}$\\   
-                      & (0.0008)         & (0.0015)             & (0.0011)              & (0.1304)      & (0.0032)\\   
+   et\_m3             & -0.0018        & -0.0067              & -0.0036               & -0.0044         & 0.0001\\   
+                      & (0.0017)       & (0.0130)             & (0.0033)              & (0.0038)        & (0.0018)\\   
+   et\_m1             & -0.0002        & -0.0274$^{*}$        & 0.0155$^{*}$          & -0.0030         & 0.0017\\   
+                      & (0.0021)       & (0.0144)             & (0.0086)              & (0.0035)        & (0.0018)\\   
+   et\_0              & -0.0002        & -0.0109              & 0.0003                & 0.0010          & 0.0011\\   
+                      & (0.0018)       & (0.0137)             & (0.0026)              & (0.0032)        & (0.0018)\\   
+   et\_1              & 0.0089$^{***}$ & 0.0416$^{**}$        & 0.0025                & 0.0070$^{**}$   & 0.0062$^{***}$\\   
+                      & (0.0024)       & (0.0185)             & (0.0056)              & (0.0035)        & (0.0024)\\   
+   et\_2              & 0.0076$^{***}$ & 0.0237               & -0.0062$^{*}$         & 0.0071$^{*}$    & 0.0085$^{***}$\\   
+                      & (0.0027)       & (0.0206)             & (0.0034)              & (0.0041)        & (0.0031)\\   
+   et\_3              & 0.0101$^{***}$ & 0.0289$^{**}$        & -0.0046               & 0.0134$^{**}$   & 0.0099$^{***}$\\   
+                      & (0.0028)       & (0.0145)             & (0.0041)              & (0.0055)        & (0.0036)\\   
+   et\_4              & 0.0092$^{***}$ & 0.0013               & 0.0061                & 0.0181$^{**}$   & 0.0090$^{***}$\\   
+                      & (0.0025)       & (0.0151)             & (0.0045)              & (0.0073)        & (0.0027)\\   
+   et\_5              & 0.0112$^{***}$ & 0.0305$^{*}$         & -0.0030               & 0.0228$^{***}$  & 0.0089$^{***}$\\   
+                      & (0.0027)       & (0.0164)             & (0.0029)              & (0.0077)        & (0.0029)\\   
     \\
-   Observations       & 4,309,295        & 2,598,476            & 2,598,476             & 4,670,519     & 4,670,519\\  
-   R$^2$              & 0.28118          & 0.31350              & 0.31380               & 0.68678       & 0.58166\\  
-   Within R$^2$       & 0.00035          & 0.00034              & 0.00077               & 0.00042       & 0.00032\\  
+   Observations       & 640,544        & 451,695              & 459,341               & 482,530         & 570,594\\  
+   R$^2$              & 0.52045        & 0.54675              & 0.53557               & 0.52768         & 0.52079\\  
+   Within R$^2$       & 0.00034        & 0.00063              & $7.83\times 10^{-5}$  & 0.00016         & 0.00019\\  
     \\
-   PID fixed effects  & $\checkmark$     & $\checkmark$         & $\checkmark$          & $\checkmark$  & $\checkmark$\\   
-   year fixed effects & $\checkmark$     & $\checkmark$         & $\checkmark$          & $\checkmark$  & $\checkmark$\\   
+   PID fixed effects  & $\checkmark$   & $\checkmark$         & $\checkmark$          & $\checkmark$    & $\checkmark$\\   
+   year fixed effects & $\checkmark$   & $\checkmark$         & $\checkmark$          & $\checkmark$    & $\checkmark$\\   
    \bottomrule
 \end{tabular}
 \par\endgroup
@@ -910,1325 +398,43 @@ design, all units, 2006--2019).}
 
 
 \end{adjustbox}
-\end{landscape}
 
-\subsection{No sheriff's deeds}\label{no-sheriffs-deeds}
-
-Sheriff's deed transfers are foreclosures, where the ``buyer'' is
-typically a bank or GSE (Fannie Mae, Freddie Mac) that temporarily holds
-title. These entities do not operate as landlords and are unlikely to
-file evictions. Excluding sheriff's deeds removes approximately 10\% of
-transfers.
-
-\subsection{Allow repeat-transfer
-PIDs}\label{allow-repeat-transfer-pids}
-
-The baseline now defaults to the single-transfer sample. As a robustness
-check, we re-introduce repeat-transfer PIDs by using each building's
-first observed sale in the analysis window even when that PID later
-sells again.
-
-\subsection{No nearby re-transfer}\label{no-nearby-re-transfer}
-
-We exclude transfers where the same PID has another transfer within 2
-years, avoiding contamination from overlapping ownership spells.
-
-\subsection{Count outcome}\label{count-outcome}
-
-Using the raw count of eviction filings (\texttt{num\_filings}) instead
-of the rate (per unit) confirms the direction of the effect. This
-addresses the concern that rate-based measures might be sensitive to
-changes in \texttt{total\_units} around transfers.
-
-\subsection{Any-filing indicator}\label{any-filing-indicator}
-
-A binary indicator for whether any eviction filings occurred in a given
-year tests whether the effect operates on the extensive margin (more
-buildings filing) rather than only the intensive margin (more filings
-per building).
-
-\subsection{Violations outcome}\label{violations-outcome}
-
-Building code violations are examined as a secondary outcome.
-\textbf{Note:} Philadelphia L\&I violations data begins in 2007, so the
-violations regressions are additionally restricted to calendar years
-\(\geq\) 2007 to avoid spurious zeros in the pre-period.
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_violations_by_buyer.png}
-
-}
-
-\caption{Annual total violations around transfer by buyer type (year
-\(\geq\) 2007, full-panel design).}
-
-\end{figure}%
-
-\section{Appendix: Baseline Regression Estimates (Full-Panel
-Design)}\label{appendix-baseline-regression-estimates-full-panel-design}
-
-These estimates use the traditional two-way FE event study (building +
-year FEs, never-sold controls, unit-weighted) rather than the stacked
-DiD design. They are retained for comparison with the stacked DiD
-baseline in Section~\ref{sec-stacked-did-4spec}.
-
-\begin{landscape}
-\begin{figure}[p]
-\centering
-\includegraphics[width=0.97\linewidth]{/Users/joefish/Documents/GitHub/philly-evictions/output/transfer_evictions/figs/rtt_annual_baseline.png}
-\caption{Event study coefficients: filing rate around ownership transfer. Reference period is t=-2; the dashed line marks the transfer year ($t=0$).}
-\end{figure}
-\end{landscape}
-
-\begin{landscape}
-\scriptsize
-\begin{adjustbox}{max width=0.95\linewidth}
-
-\begingroup
-\centering
-\begin{tabular}{lccccccc}
-   \toprule
-    & \multicolumn{7}{c}{filing\_rate}\\
-   Sample             & All buildings   & All buildings (unit-weighted) & 1-unit buildings & 2+ unit buildings (unit-weighted) & 5+ unit buildings (unit-weighted) & 2+ units, observed rental stock (unit-weighted) & 5+ units, observed rental stock (unit-weighted) \\   
-                      & (1)             & (2)                           & (3)              & (4)                               & (5)                               & (6)                                             & (7)\\  
-   \midrule 
-   et\_m3             & -0.0038$^{***}$ & -0.0032$^{***}$               & -0.0045$^{***}$  & -0.0019                           & -0.0037                           & 0.0019                                          & -0.0057\\   
-                      & (0.0008)        & (0.0010)                      & (0.0010)         & (0.0017)                          & (0.0035)                          & (0.0039)                                        & (0.0076)\\   
-   et\_m1             & 0.0043$^{***}$  & 0.0023$^{**}$                 & 0.0051$^{***}$   & -0.0003                           & -0.0033                           & 0.0093$^{*}$                                    & -0.0030\\   
-                      & (0.0009)        & (0.0012)                      & (0.0010)         & (0.0021)                          & (0.0044)                          & (0.0050)                                        & (0.0092)\\   
-   et\_0              & -0.0011         & -0.0009                       & -0.0015          & -0.0002                           & -0.0013                           & 0.0042                                          & 0.0006\\   
-                      & (0.0008)        & (0.0010)                      & (0.0010)         & (0.0018)                          & (0.0037)                          & (0.0039)                                        & (0.0074)\\   
-   et\_1              & 0.0134$^{***}$  & 0.0120$^{***}$                & 0.0151$^{***}$   & 0.0089$^{***}$                    & 0.0117$^{**}$                     & 0.0165$^{***}$                                  & 0.0212$^{**}$\\   
-                      & (0.0010)        & (0.0014)                      & (0.0012)         & (0.0024)                          & (0.0050)                          & (0.0049)                                        & (0.0093)\\   
-   et\_2              & 0.0181$^{***}$  & 0.0143$^{***}$                & 0.0216$^{***}$   & 0.0073$^{***}$                    & 0.0103$^{*}$                      & 0.0103$^{**}$                                   & 0.0160\\   
-                      & (0.0011)        & (0.0015)                      & (0.0013)         & (0.0027)                          & (0.0057)                          & (0.0051)                                        & (0.0098)\\   
-   et\_3              & 0.0163$^{***}$  & 0.0146$^{***}$                & 0.0187$^{***}$   & 0.0107$^{***}$                    & 0.0145$^{**}$                     & 0.0145$^{***}$                                  & 0.0214$^{**}$\\   
-                      & (0.0011)        & (0.0016)                      & (0.0014)         & (0.0028)                          & (0.0059)                          & (0.0051)                                        & (0.0098)\\   
-   et\_4              & 0.0178$^{***}$  & 0.0146$^{***}$                & 0.0203$^{***}$   & 0.0091$^{***}$                    & 0.0095$^{*}$                      & 0.0110$^{***}$                                  & 0.0128$^{*}$\\   
-                      & (0.0013)        & (0.0015)                      & (0.0015)         & (0.0025)                          & (0.0049)                          & (0.0040)                                        & (0.0076)\\   
-   et\_5              & 0.0127$^{***}$  & 0.0126$^{***}$                & 0.0134$^{***}$   & 0.0117$^{***}$                    & 0.0143$^{***}$                    & 0.0137$^{***}$                                  & 0.0192$^{**}$\\   
-                      & (0.0012)        & (0.0015)                      & (0.0015)         & (0.0026)                          & (0.0055)                          & (0.0041)                                        & (0.0081)\\   
-    \\
-   Observations       & 2,598,476       & 2,598,476                     & 1,956,298        & 642,173                           & 82,762                            & 340,761                                         & 37,797\\  
-   R$^2$              & 0.23768         & 0.33369                       & 0.22100          & 0.52039                           & 0.69746                           & 0.54546                                         & 0.69015\\  
-   Within R$^2$       & 0.00041         & 0.00039                       & 0.00048          & 0.00036                           & 0.00085                           & 0.00039                                         & 0.00114\\  
-    \\
-   PID fixed effects  & $\checkmark$    & $\checkmark$                  & $\checkmark$     & $\checkmark$                      & $\checkmark$                      & $\checkmark$                                    & $\checkmark$\\   
-   year fixed effects & $\checkmark$    & $\checkmark$                  & $\checkmark$     & $\checkmark$                      & $\checkmark$                      & $\checkmark$                                    & $\checkmark$\\   
-   \bottomrule
-\end{tabular}
-\par\endgroup
-
-
-
-\end{adjustbox}
-\end{landscape}
-
-\subsection{Baseline: Poisson with unit
-offset}\label{baseline-poisson-with-unit-offset}
-
-\begin{landscape}
-\begin{figure}[p]
-\centering
-\includegraphics[width=0.97\linewidth]{/Users/joefish/Documents/GitHub/philly-evictions/output/transfer_evictions/figs/rtt_annual_baseline_poisson.png}
-\caption{Poisson event study: log expected filings-per-unit around transfer. Reference period is t=-2.}
-\end{figure}
-\end{landscape}
-
-\begin{landscape}
-\scriptsize
-\begin{adjustbox}{max width=0.95\linewidth}
-
-\begingroup
-\centering
-\begin{tabular}{lcccccc}
-   \toprule
-    & \multicolumn{6}{c}{num\_filings}\\
-   Sample              & All buildings & 1-unit buildings & 2+ unit buildings & 5+ unit buildings & 2+ units, observed rental stock & 5+ units, observed rental stock \\   
-                       & (1)           & (2)              & (3)               & (4)               & (5)                             & (6)\\  
-   \midrule 
-   et\_m3              & -0.0032       & -0.1379$^{***}$  & -0.0011           & -0.0019           & 0.0257                          & 0.0223\\   
-                       & (0.0992)      & (0.0327)         & (0.1012)          & (0.1036)          & (0.0998)                        & (0.1020)\\   
-   et\_m1              & 0.0326        & 0.1472$^{***}$   & 0.0299            & 0.0286            & 0.0637                          & 0.0582\\   
-                       & (0.1268)      & (0.0269)         & (0.1297)          & (0.1328)          & (0.1329)                        & (0.1357)\\   
-   et\_0               & 0.0185        & -0.0348          & 0.0196            & 0.0191            & 0.0515                          & 0.0496\\   
-                       & (0.0794)      & (0.0295)         & (0.0810)          & (0.0828)          & (0.0830)                        & (0.0845)\\   
-   et\_1               & 0.1647        & 0.3553$^{***}$   & 0.1599            & 0.1585            & 0.1817                          & 0.1815\\   
-                       & (0.1154)      & (0.0251)         & (0.1183)          & (0.1212)          & (0.1179)                        & (0.1205)\\   
-   et\_2               & 0.2223$^{*}$  & 0.4636$^{***}$   & 0.2153$^{*}$      & 0.2161$^{*}$      & 0.2107                          & 0.2133\\   
-                       & (0.1222)      & (0.0252)         & (0.1263)          & (0.1297)          & (0.1338)                        & (0.1367)\\   
-   et\_3               & 0.1593        & 0.4054$^{***}$   & 0.1526            & 0.1494            & 0.1665                          & 0.1661\\   
-                       & (0.1320)      & (0.0268)         & (0.1355)          & (0.1389)          & (0.1350)                        & (0.1381)\\   
-   et\_4               & 0.0779        & 0.4187$^{***}$   & 0.0674            & 0.0614            & 0.0905                          & 0.0885\\   
-                       & (0.1341)      & (0.0278)         & (0.1374)          & (0.1408)          & (0.1244)                        & (0.1278)\\   
-   et\_5               & 0.1530        & 0.2896$^{***}$   & 0.1484            & 0.1441            & 0.1511                          & 0.1510\\   
-                       & (0.1408)      & (0.0287)         & (0.1446)          & (0.1488)          & (0.1398)                        & (0.1442)\\   
-    \\
-   Observations        & 807,236       & 575,692          & 231,536           & 33,285            & 160,751                         & 23,770\\  
-   Squared Correlation & 0.73777       & 0.15779          & 0.75602           & 0.75492           & 0.76020                         & 0.75250\\  
-   Pseudo R$^2$        & 2.5167        & 0.10020          & 1.6592            & 1.3869            & 1.3965                          & 1.2724\\  
-   BIC                 & 7,215,645.3   & 1,004,858.5      & 6,174,841.7       & 5,566,986.4       & 5,501,993.4                     & 4,983,632.6\\  
-    \\
-   PID fixed effects   & $\checkmark$  & $\checkmark$     & $\checkmark$      & $\checkmark$      & $\checkmark$                    & $\checkmark$\\   
-   year fixed effects  & $\checkmark$  & $\checkmark$     & $\checkmark$      & $\checkmark$      & $\checkmark$                    & $\checkmark$\\   
-   \bottomrule
-\end{tabular}
-\par\endgroup
-
-
-
-\end{adjustbox}
-\end{landscape}
-
-\subsection{Acquirer Filing Rate: Poisson with unit
-offset}\label{acquirer-filing-rate-poisson-with-unit-offset}
-
-\begin{landscape}
-\begin{figure}[p]
-\centering
-\includegraphics[width=0.97\linewidth]{/Users/joefish/Documents/GitHub/philly-evictions/output/transfer_evictions/figs/rtt_annual_by_acq_filer_poisson.png}
-\caption{Poisson event study by acquirer pre-acquisition filing rate. Coefficients on log expected filings-per-unit scale; reference period is t=-2.}
-\end{figure}
-\end{landscape}
-
-\begin{landscape}
-\scriptsize
-\begin{adjustbox}{max width=0.95\linewidth}
-
-\begingroup
-\centering
-\begin{tabular}{lcccc}
-   \toprule
-    & \multicolumn{4}{c}{num\_filings}\\
-   Acquirer type       & High-filer portfolio (10+ other units) & Low-filer portfolio (10+ other units) & Small portfolio (<10 other units) & Single-purchase \\   
-                       & (1)                                    & (2)                                   & (3)                               & (4)\\  
-   \midrule 
-   et\_m3              & 0.1341                                 & -0.3048                               & -0.4260                           & -0.0845\\   
-                       & (0.1132)                               & (0.6716)                              & (0.2753)                          & (0.1614)\\   
-   et\_m1              & 0.0062                                 & 1.123$^{***}$                         & -0.4167                           & -0.0860\\   
-                       & (0.1912)                               & (0.2568)                              & (0.2782)                          & (0.1469)\\   
-   et\_0               & 0.0968                                 & -0.0371                               & 0.1137                            & -0.0468\\   
-                       & (0.1160)                               & (0.2425)                              & (0.2249)                          & (0.1026)\\   
-   et\_1               & 0.2468                                 & 0.4784                                & 0.1895                            & 0.0562\\   
-                       & (0.1907)                               & (0.3351)                              & (0.1441)                          & (0.1632)\\   
-   et\_2               & 0.3599$^{*}$                           & -0.8235                               & 0.0550                            & 0.2443\\   
-                       & (0.1999)                               & (0.5539)                              & (0.1673)                          & (0.1495)\\   
-   et\_3               & 0.0934                                 & -0.9003                               & 0.5437$^{***}$                    & 0.1928\\   
-                       & (0.0996)                               & (0.5682)                              & (0.1428)                          & (0.2012)\\   
-   et\_4               & -0.2043                                & -0.0199                               & 0.7219$^{***}$                    & 0.1538\\   
-                       & (0.1693)                               & (0.5394)                              & (0.1482)                          & (0.1693)\\   
-   et\_5               & -0.0202                                & -0.2704                               & 0.6709$^{***}$                    & 0.2035\\   
-                       & (0.1981)                               & (0.2335)                              & (0.1600)                          & (0.1862)\\   
-    \\
-   Observations        & 551,230                                & 538,211                               & 594,589                           & 694,312\\  
-   Squared Correlation & 0.74554                                & 0.74360                               & 0.74178                           & 0.74064\\  
-   Pseudo R$^2$        & 1.8946                                 & 2.0360                                & 2.1451                            & 2.3399\\  
-   BIC                 & 6,068,622.4                            & 5,851,791.7                           & 5,919,782.6                       & 6,534,838.5\\  
-    \\
-   PID fixed effects   & $\checkmark$                           & $\checkmark$                          & $\checkmark$                      & $\checkmark$\\   
-   year fixed effects  & $\checkmark$                           & $\checkmark$                          & $\checkmark$                      & $\checkmark$\\   
-   \bottomrule
-\end{tabular}
-\par\endgroup
-
-
-
-\end{adjustbox}
-\end{landscape}
-
-\section{Appendix: 1-Unit vs 2+
-Diagnostics}\label{appendix-1-unit-vs-2-diagnostics}
-
-These appendix figures isolate the size composition issue behind the
-lead patterns in the annual event studies. Each plot re-estimates the
-same full-panel, never-sold-control design separately for
-\textbf{1-unit} and \textbf{2+ unit} buildings.
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_filing_rate_size_diag.png}
-
-}
-
-\caption{Appendix diagnostic: filing-rate event studies for 1-unit
-versus 2+ unit buildings.}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_occupancy_rate_size_diag.png}
-
-}
-
-\caption{Appendix diagnostic: occupancy-rate event studies for 1-unit
-versus 2+ unit buildings.}
-
-\end{figure}%
-
-\begin{landscape}
-\begin{figure}[p]
-\centering
-\includegraphics[width=0.97\linewidth]{/Users/joefish/Documents/GitHub/philly-evictions/output/transfer_evictions/figs/rtt_annual_race_shares_size_diag.png}
-\caption{Appendix diagnostic: all five race-share event studies for 1-unit versus 2+ unit buildings.}
-\end{figure}
-\end{landscape}
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_permit_rate_size_diag.png}
-
-}
-
-\caption{Appendix diagnostic: permit-rate event studies for 1-unit
-versus 2+ unit buildings.}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_rent_size_diag.png}
-
-}
-
-\caption{Appendix diagnostic: log-rent event studies for 1-unit versus
-2+ unit buildings.}
-
-\end{figure}%
-
-\section{Appendix: Heterogeneity by Buyer
-Type}\label{appendix-heterogeneity-by-buyer-type}
-
-The main heterogeneity analyses use the same \textbf{full-panel,
-never-sold-control} design and are \textbf{unit-weighted}
-(\texttt{weights\ =\ total\_units}). Each subgroup regression keeps the
-same never-sold control buildings and swaps in only the treated subgroup
-of interest. This shifts the estimand from the average change per
-building to the average change per rental unit, up-weighting large
-multi-unit properties. All regressions use calendar years 2006--2019,
-and treated observations are limited to the single-transfer sample. The
-Poisson robustness below instead models \texttt{num\_filings} with
-offset
-\texttt{\textbackslash{}log(\textbackslash{}text\{total\textbackslash{}\_units\})},
-so it does not use separate unit weights.
-
-\begin{landscape}
-\begin{figure}[p]
-\centering
-\includegraphics[width=0.97\linewidth]{/Users/joefish/Documents/GitHub/philly-evictions/output/transfer_evictions/figs/rtt_annual_by_buyer.png}
-\caption{Event study by buyer type (full unit-weighted sample). Reference period is t=-2; the dashed line marks the transfer year ($t=0$).}
-\end{figure}
-\end{landscape}
-
-\begin{landscape}
-\begin{figure}[p]
-\centering
-\includegraphics[width=0.97\linewidth]{/Users/joefish/Documents/GitHub/philly-evictions/output/transfer_evictions/figs/rtt_annual_by_buyer_2plus.png}
-\caption{Event study by buyer type for 2+ unit buildings. Reference period is t=-2; the dashed line marks the transfer year ($t=0$).}
-\end{figure}
-\end{landscape}
-
-\begin{landscape}
-\scriptsize
-\begin{adjustbox}{max width=0.95\linewidth}
-
-\begingroup
-\centering
-\begin{tabular}{lcccc}
-   \toprule
-    & \multicolumn{4}{c}{filing\_rate}\\
-   Buyer type         & Corporate       & Individual     & Corp (5+)     & Indiv (5+) \\   
-                      & (1)             & (2)            & (3)           & (4)\\  
-   \midrule 
-   et\_m3             & -0.0052$^{***}$ & -0.0015$^{*}$  & -0.0045       & -0.0004\\   
-                      & (0.0020)        & (0.0009)       & (0.0044)      & (0.0019)\\   
-   et\_m1             & -0.0063$^{**}$  & 0.0086$^{***}$ & -0.0042       & -0.0004\\   
-                      & (0.0025)        & (0.0009)       & (0.0055)      & (0.0030)\\   
-   et\_0              & -0.0017         & -0.0003        & -0.0024       & 0.0023\\   
-                      & (0.0022)        & (0.0008)       & (0.0045)      & (0.0036)\\   
-   et\_1              & 0.0212$^{***}$  & 0.0058$^{***}$ & 0.0138$^{**}$ & 0.0025\\   
-                      & (0.0030)        & (0.0009)       & (0.0061)      & (0.0038)\\   
-   et\_2              & 0.0248$^{***}$  & 0.0074$^{***}$ & 0.0121$^{*}$  & 0.0008\\   
-                      & (0.0035)        & (0.0010)       & (0.0067)      & (0.0032)\\   
-   et\_3              & 0.0260$^{***}$  & 0.0072$^{***}$ & 0.0163$^{**}$ & 0.0035\\   
-                      & (0.0037)        & (0.0011)       & (0.0068)      & (0.0040)\\   
-   et\_4              & 0.0214$^{***}$  & 0.0104$^{***}$ & 0.0093$^{*}$  & 0.0115$^{*}$\\   
-                      & (0.0033)        & (0.0012)       & (0.0056)      & (0.0069)\\   
-   et\_5              & 0.0225$^{***}$  & 0.0067$^{***}$ & 0.0154$^{**}$ & 0.0067\\   
-                      & (0.0035)        & (0.0012)       & (0.0062)      & (0.0061)\\   
-    \\
-   Observations       & 1,959,023       & 2,325,584      & 77,100        & 69,612\\  
-   R$^2$              & 0.36160         & 0.32266        & 0.69769       & 0.69795\\  
-   Within R$^2$       & 0.00061         & 0.00011        & 0.00094       & $3.64\times 10^{-5}$\\   
-    \\
-   PID fixed effects  & $\checkmark$    & $\checkmark$   & $\checkmark$  & $\checkmark$\\   
-   year fixed effects & $\checkmark$    & $\checkmark$   & $\checkmark$  & $\checkmark$\\   
-   \bottomrule
-\end{tabular}
-\par\endgroup
-
-
-
-\end{adjustbox}
-\end{landscape}
-
-\subsection{Buyer-type heterogeneity: Poisson with unit
-offset}\label{buyer-type-heterogeneity-poisson-with-unit-offset}
-
-\begin{landscape}
-\begin{figure}[p]
-\centering
-\includegraphics[width=0.97\linewidth]{/Users/joefish/Documents/GitHub/philly-evictions/output/transfer_evictions/figs/rtt_annual_by_buyer_poisson.png}
-\caption{Poisson event study by buyer type with log(total units) offset. Coefficients are on the log expected filings-per-unit scale; reference period is t=-2 and the dashed line marks the transfer year ($t=0$).}
-\end{figure}
-\end{landscape}
-
-\begin{landscape}
-\begin{figure}[p]
-\centering
-\includegraphics[width=0.97\linewidth]{/Users/joefish/Documents/GitHub/philly-evictions/output/transfer_evictions/figs/rtt_annual_by_buyer_poisson_2plus.png}
-\caption{Poisson event study by buyer type with log(total units) offset for 2+ unit buildings. Coefficients are on the log expected filings-per-unit scale; reference period is t=-2 and the dashed line marks the transfer year ($t=0$).}
-\end{figure}
-\end{landscape}
-
-\begin{landscape}
-\scriptsize
-\begin{adjustbox}{max width=0.95\linewidth}
-
-\begingroup
-\centering
-\begin{tabular}{lcccc}
-   \toprule
-    & \multicolumn{4}{c}{num\_filings}\\
-   Buyer type          & Corporate     & Individual     & Corp (5+)     & Indiv (5+) \\   
-                       & (1)           & (2)            & (3)           & (4)\\  
-   \midrule 
-   et\_m3              & 0.0018        & -0.0856        & 0.0034        & -0.2316\\   
-                       & (0.1028)      & (0.1595)       & (0.1049)      & (0.4332)\\   
-   et\_m1              & 0.0189        & 0.3098         & 0.0217        & 0.3744\\   
-                       & (0.1329)      & (0.2082)       & (0.1351)      & (0.5187)\\   
-   et\_0               & 0.0091        & 0.2205         & 0.0092        & 0.5328\\   
-                       & (0.0822)      & (0.2644)       & (0.0833)      & (0.5413)\\   
-   et\_1               & 0.1635        & 0.1836         & 0.1581        & 0.1811\\   
-                       & (0.1204)      & (0.2112)       & (0.1230)      & (0.5357)\\   
-   et\_2               & 0.2278$^{*}$  & 0.1256         & 0.2215$^{*}$  & -0.0041\\   
-                       & (0.1277)      & (0.1511)       & (0.1314)      & (0.4268)\\   
-   et\_3               & 0.1552        & 0.2412$^{**}$  & 0.1471        & 0.2858\\   
-                       & (0.1384)      & (0.1098)       & (0.1414)      & (0.2539)\\   
-   et\_4               & 0.0549        & 0.4289$^{***}$ & 0.0459        & 0.5765$^{**}$\\   
-                       & (0.1406)      & (0.1466)       & (0.1434)      & (0.2812)\\   
-   et\_5               & 0.1473        & 0.2689$^{**}$  & 0.1413        & 0.3072\\   
-                       & (0.1467)      & (0.1341)       & (0.1500)      & (0.4392)\\   
-    \\
-   Observations        & 620,918       & 710,850        & 31,706        & 26,087\\  
-   Squared Correlation & 0.74373       & 0.73713        & 0.75461       & 0.75641\\  
-   Pseudo R$^2$        & 2.0003        & 2.5919         & 1.3752        & 1.3752\\  
-   BIC                 & 6,782,157.2   & 6,166,213.4    & 5,515,707.8   & 4,718,349.2\\  
-    \\
-   PID fixed effects   & $\checkmark$  & $\checkmark$   & $\checkmark$  & $\checkmark$\\   
-   year fixed effects  & $\checkmark$  & $\checkmark$   & $\checkmark$  & $\checkmark$\\   
-   \bottomrule
-\end{tabular}
-\par\endgroup
-
-
-
-\end{adjustbox}
-\end{landscape}
-
-\subsection{Pre-transfer balance}\label{pre-transfer-balance}
-
-\begin{longtable}[t]{lrrrr}
-\caption{\label{tab:balance-table}Pre-transfer balance by buyer type}\\
+\begin{longtable}[t]{lrrr}
+\caption{\label{tab:filing-acq-summary}Selected 2+ unit filing-rate coefficients by acquirer type}\\
 \toprule
-buyer\_type & mean\_filing\_rate & mean\_violations & mean\_units & n\\
+Acquirer type & t+1 & t+2 & t+3\\
 \midrule
-Corporate & 0.02858 & 0.42 & 2.1 & 62311\\
-Individual & 0.02789 & 0.26 & 1.3 & 186640\\
+All acquirers & 0.0089 & 0.0076 & 0.0101\\
+High-filer portfolio & 0.0416 & 0.0237 & 0.0289\\
+Low-filer portfolio & 0.0025 & -0.0062 & -0.0046\\
+Single-purchase & 0.0062 & 0.0085 & 0.0099\\
+Small portfolio & 0.0070 & 0.0071 & 0.0134\\
 \bottomrule
 \end{longtable}
 
-\section{Appendix: Heterogeneity by Building
-Size}\label{appendix-heterogeneity-by-building-size}
+\section{Weighted Stacked Robustness}\label{weighted-stacked-robustness}
 
-We estimate the event study separately by building size bin in the
-unit-weighted 2006--2019 sample.
+As a robustness check, the production script now runs a weighted stacked
+annual filing-rate estimator for the full sample and the
+\texttt{2+\ unit} sample. This is not the main specification, but it
+provides a cleaner stacked benchmark than the earlier scratch
+implementation.
 
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_by_size.png}
-
-}
-
-\caption{Event study by building size bin. Reference period is t=-2; the
-dashed line marks the transfer year (\(t=0\)).}
-
-\end{figure}%
-
-\begin{adjustbox}{max width=\textwidth}
-
-\begingroup
-\centering
-\begin{tabular}{lcccc}
-   \toprule
-    & \multicolumn{4}{c}{filing\_rate}\\
-   Building size      & 1 unit          & 2-4 units      & 5-19 units     & 20+ units \\   
-                      & (1)             & (2)            & (3)            & (4)\\  
-   \midrule 
-   et\_m3             & -0.0045$^{***}$ & -0.0008        & -0.0048        & -0.0032\\   
-                      & (0.0010)        & (0.0014)       & (0.0031)       & (0.0052)\\   
-   et\_m1             & 0.0051$^{***}$  & 0.0019         & -0.0054        & -0.0022\\   
-                      & (0.0010)        & (0.0013)       & (0.0040)       & (0.0065)\\   
-   et\_0              & -0.0015         & 0.0005         & 0.0007         & -0.0025\\   
-                      & (0.0010)        & (0.0012)       & (0.0037)       & (0.0054)\\   
-   et\_1              & 0.0151$^{***}$  & 0.0066$^{***}$ & 0.0068         & 0.0139$^{*}$\\   
-                      & (0.0012)        & (0.0014)       & (0.0044)       & (0.0072)\\   
-   et\_2              & 0.0216$^{***}$  & 0.0050$^{***}$ & 0.0114$^{*}$   & 0.0097\\   
-                      & (0.0013)        & (0.0015)       & (0.0066)       & (0.0079)\\   
-   et\_3              & 0.0187$^{***}$  & 0.0076$^{***}$ & 0.0167$^{**}$  & 0.0131\\   
-                      & (0.0014)        & (0.0016)       & (0.0067)       & (0.0080)\\   
-   et\_4              & 0.0203$^{***}$  & 0.0088$^{***}$ & 0.0168$^{**}$  & 0.0057\\   
-                      & (0.0015)        & (0.0018)       & (0.0068)       & (0.0065)\\   
-   et\_5              & 0.0134$^{***}$  & 0.0094$^{***}$ & 0.0171$^{***}$ & 0.0125$^{*}$\\   
-                      & (0.0015)        & (0.0018)       & (0.0064)       & (0.0075)\\   
-    \\
-   Observations       & 1,956,298       & 559,405        & 61,395         & 21,325\\  
-   R$^2$              & 0.22100         & 0.30626        & 0.64568        & 0.72612\\  
-   Within R$^2$       & 0.00048         & 0.00017        & 0.00084        & 0.00095\\  
-    \\
-   PID fixed effects  & $\checkmark$    & $\checkmark$   & $\checkmark$   & $\checkmark$\\   
-   year fixed effects & $\checkmark$    & $\checkmark$   & $\checkmark$   & $\checkmark$\\   
-   \bottomrule
-\end{tabular}
-\par\endgroup
-
-
-
-\end{adjustbox}
-
-\subsection{Corporate buyer effect by building
-size}\label{corporate-buyer-effect-by-building-size}
-
-To confirm the corporate buyer effect isn't driven solely by small
-properties, we cross the buyer type and building size splits:
-
-\begin{longtable}[t]{llrr}
-\caption{\label{tab:corp-size-table}Average post-transfer effect (t+1 to t+3) by buyer type and building size}\\
-\toprule
-Buyer type & Size bin & Mean coef (t+1 to t+3) & Mean SE\\
-\midrule
-Corporate & 1 unit & 0.0468 & 0.0033\\
-Individual & 1 unit & 0.0088 & 0.0013\\
-Corporate & 2-4 units & 0.0126 & 0.0032\\
-Individual & 2-4 units & 0.0037 & 0.0017\\
-Corporate & 20+ units & 0.0128 & 0.0086\\
-\addlinespace
-Individual & 20+ units & 0.0075 & 0.0067\\
-Corporate & 5-19 units & 0.0170 & 0.0078\\
-Individual & 5-19 units & -0.0035 & 0.0038\\
-\bottomrule
-\end{longtable}
-
-\section{Appendix: Heterogeneity by Portfolio
-Size}\label{appendix-heterogeneity-by-portfolio-size}
+For the \texttt{2+\ unit} weighted stacked regression, the
+\texttt{t\ =\ -3} coefficient is -0.0009 and the \texttt{t\ =\ +2}
+coefficient is 0.0124.
 
 \begin{figure}[H]
 
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_by_portfolio.png}
+{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_baseline_stacked_weighted.png}
 
 }
 
-\caption{Event study by portfolio size (non-sheriff acquisitions).
-Reference period is t=-2; the dashed line marks the transfer year
-(\(t=0\)).}
+\caption{Weighted stacked annual filing-rate event study. Corrective
+weights are applied at the cohort-control level; the main comparison is
+the full sample versus 2+ units.}
 
 \end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_by_portfolio_2plus.png}
-
-}
-
-\caption{Event study by portfolio size for 2+ unit buildings
-(non-sheriff acquisitions). Reference period is t=-2; the dashed line
-marks the transfer year (\(t=0\)).}
-
-\end{figure}%
-
-\begin{adjustbox}{max width=\textwidth}
-
-\begingroup
-\centering
-\begin{tabular}{lcccc}
-   \toprule
-    & \multicolumn{4}{c}{filing\_rate}\\
-   Portfolio size     & Single-purchase        & 2-4                    & 5-9            & 10+ \\   
-                      & (1)                    & (2)                    & (3)            & (4)\\  
-   \midrule 
-   et\_m3             & -0.0005                & -0.0015                & -0.0097$^{**}$ & -0.0083$^{***}$\\   
-                      & (0.0011)               & (0.0034)               & (0.0038)       & (0.0029)\\   
-   et\_m1             & 0.0092$^{***}$         & -0.0043                & 0.0020         & -0.0117$^{***}$\\   
-                      & (0.0012)               & (0.0039)               & (0.0082)       & (0.0030)\\   
-   et\_0              & $-5.66\times 10^{-5}$  & $-1.19\times 10^{-5}$  & -0.0069        & -0.0016\\   
-                      & (0.0011)               & (0.0031)               & (0.0049)       & (0.0035)\\   
-   et\_1              & 0.0066$^{***}$         & 0.0168$^{***}$         & 0.0210$^{***}$ & 0.0288$^{***}$\\   
-                      & (0.0014)               & (0.0051)               & (0.0067)       & (0.0036)\\   
-   et\_2              & 0.0085$^{***}$         & 0.0198$^{***}$         & 0.0130$^{**}$  & 0.0319$^{***}$\\   
-                      & (0.0018)               & (0.0053)               & (0.0060)       & (0.0042)\\   
-   et\_3              & 0.0086$^{***}$         & 0.0159$^{***}$         & 0.0209$^{***}$ & 0.0329$^{***}$\\   
-                      & (0.0020)               & (0.0042)               & (0.0064)       & (0.0043)\\   
-   et\_4              & 0.0088$^{***}$         & 0.0158$^{***}$         & 0.0326$^{***}$ & 0.0286$^{***}$\\   
-                      & (0.0016)               & (0.0050)               & (0.0070)       & (0.0051)\\   
-   et\_5              & 0.0074$^{***}$         & 0.0182$^{***}$         & 0.0225$^{***}$ & 0.0223$^{***}$\\   
-                      & (0.0018)               & (0.0052)               & (0.0066)       & (0.0045)\\   
-    \\
-   Observations       & 2,248,313              & 1,815,766              & 1,743,356      & 1,800,753\\  
-   R$^2$              & 0.34005                & 0.35220                & 0.35090        & 0.35174\\  
-   Within R$^2$       & 0.00012                & 0.00014                & 0.00012        & 0.00036\\  
-    \\
-   PID fixed effects  & $\checkmark$           & $\checkmark$           & $\checkmark$   & $\checkmark$\\   
-   year fixed effects & $\checkmark$           & $\checkmark$           & $\checkmark$   & $\checkmark$\\   
-   \bottomrule
-\end{tabular}
-\par\endgroup
-
-
-
-\end{adjustbox}
-
-\subsection{Portfolio-size heterogeneity: Poisson with unit
-offset}\label{portfolio-size-heterogeneity-poisson-with-unit-offset}
-
-\begin{landscape}
-\begin{figure}[p]
-\centering
-\includegraphics[width=0.97\linewidth]{/Users/joefish/Documents/GitHub/philly-evictions/output/transfer_evictions/figs/rtt_annual_by_portfolio_poisson.png}
-\caption{Poisson event study by portfolio size with log(total units) offset. Coefficients are on the log expected filings-per-unit scale; reference period is t=-2 and the dashed line marks the transfer year ($t=0$).}
-\end{figure}
-\end{landscape}
-
-\begin{landscape}
-\begin{figure}[p]
-\centering
-\includegraphics[width=0.97\linewidth]{/Users/joefish/Documents/GitHub/philly-evictions/output/transfer_evictions/figs/rtt_annual_by_portfolio_poisson_2plus.png}
-\caption{Poisson event study by portfolio size with log(total units) offset for 2+ unit buildings. Coefficients are on the log expected filings-per-unit scale; reference period is t=-2 and the dashed line marks the transfer year ($t=0$).}
-\end{figure}
-\end{landscape}
-
-\begin{landscape}
-\scriptsize
-\begin{adjustbox}{max width=0.95\linewidth}
-
-\begingroup
-\centering
-\begin{tabular}{lcccc}
-   \toprule
-    & \multicolumn{4}{c}{num\_filings}\\
-   Portfolio size      & Single-purchase & 2-4            & 5-9            & 10+ \\   
-                       & (1)             & (2)            & (3)            & (4)\\  
-   \midrule 
-   et\_m3              & -0.1171         & 0.2385$^{*}$   & -1.284$^{**}$  & -0.1144\\   
-                       & (0.1622)        & (0.1279)       & (0.6149)       & (0.1749)\\   
-   et\_m1              & -0.1285         & 0.1181         & 0.7625$^{*}$   & -0.1939\\   
-                       & (0.1415)        & (0.2026)       & (0.4207)       & (0.2080)\\   
-   et\_0               & -0.0491         & 0.1686         & -0.1444        & -0.1040\\   
-                       & (0.1039)        & (0.1164)       & (0.2037)       & (0.1860)\\   
-   et\_1               & 0.1138          & 0.1939         & 0.4489         & 0.1242\\   
-                       & (0.1611)        & (0.2165)       & (0.3135)       & (0.1778)\\   
-   et\_2               & 0.2516$^{*}$    & 0.4556$^{***}$ & -1.199$^{***}$ & -0.2427\\   
-                       & (0.1488)        & (0.1713)       & (0.4436)       & (0.2215)\\   
-   et\_3               & 0.1859          & 0.2170$^{*}$   & -0.3569        & -0.2517\\   
-                       & (0.2007)        & (0.1208)       & (0.4476)       & (0.2110)\\   
-   et\_4               & 0.1597          & -0.1114        & 0.3698         & -0.2535\\   
-                       & (0.1608)        & (0.2786)       & (0.2525)       & (0.2882)\\   
-   et\_5               & 0.2595          & 0.0154         & 0.2783         & -0.4547$^{**}$\\   
-                       & (0.1747)        & (0.2701)       & (0.2534)       & (0.1853)\\   
-    \\
-   Observations        & 684,601         & 567,680        & 545,706        & 567,033\\  
-   Squared Correlation & 0.74106         & 0.74560        & 0.74261        & 0.74169\\  
-   Pseudo R$^2$        & 2.2878          & 1.9565         & 2.0301         & 2.0760\\  
-   BIC                 & 6,506,094.8     & 6,040,311.4    & 5,859,285.5    & 5,944,311.0\\  
-    \\
-   PID fixed effects   & $\checkmark$    & $\checkmark$   & $\checkmark$   & $\checkmark$\\   
-   year fixed effects  & $\checkmark$    & $\checkmark$   & $\checkmark$   & $\checkmark$\\   
-   \bottomrule
-\end{tabular}
-\par\endgroup
-
-
-
-\end{adjustbox}
-\end{landscape}
-
-\subsection{Portfolio heterogeneity by net units
-held}\label{portfolio-heterogeneity-by-net-units-held}
-
-The property-count portfolio bins above can conflate small-count
-portfolios of large apartment buildings with large-count portfolios of
-row homes. As an alternative measure of portfolio scale, the acquirer's
-total unit count across all other conglomerate buildings (net of the
-acquired parcel itself) is binned at acquisition.
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_by_portfolio_units.png}
-
-}
-
-\caption{Event study by portfolio net units held at acquisition (units
-in other conglomerate buildings, excluding the acquired parcel).
-Reference period is t=-2; the dashed line marks the transfer year
-(\(t=0\)).}
-
-\end{figure}%
-
-\begin{adjustbox}{max width=\textwidth}
-
-\begingroup
-\centering
-\begin{tabular}{lcccc}
-   \toprule
-    & \multicolumn{4}{c}{filing\_rate}\\
-   Portfolio units (net) & 0 units (solo) & 1-9 other units        & 10-49 other units & 50+ other units \\   
-                         & (1)            & (2)                    & (3)               & (4)\\  
-   \midrule 
-   et\_m3                & -0.0005        & -0.0065$^{***}$        & -0.0104$^{***}$   & -0.0051\\   
-                         & (0.0011)       & (0.0020)               & (0.0031)          & (0.0064)\\   
-   et\_m1                & 0.0080$^{***}$ & -0.0040$^{**}$         & -0.0136$^{**}$    & -0.0055\\   
-                         & (0.0012)       & (0.0016)               & (0.0067)          & (0.0075)\\   
-   et\_0                 & 0.0003         & $-5.15\times 10^{-6}$  & -0.0078$^{**}$    & -0.0004\\   
-                         & (0.0011)       & (0.0018)               & (0.0040)          & (0.0069)\\   
-   et\_1                 & 0.0068$^{***}$ & 0.0180$^{***}$         & 0.0256$^{***}$    & 0.0316$^{***}$\\   
-                         & (0.0014)       & (0.0022)               & (0.0052)          & (0.0105)\\   
-   et\_2                 & 0.0092$^{***}$ & 0.0222$^{***}$         & 0.0313$^{***}$    & 0.0250$^{**}$\\   
-                         & (0.0017)       & (0.0026)               & (0.0052)          & (0.0109)\\   
-   et\_3                 & 0.0097$^{***}$ & 0.0200$^{***}$         & 0.0283$^{***}$    & 0.0282$^{***}$\\   
-                         & (0.0020)       & (0.0024)               & (0.0058)          & (0.0083)\\   
-   et\_4                 & 0.0097$^{***}$ & 0.0283$^{***}$         & 0.0284$^{***}$    & 0.0131\\   
-                         & (0.0017)       & (0.0030)               & (0.0053)          & (0.0091)\\   
-   et\_5                 & 0.0082$^{***}$ & 0.0203$^{***}$         & 0.0315$^{***}$    & 0.0114\\   
-                         & (0.0018)       & (0.0027)               & (0.0056)          & (0.0090)\\   
-    \\
-   Observations          & 2,281,058      & 1,879,781              & 1,758,320         & 1,730,615\\  
-   R$^2$                 & 0.33903        & 0.34222                & 0.35121           & 0.36018\\  
-   Within R$^2$          & 0.00013        & 0.00026                & 0.00026           & 0.00016\\  
-    \\
-   PID fixed effects     & $\checkmark$   & $\checkmark$           & $\checkmark$      & $\checkmark$\\   
-   year fixed effects    & $\checkmark$   & $\checkmark$           & $\checkmark$      & $\checkmark$\\   
-   \bottomrule
-\end{tabular}
-\par\endgroup
-
-
-
-\end{adjustbox}
-
-\section{Appendix: Pooled Window
-Estimates}\label{appendix-pooled-window-estimates}
-
-We pool event-time periods into four windows to summarize the magnitude
-and significance of the transfer effect:
-
-\begin{itemize}
-\tightlist
-\item
-  \textbf{Pre} (\(t \in \{-3, -2\}\)): Baseline period before transfer
-\item
-  \textbf{Transition} (\(t \in \{-1, 0\}\)): Transfer year and immediate
-  lead
-\item
-  \textbf{Early post} (\(t \in \{1, 2\}\)): First two post-transfer
-  years
-\item
-  \textbf{Late post} (\(t \in \{3, 4, 5\}\)): Three to five years after
-  transfer
-\end{itemize}
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_pooled_windows.png}
-
-}
-
-\caption{Pooled window estimates: filing rate change relative to
-pre-transfer period.}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_post_minus_pre.png}
-
-}
-
-\caption{Post-minus-pre filing rate change by subgroup. Average of early
-and late post windows, relative to pre-transfer.}
-
-\end{figure}%
-
-\begin{longtable}[t]{lrrrrr}
-\caption{\label{tab:post-pre-table}Post-minus-pre filing rate change by subgroup}\\
-\toprule
-Subgroup & Post-Pre & SE & CI Lower & CI Upper & N\\
-\midrule
-full & 0.02028 & 0.00203 & 0.01630 & 0.02425 & 464,146\\
-corporate & 0.02658 & 0.00408 & 0.01857 & 0.03458 & 135,141\\
-individual & 0.01565 & 0.00190 & 0.01192 & 0.01938 & 329,005\\
-highfiler\_portfolio\_10plus\_otherunits & 0.06220 & 0.01527 & 0.03227 & 0.09213 & 24,776\\
-lowfiler\_portfolio\_10plus\_otherunits & 0.01507 & 0.00551 & 0.00427 & 0.02587 & 28,345\\
-\addlinespace
-smallportfolio\_lt10\_otherunits & 0.01569 & 0.00413 & 0.00760 & 0.02378 & 105,874\\
-singlepurchase & 0.01801 & 0.00220 & 0.01370 & 0.02231 & 305,142\\
-portfolio\_singlepurchase & 0.01821 & 0.00236 & 0.01359 & 0.02285 & 286,852\\
-portfolio\_24 & 0.01036 & 0.00610 & -0.00159 & 0.02231 & 66,180\\
-portfolio\_59 & 0.03636 & 0.00771 & 0.02125 & 0.05147 & 29,072\\
-\addlinespace
-portfolio\_10\_ & 0.03358 & 0.00602 & 0.02177 & 0.04538 & 58,409\\
-\bottomrule
-\end{longtable}
-
-\section{Appendix: Composition
-Diagnostics}\label{appendix-composition-diagnostics}
-
-\begingroup\fontsize{8}{10}\selectfont
-
-\begin{longtable}[t]{rrrrrrrrr}
-\caption{\label{tab:composition-table}Sample composition by event time (2006--2019 single-transfer treated sample)}\\
-\toprule
-Event time & N obs & N PIDs & Units obs (\%) & Mean units & Pre-rental (\%) & Post-only rental (\%) & Corporate (\%) & Large (\%)\\
-\midrule
--3 & 119,944 & 119,944 & 41.6 & 1.6 & 14.5 & 19.2 & 25.5 & 0.9\\
--2 & 129,007 & 129,007 & 41.6 & 1.6 & 14.3 & 19.3 & 24.6 & 0.9\\
--1 & 141,161 & 141,161 & 41.8 & 1.6 & 14.1 & 19.2 & 23.5 & 0.9\\
-0 & 156,039 & 156,039 & 41.9 & 1.6 & 12.7 & 19.9 & 22.2 & 0.9\\
-1 & 139,510 & 139,510 & 42.6 & 1.6 & 12.6 & 21.3 & 20.4 & 0.9\\
-\addlinespace
-2 & 123,042 & 123,042 & 43.1 & 1.6 & 12.4 & 22.1 & 18.9 & 0.9\\
-3 & 108,111 & 108,111 & 43.3 & 1.6 & 12.0 & 22.7 & 17.4 & 0.9\\
-4 & 95,007 & 95,007 & 43.1 & 1.6 & 11.5 & 22.8 & 16.1 & 0.9\\
-5 & 84,177 & 84,177 & 42.9 & 1.6 & 10.9 & 22.8 & 15.1 & 0.8\\
-\bottomrule
-\end{longtable}
-\endgroup{}
-
-\section{Appendix: Selection Concern: Rental Market
-Presence}\label{appendix-selection-concern-rental-market-presence}
-
-A central concern is that corporate transfers may bring formerly
-owner-occupied properties into the observed rental market, mechanically
-increasing the population at risk for eviction filings. We test this
-directly using rental license, listing, and any-rental-evidence
-indicators as outcomes. These are \textbf{rental-market presence}
-measures, not literal first-entry hazards. The regressions use the same
-never-sold controls as the main filing-rate design, include all
-properties (including single-unit rowhouses, the primary owner-to-renter
-conversion target in Philadelphia), and restrict to calendar years
-2011--2019.
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_rental_license_entry.png}
-
-}
-
-\caption{Probability of a rental license record around transfer, by
-buyer type. Reference period is t=-2; the dashed line marks the transfer
-year (\(t=0\)).}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_rental_license_entry_2plus_rental.png}
-
-}
-
-\caption{Probability of a rental license record around transfer, by
-buyer type, for 2+ unit observed-rental-stock buildings. Reference
-period is t=-2; the dashed line marks the transfer year (\(t=0\)).}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_any_rental_entry.png}
-
-}
-
-\caption{Probability of any observed rental evidence around transfer, by
-buyer type. Reference period is t=-2; the dashed line marks the transfer
-year (\(t=0\)).}
-
-\end{figure}%
-
-\begin{longtable}[t]{lrrrr}
-\caption{\label{tab:entry-table}Rental-market presence coefficients at key event times (reference period: t=-2)}\\
-\toprule
-Specification & t-3 & t=0 & t+1 & t+3\\
-\midrule
-altos\_entry\_full & -0.019 & 0.016 & 0.033 & 0.023\\
-any\_rental\_entry\_corp & -0.076 & -0.024 & 0.065 & 0.101\\
-any\_rental\_entry\_full & -0.055 & -0.018 & 0.033 & 0.055\\
-any\_rental\_entry\_indiv & -0.037 & -0.010 & 0.011 & 0.023\\
-license\_entry\_corp & -0.062 & -0.031 & 0.045 & 0.105\\
-\addlinespace
-license\_entry\_full & -0.043 & -0.037 & 0.012 & 0.054\\
-license\_entry\_indiv & -0.027 & -0.039 & -0.011 & 0.017\\
-\bottomrule
-\end{longtable}
-
-Note: rental license coverage begins around 2013 in the Philadelphia
-data. All rental-market presence regressions are restricted to year
-\(\geq\) 2011. Altos listing data is available from 2006.
-
-\section{Appendix: Full-Panel Outcome Event
-Studies}\label{appendix-full-panel-outcome-event-studies}
-
-The following figures show the full-panel never-sold-control event
-studies (same specification as the baseline filing-rate analysis) for
-each secondary outcome. These complement the stacked DiD outcome results
-in the main text. All regressions use building + year fixed effects, are
-unit-weighted, and cluster standard errors at the PID level. Reference
-period: \(t = -2\).
-
-\subsection{Neighborhood Gentrification Status
-Heterogeneity}\label{neighborhood-gentrification-status-heterogeneity}
-
-Buildings are classified by the gentrification trajectory of their
-census tract (2010--2019). \textbf{Gentrifiable} tracts are below the
-city-wide median household income in 2010. Among gentrifiable tracts,
-\textbf{Gentrified} = income percentile rank rose \(\geq 10\) pp by
-2019; \textbf{Did not gentrify} = rank change below threshold.
-\textbf{Not gentrifiable} (above-median 2010 income) serves as the
-comparison baseline. Classification from
-\texttt{analyze-nhood-portfolio-transitions.R}.
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{transfer-evictions_files/figure-pdf/nhood-gent-plot-1.pdf}
-
-}
-
-\caption{Filing-rate event study by neighborhood gentrification status.
-Full-panel never-sold-control design; unit-weighted; SE clustered by
-building. Reference: \(t = -2\). Grey = all buildings (baseline).}
-
-\end{figure}%
-
-\small
-\begin{adjustbox}{max width=\textwidth}
-
-\begingroup
-\centering
-\begin{tabular}{lccc}
-   \toprule
-    & \multicolumn{3}{c}{filing\_rate}\\
-   Nhood trajectory   & Gentrified    & Did not gentrify & Not gentrifiable \\   
-                      & (1)           & (2)              & (3)\\  
-   \midrule 
-   et\_m3             & -0.0042       & 0.0048$^{*}$     & -0.0028\\   
-                      & (0.0034)      & (0.0028)         & (0.0033)\\   
-   et\_m1             & 0.0020        & 0.0007           & 0.0012\\   
-                      & (0.0035)      & (0.0027)         & (0.0032)\\   
-   et\_0              & 0.0030        & 0.0047           & -0.0004\\   
-                      & (0.0037)      & (0.0037)         & (0.0038)\\   
-   et\_1              & 0.0059        & 0.0150$^{***}$   & 0.0118$^{**}$\\   
-                      & (0.0040)      & (0.0042)         & (0.0050)\\   
-   et\_2              & 0.0041        & 0.0145$^{***}$   & 0.0093\\   
-                      & (0.0051)      & (0.0054)         & (0.0061)\\   
-   et\_3              & 0.0077        & 0.0261$^{***}$   & 0.0089\\   
-                      & (0.0050)      & (0.0061)         & (0.0059)\\   
-    \\
-   Observations       & 68,722        & 168,484          & 274,750\\  
-   R$^2$              & 0.45582       & 0.41846          & 0.60761\\  
-   Within R$^2$       & 0.00011       & 0.00052          & 0.00030\\  
-    \\
-   PID fixed effects  & $\checkmark$  & $\checkmark$     & $\checkmark$\\   
-   year fixed effects & $\checkmark$  & $\checkmark$     & $\checkmark$\\   
-   \bottomrule
-\end{tabular}
-\par\endgroup
-
-
-
-\end{adjustbox}
-
-\subsection{Full-Panel Outcome Event Studies (Filing-Rate
-Specification)}\label{full-panel-outcome-event-studies-filing-rate-specification}
-
-The following sections extend the event study to additional outcomes.
-All regressions use the same \textbf{full-panel, never-sold-control}
-specification (\texttt{weights\ =\ total\_units}, 2006--2019 sample).
-Three splits are reported for each outcome: (1) full sample, (2) by
-acquirer pre-acquisition filing rate, and (3) by acquirer portfolio
-size.
-
-\subsection{Log Median Rent}\label{log-median-rent}
-
-Rental price is measured as log median rent from
-\texttt{bldg\_panel\_blp}, combining listing rents and eviction-claimed
-rents. Because rent data is sparse (\textasciitilde25--45\% annual
-coverage), the rent regressions use the same \textbf{full-panel DiD
-design} with an additional support restriction: never-sold buildings
-with at least 2 observed rent years serve as controls, while treated
-buildings are required to have at least 1 non-missing rent year both
-before and after acquisition. Explicit event-time dummies replace the
-\texttt{i()} interaction so that control-building observations anchor
-the year fixed effects.
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_rent_full.png}
-
-}
-
-\caption{Log median rent around transfer (full sample, unit-weighted).}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_rent_by_acq_filer.png}
-
-}
-
-\caption{Log median rent by acquirer pre-acquisition filing rate.}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_rent_by_port.png}
-
-}
-
-\caption{Log median rent by acquirer portfolio size.}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_rent_robustness.png}
-
-}
-
-\caption{Log median rent robustness checks: tract-by-year fixed effects
-and stricter control support.}
-
-\end{figure}%
-
-\subsection{Demographic Composition}\label{demographic-composition}
-
-\subsubsection{Race Shares}\label{race-shares}
-
-The race outcomes use the building-level probability-weighted shares of
-residents predicted Asian, Black, Latino/Hispanic, White, and Other from
-the InfoUSA-linked resident roster in \texttt{bldg\_panel\_blp}.
-Missingness is at the building-year level when there are no InfoUSA
-person-level observations.
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_race_shares_full.png}
-
-}
-
-\caption{All five race-share event studies (full sample,
-unit-weighted).}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_race_shares_by_acq_filer.png}
-
-}
-
-\caption{All five race-share event studies for high-filer portfolio
-acquirers.}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_race_shares_by_port.png}
-
-}
-
-\caption{All five race-share event studies for 10+ property acquirers.}
-
-\end{figure}%
-
-For all 1,978,692 building-year observations with complete race shares,
-\texttt{infousa\_pct\_asian\ +\ infousa\_pct\_black\ +\ infousa\_pct\_hispanic\ +\ infousa\_pct\_white\ +\ infousa\_pct\_other}
-sums to 1 up to machine precision (max absolute deviation 2.22e-15).
-
-\subsubsection{Gender Shares}\label{gender-shares}
-
-Female and male shares are reported together because they are
-complements.
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_gender_shares_full.png}
-
-}
-
-\caption{Female and male share event studies (full sample,
-unit-weighted).}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_gender_shares_by_acq_filer.png}
-
-}
-
-\caption{Female and male share event studies for high-filer portfolio
-acquirers.}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_gender_shares_by_port.png}
-
-}
-
-\caption{Female and male share event studies for 10+ property
-acquirers.}
-
-\end{figure}%
-
-\subsection{Occupancy Rate}\label{occupancy-rate}
-
-Occupancy rate (\texttt{occupancy\_rate} from \texttt{bldg\_panel\_blp})
-= InfoUSA observed households / imputed total units. Post-transfer
-changes reflect occupancy transitions: an increase may indicate a
-formerly partially-vacant building being filled; a decrease may indicate
-displacement-driven vacancy.
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_occupancy_rate_full.png}
-
-}
-
-\caption{Occupancy rate around transfer (full sample, unit-weighted).}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_occupancy_rate_by_acq_filer.png}
-
-}
-
-\caption{Occupancy rate by acquirer pre-acquisition filing rate.}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_occupancy_rate_by_port.png}
-
-}
-
-\caption{Occupancy rate by acquirer portfolio size.}
-
-\end{figure}%
-
-\subsection{Log Household Income}\label{log-household-income}
-
-Log predicted household income (\texttt{log(infousa\_find\_mean\_k)},
-income in \$1,000s from InfoUSA) captures whether post-transfer tenant
-turnover selects for different kinds of households.
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_log_income_full.png}
-
-}
-
-\caption{Log household income around transfer (full sample,
-unit-weighted).}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_log_income_by_acq_filer.png}
-
-}
-
-\caption{Log household income by acquirer pre-acquisition filing rate.}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_log_income_by_port.png}
-
-}
-
-\caption{Log household income by acquirer portfolio size.}
-
-\end{figure}%
-
-\subsection{Permit Rate}\label{permit-rate}
-
-Permit rate = \texttt{total\_permits\ /\ total\_units} from L\&I permit
-records. Post-transfer increases indicate renovation or capital
-investment; decreases indicate disinvestment.
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_permit_rate_full.png}
-
-}
-
-\caption{Permit rate around transfer (full sample, unit-weighted).}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_permit_rate_by_acq_filer.png}
-
-}
-
-\caption{Permit rate by acquirer pre-acquisition filing rate.}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_permit_rate_by_port.png}
-
-}
-
-\caption{Permit rate by acquirer portfolio size.}
-
-\end{figure}%
-
-\subsection{Complaint Rate}\label{complaint-rate}
-
-Complaint rate = \texttt{total\_complaints\ /\ total\_units} from L\&I
-complaint records. Increases post-transfer indicate either deteriorating
-housing conditions (habitability complaints) or increased
-tenant-initiated complaint activity.
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_complaint_rate_full.png}
-
-}
-
-\caption{Complaint rate around transfer (full sample, unit-weighted).}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_complaint_rate_by_acq_filer.png}
-
-}
-
-\caption{Complaint rate by acquirer pre-acquisition filing rate.}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_complaint_rate_by_port.png}
-
-}
-
-\caption{Complaint rate by acquirer portfolio size.}
-
-\end{figure}%
-
-\subsection{Neighborhood Trend Robustness for InfoUSA
-Outcomes}\label{neighborhood-trend-robustness-for-infousa-outcomes}
-
-To probe neighborhood trend differences, we re-estimate the full-sample
-unit-weighted event studies with \textbf{census tract \(\times\) year
-fixed effects}, so identification comes from within-tract changes
-relative to other buildings in the same tract-year.
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_occupancy_rate_tract_year.png}
-
-}
-
-\caption{Occupancy rate around transfer with tract-by-year fixed effects
-(full sample, unit-weighted).}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_log_income_tract_year.png}
-
-}
-
-\caption{Log household income around transfer with tract-by-year fixed
-effects (full sample, unit-weighted).}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_log_income_tract_year_by_buyer.png}
-
-}
-
-\caption{Log household income around transfer with tract-by-year fixed
-effects, by buyer type.}
-
-\end{figure}%
-
-\begin{figure}[H]
-
-{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_race_shares_tract_year.png}
-
-}
-
-\caption{All five race-share event studies with tract-by-year fixed
-effects (full sample, unit-weighted).}
-
-\end{figure}%
-
-\section{Appendix: Continuous Acquirer Filing Rate
-Interaction}\label{appendix-continuous-acquirer-filing-rate-interaction}
-
-The event-study heterogeneity analysis in the main text bins acquirers
-by pre-acquisition filing rate. As a complementary specification, we
-pool the high- and low-filer bins into a single ``portfolio acquirer''
-subsample (2+ unit buildings, acquirer has \(\geq\) 10 other units at
-transfer) and treat the pre-acquisition filing rate as a continuous
-moderator. The estimating equation is:
-
-\[
-\text{FilingRate}_{it} = \sum_{k \neq -2} \beta_k \cdot \mathbf{1}[t_i = k] \times \widetilde{\text{AcqRate}}_i + \alpha_i + \alpha_t + \varepsilon_{it}
-\]
-
-where
-\(\widetilde{\text{AcqRate}}_i = \text{AcqRate}_i - \bar{\text{AcqRate}}^w\)
-is the demeaned pre-acquisition filing rate, \(\bar{\text{AcqRate}}^w\)
-is the unit-weighted mean across acquired buildings (one observation per
-PID, weighted by building size, matching the regression weights), and
-the sum runs over \(k \in [-3, +5] \setminus \{-2\}\). This is the same
-filing-rate measure that determines placement into the high-filer bin
-(threshold: 0.05 filings/unit-year).
-
-\begin{center}
-\includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{transfer-evictions_files/figure-pdf/cont-interaction-plot-1.pdf}
-\end{center}
 
 \scriptsize
 \begin{adjustbox}{max width=\textwidth}
@@ -2238,39 +444,28 @@ filing-rate measure that determines placement into the high-filer bin
 \begin{tabular}{lcc}
    \toprule
     & \multicolumn{2}{c}{filing\_rate}\\
-                                              & (1)            & (2)\\  
+   Sample                     & All buildings (weighted stacked) & 2+ unit buildings (weighted stacked) \\   
+                              & (1)                              & (2)\\  
    \midrule 
-   et\_m3 $\times$ acq\_rate\_demean          & -0.1754        &   \\   
-                                              & (0.1454)       &   \\   
-   acq\_rate\_demean $\times$ et\_m1          & -0.1591$^{**}$ &   \\   
-                                              & (0.0762)       &   \\   
-   acq\_rate\_demean $\times$ et\_0           & -0.1395        &   \\   
-                                              & (0.1140)       &   \\   
-   acq\_rate\_demean $\times$ et\_1           & 0.0499         &   \\   
-                                              & (0.1309)       &   \\   
-   acq\_rate\_demean $\times$ et\_2           & 0.1148         &   \\   
-                                              & (0.2007)       &   \\   
-   acq\_rate\_demean $\times$ et\_3           & 0.0767         &   \\   
-                                              & (0.1515)       &   \\   
-   acq\_rate\_demean $\times$ et\_4           & -0.0619        &   \\   
-                                              & (0.1325)       &   \\   
-   acq\_rate\_demean $\times$ et\_5           & 0.0902         &   \\   
-                                              & (0.1230)       &   \\   
-   post\_treat                                &                & 0.0166$^{***}$\\   
-                                              &                & (0.0052)\\   
-   post\_treat $\times$ acq\_rate\_demean     &                & 0.1744$^{*}$\\   
-                                              &                & (0.0893)\\   
-   Treated PIDs                               & 4,822          & 4,815\\  
-   Control PIDs                               & 32,976         & 32,976\\  
-   SD(acq rate)                               & 0.0782         & 0.0782\\  
-   Mean(acq rate)                             & 0.0624         & 0.0624\\  
+   st\_et\_m3                 & -0.0005                          & -0.0009\\   
+                              & (0.0015)                         & (0.0026)\\   
+   st\_et\_m1                 & 0.0056$^{***}$                   & 0.0052$^{*}$\\   
+                              & (0.0016)                         & (0.0027)\\   
+   st\_et\_0                  & 0.0017                           & 0.0008\\   
+                              & (0.0018)                         & (0.0032)\\   
+   st\_et\_1                  & 0.0151$^{***}$                   & 0.0096$^{***}$\\   
+                              & (0.0021)                         & (0.0037)\\   
+   st\_et\_2                  & 0.0195$^{***}$                   & 0.0124$^{**}$\\   
+                              & (0.0027)                         & (0.0049)\\   
+   st\_et\_3                  & 0.0199$^{***}$                   & 0.0137$^{***}$\\   
+                              & (0.0025)                         & (0.0045)\\   
     \\
-   Observations                               & 474,589        & 470,052\\  
-   R$^2$                                      & 0.53672        & 0.53773\\  
-   Within R$^2$                               & 0.00073        & 0.00056\\  
+   Observations               & 6,960,484                        & 1,811,495\\  
+   R$^2$                      & 0.44371                          & 0.62041\\  
+   Within R$^2$               & $8\times 10^{-5}$                & $6.61\times 10^{-5}$\\   
     \\
-   PID fixed effects                          & $\checkmark$   & $\checkmark$\\   
-   year fixed effects                         & $\checkmark$   & $\checkmark$\\   
+   pid\_cohort fixed effects  & $\checkmark$                     & $\checkmark$\\   
+   yr\_cohort fixed effects   & $\checkmark$                     & $\checkmark$\\   
    \bottomrule
 \end{tabular}
 \par\endgroup
@@ -2279,91 +474,422 @@ filing-rate measure that determines placement into the high-filer bin
 
 \end{adjustbox}
 
-None of the interaction terms are statistically significant at
-conventional levels. The table reports treated and control PIDs, the
-unit-weighted mean and SD of the pre-acquisition filing rate, and
-within-R² for each specification. The large standard errors on the
-interaction terms reflect the modest cross-sectional dispersion in
-acquirer filing rates relative to the within-building variation in the
-outcome.
-
-\subsection{Pooled post-treatment DiD}\label{pooled-post-treatment-did}
-
-As a more parsimonious summary, we collapse the event study into a
-single post-treatment indicator:
-
-\[
-\text{FilingRate}_{it} = \gamma_0 \cdot \text{Post}_{it} + \gamma_1 \cdot \text{Post}_{it} \times \widetilde{\text{AcqRate}}_i + \alpha_i + \alpha_t + \varepsilon_{it}
-\]
-
-where \(\text{Post}_{it} = 1\) for \(t \geq 1\) (post-transfer), 0 for
-\(t < 0\) and for never-sold controls. The transfer year (\(t = 0\)) is
-excluded. The pooled DiD column appears as column (2) in the table
-above.
-
-Neither the level effect (\(\hat{\gamma}_0\)) nor the heterogeneity
-interaction (\(\hat{\gamma}_1\)) is significant. This confirms that the
-dynamic binned patterns are not masking a detectable continuous gradient
-in post-transfer filing intensity with respect to acquirer
-aggressiveness. \# Appendix: Data Pipeline
-
-\textbf{Scripts (run in order):}
-
-\begin{enumerate}
-\def\labelenumi{\arabic{enumi}.}
-\tightlist
-\item
-  \texttt{r/build-owner-linkage.R} --- Owner name standardization,
-  entity grouping (\texttt{owner\_group\_id}), is\_corp classification
-\item
-  \texttt{r/build-business-networks.R} --- PA Dept of State business
-  filing conglomerates
-\item
-  \texttt{r/build-ownership-panel.R} --- Phases 1--4: entity merging via
-  addresses, RTT chains, and business filings; produces conglomerate
-  assignments and \texttt{owner\_portfolio}
-\item
-  \texttt{r/analyze-transfer-evictions-unified.R} --- Event panel
-  construction and all regressions
-\end{enumerate}
-
-\textbf{Key data products:}
-
 \begingroup\fontsize{8}{10}\selectfont
 
-\begin{longtable}[t]{lll}
-\caption{\label{tab:appendix-products}Ownership-linkage data products}\\
+\begin{longtable}[t]{lrrrr}
+\caption{\label{tab:filing-stacked-qweights}Weighted stacked annual filing-rate cohort weights}\\
 \toprule
-Product & Key & Description\\
+Sample & Cohort & Treated PIDs & Control PIDs & Corrective weight\\
 \midrule
-owner\_linkage\_xwalk.csv & (grantee\_upper, PID) & Maps grantee names to owner\_group\_id and is\_corp; PID is NA for corporate matches.\\
-xwalk\_pid\_conglomerate.csv & (PID, year) & Maps parcels to conglomerate\_id by year.\\
-owner\_portfolio.csv & conglomerate\_id & Portfolio sizes and bins at the conglomerate level.\\
-xwalk\_entity\_conglomerate.csv & entity\_id & Entity to conglomerate crosswalk with link\_method flag.\\
+All buildings & 2009 & 3105 & 120499 & 0.785\\
+All buildings & 2010 & 3133 & 120831 & 0.790\\
+All buildings & 2011 & 2942 & 121150 & 0.740\\
+All buildings & 2012 & 3502 & 121585 & 0.877\\
+All buildings & 2013 & 3997 & 122025 & 0.998\\
+\addlinespace
+All buildings & 2014 & 4493 & 122470 & 1.117\\
+All buildings & 2015 & 4926 & 122902 & 1.221\\
+All buildings & 2016 & 5908 & 123264 & 1.460\\
+2+ units & 2009 & 685 & 31555 & 0.763\\
+2+ units & 2010 & 701 & 31747 & 0.776\\
+\addlinespace
+2+ units & 2011 & 711 & 31910 & 0.783\\
+2+ units & 2012 & 875 & 32092 & 0.958\\
+2+ units & 2013 & 950 & 32266 & 1.035\\
+2+ units & 2014 & 1038 & 32452 & 1.124\\
+2+ units & 2015 & 1108 & 32667 & 1.192\\
+\addlinespace
+2+ units & 2016 & 1262 & 32875 & 1.349\\
 \bottomrule
 \end{longtable}
 \endgroup{}
 
-\textbf{Config keys}
+\section{Occupancy, Demographics, Complaints, and
+Permits}\label{occupancy-demographics-complaints-and-permits}
+
+These outcomes are estimated on the \texttt{2+\ unit} sample and split
+by the same acquirer-type bins as the filing regressions. The output
+surface here is intentionally narrower than the earlier report: the
+focus is occupancy, resident composition, complaints, and permits.
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_occupancy_2plus.png}
+
+}
+
+\caption{Occupancy-rate event study for 2+ unit buildings, overall and
+by acquirer filing type.}
+
+\end{figure}%
+
+\scriptsize
+\begin{adjustbox}{max width=\textwidth}
+
+\begingroup
+\centering
+\begin{tabular}{lccccc}
+   \toprule
+    & \multicolumn{5}{c}{occupancy\_rate}\\
+   Acquirer type      & All acquirers   & High-filer portfolio & Low-filer portfolio & Small portfolio & Single-purchase \\   
+                      & (1)             & (2)                  & (3)                 & (4)             & (5)\\  
+   \midrule 
+   et\_m3             & 0.0031          & -0.0221              & -0.0052             & -0.0181$^{***}$ & 0.0102\\   
+                      & (0.0067)        & (0.0265)             & (0.0175)            & (0.0067)        & (0.0092)\\   
+   et\_m1             & -0.0053         & -0.0458              & -0.0413$^{*}$       & -0.0169$^{**}$  & 0.0077\\   
+                      & (0.0071)        & (0.0301)             & (0.0214)            & (0.0082)        & (0.0092)\\   
+   et\_0              & -0.0155$^{**}$  & -0.0280              & -0.0824$^{***}$     & -0.0215$^{**}$  & -0.0021\\   
+                      & (0.0075)        & (0.0312)             & (0.0237)            & (0.0087)        & (0.0096)\\   
+   et\_1              & -0.0270$^{***}$ & -0.0405              & -0.1041$^{***}$     & -0.0214$^{**}$  & -0.0139\\   
+                      & (0.0084)        & (0.0328)             & (0.0270)            & (0.0092)        & (0.0108)\\   
+   et\_2              & -0.0314$^{***}$ & -0.0722$^{**}$       & -0.1086$^{***}$     & -0.0271$^{***}$ & -0.0145\\   
+                      & (0.0086)        & (0.0349)             & (0.0278)            & (0.0087)        & (0.0109)\\   
+   et\_3              & -0.0392$^{***}$ & -0.0963$^{**}$       & -0.1025$^{***}$     & -0.0356$^{***}$ & -0.0237$^{**}$\\   
+                      & (0.0097)        & (0.0425)             & (0.0314)            & (0.0089)        & (0.0120)\\   
+   et\_4              & -0.0324$^{***}$ & -0.0300              & -0.1120$^{***}$     & -0.0526$^{***}$ & -0.0173\\   
+                      & (0.0096)        & (0.0284)             & (0.0284)            & (0.0089)        & (0.0127)\\   
+   et\_5              & -0.0419$^{***}$ & -0.0091              & -0.0745$^{***}$     & -0.0739$^{***}$ & -0.0401$^{***}$\\   
+                      & (0.0070)        & (0.0260)             & (0.0170)            & (0.0100)        & (0.0093)\\   
+    \\
+   Observations       & 640,544         & 451,695              & 459,341             & 482,530         & 570,594\\  
+   R$^2$              & 0.50791         & 0.49361              & 0.50079             & 0.49636         & 0.50579\\  
+   Within R$^2$       & 0.00098         & 0.00039              & 0.00148             & 0.00030         & 0.00038\\  
+    \\
+   PID fixed effects  & $\checkmark$    & $\checkmark$         & $\checkmark$        & $\checkmark$    & $\checkmark$\\   
+   year fixed effects & $\checkmark$    & $\checkmark$         & $\checkmark$        & $\checkmark$    & $\checkmark$\\   
+   \bottomrule
+\end{tabular}
+\par\endgroup
+
+
+
+\end{adjustbox}
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_pct_black_2plus.png}
+
+}
+
+\caption{Share Black residents for 2+ unit buildings, overall and by
+acquirer filing type.}
+
+\end{figure}%
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_pct_latino_2plus.png}
+
+}
+
+\caption{Share Latino residents for 2+ unit buildings, overall and by
+acquirer filing type.}
+
+\end{figure}%
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_pct_white_2plus.png}
+
+}
+
+\caption{Share White residents for 2+ unit buildings, overall and by
+acquirer filing type.}
+
+\end{figure}%
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_pct_asian_2plus.png}
+
+}
+
+\caption{Share Asian residents for 2+ unit buildings, overall and by
+acquirer filing type.}
+
+\end{figure}%
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_permit_rate_2plus.png}
+
+}
+
+\caption{Permit-rate event study for 2+ unit buildings, overall and by
+acquirer filing type.}
+
+\end{figure}%
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_complaint_rate_2plus.png}
+
+}
+
+\caption{Complaint-rate event study for 2+ unit buildings, overall and
+by acquirer filing type.}
+
+\end{figure}%
+
+\section{Rent Outcomes}\label{rent-outcomes}
+
+The rent analysis is run on all units, but treated buildings are
+required to have both pre- and post-acquisition support in the relevant
+rent measure. The report keeps both the unified rent series and the safe
+single-source series.
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_rent_core.png}
+
+}
+
+\caption{Log median rent event study, all units, overall and by acquirer
+filing type.}
+
+\end{figure}%
+
+\scriptsize
+\begin{adjustbox}{max width=\textwidth}
+
+\begingroup
+\centering
+\begin{tabular}{lccccc}
+   \toprule
+    & \multicolumn{5}{c}{log\_med\_rent}\\
+   Acquirer type      & All acquirers  & High-filer portfolio & Low-filer portfolio & Small portfolio & Single-purchase \\   
+                      & (1)            & (2)                  & (3)                 & (4)             & (5)\\  
+   \midrule 
+   et\_m3             & -0.0120        & 0.0272               & 0.0484              & -0.0318         & -0.0415$^{***}$\\   
+                      & (0.0147)       & (0.0239)             & (0.0691)            & (0.0222)        & (0.0151)\\   
+   et\_m1             & -0.0056        & 0.0162               & -0.0251             & -0.0113         & -0.0103\\   
+                      & (0.0091)       & (0.0153)             & (0.0483)            & (0.0177)        & (0.0116)\\   
+   et\_0              & 0.0025         & 0.0123               & 0.0424$^{***}$      & -0.0270         & -0.0035\\   
+                      & (0.0093)       & (0.0145)             & (0.0161)            & (0.0245)        & (0.0142)\\   
+   et\_1              & 0.0116         & 0.0152               & 0.0471$^{*}$        & 0.0380$^{***}$  & -0.0045\\   
+                      & (0.0101)       & (0.0137)             & (0.0257)            & (0.0127)        & (0.0160)\\   
+   et\_2              & 0.0610$^{***}$ & 0.0549$^{***}$       & 0.1991$^{***}$      & 0.0348$^{**}$   & 0.0343$^{**}$\\   
+                      & (0.0175)       & (0.0173)             & (0.0648)            & (0.0156)        & (0.0163)\\   
+   et\_3              & 0.0499$^{**}$  & 0.0405$^{**}$        & 0.1901$^{***}$      & 0.0183          & 0.0179\\   
+                      & (0.0209)       & (0.0176)             & (0.0697)            & (0.0192)        & (0.0190)\\   
+   et\_4              & 0.0360$^{***}$ & 0.0425$^{***}$       & 0.0934$^{**}$       & -0.0380         & 0.0330$^{*}$\\   
+                      & (0.0132)       & (0.0156)             & (0.0392)            & (0.0423)        & (0.0192)\\   
+   et\_5              & 0.0185         & 0.0129               & 0.0874$^{*}$        & -0.0155         & 0.0160\\   
+                      & (0.0153)       & (0.0177)             & (0.0530)            & (0.0218)        & (0.0290)\\   
+    \\
+   Observations       & 130,946        & 117,300              & 116,488             & 118,763         & 122,939\\  
+   R$^2$              & 0.88881        & 0.88833              & 0.88650             & 0.88770         & 0.88985\\  
+   Within R$^2$       & 0.00273        & 0.00059              & 0.00462             & 0.00039         & 0.00109\\  
+    \\
+   PID fixed effects  & $\checkmark$   & $\checkmark$         & $\checkmark$        & $\checkmark$    & $\checkmark$\\   
+   year fixed effects & $\checkmark$   & $\checkmark$         & $\checkmark$        & $\checkmark$    & $\checkmark$\\   
+   \bottomrule
+\end{tabular}
+\par\endgroup
+
+
+
+\end{adjustbox}
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_rent_safe_core.png}
+
+}
+
+\caption{Log median rent (safe single-source series) event study, all
+units, overall and by acquirer filing type.}
+
+\end{figure}%
+
+\scriptsize
+\begin{adjustbox}{max width=\textwidth}
+
+\begingroup
+\centering
+\begin{tabular}{lccccc}
+   \toprule
+    & \multicolumn{5}{c}{log\_med\_rent\_safe}\\
+   Acquirer type      & All acquirers  & High-filer portfolio & Low-filer portfolio & Small portfolio & Single-purchase \\   
+                      & (1)            & (2)                  & (3)                 & (4)             & (5)\\  
+   \midrule 
+   et\_m3             & -0.0304        & -0.0176              & 0.0760              & -0.0648$^{***}$ & -0.0415$^{**}$\\   
+                      & (0.0188)       & (0.0283)             & (0.1121)            & (0.0219)        & (0.0193)\\   
+   et\_m1             & -0.0192$^{*}$  & -0.0184              & -0.0419             & -0.0389         & -0.0109\\   
+                      & (0.0112)       & (0.0291)             & (0.0331)            & (0.0284)        & (0.0135)\\   
+   et\_0              & -0.0289$^{**}$ & -0.0512$^{**}$       & 0.0766              & -0.0966$^{**}$  & -0.0242\\   
+                      & (0.0139)       & (0.0222)             & (0.0562)            & (0.0410)        & (0.0173)\\   
+   et\_1              & -0.0047        & -0.0243              & 0.1173$^{*}$        & -0.0046         & -0.0146\\   
+                      & (0.0151)       & (0.0288)             & (0.0674)            & (0.0244)        & (0.0179)\\   
+   et\_2              & 0.0334$^{*}$   & 0.0030               & 0.1340              & -0.0333         & 0.0350$^{*}$\\   
+                      & (0.0183)       & (0.0425)             & (0.0970)            & (0.0217)        & (0.0209)\\   
+   et\_3              & 0.0305         & -0.0303              & 0.1634              & -0.0013         & 0.0268\\   
+                      & (0.0236)       & (0.0327)             & (0.1058)            & (0.0278)        & (0.0226)\\   
+   et\_4              & 0.0441$^{**}$  & -0.0198              & 0.1698$^{**}$       & -0.0203         & 0.0619$^{**}$\\   
+                      & (0.0215)       & (0.0263)             & (0.0862)            & (0.0221)        & (0.0275)\\   
+   et\_5              & 0.0520         & -0.0031              & 0.2769$^{***}$      & -0.0191         & 0.0590\\   
+                      & (0.0333)       & (0.0213)             & (0.0832)            & (0.0198)        & (0.0634)\\   
+    \\
+   Observations       & 92,561         & 85,909               & 85,733              & 86,869          & 89,257\\  
+   R$^2$              & 0.91687        & 0.91663              & 0.91580             & 0.91662         & 0.91804\\  
+   Within R$^2$       & 0.00274        & 0.00037              & 0.00330             & 0.00076         & 0.00209\\  
+    \\
+   PID fixed effects  & $\checkmark$   & $\checkmark$         & $\checkmark$        & $\checkmark$    & $\checkmark$\\   
+   year fixed effects & $\checkmark$   & $\checkmark$         & $\checkmark$        & $\checkmark$    & $\checkmark$\\   
+   \bottomrule
+\end{tabular}
+\par\endgroup
+
+
+
+\end{adjustbox}
+
+\section{Rental Evidence}\label{rental-evidence}
+
+These regressions show the probability of observed rental evidence
+separately for \texttt{1-unit} and \texttt{2+\ unit} buildings. This is
+the direct check on the concern that transfers mechanically enter
+properties into the observed rental market.
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_rental_evidence_1unit.png}
+
+}
+
+\caption{Probability of rental evidence for 1-unit buildings, overall
+and by acquirer filing type.}
+
+\end{figure}%
+
+\scriptsize
+\begin{adjustbox}{max width=\textwidth}
+
+\begingroup
+\centering
+\begin{tabular}{lccccc}
+   \toprule
+    & \multicolumn{5}{c}{has\_rental\_evidence}\\
+   Acquirer type      & All acquirers   & High-filer portfolio & Low-filer portfolio & Small portfolio & Single-purchase \\   
+                      & (1)             & (2)                  & (3)                 & (4)             & (5)\\  
+   \midrule 
+   et\_m3             & -0.0629$^{***}$ & -0.2054$^{***}$      & -0.1148$^{***}$     & -0.0999$^{***}$ & -0.0327$^{***}$\\   
+                      & (0.0018)        & (0.0083)             & (0.0049)            & (0.0034)        & (0.0024)\\   
+   et\_m1             & -0.1340$^{***}$ & -0.3139$^{***}$      & -0.1826$^{***}$     & -0.1832$^{***}$ & -0.0896$^{***}$\\   
+                      & (0.0022)        & (0.0089)             & (0.0065)            & (0.0041)        & (0.0029)\\   
+   et\_0              & 0.0153$^{***}$  & 0.0333$^{**}$        & 0.1419$^{***}$      & 0.0609$^{***}$  & -0.0102$^{***}$\\   
+                      & (0.0030)        & (0.0135)             & (0.0106)            & (0.0063)        & (0.0037)\\   
+   et\_1              & 0.0928$^{***}$  & 0.2625$^{***}$       & 0.3856$^{***}$      & 0.2246$^{***}$  & 0.0032\\   
+                      & (0.0033)        & (0.0121)             & (0.0110)            & (0.0068)        & (0.0041)\\   
+   et\_2              & 0.1091$^{***}$  & 0.2667$^{***}$       & 0.4093$^{***}$      & 0.2505$^{***}$  & 0.0179$^{***}$\\   
+                      & (0.0031)        & (0.0108)             & (0.0107)            & (0.0066)        & (0.0039)\\   
+   et\_3              & 0.1009$^{***}$  & 0.2340$^{***}$       & 0.3765$^{***}$      & 0.2381$^{***}$  & 0.0194$^{***}$\\   
+                      & (0.0029)        & (0.0096)             & (0.0107)            & (0.0064)        & (0.0037)\\   
+   et\_4              & 0.0872$^{***}$  & 0.1936$^{***}$       & 0.3131$^{***}$      & 0.2062$^{***}$  & 0.0222$^{***}$\\   
+                      & (0.0026)        & (0.0084)             & (0.0106)            & (0.0059)        & (0.0033)\\   
+   et\_5              & 0.0719$^{***}$  & 0.1643$^{***}$       & 0.2320$^{***}$      & 0.1621$^{***}$  & 0.0248$^{***}$\\   
+                      & (0.0022)        & (0.0065)             & (0.0097)            & (0.0051)        & (0.0028)\\   
+    \\
+   Observations       & 1,259,297       & 830,325              & 834,388             & 899,683         & 1,106,683\\  
+   R$^2$              & 0.62187         & 0.65174              & 0.64918             & 0.64523         & 0.62186\\  
+   Within R$^2$       & 0.01326         & 0.00781              & 0.01286             & 0.01649         & 0.00184\\  
+    \\
+   PID fixed effects  & $\checkmark$    & $\checkmark$         & $\checkmark$        & $\checkmark$    & $\checkmark$\\   
+   year fixed effects & $\checkmark$    & $\checkmark$         & $\checkmark$        & $\checkmark$    & $\checkmark$\\   
+   \bottomrule
+\end{tabular}
+\par\endgroup
+
+
+
+\end{adjustbox}
+
+\begin{figure}[H]
+
+{\centering \includegraphics[width=0.95\linewidth,height=\textheight,keepaspectratio]{../output/transfer_evictions/figs/rtt_annual_rental_evidence_2plus.png}
+
+}
+
+\caption{Probability of rental evidence for 2+ unit buildings, overall
+and by acquirer filing type.}
+
+\end{figure}%
+
+\scriptsize
+\begin{adjustbox}{max width=\textwidth}
+
+\begingroup
+\centering
+\begin{tabular}{lccccc}
+   \toprule
+    & \multicolumn{5}{c}{has\_rental\_evidence}\\
+   Acquirer type      & All acquirers   & High-filer portfolio & Low-filer portfolio & Small portfolio & Single-purchase \\   
+                      & (1)             & (2)                  & (3)                 & (4)             & (5)\\  
+   \midrule 
+   et\_m3             & -0.0488$^{***}$ & -0.0589$^{***}$      & -0.0765$^{***}$     & -0.0513$^{***}$ & -0.0416$^{***}$\\   
+                      & (0.0072)        & (0.0111)             & (0.0268)            & (0.0099)        & (0.0099)\\   
+   et\_m1             & -0.1002$^{***}$ & -0.1172$^{***}$      & -0.1497$^{***}$     & -0.1509$^{***}$ & -0.0751$^{***}$\\   
+                      & (0.0100)        & (0.0167)             & (0.0258)            & (0.0126)        & (0.0147)\\   
+   et\_0              & -0.0452$^{***}$ & -0.0288$^{*}$        & -0.1044$^{***}$     & -0.0574$^{***}$ & -0.0318$^{**}$\\   
+                      & (0.0103)        & (0.0153)             & (0.0289)            & (0.0141)        & (0.0146)\\   
+   et\_1              & -0.0183         & 0.0497$^{**}$        & -0.0392             & 0.0268$^{**}$   & -0.0322$^{*}$\\   
+                      & (0.0135)        & (0.0229)             & (0.0471)            & (0.0135)        & (0.0181)\\   
+   et\_2              & 0.0292$^{**}$   & 0.1110$^{***}$       & 0.0242              & 0.0708$^{***}$  & 0.0117\\   
+                      & (0.0121)        & (0.0275)             & (0.0336)            & (0.0136)        & (0.0172)\\   
+   et\_3              & 0.0136          & 0.1334$^{***}$       & 0.0488              & 0.0478$^{***}$  & -0.0157\\   
+                      & (0.0141)        & (0.0232)             & (0.0298)            & (0.0143)        & (0.0202)\\   
+   et\_4              & 0.0246$^{*}$    & 0.0934$^{***}$       & 0.0171              & 0.0498$^{***}$  & 0.0100\\   
+                      & (0.0133)        & (0.0152)             & (0.0331)            & (0.0123)        & (0.0195)\\   
+   et\_5              & 0.0304$^{***}$  & 0.0720$^{***}$       & 0.0528              & 0.0569$^{***}$  & 0.0131\\   
+                      & (0.0083)        & (0.0135)             & (0.0325)            & (0.0118)        & (0.0110)\\   
+    \\
+   Observations       & 416,174         & 293,442              & 298,662             & 313,545         & 370,506\\  
+   R$^2$              & 0.69997         & 0.71734              & 0.71352             & 0.71161         & 0.70132\\  
+   Within R$^2$       & 0.00332         & 0.00125              & 0.00151             & 0.00191         & 0.00117\\  
+    \\
+   PID fixed effects  & $\checkmark$    & $\checkmark$         & $\checkmark$        & $\checkmark$    & $\checkmark$\\   
+   year fixed effects & $\checkmark$    & $\checkmark$         & $\checkmark$        & $\checkmark$    & $\checkmark$\\   
+   \bottomrule
+\end{tabular}
+\par\endgroup
+
+
+
+\end{adjustbox}
+
+\section{Appendix: Output Inventory}\label{appendix-output-inventory}
+
+The streamlined annual writeup now depends on the following output
+families:
 
 \begin{itemize}
 \tightlist
 \item
-  \texttt{owner\_linkage\_xwalk}
+  \texttt{annual\_filing\_core\_*}
 \item
-  \texttt{owner\_portfolio}
+  \texttt{annual\_filing\_acq\_2plus\_*}
 \item
-  \texttt{xwalk\_pid\_conglomerate}
+  \texttt{annual\_baseline\_stacked\_weighted\_*}
 \item
-  \texttt{xwalk\_entity\_conglomerate}
+  \texttt{annual\_occupancy\_2plus\_*}
+\item
+  \texttt{annual\_pct\_*\_2plus\_*}
+\item
+  \texttt{annual\_permit\_rate\_2plus\_*}
+\item
+  \texttt{annual\_complaint\_rate\_2plus\_*}
+\item
+  \texttt{annual\_rent\_core\_*}
+\item
+  \texttt{annual\_rent\_safe\_core\_*}
+\item
+  \texttt{annual\_rental\_evidence\_1unit\_*}
+\item
+  \texttt{annual\_rental\_evidence\_2plus\_*}
 \end{itemize}
 
-All live under \texttt{products:} in \texttt{config.yml}.
-
-\textbf{Rental license coverage note:} Philadelphia's Open Data business
-license records begin substantive rental license coverage around 2013.
-All rental-market presence regressions are restricted to year \(\geq\)
-2011. Altos listing data begins in 2006.
+Legacy annual outputs and scratch stacked CSVs are no longer required
+for this document.
 
 
 

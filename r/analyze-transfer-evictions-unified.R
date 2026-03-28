@@ -123,17 +123,28 @@ ET_REF <- fp$ref_period
 
 ANALYSIS_YEAR_MIN <- 2006L
 ANALYSIS_YEAR_MAX <- 2019L
-ACQ_SMALL_PORTFOLIO_MIN_OTHER_UNITS <- 10L
+LOO_MIN_UNIT_YEARS <- suppressWarnings(as.integer(cfg$run$loo_min_unit_years %||% 100L))
+if (!is.finite(LOO_MIN_UNIT_YEARS) || LOO_MIN_UNIT_YEARS <= 0L) {
+  stop("Invalid run$loo_min_unit_years: expected a positive integer.")
+}
 # Fixed high-filer rate threshold (filings per unit-year). Portfolios above this are "high-filers".
 # Using a fixed threshold rather than the median makes the classification invariant to sample
 # composition and has a direct economic interpretation (~7.5 filings per 100 units per year).
-ACQ_HIGH_FILER_THRESHOLD <- as.numeric(cfg$run$acq_high_filer_threshold %||% 0.05)
+ACQ_HIGH_FILER_THRESHOLD <- as.numeric(
+  cfg$run$loo_filing_threshold %||%
+    cfg$run$acq_high_filer_threshold %||%
+    0.05
+)
+if (!is.finite(ACQ_HIGH_FILER_THRESHOLD) || ACQ_HIGH_FILER_THRESHOLD <= 0 || ACQ_HIGH_FILER_THRESHOLD >= 1) {
+  stop("Invalid LOO filing threshold: expected a number strictly between 0 and 1.")
+}
 ACQ_BIN_LABELS <- c(
-  paste0("High-filer portfolio (", ACQ_SMALL_PORTFOLIO_MIN_OTHER_UNITS, "+ other units)"),
-  paste0("Low-filer portfolio (", ACQ_SMALL_PORTFOLIO_MIN_OTHER_UNITS, "+ other units)"),
-  paste0("Small portfolio (<", ACQ_SMALL_PORTFOLIO_MIN_OTHER_UNITS, " other units)"),
+  "High-filer portfolio",
+  "Low-filer portfolio",
+  "Small portfolio",
   "Single-purchase"
 )
+# Preserve legacy suffixes to avoid churn in downstream output column names.
 ACQ_BIN_SUFFIX <- c(
   setNames("highfiler_portfolio_10plus_otherunits", ACQ_BIN_LABELS[1]),
   setNames("lowfiler_portfolio_10plus_otherunits", ACQ_BIN_LABELS[2]),
@@ -250,7 +261,9 @@ clean_spec_labels <- function(specs) {
     "highfiler_portfolio_10plus_otherunits"      = "High-filer",
     "lowfiler_portfolio_10plus_otherunits"       = "Low-filer",
     "smallportfolio_lt10_otherunits"             = "Small portfolio",
-    "full_singlepurchase"          = "Single-purchase"
+    "full_singlepurchase"          = "Single-purchase",
+    "stacked_full_wtd"             = "Stacked full (wtd)",
+    "stacked_2plus_wtd"            = "Stacked 2+ (wtd)"
   )
   # Size bins
   for (sb in c("2-4 units", "5-19 units", "20+ units", "10+ units")) {
@@ -665,17 +678,14 @@ bldg_loo <- merge(
   by = c("PID", "year")
 )
 
-# Use actual bldg_loo panel span as multiplier — not the RTT analysis year range.
-# This keeps the "small portfolio" unit-year threshold consistent with
-# retaliatory-evictions.r (which hardcodes 9L for its 2011-2019 bldg panel).
 n_analysis_years <- bldg_loo[, max(year) - min(year) + 1L]
 logf("  bldg_loo panel span: ", bldg_loo[, min(year)], "-", bldg_loo[, max(year)],
      " (", n_analysis_years, " years) | loo_min_unit_years = ",
-     ACQ_SMALL_PORTFOLIO_MIN_OTHER_UNITS * n_analysis_years, log_file = log_file)
+     LOO_MIN_UNIT_YEARS, log_file = log_file)
 
 loo_type <- compute_loo_filing_type(
   pid_yr_dt            = bldg_loo,
-  loo_min_unit_years   = ACQ_SMALL_PORTFOLIO_MIN_OTHER_UNITS * n_analysis_years,
+  loo_min_unit_years   = LOO_MIN_UNIT_YEARS,
   loo_filing_threshold = ACQ_HIGH_FILER_THRESHOLD
 )
 
@@ -686,7 +696,8 @@ loo_type[, acq_filer_bin := fcase(
   portfolio_evict_group_cong == "Small portfolio",         ACQ_BIN_LABELS[3],
   default                                                = "Single-purchase"
 )]
-# Retain LOO rate and unit-years for descriptives (replaces acq_rate / other_units_transfer_year)
+# Retain LOO rate and unit-years for descriptives.
+# `other_units_transfer_year` is a legacy column name kept for downstream compatibility.
 setnames(loo_type, c("loo_rate_cong", "loo_units_cong"),
                    c("acq_rate",       "other_units_transfer_year"))
 
@@ -697,7 +708,7 @@ acq_threshold_quantile <- if (length(acq_rate_pool) > 0L) mean(acq_rate_pool <= 
 acq_cutoffs <- data.table(
   analysis_year_min                 = ANALYSIS_YEAR_MIN,
   analysis_year_max                 = ANALYSIS_YEAR_MAX,
-  meaningful_other_units_cutoff     = ACQ_SMALL_PORTFOLIO_MIN_OTHER_UNITS,
+  meaningful_loo_unit_years_cutoff  = LOO_MIN_UNIT_YEARS,
   high_filer_rate_cutoff            = ACQ_HIGH_FILER_THRESHOLD,
   high_filer_rate_quantile          = acq_threshold_quantile,
   n_positive_meaningful_portfolio   = length(acq_rate_pool)
@@ -706,8 +717,8 @@ fwrite(acq_cutoffs, out_path("acq_cutoffs.csv"))
 
 logf("  Acquirer classification: full-period LOO (", ANALYSIS_YEAR_MIN, "-", ANALYSIS_YEAR_MAX, ")",
      log_file = log_file)
-logf("  Small-portfolio screen: <", ACQ_SMALL_PORTFOLIO_MIN_OTHER_UNITS,
-     " avg other units (loo_min_unit_years=", ACQ_SMALL_PORTFOLIO_MIN_OTHER_UNITS * n_analysis_years, ")",
+logf("  Small-portfolio screen: <", LOO_MIN_UNIT_YEARS,
+     " leave-one-out unit-years",
      log_file = log_file)
 logf("  High-filer threshold: ", ACQ_HIGH_FILER_THRESHOLD, " filings/unit-year",
      log_file = log_file)
@@ -745,7 +756,7 @@ logf("  Event grid: ", nrow(event_grid), " rows (", event_grid[, uniqueN(PID)],
 
 # --- Merge building outcomes ---
 bldg_cols <- c("PID", "year", "num_filings", "total_units", "total_violations",
-               "total_complaints", "total_permits", "log_med_rent",
+               "total_complaints", "total_permits", "log_med_rent", "log_med_rent_safe",
                "infousa_pct_asian", "infousa_pct_black", "infousa_pct_hispanic",
                "infousa_pct_female", "infousa_pct_male", "infousa_pct_other",
                "infousa_pct_white",
@@ -755,6 +766,8 @@ bldg_cols <- c("PID", "year", "num_filings", "total_units", "total_violations",
                "ever_rental_any_year", "ever_rental_any_year_ever")
 bldg_cols <- intersect(bldg_cols, names(bldg))
 bldg_sub <- unique(bldg[, ..bldg_cols], by = c("PID", "year"))
+if (!"log_med_rent_safe" %in% names(bldg_sub))
+  stop("log_med_rent_safe missing from bldg_panel_blp — re-run make-analytic-sample.R")
 
 if (freq == "annual") {
   event_panel <- merge(event_grid, bldg_sub, by = c("PID", "year"), all.x = TRUE)
@@ -1080,60 +1093,67 @@ make_formula <- function(outcome, et_var, ref, fe_parts) {
 baseline_coefs <- list()
 baseline_fits <- list()
 
-# --- Baseline specs: Full, Full (unit-wtd), 1-unit, 2+, 5+, 2+ & Known Rental, 5+ & Known Rental ---
-# All use PID + year/yq FE (no BG×year trends)
-baseline_spec_list <- list(
-  list(label = "full",               filter_expr = quote(TRUE),
-       weights = NULL,               desc = "All buildings"),
-  list(label = "full_wtd",           filter_expr = quote(!is.na(total_units)),
-       weights = ~total_units,       desc = "All buildings (unit-weighted)"),
-  list(label = "1unit",              filter_expr = quote(!is.na(total_units) & total_units == 1L),
-       weights = NULL,               desc = "1-unit buildings"),
-  list(label = "2plus",              filter_expr = quote(!is.na(total_units) & total_units >= 2L),
-       weights = ~total_units,       desc = "2+ unit buildings (unit-weighted)"),
-  list(label = "5plus",              filter_expr = quote(large_building == TRUE),
-       weights = ~total_units,       desc = "5+ unit buildings (unit-weighted)"),
-  list(label = "2plus_rental_pre",   filter_expr = quote(!is.na(total_units) & total_units >= 2L & known_rental_pre == TRUE),
-       weights = ~total_units,       desc = "2+ units, pre-transfer rental (unit-weighted)"),
-  list(label = "5plus_rental_pre",   filter_expr = quote(large_building == TRUE & known_rental_pre == TRUE),
-       weights = ~total_units,       desc = "5+ units, pre-transfer rental (unit-weighted)")
-)
+if (freq != "annual") {
+  # --- Baseline specs: Full, Full (unit-wtd), 1-unit, 2+, 5+, 2+ & Known Rental, 5+ & Known Rental ---
+  # All use PID + year/yq FE (no BG×year trends)
+  baseline_spec_list <- list(
+    list(label = "full",               filter_expr = quote(TRUE),
+         weights = NULL,               desc = "All buildings"),
+    list(label = "full_wtd",           filter_expr = quote(!is.na(total_units)),
+         weights = ~total_units,       desc = "All buildings (unit-weighted)"),
+    list(label = "1unit",              filter_expr = quote(!is.na(total_units) & total_units == 1L),
+         weights = NULL,               desc = "1-unit buildings"),
+    list(label = "2plus",              filter_expr = quote(!is.na(total_units) & total_units >= 2L),
+         weights = ~total_units,       desc = "2+ unit buildings (unit-weighted)"),
+    list(label = "5plus",              filter_expr = quote(large_building == TRUE),
+         weights = ~total_units,       desc = "5+ unit buildings (unit-weighted)"),
+    list(label = "2plus_rental_pre",   filter_expr = quote(!is.na(total_units) & total_units >= 2L & known_rental_pre == TRUE),
+         weights = ~total_units,       desc = "2+ units, pre-transfer rental (unit-weighted)"),
+    list(label = "5plus_rental_pre",   filter_expr = quote(large_building == TRUE & known_rental_pre == TRUE),
+         weights = ~total_units,       desc = "5+ units, pre-transfer rental (unit-weighted)")
+  )
 
-for (bs in baseline_spec_list) {
-  sub_dt <- reg_dt[eval(bs$filter_expr)]
-  n_sub <- nrow(sub_dt)
-  n_pids <- sub_dt[, uniqueN(PID)]
-  logf("  Spec '", bs$label, "' (", bs$desc, "): N=", n_sub, ", PIDs=", n_pids,
-       log_file = log_file)
-  if (n_sub < 100 || n_pids < 10) next
+  for (bs in baseline_spec_list) {
+    sub_dt <- reg_dt[eval(bs$filter_expr)]
+    n_sub <- nrow(sub_dt)
+    n_pids <- sub_dt[, uniqueN(PID)]
+    logf("  Spec '", bs$label, "' (", bs$desc, "): N=", n_sub, ", PIDs=", n_pids,
+         log_file = log_file)
+    if (n_sub < 100 || n_pids < 10) next
 
-  fit_fml  <- if (freq == "annual") filing_rate  ~ i(event_time,  ref = ET_REF) | PID + year
-              else                  filing_rate_q ~ i(q_relative, ref = -4)  | PID + yq
-  fit_args <- list(fml = fit_fml, data = sub_dt, cluster = ~PID)
-  if (!is.null(bs$weights)) fit_args$weights <- bs$weights
-  fit <- do.call(feols, fit_args)
-  baseline_coefs[[length(baseline_coefs) + 1]] <- extract_feols_coefs(fit, bs$label)
-  baseline_fits[[bs$desc]] <- fit
+    fit_fml <- if (freq == "annual") {
+      filing_rate ~ i(event_time, ref = ET_REF) | PID + year
+    } else {
+      filing_rate_q ~ i(q_relative, ref = -4) | PID + yq
+    }
+    fit_args <- list(fml = fit_fml, data = sub_dt, cluster = ~PID)
+    if (!is.null(bs$weights)) fit_args$weights <- bs$weights
+    fit <- do.call(feols, fit_args)
+    baseline_coefs[[length(baseline_coefs) + 1]] <- extract_feols_coefs(fit, bs$label)
+    baseline_fits[[bs$desc]] <- fit
+  }
+
+  for (i in seq_along(baseline_fits)) {
+    logf("    ", names(baseline_fits)[i], ": N=", baseline_fits[[i]]$nobs,
+         ", adj-R2=", round(fixest::r2(baseline_fits[[i]], "ar2"), 4), log_file = log_file)
+  }
+
+  baseline_all <- rbindlist(baseline_coefs)
+  fwrite(baseline_all, out_path("baseline_coefs.csv"))
+  logf("  Wrote ", fp$file_prefix, "_baseline_coefs.csv", log_file = log_file)
+
+  plot_event_coefs(baseline_all, unique(baseline_all$spec),
+                   paste0("Event Study: Filing Rate Around Transfer (", fp$label, ")"),
+                   fig_path("baseline.png"), facet = TRUE)
+
+  etable(baseline_fits,
+         file = out_path("baseline_etable.tex"),
+         style.tex = style.tex("aer"),
+         headers = list("Sample" = names(baseline_fits)))
+  logf("  Wrote baseline_etable.tex", log_file = log_file)
+} else {
+  logf("  Annual run: baseline outputs handled by streamlined annual block below", log_file = log_file)
 }
-
-for (i in seq_along(baseline_fits)) {
-  logf("    ", names(baseline_fits)[i], ": N=", baseline_fits[[i]]$nobs,
-       ", adj-R2=", round(fixest::r2(baseline_fits[[i]], "ar2"), 4), log_file = log_file)
-}
-
-baseline_all <- rbindlist(baseline_coefs)
-fwrite(baseline_all, out_path("baseline_coefs.csv"))
-logf("  Wrote ", fp$file_prefix, "_baseline_coefs.csv", log_file = log_file)
-
-plot_event_coefs(baseline_all, unique(baseline_all$spec),
-                 paste0("Event Study: Filing Rate Around Transfer (", fp$label, ")"),
-                 fig_path("baseline.png"), facet = TRUE)
-
-etable(baseline_fits,
-       file = out_path("baseline_etable.tex"),
-       style.tex = style.tex("aer"),
-       headers = list("Sample" = names(baseline_fits)))
-logf("  Wrote baseline_etable.tex", log_file = log_file)
 
 # Main heterogeneity sample: full panel, requires non-NA total_units for unit-weighting.
 # All heterogeneity sections (4a–4f, 4g, 5, 6) use this sample with weights = ~total_units.
@@ -1210,6 +1230,173 @@ run_fullpanel_fit_poisson <- function(panel, fml_str, spec_label,
        ", treated PIDs=", treated_pids_n, ", treated rows=", treated_rows_n,
        " [Poisson offset]", log_file = log_file)
   list(coefs = ct, fit = fit)
+}
+
+build_weighted_stacked_panel <- function(panel, outcome_col,
+                                         event_window = -3L:3L,
+                                         ref_period = ET_REF,
+                                         label = "stacked_panel") {
+  req_cols <- c("PID", "year", "transfer_year", "total_units", outcome_col)
+  assert_has_cols(panel, req_cols, paste0(label, ": panel"))
+  assert_unique(panel, c("PID", "year"), paste0(label, ": panel PID-year"))
+
+  if (!ref_period %in% event_window) {
+    stop(label, ": ref_period must be inside event_window")
+  }
+  if (length(event_window) < 2L) {
+    stop(label, ": event_window must contain at least two event times")
+  }
+
+  base <- copy(panel)[
+    year >= ANALYSIS_YEAR_MIN &
+      year <= ANALYSIS_YEAR_MAX &
+      !is.na(total_units) &
+      total_units > 0 &
+      !is.na(get(outcome_col))
+  ]
+  assert_unique(base, c("PID", "year"), paste0(label, ": filtered base PID-year"))
+
+  treated_lookup <- unique(base[!is.na(transfer_year), .(PID, transfer_year)])
+  assert_unique(treated_lookup, "PID", paste0(label, ": treated lookup PID"))
+  control_lookup <- unique(base[is.na(transfer_year), .(PID)])
+  assert_unique(control_lookup, "PID", paste0(label, ": control lookup PID"))
+
+  trimmed_cohorts <- sort(unique(
+    treated_lookup[
+      transfer_year + min(event_window) >= ANALYSIS_YEAR_MIN &
+        transfer_year + max(event_window) <= ANALYSIS_YEAR_MAX,
+      transfer_year
+    ]
+  ))
+  if (length(trimmed_cohorts) == 0L) {
+    stop(label, ": no treated cohorts survive the trimmed event window")
+  }
+
+  stack_parts <- vector("list", length(trimmed_cohorts))
+  cohort_meta <- vector("list", length(trimmed_cohorts))
+
+  for (i in seq_along(trimmed_cohorts)) {
+    cohort_year <- trimmed_cohorts[i]
+    cohort_treated <- treated_lookup[transfer_year == cohort_year, PID]
+    if (length(cohort_treated) == 0L) {
+      stop(label, ": empty treated cohort for year ", cohort_year)
+    }
+
+    years_use <- cohort_year + event_window
+    sub <- base[
+      year %in% years_use &
+        (PID %chin% cohort_treated | is.na(transfer_year))
+    ]
+    sub[, cohort_year := cohort_year]
+    sub[, treated := as.integer(PID %chin% cohort_treated)]
+    sub[, rel_time := year - cohort_year]
+    sub <- sub[rel_time %in% event_window]
+    assert_unique(
+      sub,
+      c("PID", "year", "cohort_year"),
+      paste0(label, ": stacked cohort PID-year ", cohort_year)
+    )
+    sub[, pid_cohort := paste0(PID, "_", cohort_year)]
+    sub[, yr_cohort := paste0(year, "_", cohort_year)]
+
+    stack_parts[[i]] <- sub
+    cohort_meta[[i]] <- data.table(
+      cohort_year = cohort_year,
+      treated_pids = uniqueN(sub[treated == 1L, PID]),
+      control_pids = uniqueN(sub[treated == 0L, PID]),
+      treated_rows = sub[treated == 1L, .N],
+      control_rows = sub[treated == 0L, .N],
+      treated_unit_weight = sub[treated == 1L, sum(total_units, na.rm = TRUE)],
+      control_unit_weight = sub[treated == 0L, sum(total_units, na.rm = TRUE)]
+    )
+  }
+
+  stacked <- rbindlist(stack_parts, use.names = TRUE, fill = TRUE)
+  cohort_weights <- rbindlist(cohort_meta, use.names = TRUE, fill = TRUE)
+  assert_unique(cohort_weights, "cohort_year", paste0(label, ": cohort weights"))
+
+  total_treated_pids <- cohort_weights[, sum(treated_pids)]
+  total_control_pids <- cohort_weights[, sum(control_pids)]
+  if (total_treated_pids <= 0L || total_control_pids <= 0L) {
+    stop(label, ": invalid stacked totals for corrective weights")
+  }
+
+  cohort_weights[, q_weight_control := (treated_pids / total_treated_pids) /
+                                       (control_pids / total_control_pids)]
+  cohort_weights[, q_weight_rule := "treated=1; controls=(cohort treated PID share)/(cohort control PID share)"]
+
+  stacked <- merge(
+    stacked,
+    cohort_weights[, .(cohort_year, q_weight_control)],
+    by = "cohort_year",
+    all.x = TRUE
+  )
+  assert_unique(stacked, c("PID", "year", "cohort_year"), paste0(label, ": merged stacked PID-year"))
+  if (stacked[is.na(q_weight_control), .N] > 0L) {
+    stop(label, ": missing q_weight_control after merge")
+  }
+
+  stacked[, q_weight := fifelse(treated == 1L, 1, q_weight_control)]
+  stacked[, stack_weight := q_weight * total_units]
+  if (stacked[!is.finite(stack_weight) | stack_weight <= 0, .N] > 0L) {
+    stop(label, ": non-positive stacked weights detected")
+  }
+
+  for (k in setdiff(event_window, ref_period)) {
+    nm <- paste0("st_et_", ifelse(k < 0L, paste0("m", abs(k)), k))
+    stacked[, (nm) := as.integer(treated == 1L & rel_time == k)]
+  }
+
+  logf(
+    "    ", label, ": built weighted stacked panel with ",
+    nrow(stacked), " rows across ", length(trimmed_cohorts),
+    " trimmed cohorts; treated PIDs=",
+    uniqueN(stacked[treated == 1L, PID]),
+    ", controls=", uniqueN(stacked[treated == 0L, PID]),
+    log_file = log_file
+  )
+
+  list(
+    panel = stacked,
+    cohort_weights = cohort_weights,
+    treated_pids = uniqueN(stacked[treated == 1L, PID]),
+    control_pids = uniqueN(stacked[treated == 0L, PID]),
+    n_cohorts = length(trimmed_cohorts)
+  )
+}
+
+run_weighted_stacked_fit <- function(panel, outcome_col, spec_label,
+                                     event_window = -3L:3L,
+                                     ref_period = ET_REF) {
+  built <- build_weighted_stacked_panel(
+    panel = panel,
+    outcome_col = outcome_col,
+    event_window = event_window,
+    ref_period = ref_period,
+    label = spec_label
+  )
+  dummy_terms <- paste0(
+    "st_et_",
+    ifelse(setdiff(event_window, ref_period) < 0L,
+           paste0("m", abs(setdiff(event_window, ref_period))),
+           setdiff(event_window, ref_period))
+  )
+  fml_str <- paste0(outcome_col, " ~ ", paste(dummy_terms, collapse = " + "),
+                    " | pid_cohort + yr_cohort")
+  fit <- feols(
+    as.formula(fml_str),
+    data = built$panel,
+    weights = ~stack_weight,
+    cluster = ~PID
+  )
+  ct <- extract_feols_coefs(fit, spec_label)
+  ct[, treated_pids := built$treated_pids]
+  ct[, control_pids := built$control_pids]
+  ct[, trimmed_cohorts := built$n_cohorts]
+  ct[, term := gsub("^st_et_m", paste0(fp$et_var, "::-"), term)]
+  ct[, term := gsub("^st_et_", paste0(fp$et_var, "::"), term)]
+
+  list(coefs = ct, fit = fit, stacked = built$panel, cohort_weights = built$cohort_weights)
 }
 
 et_dummies_main <- paste0("et_", ifelse(setdiff(fp$et_range, fp$ref_period) < 0,
@@ -1549,8 +1736,11 @@ for (sb in all_size_bins) {
 
   if (n_sub < 100 || n_pids < 10) next
 
-  fit_fml <- if (freq == "annual") filing_rate  ~ i(event_time,  ref = ET_REF) | PID + year
-             else                  filing_rate_q ~ i(q_relative, ref = -4)  | PID + yq
+  fit_fml <- if (freq == "annual") {
+    filing_rate ~ i(event_time, ref = ET_REF) | PID + year
+  } else {
+    filing_rate_q ~ i(q_relative, ref = -4) | PID + yq
+  }
   fit_sb <- do.call(feols, list(fml = fit_fml, data = sub_dt,
                                 cluster = ~PID, weights = ~total_units))
   size_coefs[[length(size_coefs) + 1]] <- extract_feols_coefs(fit_sb, paste0("size_", sb))
@@ -1615,8 +1805,11 @@ for (ab in acq_bins_ordered) {
   if (n_sub < 100 || n_pids < 10) next
 
   spec_name <- paste0("full_", acq_bin_suffix(ab))
-  fit_fml <- if (freq == "annual") filing_rate  ~ i(event_time,  ref = ET_REF) | PID + year
-             else                  filing_rate_q ~ i(q_relative, ref = -4)  | PID + yq
+  fit_fml <- if (freq == "annual") {
+    filing_rate ~ i(event_time, ref = ET_REF) | PID + year
+  } else {
+    filing_rate_q ~ i(q_relative, ref = -4) | PID + yq
+  }
   fit_ab <- do.call(feols, list(fml = fit_fml, data = sub_dt,
                                 cluster = ~PID, weights = ~total_units))
   acq_coefs[[length(acq_coefs) + 1]] <- extract_feols_coefs(fit_ab, spec_name)
@@ -1656,8 +1849,11 @@ for (pb in portfolio_bins) {
   logf("  Portfolio bin '", pb, "': N=", n_sub, ", PIDs=", n_pids, log_file = log_file)
   if (n_sub < 100 || n_pids < 10) next
 
-  fit_fml <- if (freq == "annual") filing_rate  ~ i(event_time,  ref = ET_REF) | PID + year
-             else                  filing_rate_q ~ i(q_relative, ref = -4)  | PID + yq
+  fit_fml <- if (freq == "annual") {
+    filing_rate ~ i(event_time, ref = ET_REF) | PID + year
+  } else {
+    filing_rate_q ~ i(q_relative, ref = -4) | PID + yq
+  }
   fit_pb <- do.call(feols, list(fml = fit_fml, data = sub_dt,
                                 cluster = ~PID, weights = ~total_units))
   portfolio_coefs[[length(portfolio_coefs) + 1]] <- extract_feols_coefs(fit_pb, paste0("portfolio_", pb))
@@ -1698,8 +1894,11 @@ for (ab in acq_bins_ordered) {
 
     if (n_sub < 100 || n_pids < 10) next
 
-    fit_fml <- if (freq == "annual") filing_rate  ~ i(event_time,  ref = ET_REF) | PID + year
-               else                  filing_rate_q ~ i(q_relative, ref = -4)  | PID + yq
+    fit_fml <- if (freq == "annual") {
+      filing_rate ~ i(event_time, ref = ET_REF) | PID + year
+    } else {
+      filing_rate_q ~ i(q_relative, ref = -4) | PID + yq
+    }
     fit_cf <- do.call(feols, list(fml = fit_fml, data = sub_dt,
                                   cluster = ~PID, weights = ~total_units))
     corp_filer_coefs[[length(corp_filer_coefs) + 1]] <- extract_feols_coefs(fit_cf, spec_name)
@@ -1927,8 +2126,11 @@ run_outcome_event_study <- function(outcome_col, reg_data, out_stem, outcome_lab
     return(invisible(NULL))
   }
   fml_fit <- as.formula(
-    if (freq == "annual") paste0(outcome_col, " ~ i(event_time, ref = ", ET_REF, ") | PID + year")
-    else                  paste0(outcome_col, " ~ i(q_relative,  ref = -4) | PID + yq")
+    if (freq == "annual") {
+      paste0(outcome_col, " ~ i(event_time, ref = ", ET_REF, ") | PID + year")
+    } else {
+      paste0(outcome_col, " ~ i(q_relative, ref = -4) | PID + yq")
+    }
   )
 
   coef_list <- list()
@@ -2245,6 +2447,55 @@ if (freq == "annual" && "log_med_rent" %in% names(bldg_sub)) {
     logf("  Wrote rent_robustness_coefs.csv (", nrow(rent_robust_all), " rows)",
          log_file = log_file)
   }
+  # --- 5a-safe: log_med_rent_safe (single-source; no source-switching artifact) ---
+  logf("  5a-safe: log_med_rent_safe (full-panel DiD, single-source) ...", log_file = log_file)
+    .rent_fml_safe       <- paste0("log_med_rent_safe ~ ", paste(et_dummies, collapse = " + "), " | PID + year")
+    .rent_fml_safe_tract <- paste0("log_med_rent_safe ~ ", paste(et_dummies, collapse = " + "), " | PID + tract_year_fe")
+    rent_safe_coef_list <- list()
+    .res <- run_robustness_fit(rent_dt_full[!is.na(log_med_rent_safe)], .rent_fml_safe, "rent_safe_full")
+    if (!is.null(.res)) rent_safe_coef_list[[length(rent_safe_coef_list) + 1L]] <- .res$coefs
+    if ("acq_filer_bin" %in% names(.tx_attrs)) {
+      for (.fb in ACQ_BIN_LABELS) {
+        .fb_pids <- .tx_attrs[acq_filer_bin == .fb, PID]
+        .sub <- rent_dt_full[!is.na(log_med_rent_safe) &
+                               ((PID %chin% .valid_ctrl_rent) | (PID %chin% .fb_pids))]
+        .spec <- paste0("rent_safe_acq_", acq_bin_suffix(.fb))
+        .res <- run_robustness_fit(.sub, .rent_fml_safe, .spec)
+        if (!is.null(.res)) rent_safe_coef_list[[length(rent_safe_coef_list) + 1L]] <- .res$coefs
+      }
+    }
+    if (length(rent_safe_coef_list) > 0L) {
+      all_rent_safe_coefs <- rbindlist(rent_safe_coef_list)
+      fwrite(all_rent_safe_coefs, out_path("rent_safe_coefs.csv"))
+      plot_event_coefs(all_rent_safe_coefs, "rent_safe_full",
+                       paste0("Event Study: Log Rent (Safe, single-source) (", fp$label, ")"),
+                       fig_path("rent_safe_full.png"), y_label = "Log median rent (safe)")
+      .filer_safe_specs <- grep("^rent_safe_acq_", unique(all_rent_safe_coefs$spec), value = TRUE)
+      if (length(.filer_safe_specs) > 1L)
+        plot_event_coefs(all_rent_safe_coefs, .filer_safe_specs,
+                         paste0("Event Study: Log Rent (Safe) by Acquirer Type (", fp$label, ")"),
+                         fig_path("rent_safe_by_acq_filer.png"), facet = TRUE,
+                         y_label = "Log median rent (safe)")
+      logf("  Wrote rent_safe_coefs.csv (", nrow(all_rent_safe_coefs), " rows)", log_file = log_file)
+    }
+    rent_safe_robust_coefs <- list()
+    .res <- run_robustness_fit(rent_dt_ctrl3[!is.na(log_med_rent_safe)],
+                               .rent_fml_safe, "rent_safe_ctrl3")
+    if (!is.null(.res)) rent_safe_robust_coefs[[length(rent_safe_robust_coefs) + 1L]] <- .res$coefs
+    if (rent_dt_ctrl3[!is.na(log_med_rent_safe) & !is.na(tract_year_fe), .N] > 100) {
+      .res <- run_robustness_fit(rent_dt_ctrl3[!is.na(log_med_rent_safe) & !is.na(tract_year_fe)],
+                                 .rent_fml_safe_tract, "rent_safe_ctrl3_tract_year")
+      if (!is.null(.res)) rent_safe_robust_coefs[[length(rent_safe_robust_coefs) + 1L]] <- .res$coefs
+    }
+    if (length(rent_safe_robust_coefs) > 0L) {
+      rent_safe_robust_all <- rbindlist(rent_safe_robust_coefs)
+      fwrite(rent_safe_robust_all, out_path("rent_safe_robustness_coefs.csv"))
+      plot_event_coefs(rent_safe_robust_all, unique(rent_safe_robust_all$spec),
+                       paste0("Rent (Safe) Robustness Checks (", fp$label, ")"),
+                       fig_path("rent_safe_robustness.png"),
+                       facet = TRUE, y_label = "Log median rent (safe)")
+    }
+
   # Clean up temporaries
   rm(.st_pids_rent, .st_trans_rent, .all_tx_pids, .bldg_rent, .rent_panel,
      .tx_cov, .valid_tx_rent, .ctrl_cov, .valid_ctrl_rent, .tx_attrs, .rent_fml,
@@ -2778,8 +3029,11 @@ for (sg_name in names(pooled_subgroups)) {
     next
   }
 
-  pool_fml <- if (freq == "annual") filing_rate  ~ window | PID + year
-              else                  filing_rate_q ~ window | PID + yq
+  pool_fml <- if (freq == "annual") {
+    filing_rate ~ window | PID + year
+  } else {
+    filing_rate_q ~ window | PID + yq
+  }
   fit_pooled <- do.call(feols, list(fml = pool_fml, data = sg_dt,
                                     cluster = ~PID, weights = ~total_units))
   ct <- as.data.table(coeftable(fit_pooled), keep.rownames = "term")
@@ -3127,6 +3381,7 @@ if (freq == "annual" && !is.null(full_panel_main)) {
   acq_bins_ordered <- ACQ_BIN_LABELS
   portfolio_bins <- c("Single-purchase", "2-4", "5-9", "10+")
   all_size_bins <- c("1 unit", fp$size_bins)
+  run_legacy_annual_outputs <- isTRUE(cfg$run$transfer_evictions_run_legacy_annual %||% FALSE)
 
   subset_panel_main <- function(panel, sample_filter = NULL, treated_filter = NULL,
                                 outcome_col = NULL, year_min = NULL) {
@@ -3148,6 +3403,174 @@ if (freq == "annual" && !is.null(full_panel_main)) {
                                           lhs = "num_filings", fe = "PID + year") {
     fml_str <- paste0(lhs, " ~ ", paste(et_dummies_main, collapse = " + "), " | ", fe)
     run_fullpanel_fit_poisson(panel, fml_str, spec_label, offset = ~log(total_units))
+  }
+  core_baseline_specs <- list(
+    list(label = "core_all_units", sample_filter = NULL, pretty = "All buildings"),
+    list(label = "core_1unit", sample_filter = quote(total_units == 1L), pretty = "1-unit"),
+    list(label = "core_2plus", sample_filter = quote(total_units >= 2L), pretty = "2+ units"),
+    list(label = "core_2plus_rental_evidence",
+         sample_filter = quote(total_units >= 2L & observed_rental_stock == TRUE),
+         pretty = "2+ units, rental evidence"),
+    list(label = "core_5plus", sample_filter = quote(total_units >= 5L), pretty = "5+ units"),
+    list(label = "core_5plus_rental_evidence",
+         sample_filter = quote(total_units >= 5L & observed_rental_stock == TRUE),
+         pretty = "5+ units, rental evidence"),
+    list(label = "core_10plus", sample_filter = quote(total_units >= 10L), pretty = "10+ units"),
+    list(label = "core_10plus_rental_evidence",
+         sample_filter = quote(total_units >= 10L & observed_rental_stock == TRUE),
+         pretty = "10+ units, rental evidence")
+  )
+  run_core_sample_grid <- function(panel, outcome_col, out_stem, plot_title, y_label,
+                                   specs = core_baseline_specs, weights = ~total_units) {
+    coef_list <- list()
+    fit_list <- list()
+    label_map <- character()
+    for (sp in specs) {
+      .panel <- subset_panel_main(panel, sample_filter = sp$sample_filter, outcome_col = outcome_col)
+      .res <- run_named_fullpanel(.panel, sp$label, weights = weights, lhs = outcome_col)
+      if (!is.null(.res)) {
+        coef_list[[length(coef_list) + 1L]] <- .res$coefs
+        fit_list[[sp$pretty]] <- .res$fit
+        label_map[[sp$label]] <- sp$pretty
+      }
+    }
+    if (length(coef_list) == 0L) return(invisible(NULL))
+    all_coefs <- rbindlist(coef_list, use.names = TRUE, fill = TRUE)
+    fwrite(all_coefs, out_path(paste0(out_stem, "_coefs.csv")))
+    plot_event_coefs(
+      all_coefs,
+      unique(all_coefs$spec),
+      paste0(plot_title, " (", fp$label, ")"),
+      fig_path(paste0(out_stem, ".png")),
+      facet = TRUE,
+      y_label = y_label,
+      custom_labels = label_map
+    )
+    etable(
+      fit_list,
+      file = out_path(paste0(out_stem, "_etable.tex")),
+      style.tex = style.tex("aer"),
+      headers = list("Sample" = names(fit_list))
+    )
+    all_coefs
+  }
+  run_core_buyer_split <- function(panel, outcome_col, out_stem, plot_title, y_label,
+                                   sample_filter = quote(total_units >= 2L),
+                                   weights = ~total_units) {
+    coef_list <- list()
+    fit_list <- list()
+    label_map <- c(full = "All acquirers", corporate = "Corporate", individual = "Individual")
+    .full <- subset_panel_main(panel, sample_filter = sample_filter, outcome_col = outcome_col)
+    .res <- run_named_fullpanel(.full, "full", weights = weights, lhs = outcome_col)
+    if (!is.null(.res)) {
+      coef_list[[length(coef_list) + 1L]] <- .res$coefs
+      fit_list[["All acquirers"]] <- .res$fit
+    }
+    for (buyer_nm in c("corporate", "individual")) {
+      .treated_filter <- if (buyer_nm == "corporate") quote(is_corp == TRUE) else quote(is_corp == FALSE)
+      .panel <- subset_panel_main(
+        panel,
+        sample_filter = sample_filter,
+        treated_filter = .treated_filter,
+        outcome_col = outcome_col
+      )
+      .res <- run_named_fullpanel(.panel, buyer_nm, weights = weights, lhs = outcome_col)
+      if (!is.null(.res)) {
+        coef_list[[length(coef_list) + 1L]] <- .res$coefs
+        fit_list[[label_map[[buyer_nm]]]] <- .res$fit
+      }
+    }
+    if (length(coef_list) == 0L) return(invisible(NULL))
+    all_coefs <- rbindlist(coef_list, use.names = TRUE, fill = TRUE)
+    fwrite(all_coefs, out_path(paste0(out_stem, "_coefs.csv")))
+    plot_event_coefs(
+      all_coefs,
+      unique(all_coefs$spec),
+      paste0(plot_title, " (", fp$label, ")"),
+      fig_path(paste0(out_stem, ".png")),
+      facet = TRUE,
+      y_label = y_label,
+      ncol = 2L,
+      custom_labels = label_map
+    )
+    etable(
+      fit_list,
+      file = out_path(paste0(out_stem, "_etable.tex")),
+      style.tex = style.tex("aer"),
+      headers = list("Buyer type" = names(fit_list))
+    )
+    all_coefs
+  }
+  run_core_acq_split <- function(panel, outcome_col, out_stem, plot_title, y_label,
+                                 sample_filter = quote(total_units >= 2L),
+                                 weights = ~total_units) {
+    coef_list <- list()
+    fit_list <- list()
+    label_map <- c(full = "All acquirers")
+    .full <- subset_panel_main(panel, sample_filter = sample_filter, outcome_col = outcome_col)
+    .res <- run_named_fullpanel(.full, "full", weights = weights, lhs = outcome_col)
+    if (!is.null(.res)) {
+      coef_list[[length(coef_list) + 1L]] <- .res$coefs
+      fit_list[["All acquirers"]] <- .res$fit
+    }
+    for (ab in acq_bins_ordered) {
+      .panel <- subset_panel_main(
+        panel,
+        sample_filter = sample_filter,
+        treated_filter = substitute(acq_filer_bin == AB, list(AB = ab)),
+        outcome_col = outcome_col
+      )
+      .spec <- acq_bin_suffix(ab)
+      .res <- run_named_fullpanel(.panel, .spec, weights = weights, lhs = outcome_col)
+      if (!is.null(.res)) {
+        coef_list[[length(coef_list) + 1L]] <- .res$coefs
+        fit_list[[ab]] <- .res$fit
+        label_map[[.spec]] <- ab
+      }
+    }
+    if (length(coef_list) == 0L) return(invisible(NULL))
+    all_coefs <- rbindlist(coef_list, use.names = TRUE, fill = TRUE)
+    fwrite(all_coefs, out_path(paste0(out_stem, "_coefs.csv")))
+    plot_event_coefs(
+      all_coefs,
+      unique(all_coefs$spec),
+      paste0(plot_title, " (", fp$label, ")"),
+      fig_path(paste0(out_stem, ".png")),
+      facet = TRUE,
+      y_label = y_label,
+      custom_labels = label_map
+    )
+    etable(
+      fit_list,
+      file = out_path(paste0(out_stem, "_etable.tex")),
+      style.tex = style.tex("aer"),
+      headers = list("Acquirer type" = names(fit_list))
+    )
+    all_coefs
+  }
+  build_supported_outcome_panel <- function(panel, outcome_col, sample_filter = NULL,
+                                            min_control_obs = 2L) {
+    req_cols <- c(outcome_col, "PID", "year", "event_time", "transfer_year")
+    assert_has_cols(panel, req_cols, paste0("build_supported_outcome_panel: ", outcome_col))
+    src <- subset_panel_main(panel, sample_filter = sample_filter, outcome_col = outcome_col)
+    tx_cov <- src[!is.na(transfer_year),
+                  .(has_pre = any(event_time < 0L, na.rm = TRUE),
+                    has_post = any(event_time >= 0L, na.rm = TRUE)),
+                  by = PID]
+    valid_tx <- tx_cov[has_pre == TRUE & has_post == TRUE, PID]
+    ctrl_cov <- src[is.na(transfer_year), .(n_obs = .N), by = PID]
+    valid_ctrl <- ctrl_cov[n_obs >= min_control_obs, PID]
+    out <- src[
+      (!is.na(transfer_year) & PID %chin% valid_tx) |
+      (is.na(transfer_year) & PID %chin% valid_ctrl)
+    ]
+    logf(
+      "    supported panel ", outcome_col, ": ",
+      out[, uniqueN(PID)], " PIDs (treated=", out[!is.na(transfer_year), uniqueN(PID)],
+      ", controls=", out[is.na(transfer_year), uniqueN(PID)], "), N=", nrow(out),
+      log_file = log_file
+    )
+    out
   }
 
   # --- Baseline ---
@@ -3198,6 +3621,164 @@ if (freq == "annual" && !is.null(full_panel_main)) {
     plot_title = "Event Study: Filing Rate Around Transfer",
     y_label = "Filing Rate (per unit-year)"
   )
+  stacked_baseline_specs <- list(
+    list(
+      label = "stacked_full_wtd",
+      sample_filter = NULL,
+      header = "All buildings (weighted stacked)"
+    ),
+    list(
+      label = "stacked_2plus_wtd",
+      sample_filter = quote(total_units >= 2L),
+      header = "2+ unit buildings (weighted stacked)"
+    )
+  )
+  run_baseline_stacked_override <- function() {
+    stacked_coefs <- list()
+    stacked_fits <- list()
+    stacked_weights <- list()
+    for (bs in stacked_baseline_specs) {
+      .panel <- subset_panel_main(
+        full_panel_main,
+        sample_filter = bs$sample_filter,
+        outcome_col = "filing_rate"
+      )
+      .res <- run_weighted_stacked_fit(
+        panel = .panel,
+        outcome_col = "filing_rate",
+        spec_label = bs$label,
+        event_window = -3L:3L,
+        ref_period = ET_REF
+      )
+      stacked_coefs[[length(stacked_coefs) + 1L]] <- .res$coefs
+      stacked_fits[[bs$header]] <- .res$fit
+      .w <- copy(.res$cohort_weights)
+      .w[, spec := bs$label]
+      stacked_weights[[length(stacked_weights) + 1L]] <- .w
+    }
+    stacked_all <- rbindlist(stacked_coefs, use.names = TRUE, fill = TRUE)
+    stacked_weight_dt <- rbindlist(stacked_weights, use.names = TRUE, fill = TRUE)
+    fwrite(stacked_all, out_path("baseline_stacked_weighted_coefs.csv"))
+    fwrite(stacked_weight_dt, out_path("baseline_stacked_weighted_qweights.csv"))
+    plot_event_coefs(
+      stacked_all,
+      unique(stacked_all$spec),
+      paste0("Weighted Stacked Event Study: Filing Rate Around Transfer (", fp$label, ")"),
+      fig_path("baseline_stacked_weighted.png"),
+      facet = TRUE,
+      y_label = "Filing Rate (per unit-year)"
+    )
+    etable(
+      stacked_fits,
+      file = out_path("baseline_stacked_weighted_etable.tex"),
+      style.tex = style.tex("aer"),
+      headers = list("Sample" = names(stacked_fits))
+    )
+    stacked_all
+  }
+  baseline_stacked_all <- run_baseline_stacked_override()
+  logf("--- ANNUAL CORE OUTPUTS: streamlined regression surface ---", log_file = log_file)
+
+  filing_core_all <- run_core_sample_grid(
+    panel = full_panel_main,
+    outcome_col = "filing_rate",
+    out_stem = "filing_core",
+    plot_title = "Event Study: Filing Rate Around Transfer",
+    y_label = "Filing Rate (per unit-year)"
+  )
+  filing_acq_2plus <- run_core_acq_split(
+    panel = full_panel_filer,
+    outcome_col = "filing_rate",
+    out_stem = "filing_acq_2plus",
+    plot_title = "Event Study: Filing Rate by Acquirer Filing Type",
+    y_label = "Filing Rate (per unit-year)",
+    sample_filter = quote(total_units >= 2L)
+  )
+
+  for (.demo in list(
+    list(col = "occupancy_rate", stem = "occupancy_2plus", label = "Occupancy Rate"),
+    list(col = "infousa_pct_black", stem = "pct_black_2plus", label = "Share Black Residents"),
+    list(col = "infousa_pct_asian", stem = "pct_asian_2plus", label = "Share Asian Residents"),
+    list(col = "infousa_pct_hispanic", stem = "pct_latino_2plus", label = "Share Latino Residents"),
+    list(col = "infousa_pct_white", stem = "pct_white_2plus", label = "Share White Residents"),
+    list(col = "infousa_pct_other", stem = "pct_other_2plus", label = "Share Other Residents"),
+    list(col = "infousa_pct_female", stem = "pct_female_2plus", label = "Share Female Residents"),
+    list(col = "infousa_pct_male", stem = "pct_male_2plus", label = "Share Male Residents"),
+    list(col = "permit_rate", stem = "permit_rate_2plus", label = "Permit Rate (per unit-year)"),
+    list(col = "complaint_rate", stem = "complaint_rate_2plus", label = "Complaint Rate (per unit-year)")
+  )) {
+    run_core_acq_split(
+      panel = full_panel_filer,
+      outcome_col = .demo$col,
+      out_stem = .demo$stem,
+      plot_title = paste0("Event Study: ", .demo$label, " by Acquirer Filing Type"),
+      y_label = .demo$label,
+      sample_filter = quote(total_units >= 2L)
+    )
+  }
+
+  if ("log_med_rent" %in% names(full_panel_main)) {
+    rent_supported <- build_supported_outcome_panel(full_panel_main, "log_med_rent")
+    rent_supported_filer <- build_supported_outcome_panel(full_panel_filer, "log_med_rent")
+    run_core_acq_split(
+      panel = rent_supported_filer,
+      outcome_col = "log_med_rent",
+      out_stem = "rent_core",
+      plot_title = "Event Study: Log Median Rent by Acquirer Filing Type",
+      y_label = "Log median rent",
+      sample_filter = NULL
+    )
+  }
+  if ("log_med_rent_safe" %in% names(full_panel_main)) {
+    rent_safe_supported_filer <- build_supported_outcome_panel(full_panel_filer, "log_med_rent_safe")
+    run_core_acq_split(
+      panel = rent_safe_supported_filer,
+      outcome_col = "log_med_rent_safe",
+      out_stem = "rent_safe_core",
+      plot_title = "Event Study: Log Median Rent (Safe, single-source) by Acquirer Filing Type",
+      y_label = "Log median rent (safe)",
+      sample_filter = NULL
+    )
+  }
+
+  entry_panel_core <- full_panel_main[
+    year >= max(2011L, ANALYSIS_YEAR_MIN) &
+      year <= ANALYSIS_YEAR_MAX &
+      !is.na(total_units) & total_units > 0
+  ]
+  if ("has_rental_evidence" %in% names(entry_panel_core)) {
+    entry_panel_core_filer <- full_panel_filer[
+      year >= max(2011L, ANALYSIS_YEAR_MIN) &
+        year <= ANALYSIS_YEAR_MAX &
+        !is.na(total_units) & total_units > 0
+    ]
+    run_core_acq_split(
+      panel = entry_panel_core_filer,
+      outcome_col = "has_rental_evidence",
+      out_stem = "rental_evidence_1unit",
+      plot_title = "Event Study: Probability of Rental Evidence (1-unit) by Acquirer Filing Type",
+      y_label = "Probability of rental evidence",
+      sample_filter = quote(total_units == 1L)
+    )
+    run_core_acq_split(
+      panel = entry_panel_core_filer,
+      outcome_col = "has_rental_evidence",
+      out_stem = "rental_evidence_2plus",
+      plot_title = "Event Study: Probability of Rental Evidence (2+ units) by Acquirer Filing Type",
+      y_label = "Probability of rental evidence",
+      sample_filter = quote(total_units >= 2L)
+    )
+  }
+
+  if (run_legacy_annual_outputs) {
+    logf("--- ANNUAL LEGACY OUTPUTS: enabled by cfg$run$transfer_evictions_run_legacy_annual ---",
+         log_file = log_file)
+  } else {
+    logf("--- ANNUAL LEGACY OUTPUTS: skipped (set cfg$run$transfer_evictions_run_legacy_annual: true to enable) ---",
+         log_file = log_file)
+  }
+
+  if (run_legacy_annual_outputs) {
   baseline_poisson_specs <- list(
     list(label = "full", sample_filter = NULL, header = "All buildings"),
     list(label = "1unit", sample_filter = quote(total_units == 1L), header = "1-unit buildings"),
@@ -3497,7 +4078,7 @@ if (freq == "annual" && !is.null(full_panel_main)) {
   # --- Raw means diagnostic by acq_filer_bin x event_time ---
   # Used to check for attrition / suspicious filing patterns (e.g. t=3→4 drop).
   # Unit-weighted; restricted to treated PIDs in event window.
-  hi_bin <- ACQ_BIN_LABELS[1]  # "High-filer portfolio (10+ other units)"
+  hi_bin <- ACQ_BIN_LABELS[1]  # "High-filer portfolio"
   raw_acq_dt <- full_panel_filer[
     !is.na(acq_filer_bin) &
     !is.na(event_time) & event_time %in% fp$et_range,
@@ -3781,7 +4362,7 @@ if (freq == "annual" && !is.null(full_panel_main)) {
 
   # --------------------------------------------------------
   # Continuous acq_rate interaction + pooled post-treatment DiD
-  # (annual, 2+ unit portfolio-acquirer subsample only)
+  # (annual, meaningful-portfolio acquirer subsample only)
   # --------------------------------------------------------
   logf("--- Annual override: continuous acq_rate interaction ---", log_file = log_file)
   # treated_filter (not sample_filter) so never-sold controls are kept for the DiD;
@@ -3790,7 +4371,7 @@ if (freq == "annual" && !is.null(full_panel_main)) {
     full_panel_filer,
     sample_filter  = quote(total_units >= 2L),
     treated_filter = quote(!is.na(other_units_transfer_year) &
-                           other_units_transfer_year >= ACQ_SMALL_PORTFOLIO_MIN_OTHER_UNITS &
+                           other_units_transfer_year >= LOO_MIN_UNIT_YEARS &
                            !is.na(acq_rate)),
     outcome_col    = "filing_rate"
   )
@@ -4111,6 +4692,69 @@ if (freq == "annual" && !is.null(full_panel_main)) {
                        facet = TRUE, y_label = "Log median rent")
     }
   }
+
+  # --- log_med_rent_safe override (single-source supplement) ---
+  rent_safe_source <- full_panel_main[year >= ANALYSIS_YEAR_MIN & year <= ANALYSIS_YEAR_MAX &
+                                          !is.na(total_units) & total_units > 0]
+    .tx_cov_safe <- rent_safe_source[!is.na(transfer_year) & !is.na(log_med_rent_safe),
+                                      .(has_pre  = any(event_time < 0L, na.rm = TRUE),
+                                        has_post = any(event_time >= 0L, na.rm = TRUE)),
+                                      by = PID]
+    .valid_tx_safe <- .tx_cov_safe[has_pre == TRUE & has_post == TRUE, PID]
+    .ctrl_cov_safe <- rent_safe_source[is.na(transfer_year) & !is.na(log_med_rent_safe),
+                                        .(n_obs = .N), by = PID]
+    .valid_ctrl_safe  <- .ctrl_cov_safe[n_obs >= 2L, PID]
+    .valid_ctrl_safe3 <- .ctrl_cov_safe[n_obs >= 3L, PID]
+    rent_safe_dt_full <- rent_safe_source[
+      (!is.na(transfer_year) & PID %chin% .valid_tx_safe) |
+      (is.na(transfer_year)  & PID %chin% .valid_ctrl_safe)
+    ]
+    rent_safe_coef_list <- list()
+    .res <- run_named_fullpanel(rent_safe_dt_full[!is.na(log_med_rent_safe)],
+                                "rent_safe_full", lhs = "log_med_rent_safe")
+    if (!is.null(.res)) rent_safe_coef_list[[length(rent_safe_coef_list) + 1L]] <- .res$coefs
+    for (fb in acq_bins_ordered) {
+      .sub <- subset_panel_main(rent_safe_dt_full,
+                                treated_filter = substitute(acq_filer_bin == FB, list(FB = fb)),
+                                outcome_col = "log_med_rent_safe")
+      .spec <- paste0("rent_safe_acq_", acq_bin_suffix(fb))
+      .res <- run_named_fullpanel(.sub, .spec, lhs = "log_med_rent_safe")
+      if (!is.null(.res)) rent_safe_coef_list[[length(rent_safe_coef_list) + 1L]] <- .res$coefs
+    }
+    if (length(rent_safe_coef_list) > 0L) {
+      all_rent_safe_coefs <- rbindlist(rent_safe_coef_list, use.names = TRUE, fill = TRUE)
+      fwrite(all_rent_safe_coefs, out_path("rent_safe_coefs.csv"))
+      plot_event_coefs(all_rent_safe_coefs, "rent_safe_full",
+                       paste0("Event Study: Log Rent (Safe, single-source) (", fp$label, ")"),
+                       fig_path("rent_safe_full.png"), y_label = "Log median rent (safe)")
+      .filer_safe_specs <- grep("^rent_safe_acq_", unique(all_rent_safe_coefs$spec), value = TRUE)
+      if (length(.filer_safe_specs) > 1L)
+        plot_event_coefs(all_rent_safe_coefs, .filer_safe_specs,
+                         paste0("Event Study: Log Rent (Safe) by Acquirer Type (", fp$label, ")"),
+                         fig_path("rent_safe_by_acq_filer.png"), facet = TRUE,
+                         y_label = "Log median rent (safe)")
+    }
+    rent_safe_dt_ctrl3 <- rent_safe_source[
+      (!is.na(transfer_year) & PID %chin% .valid_tx_safe) |
+      (is.na(transfer_year)  & PID %chin% .valid_ctrl_safe3)
+    ]
+    rent_safe_robust_list <- list()
+    .res <- run_named_fullpanel(rent_safe_dt_ctrl3[!is.na(log_med_rent_safe)],
+                                "rent_safe_ctrl3", lhs = "log_med_rent_safe")
+    if (!is.null(.res)) rent_safe_robust_list[[length(rent_safe_robust_list) + 1L]] <- .res$coefs
+    .res <- run_named_fullpanel(
+      rent_safe_dt_ctrl3[!is.na(log_med_rent_safe) & !is.na(tract_year_fe)],
+      "rent_safe_ctrl3_tract_year", lhs = "log_med_rent_safe", fe = "PID + tract_year_fe"
+    )
+    if (!is.null(.res)) rent_safe_robust_list[[length(rent_safe_robust_list) + 1L]] <- .res$coefs
+    if (length(rent_safe_robust_list) > 0L) {
+      rent_safe_robust_all <- rbindlist(rent_safe_robust_list, use.names = TRUE, fill = TRUE)
+      fwrite(rent_safe_robust_all, out_path("rent_safe_robustness_coefs.csv"))
+      plot_event_coefs(rent_safe_robust_all, unique(rent_safe_robust_all$spec),
+                       paste0("Rent (Safe) Robustness Checks (", fp$label, ")"),
+                       fig_path("rent_safe_robustness.png"),
+                       facet = TRUE, y_label = "Log median rent (safe)")
+    }
 
   # --- Other outcomes ---
   race_all_coefs <- list()
@@ -4626,6 +5270,7 @@ if (freq == "annual" && !is.null(full_panel_main)) {
                        by = phase4_conglomerate]
   setorder(phase4_portfolio_tbl, phase4_conglomerate, portfolio_bin)
   fwrite(phase4_portfolio_tbl, out_path("phase4_consolidation.csv"))
+  }
 }
 
 logf("=== analyze-transfer-evictions-unified.R (", fp$label, ") complete ===",
