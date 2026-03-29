@@ -220,6 +220,12 @@ year fixed effects. Non-filing outcomes continue to use the annual
 \texttt{PID\ +\ year} event-study design on the same \texttt{-3:3}
 window.
 
+Operationally, \texttt{q\_weight} corrects the fact that the same
+never-transferred controls are reused in multiple cohort stacks.
+Multiplying by \texttt{total\_units} then makes the corrected stacked
+estimator unit-weighted, so the filing results are a weighted average
+over unit exposure rather than a simple parcel average.
+
 The annual surface has been pruned to four blocks:
 
 \begin{itemize}
@@ -241,6 +247,30 @@ all holdings, including \texttt{1-unit} buildings. The filing and
 neighborhood-outcome regressions then restrict the estimation sample as
 needed.
 
+The acquirer bins are:
+
+\begin{itemize}
+\tightlist
+\item
+  \texttt{Single-purchase}: leave-one-out portfolio exposure is exactly
+  \texttt{0} unit-years.
+\item
+  \texttt{Small\ portfolio}: leave-one-out portfolio exposure is
+  positive but below 100 unit-years.
+\item
+  \texttt{Low-filer\ portfolio}: leave-one-out portfolio exposure is at
+  least 100 unit-years and the leave-one-out filing rate is below 0.05
+  filings per unit-year.
+\item
+  \texttt{High-filer\ portfolio}: leave-one-out portfolio exposure is at
+  least 100 unit-years and the leave-one-out filing rate is at least
+  0.05 filings per unit-year.
+\end{itemize}
+
+For the filing-rate outcome and for the leave-one-out filing-rate bins,
+annual filing rates are capped at 0.75 filings per unit-year before
+aggregation.
+
 \section{Main Filing Results}\label{main-filing-results}
 
 The main filing figures now use the weighted stacked estimator directly.
@@ -251,24 +281,24 @@ close, while \texttt{1-unit} properties are shown separately as the
 single-family contrast and the \texttt{10+} cut is treated as a stricter
 appendix validation rather than the main specification.
 
-At \texttt{t\ =\ +1}, the filing-rate coefficient is 0.0096 for
-\texttt{2+\ units}, 0.0059 for \texttt{5+\ units}, and 0.0030 for
+At \texttt{t\ =\ +1}, the filing-rate coefficient is 0.0088 for
+\texttt{2+\ units}, 0.0051 for \texttt{5+\ units}, and 0.0044 for
 \texttt{10+\ units}.
 
 \begin{longtable}[t]{lrrr}
 \caption{\label{tab:filing-sample-table}Sample sizes for the streamlined annual filing-rate event studies}\\
 \toprule
-Sample & Rows & Treated PIDs & Control PIDs\\
+Sample & Treated transfers & Control PIDs & Stacked rows\\
 \midrule
-All buildings & 6,960,484 & 32,006 & 123,376\\
-1-unit & 5,148,966 & 24,676 & 90,413\\
-2+ units & 1,811,495 & 7,330 & 32,976\\
-2+ units, rental evidence & 985,907 & 6,148 & 28,792\\
-5+ units & 258,330 & 662 & 5,089\\
+All buildings & 32,006 & 123,376 & 6,960,484\\
+1-unit & 24,676 & 90,413 & 5,148,966\\
+2+ units & 7,330 & 32,976 & 1,811,495\\
+2+ units, rental evidence & 6,148 & 28,792 & 985,907\\
+5+ units & 662 & 5,089 & 258,330\\
 \addlinespace
-5+ units, rental evidence & 113,778 & 548 & 3,874\\
-10+ units & 121,631 & 290 & 2,551\\
-10+ units, rental evidence & 57,728 & 236 & 1,923\\
+5+ units, rental evidence & 548 & 3,874 & 113,778\\
+10+ units & 290 & 2,551 & 121,631\\
+10+ units, rental evidence & 236 & 1,923 & 57,728\\
 \bottomrule
 \end{longtable}
 
@@ -293,28 +323,28 @@ tables.}
 \begin{tabular}{lcccccccc}
    \toprule
     & \multicolumn{8}{c}{filing\_rate}\\
-   Sample                     & All buildings      & 1-unit         & 2+ units              & 2+ units, rental evidence & 5+ units      & 5+ units, rental evidence & 10+ units     & 10+ units, rental evidence \\   
-                              & (1)                & (2)            & (3)                   & (4)                       & (5)           & (6)                       & (7)           & (8)\\  
+   Sample                     & All buildings         & 1-unit         & 2+ units              & 2+ units, rental evidence & 5+ units      & 5+ units, rental evidence & 10+ units     & 10+ units, rental evidence \\   
+                              & (1)                   & (2)            & (3)                   & (4)                       & (5)           & (6)                       & (7)           & (8)\\  
    \midrule 
-   st\_et\_m3                 & -0.0005            & 0.0002         & -0.0009               & -0.0051                   & -0.0029       & -0.0073                   & -0.0039       & -0.0100\\   
-                              & (0.0015)           & (0.0015)       & (0.0026)              & (0.0058)                  & (0.0056)      & (0.0107)                  & (0.0068)      & (0.0128)\\   
-   st\_et\_m1                 & 0.0056$^{***}$     & 0.0059$^{***}$ & 0.0052$^{*}$          & 0.0125$^{**}$             & 0.0012        & 0.0045                    & 0.0017        & 0.0018\\   
-                              & (0.0016)           & (0.0016)       & (0.0027)              & (0.0063)                  & (0.0058)      & (0.0115)                  & (0.0071)      & (0.0132)\\   
-   st\_et\_0                  & 0.0017             & 0.0026         & 0.0008                & -0.0017                   & -0.0046       & -0.0055                   & -0.0100       & -0.0164\\   
-                              & (0.0018)           & (0.0017)       & (0.0032)              & (0.0070)                  & (0.0070)      & (0.0129)                  & (0.0083)      & (0.0150)\\   
-   st\_et\_1                  & 0.0151$^{***}$     & 0.0208$^{***}$ & 0.0096$^{***}$        & 0.0099                    & 0.0059        & 0.0112                    & 0.0030        & 0.0052\\   
-                              & (0.0021)           & (0.0020)       & (0.0037)              & (0.0084)                  & (0.0080)      & (0.0149)                  & (0.0097)      & (0.0173)\\   
-   st\_et\_2                  & 0.0195$^{***}$     & 0.0274$^{***}$ & 0.0124$^{**}$         & 0.0113                    & 0.0165        & 0.0257                    & 0.0104        & 0.0153\\   
-                              & (0.0027)           & (0.0021)       & (0.0049)              & (0.0106)                  & (0.0110)      & (0.0193)                  & (0.0128)      & (0.0218)\\   
-   st\_et\_3                  & 0.0199$^{***}$     & 0.0269$^{***}$ & 0.0137$^{***}$        & 0.0115                    & 0.0179$^{*}$  & 0.0258                    & 0.0127        & 0.0169\\   
-                              & (0.0025)           & (0.0021)       & (0.0045)              & (0.0099)                  & (0.0099)      & (0.0180)                  & (0.0114)      & (0.0202)\\   
+   st\_et\_m3                 & -0.0006               & 0.0002         & -0.0012               & -0.0057                   & -0.0035       & -0.0082                   & -0.0043       & -0.0107\\   
+                              & (0.0013)              & (0.0010)       & (0.0024)              & (0.0054)                  & (0.0054)      & (0.0104)                  & (0.0067)      & (0.0125)\\   
+   st\_et\_m1                 & 0.0045$^{***}$        & 0.0045$^{***}$ & 0.0045$^{*}$          & 0.0103$^{*}$              & 0.0009        & 0.0019                    & 0.0013        & 0.0013\\   
+                              & (0.0014)              & (0.0011)       & (0.0026)              & (0.0060)                  & (0.0057)      & (0.0110)                  & (0.0071)      & (0.0132)\\   
+   st\_et\_0                  & 0.0015                & 0.0022$^{*}$   & 0.0008                & -0.0019                   & -0.0052       & -0.0072                   & -0.0094       & -0.0152\\   
+                              & (0.0016)              & (0.0011)       & (0.0030)              & (0.0065)                  & (0.0067)      & (0.0123)                  & (0.0083)      & (0.0148)\\   
+   st\_et\_1                  & 0.0112$^{***}$        & 0.0137$^{***}$ & 0.0088$^{**}$         & 0.0083                    & 0.0051        & 0.0093                    & 0.0044        & 0.0079\\   
+                              & (0.0019)              & (0.0013)       & (0.0034)              & (0.0077)                  & (0.0076)      & (0.0140)                  & (0.0094)      & (0.0166)\\   
+   st\_et\_2                  & 0.0138$^{***}$        & 0.0182$^{***}$ & 0.0098$^{**}$         & 0.0068                    & 0.0108        & 0.0160                    & 0.0096        & 0.0145\\   
+                              & (0.0021)              & (0.0013)       & (0.0040)              & (0.0087)                  & (0.0090)      & (0.0156)                  & (0.0110)      & (0.0187)\\   
+   st\_et\_3                  & 0.0144$^{***}$        & 0.0175$^{***}$ & 0.0118$^{***}$        & 0.0084                    & 0.0141        & 0.0190                    & 0.0138        & 0.0190\\   
+                              & (0.0022)              & (0.0013)       & (0.0040)              & (0.0088)                  & (0.0090)      & (0.0161)                  & (0.0111)      & (0.0194)\\   
     \\
-   Observations               & 6,960,484          & 5,148,966      & 1,811,495             & 985,907                   & 258,330       & 113,778                   & 121,631       & 57,728\\  
-   R$^2$                      & 0.44371            & 0.32750        & 0.62041               & 0.64365                   & 0.78199       & 0.77970                   & 0.78786       & 0.77942\\  
-   Within R$^2$               & $8\times 10^{-5}$  & 0.00010        & $6.61\times 10^{-5}$  & $5.08\times 10^{-5}$      & 0.00020       & 0.00028                   & 0.00017       & 0.00026\\  
+   Observations               & 6,960,484             & 5,148,966      & 1,811,495             & 985,907                   & 258,330       & 113,778                   & 121,631       & 57,728\\  
+   R$^2$                      & 0.44893               & 0.26811        & 0.60936               & 0.63480                   & 0.79893       & 0.79218                   & 0.81745       & 0.80832\\  
+   Within R$^2$               & $9.24\times 10^{-5}$  & 0.00011        & $7.81\times 10^{-5}$  & $5.8\times 10^{-5}$       & 0.00021       & 0.00028                   & 0.00026       & 0.00039\\  
     \\
-   pid\_cohort fixed effects  & $\checkmark$       & $\checkmark$   & $\checkmark$          & $\checkmark$              & $\checkmark$  & $\checkmark$              & $\checkmark$  & $\checkmark$\\   
-   yr\_cohort fixed effects   & $\checkmark$       & $\checkmark$   & $\checkmark$          & $\checkmark$              & $\checkmark$  & $\checkmark$              & $\checkmark$  & $\checkmark$\\   
+   pid\_cohort fixed effects  & $\checkmark$          & $\checkmark$   & $\checkmark$          & $\checkmark$              & $\checkmark$  & $\checkmark$              & $\checkmark$  & $\checkmark$\\   
+   yr\_cohort fixed effects   & $\checkmark$          & $\checkmark$   & $\checkmark$          & $\checkmark$              & $\checkmark$  & $\checkmark$              & $\checkmark$  & $\checkmark$\\   
    \bottomrule
 \end{tabular}
 \par\endgroup
@@ -328,14 +358,14 @@ tables.}
 \toprule
 Sample & t+1 & t+2 & t+3\\
 \midrule
-1-unit & 0.0208 & 0.0274 & 0.0269\\
-10+ units & 0.0030 & 0.0104 & 0.0127\\
-10+ units, rental evidence & 0.0052 & 0.0153 & 0.0169\\
-2+ units & 0.0096 & 0.0124 & 0.0137\\
-2+ units, rental evidence & 0.0099 & 0.0113 & 0.0115\\
+1-unit & 0.0137 & 0.0182 & 0.0175\\
+10+ units & 0.0044 & 0.0096 & 0.0138\\
+10+ units, rental evidence & 0.0079 & 0.0145 & 0.0190\\
+2+ units & 0.0088 & 0.0098 & 0.0118\\
+2+ units, rental evidence & 0.0083 & 0.0068 & 0.0084\\
 \addlinespace
-5+ units & 0.0059 & 0.0165 & 0.0178\\
-5+ units, rental evidence & 0.0112 & 0.0257 & 0.0258\\
+5+ units & 0.0051 & 0.0108 & 0.0141\\
+5+ units, rental evidence & 0.0093 & 0.0160 & 0.0190\\
 \bottomrule
 \end{longtable}
 
@@ -359,8 +389,25 @@ The main heterogeneity split uses four acquirer types:
 These categories are defined from the helper-function leave-one-out
 portfolio measures, while the regression itself is restricted to
 \texttt{2+\ unit} buildings. In the current annual weighted stacked
-outputs, the \texttt{t\ =\ +2} coefficient is 0.0460 for high-filer
-portfolios and -0.0115 for low-filer portfolios.
+outputs, the \texttt{t\ =\ +2} coefficient is 0.0325 for high-filer
+portfolios and -0.0069 for low-filer portfolios.
+
+The standard errors differ sharply across these bins. At
+\texttt{t\ =\ +2}, the high-filer estimate has standard error 0.0436
+versus 0.0068 for low-filer acquirers, which largely reflects the much
+smaller treated sample for high-filer acquisitions.
+
+\begin{longtable}[t]{lrrrr}
+\caption{\label{tab:filing-acq-sample-table}Weighted stacked 2+ filing-rate sample sizes by acquirer type}\\
+\toprule
+Acquirer type & Treated transfers & Control PIDs & Stacked rows & Trimmed cohorts\\
+\midrule
+High-filer portfolio & 320 & 32,976 & 1,764,405 & 8\\
+Low-filer portfolio & 886 & 32,976 & 1,767,856 & 8\\
+Small portfolio & 1,572 & 32,976 & 1,772,560 & 8\\
+Single-purchase & 4,484 & 32,976 & 1,792,808 & 8\\
+\bottomrule
+\end{longtable}
 
 \begin{figure}[H]
 
@@ -382,28 +429,28 @@ same 2+ unit sample.}
 \begin{tabular}{lcccc}
    \toprule
     & \multicolumn{4}{c}{filing\_rate}\\
-   Acquirer type              & High-filer portfolio & Low-filer portfolio   & Small portfolio       & Single-purchase \\   
-                              & (1)                  & (2)                   & (3)                   & (4)\\  
+   Acquirer type              & High-filer portfolio & Low-filer portfolio   & Small portfolio      & Single-purchase \\   
+                              & (1)                  & (2)                   & (3)                  & (4)\\  
    \midrule 
-   st\_et\_m3                 & 0.0015               & -0.0071               & -0.0002               & 0.0004\\   
-                              & (0.0183)             & (0.0084)              & (0.0036)              & (0.0029)\\   
-   st\_et\_m1                 & -0.0263$^{*}$        & 0.0194$^{*}$          & 0.0073$^{*}$          & 0.0060$^{**}$\\   
-                              & (0.0147)             & (0.0113)              & (0.0039)              & (0.0028)\\   
-   st\_et\_0                  & -0.0117              & -0.0013               & 0.0165$^{***}$        & -0.0007\\   
-                              & (0.0254)             & (0.0041)              & (0.0049)              & (0.0038)\\   
-   st\_et\_1                  & 0.0313               & -0.0006               & 0.0233$^{***}$        & 0.0062\\   
-                              & (0.0302)             & (0.0054)              & (0.0053)              & (0.0041)\\   
-   st\_et\_2                  & 0.0461               & -0.0115               & 0.0204$^{***}$        & 0.0128$^{***}$\\   
-                              & (0.0492)             & (0.0073)              & (0.0055)              & (0.0047)\\   
-   st\_et\_3                  & 0.0410               & -0.0080               & 0.0213$^{***}$        & 0.0121$^{**}$\\   
-                              & (0.0358)             & (0.0076)              & (0.0050)              & (0.0049)\\   
+   st\_et\_m3                 & 0.0020               & -0.0055               & 0.0014               & -0.0008\\   
+                              & (0.0189)             & (0.0079)              & (0.0033)             & (0.0027)\\   
+   st\_et\_m1                 & -0.0237              & 0.0177$^{*}$          & 0.0076$^{**}$        & 0.0042\\   
+                              & (0.0161)             & (0.0106)              & (0.0036)             & (0.0026)\\   
+   st\_et\_0                  & -0.0106              & $2.62\times 10^{-5}$  & 0.0155$^{***}$       & -0.0010\\   
+                              & (0.0285)             & (0.0038)              & (0.0044)             & (0.0036)\\   
+   st\_et\_1                  & 0.0296               & 0.0032                & 0.0212$^{***}$       & 0.0051\\   
+                              & (0.0337)             & (0.0050)              & (0.0045)             & (0.0037)\\   
+   st\_et\_2                  & 0.0325               & -0.0069               & 0.0185$^{***}$       & 0.0102$^{***}$\\   
+                              & (0.0436)             & (0.0068)              & (0.0046)             & (0.0039)\\   
+   st\_et\_3                  & 0.0359               & -0.0031               & 0.0202$^{***}$       & 0.0094$^{**}$\\   
+                              & (0.0399)             & (0.0072)              & (0.0044)             & (0.0042)\\   
     \\
-   Observations               & 1,764,943            & 1,767,318             & 1,772,560             & 1,792,808\\  
-   R$^2$                      & 0.62451              & 0.62374               & 0.62118               & 0.62185\\  
-   Within R$^2$               & 0.00010              & $2.63\times 10^{-5}$  & $2.92\times 10^{-5}$  & $3.61\times 10^{-5}$\\   
+   Observations               & 1,764,405            & 1,767,856             & 1,772,560            & 1,792,808\\  
+   R$^2$                      & 0.61259              & 0.61097               & 0.61044              & 0.61078\\  
+   Within R$^2$               & 0.00010              & $2.99\times 10^{-5}$  & $3.7\times 10^{-5}$  & $4.01\times 10^{-5}$\\   
     \\
-   pid\_cohort fixed effects  & $\checkmark$         & $\checkmark$          & $\checkmark$          & $\checkmark$\\   
-   yr\_cohort fixed effects   & $\checkmark$         & $\checkmark$          & $\checkmark$          & $\checkmark$\\   
+   pid\_cohort fixed effects  & $\checkmark$         & $\checkmark$          & $\checkmark$         & $\checkmark$\\   
+   yr\_cohort fixed effects   & $\checkmark$         & $\checkmark$          & $\checkmark$         & $\checkmark$\\   
    \bottomrule
 \end{tabular}
 \par\endgroup
@@ -417,10 +464,10 @@ same 2+ unit sample.}
 \toprule
 Acquirer type & t+1 & t+2 & t+3\\
 \midrule
-High-filer portfolio & 0.0313 & 0.0460 & 0.0410\\
-Low-filer portfolio & -0.0006 & -0.0115 & -0.0080\\
-Single-purchase & 0.0062 & 0.0128 & 0.0122\\
-Small portfolio & 0.0233 & 0.0204 & 0.0213\\
+High-filer portfolio & 0.0296 & 0.0325 & 0.0359\\
+Low-filer portfolio & 0.0032 & -0.0069 & -0.0031\\
+Single-purchase & 0.0051 & 0.0102 & 0.0094\\
+Small portfolio & 0.0212 & 0.0185 & 0.0202\\
 \bottomrule
 \end{longtable}
 
@@ -454,22 +501,22 @@ by acquirer filing type.}
    Acquirer type      & High-filer portfolio & Low-filer portfolio & Small portfolio       & Single-purchase \\   
                       & (1)                  & (2)                 & (3)                   & (4)\\  
    \midrule 
-   et\_m3             & -0.0199              & 0.0077              & -0.0110               & 0.0133\\   
-                      & (0.0274)             & (0.0158)            & (0.0068)              & (0.0090)\\   
-   et\_m1             & -0.0432              & -0.0277             & -0.0091               & 0.0112\\   
-                      & (0.0294)             & (0.0193)            & (0.0079)              & (0.0087)\\   
-   et\_0              & -0.0254              & -0.0681$^{***}$     & -0.0133               & 0.0016\\   
-                      & (0.0299)             & (0.0213)            & (0.0083)              & (0.0090)\\   
-   et\_1              & -0.0377              & -0.0875$^{***}$     & -0.0120               & -0.0096\\   
-                      & (0.0313)             & (0.0243)            & (0.0086)              & (0.0101)\\   
-   et\_2              & -0.0687$^{**}$       & -0.0903$^{***}$     & -0.0163$^{**}$        & -0.0097\\   
-                      & (0.0327)             & (0.0247)            & (0.0079)              & (0.0101)\\   
-   et\_3              & -0.0925$^{**}$       & -0.0823$^{***}$     & -0.0230$^{***}$       & -0.0182$^{*}$\\   
-                      & (0.0403)             & (0.0280)            & (0.0079)              & (0.0104)\\   
+   et\_m3             & -0.0270              & 0.0101              & -0.0110               & 0.0133\\   
+                      & (0.0293)             & (0.0155)            & (0.0068)              & (0.0090)\\   
+   et\_m1             & -0.0496              & -0.0245             & -0.0091               & 0.0112\\   
+                      & (0.0319)             & (0.0184)            & (0.0079)              & (0.0087)\\   
+   et\_0              & -0.0234              & -0.0664$^{***}$     & -0.0133               & 0.0016\\   
+                      & (0.0326)             & (0.0202)            & (0.0083)              & (0.0090)\\   
+   et\_1              & -0.0363              & -0.0849$^{***}$     & -0.0120               & -0.0096\\   
+                      & (0.0342)             & (0.0229)            & (0.0086)              & (0.0101)\\   
+   et\_2              & -0.0692$^{*}$        & -0.0883$^{***}$     & -0.0163$^{**}$        & -0.0097\\   
+                      & (0.0364)             & (0.0233)            & (0.0079)              & (0.0101)\\   
+   et\_3              & -0.0998$^{**}$       & -0.0788$^{***}$     & -0.0230$^{***}$       & -0.0182$^{*}$\\   
+                      & (0.0447)             & (0.0264)            & (0.0079)              & (0.0104)\\   
     \\
-   Observations       & 451,695              & 459,341             & 482,530               & 570,594\\  
-   R$^2$              & 0.49360              & 0.50053             & 0.49623               & 0.50568\\  
-   Within R$^2$       & 0.00037              & 0.00095             & $4.74\times 10^{-5}$  & 0.00016\\  
+   Observations       & 449,740              & 461,296             & 482,530               & 570,594\\  
+   R$^2$              & 0.49400              & 0.50014             & 0.49623               & 0.50568\\  
+   Within R$^2$       & 0.00037              & 0.00096             & $4.74\times 10^{-5}$  & 0.00016\\  
     \\
    PID fixed effects  & $\checkmark$         & $\checkmark$        & $\checkmark$          & $\checkmark$\\   
    year fixed effects & $\checkmark$         & $\checkmark$        & $\checkmark$          & $\checkmark$\\   
@@ -576,22 +623,22 @@ filing type.}
    Acquirer type      & High-filer portfolio & Low-filer portfolio & Small portfolio & Single-purchase \\   
                       & (1)                  & (2)                 & (3)             & (4)\\  
    \midrule 
-   et\_m3             & 0.0242               & 0.0388              & -0.0273         & -0.0442$^{***}$\\   
-                      & (0.0240)             & (0.0710)            & (0.0227)        & (0.0151)\\   
-   et\_m1             & 0.0123               & -0.0367             & -0.0069         & -0.0135\\   
-                      & (0.0148)             & (0.0498)            & (0.0178)        & (0.0111)\\   
-   et\_0              & 0.0084               & 0.0323$^{**}$       & -0.0233         & -0.0064\\   
-                      & (0.0139)             & (0.0143)            & (0.0246)        & (0.0139)\\   
-   et\_1              & 0.0110               & 0.0356              & 0.0429$^{***}$  & -0.0080\\   
-                      & (0.0128)             & (0.0228)            & (0.0119)        & (0.0152)\\   
-   et\_2              & 0.0488$^{***}$       & 0.1865$^{***}$      & 0.0406$^{***}$  & 0.0301$^{**}$\\   
-                      & (0.0163)             & (0.0661)            & (0.0146)        & (0.0152)\\   
-   et\_3              & 0.0342$^{**}$        & 0.1772$^{**}$       & 0.0248          & 0.0131\\   
-                      & (0.0160)             & (0.0711)            & (0.0172)        & (0.0171)\\   
+   et\_m3             & 0.0245               & 0.0376              & -0.0273         & -0.0442$^{***}$\\   
+                      & (0.0244)             & (0.0687)            & (0.0227)        & (0.0151)\\   
+   et\_m1             & 0.0122               & -0.0352             & -0.0069         & -0.0135\\   
+                      & (0.0151)             & (0.0469)            & (0.0178)        & (0.0111)\\   
+   et\_0              & 0.0077               & 0.0331$^{**}$       & -0.0233         & -0.0064\\   
+                      & (0.0144)             & (0.0134)            & (0.0246)        & (0.0139)\\   
+   et\_1              & 0.0103               & 0.0357              & 0.0429$^{***}$  & -0.0080\\   
+                      & (0.0131)             & (0.0217)            & (0.0119)        & (0.0152)\\   
+   et\_2              & 0.0476$^{***}$       & 0.1795$^{***}$      & 0.0406$^{***}$  & 0.0301$^{**}$\\   
+                      & (0.0168)             & (0.0635)            & (0.0146)        & (0.0152)\\   
+   et\_3              & 0.0337$^{**}$        & 0.1713$^{**}$       & 0.0248          & 0.0131\\   
+                      & (0.0164)             & (0.0691)            & (0.0172)        & (0.0171)\\   
     \\
-   Observations       & 117,300              & 116,488             & 118,763         & 122,939\\  
-   R$^2$              & 0.88831              & 0.88645             & 0.88769         & 0.88983\\  
-   Within R$^2$       & 0.00041              & 0.00418             & 0.00034         & 0.00092\\  
+   Observations       & 116,980              & 116,808             & 118,763         & 122,939\\  
+   R$^2$              & 0.88830              & 0.88645             & 0.88769         & 0.88983\\  
+   Within R$^2$       & 0.00038              & 0.00411             & 0.00034         & 0.00092\\  
     \\
    PID fixed effects  & $\checkmark$         & $\checkmark$        & $\checkmark$    & $\checkmark$\\   
    year fixed effects & $\checkmark$         & $\checkmark$        & $\checkmark$    & $\checkmark$\\   
@@ -625,22 +672,22 @@ units, overall and by acquirer filing type.}
    Acquirer type      & High-filer portfolio & Low-filer portfolio & Small portfolio & Single-purchase \\   
                       & (1)                  & (2)                 & (3)             & (4)\\  
    \midrule 
-   et\_m3             & -0.0166              & 0.0349              & -0.0619$^{***}$ & -0.0469$^{**}$\\   
-                      & (0.0278)             & (0.1255)            & (0.0216)        & (0.0199)\\   
-   et\_m1             & -0.0163              & -0.0877$^{*}$       & -0.0355         & -0.0177\\   
-                      & (0.0290)             & (0.0508)            & (0.0272)        & (0.0133)\\   
-   et\_0              & -0.0492$^{**}$       & 0.0343              & -0.0940$^{**}$  & -0.0302$^{*}$\\   
-                      & (0.0213)             & (0.0310)            & (0.0400)        & (0.0174)\\   
-   et\_1              & -0.0223              & 0.0715$^{*}$        & -0.0006         & -0.0217\\   
-                      & (0.0268)             & (0.0411)            & (0.0227)        & (0.0193)\\   
-   et\_2              & 0.0065               & 0.0816              & -0.0281         & 0.0273\\   
-                      & (0.0385)             & (0.0685)            & (0.0199)        & (0.0217)\\   
-   et\_3              & -0.0267              & 0.1138              & 0.0044          & 0.0169\\   
-                      & (0.0278)             & (0.0990)            & (0.0265)        & (0.0215)\\   
+   et\_m3             & -0.0157              & 0.0326              & -0.0619$^{***}$ & -0.0469$^{**}$\\   
+                      & (0.0283)             & (0.1226)            & (0.0216)        & (0.0199)\\   
+   et\_m1             & -0.0170              & -0.0839$^{*}$       & -0.0355         & -0.0177\\   
+                      & (0.0293)             & (0.0493)            & (0.0272)        & (0.0133)\\   
+   et\_0              & -0.0500$^{**}$       & 0.0321              & -0.0940$^{**}$  & -0.0302$^{*}$\\   
+                      & (0.0216)             & (0.0296)            & (0.0400)        & (0.0174)\\   
+   et\_1              & -0.0228              & 0.0691$^{*}$        & -0.0006         & -0.0217\\   
+                      & (0.0272)             & (0.0395)            & (0.0227)        & (0.0193)\\   
+   et\_2              & 0.0051               & 0.0817              & -0.0281         & 0.0273\\   
+                      & (0.0389)             & (0.0666)            & (0.0199)        & (0.0217)\\   
+   et\_3              & -0.0274              & 0.1130              & 0.0044          & 0.0169\\   
+                      & (0.0279)             & (0.0979)            & (0.0265)        & (0.0215)\\   
     \\
-   Observations       & 85,909               & 85,733              & 86,869          & 89,257\\  
+   Observations       & 85,818               & 85,824              & 86,869          & 89,257\\  
    R$^2$              & 0.91663              & 0.91568             & 0.91662         & 0.91800\\  
-   Within R$^2$       & 0.00035              & 0.00190             & 0.00074         & 0.00160\\  
+   Within R$^2$       & 0.00036              & 0.00185             & 0.00074         & 0.00160\\  
     \\
    PID fixed effects  & $\checkmark$         & $\checkmark$        & $\checkmark$    & $\checkmark$\\   
    year fixed effects & $\checkmark$         & $\checkmark$        & $\checkmark$    & $\checkmark$\\   
@@ -681,22 +728,22 @@ and by acquirer filing type.}
    Acquirer type      & High-filer portfolio & Low-filer portfolio & Small portfolio & Single-purchase \\   
                       & (1)                  & (2)                 & (3)             & (4)\\  
    \midrule 
-   et\_m3             & -0.2448$^{***}$      & -0.1555$^{***}$     & -0.1291$^{***}$ & -0.0364$^{***}$\\   
-                      & (0.0089)             & (0.0054)            & (0.0037)        & (0.0025)\\   
-   et\_m1             & -0.3609$^{***}$      & -0.2304$^{***}$     & -0.2187$^{***}$ & -0.0941$^{***}$\\   
-                      & (0.0092)             & (0.0069)            & (0.0043)        & (0.0030)\\   
-   et\_0              & -0.0152              & 0.0920$^{***}$      & 0.0237$^{***}$  & -0.0149$^{***}$\\   
-                      & (0.0134)             & (0.0107)            & (0.0063)        & (0.0037)\\   
-   et\_1              & 0.2107$^{***}$       & 0.3284$^{***}$      & 0.1817$^{***}$  & -0.0022\\   
-                      & (0.0115)             & (0.0106)            & (0.0065)        & (0.0039)\\   
-   et\_2              & 0.2122$^{***}$       & 0.3437$^{***}$      & 0.2020$^{***}$  & 0.0118$^{***}$\\   
-                      & (0.0099)             & (0.0100)            & (0.0061)        & (0.0036)\\   
-   et\_3              & 0.1775$^{***}$       & 0.3018$^{***}$      & 0.1845$^{***}$  & 0.0127$^{***}$\\   
-                      & (0.0082)             & (0.0094)            & (0.0055)        & (0.0032)\\   
+   et\_m3             & -0.2627$^{***}$      & -0.1628$^{***}$     & -0.1291$^{***}$ & -0.0364$^{***}$\\   
+                      & (0.0112)             & (0.0051)            & (0.0037)        & (0.0025)\\   
+   et\_m1             & -0.3955$^{***}$      & -0.2390$^{***}$     & -0.2187$^{***}$ & -0.0941$^{***}$\\   
+                      & (0.0110)             & (0.0064)            & (0.0043)        & (0.0030)\\   
+   et\_0              & -0.0676$^{***}$      & 0.0945$^{***}$      & 0.0237$^{***}$  & -0.0149$^{***}$\\   
+                      & (0.0156)             & (0.0098)            & (0.0063)        & (0.0037)\\   
+   et\_1              & 0.1739$^{***}$       & 0.3250$^{***}$      & 0.1817$^{***}$  & -0.0022\\   
+                      & (0.0138)             & (0.0095)            & (0.0065)        & (0.0039)\\   
+   et\_2              & 0.1915$^{***}$       & 0.3311$^{***}$      & 0.2020$^{***}$  & 0.0118$^{***}$\\   
+                      & (0.0115)             & (0.0089)            & (0.0061)        & (0.0036)\\   
+   et\_3              & 0.1601$^{***}$       & 0.2895$^{***}$      & 0.1845$^{***}$  & 0.0127$^{***}$\\   
+                      & (0.0092)             & (0.0084)            & (0.0055)        & (0.0032)\\   
     \\
-   Observations       & 830,325              & 834,388             & 899,683         & 1,106,683\\  
-   R$^2$              & 0.65132              & 0.64838             & 0.64408         & 0.62180\\  
-   Within R$^2$       & 0.00662              & 0.01061             & 0.01329         & 0.00169\\  
+   Observations       & 823,899              & 840,814             & 899,683         & 1,106,683\\  
+   R$^2$              & 0.65095              & 0.64885             & 0.64408         & 0.62180\\  
+   Within R$^2$       & 0.00477              & 0.01248             & 0.01329         & 0.00169\\  
     \\
    PID fixed effects  & $\checkmark$         & $\checkmark$        & $\checkmark$    & $\checkmark$\\   
    year fixed effects & $\checkmark$         & $\checkmark$        & $\checkmark$    & $\checkmark$\\   
@@ -730,22 +777,22 @@ and by acquirer filing type.}
    Acquirer type      & High-filer portfolio & Low-filer portfolio & Small portfolio & Single-purchase \\   
                       & (1)                  & (2)                 & (3)             & (4)\\  
    \midrule 
-   et\_m3             & -0.0691$^{***}$      & -0.0827$^{***}$     & -0.0596$^{***}$ & -0.0433$^{***}$\\   
-                      & (0.0123)             & (0.0258)            & (0.0100)        & (0.0105)\\   
-   et\_m1             & -0.1304$^{***}$      & -0.1572$^{***}$     & -0.1612$^{***}$ & -0.0772$^{***}$\\   
-                      & (0.0178)             & (0.0251)            & (0.0127)        & (0.0154)\\   
-   et\_0              & -0.0433$^{***}$      & -0.1125$^{***}$     & -0.0683$^{***}$ & -0.0340$^{**}$\\   
-                      & (0.0145)             & (0.0271)            & (0.0140)        & (0.0154)\\   
-   et\_1              & 0.0334               & -0.0486             & 0.0138          & -0.0349$^{*}$\\   
-                      & (0.0212)             & (0.0459)            & (0.0128)        & (0.0186)\\   
-   et\_2              & 0.0896$^{***}$       & 0.0138              & 0.0557$^{***}$  & 0.0087\\   
-                      & (0.0266)             & (0.0277)            & (0.0123)        & (0.0177)\\   
-   et\_3              & 0.1100$^{***}$       & 0.0377              & 0.0307$^{**}$   & -0.0191\\   
-                      & (0.0230)             & (0.0235)            & (0.0129)        & (0.0192)\\   
+   et\_m3             & -0.0584$^{***}$      & -0.0883$^{***}$     & -0.0596$^{***}$ & -0.0433$^{***}$\\   
+                      & (0.0117)             & (0.0246)            & (0.0100)        & (0.0105)\\   
+   et\_m1             & -0.1184$^{***}$      & -0.1626$^{***}$     & -0.1612$^{***}$ & -0.0772$^{***}$\\   
+                      & (0.0180)             & (0.0240)            & (0.0127)        & (0.0154)\\   
+   et\_0              & -0.0435$^{***}$      & -0.1085$^{***}$     & -0.0683$^{***}$ & -0.0340$^{**}$\\   
+                      & (0.0153)             & (0.0257)            & (0.0140)        & (0.0154)\\   
+   et\_1              & 0.0307               & -0.0430             & 0.0138          & -0.0349$^{*}$\\   
+                      & (0.0230)             & (0.0437)            & (0.0128)        & (0.0186)\\   
+   et\_2              & 0.0905$^{***}$       & 0.0176              & 0.0557$^{***}$  & 0.0087\\   
+                      & (0.0303)             & (0.0263)            & (0.0123)        & (0.0177)\\   
+   et\_3              & 0.1175$^{***}$       & 0.0389$^{*}$        & 0.0307$^{**}$   & -0.0191\\   
+                      & (0.0253)             & (0.0223)            & (0.0129)        & (0.0192)\\   
     \\
-   Observations       & 293,442              & 298,662             & 313,545         & 370,506\\  
-   R$^2$              & 0.71726              & 0.71349             & 0.71156         & 0.70131\\  
-   Within R$^2$       & 0.00098              & 0.00143             & 0.00175         & 0.00114\\  
+   Observations       & 292,164              & 299,940             & 313,545         & 370,506\\  
+   R$^2$              & 0.71742              & 0.71334             & 0.71156         & 0.70131\\  
+   Within R$^2$       & 0.00081              & 0.00157             & 0.00175         & 0.00114\\  
     \\
    PID fixed effects  & $\checkmark$         & $\checkmark$        & $\checkmark$    & $\checkmark$\\   
    year fixed effects & $\checkmark$         & $\checkmark$        & $\checkmark$    & $\checkmark$\\   

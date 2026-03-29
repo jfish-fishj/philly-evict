@@ -1,2 +1,2 @@
-analysis_year_min,analysis_year_max,meaningful_other_units_cutoff,high_filer_rate_cutoff,high_filer_rate_quantile,n_positive_meaningful_portfolio
-2006,2019,10,0.05,0.642789486147289,33784
+analysis_year_min,analysis_year_max,meaningful_loo_unit_years_cutoff,high_filer_rate_cutoff,filing_rate_cap,high_filer_rate_quantile,n_positive_meaningful_portfolio
+2006,2019,100,0.05,0.75,0.70610860332808,37439

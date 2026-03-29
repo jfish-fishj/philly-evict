@@ -511,3 +511,31 @@ Immediate next step (before interpreting demographic coefficients further):
   - `quarto render writeups/outer-sorting-baseline.qmd`
 - Iteration note:
   - `docs/notes/outer-sorting-infousa-composition-proxy-2026-03-09.md`
+
+---
+
+## Transfer Evictions Regression Catalog / Weighted Stacked Filing Baseline (2026-03-28)
+
+- Added a first-pass weighted stacked annual filing-rate block to:
+  - `r/analyze-transfer-evictions-unified.R`
+- New outputs:
+  - `output/transfer_evictions/annual_baseline_stacked_weighted_coefs.csv`
+  - `output/transfer_evictions/annual_baseline_stacked_weighted_qweights.csv`
+  - `output/transfer_evictions/annual_baseline_stacked_weighted_etable.tex`
+  - `output/transfer_evictions/figs/rtt_annual_baseline_stacked_weighted.png`
+- Standalone note:
+  - `docs/notes/transfer-evictions-regression-catalog-2026-03-28.md`
+- Main takeaway:
+  - weighted stacked pre-period coefficients for filing rate are much flatter than the earlier ad hoc unweighted stacked checks, so the weighted stacked path looks usable as a robustness spec
+  - added a first-pass streamlined annual core-output block centered on filings, 2+ buyer/filer splits, 2+ composition/occupancy/complaints/permits, all-unit rent, and 1-unit vs 2+ rental-evidence LPMs
+
+---
+
+## Transfer Evictions Filing Cap / Sample Reporting Update (2026-03-28)
+
+- Added a `0.75` filings-per-unit-year cap to the annual transfer-evictions filing-rate outcome.
+- Applied the same cap inside `compute_loo_filing_type()` for the transfer-evictions acquirer-bin construction, so the outcome and the filer bins use the same tail treatment.
+- Expanded `writeups/transfer-evictions.qmd` to define the weighted stacked estimator, explain how `q_weight` interacts with `total_units`, and report sample-size tables for the main filing grid and the `2+` acquirer split.
+- Added `filing_rate_cap` to `output/transfer_evictions/annual_acq_cutoffs.csv`.
+- Iteration note:
+  - `docs/notes/transfer-evictions-filing-cap-sample-docs-2026-03-28.md`

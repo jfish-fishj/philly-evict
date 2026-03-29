@@ -135,8 +135,14 @@ ACQ_HIGH_FILER_THRESHOLD <- as.numeric(
     cfg$run$acq_high_filer_threshold %||%
     0.05
 )
+MAX_ALLOWABLE_FILING_RATE <- as.numeric(
+  cfg$run$transfer_evictions_max_filing_rate %||% 0.75
+)
 if (!is.finite(ACQ_HIGH_FILER_THRESHOLD) || ACQ_HIGH_FILER_THRESHOLD <= 0 || ACQ_HIGH_FILER_THRESHOLD >= 1) {
   stop("Invalid LOO filing threshold: expected a number strictly between 0 and 1.")
+}
+if (!is.finite(MAX_ALLOWABLE_FILING_RATE) || MAX_ALLOWABLE_FILING_RATE <= 0) {
+  stop("Invalid transfer-evictions filing-rate cap: expected a positive number.")
 }
 ACQ_BIN_LABELS <- c(
   "High-filer portfolio",
@@ -707,7 +713,8 @@ logf("  bldg_loo panel span: ", bldg_loo[, min(year)], "-", bldg_loo[, max(year)
 loo_type <- compute_loo_filing_type(
   pid_yr_dt            = bldg_loo,
   loo_min_unit_years   = LOO_MIN_UNIT_YEARS,
-  loo_filing_threshold = ACQ_HIGH_FILER_THRESHOLD
+  loo_filing_threshold = ACQ_HIGH_FILER_THRESHOLD,
+  max_filing_rate      = MAX_ALLOWABLE_FILING_RATE
 )
 
 # Map helper levels to ACQ_BIN_LABELS
@@ -731,6 +738,7 @@ acq_cutoffs <- data.table(
   analysis_year_max                 = ANALYSIS_YEAR_MAX,
   meaningful_loo_unit_years_cutoff  = LOO_MIN_UNIT_YEARS,
   high_filer_rate_cutoff            = ACQ_HIGH_FILER_THRESHOLD,
+  filing_rate_cap                   = MAX_ALLOWABLE_FILING_RATE,
   high_filer_rate_quantile          = acq_threshold_quantile,
   n_positive_meaningful_portfolio   = length(acq_rate_pool)
 )
@@ -742,6 +750,9 @@ logf("  Small-portfolio screen: <", LOO_MIN_UNIT_YEARS,
      " leave-one-out unit-years",
      log_file = log_file)
 logf("  High-filer threshold: ", ACQ_HIGH_FILER_THRESHOLD, " filings/unit-year",
+     log_file = log_file)
+logf("  Filing-rate cap for transfer event studies and LOO bins: ",
+     MAX_ALLOWABLE_FILING_RATE, " filings/unit-year",
      log_file = log_file)
 
 acq_lookup <- loo_type[, .(PID, conglomerate_id, acq_filer_bin, acq_rate,
@@ -834,7 +845,7 @@ if (file.exists(gent_status_file)) {
 if (freq == "annual") {
   event_panel[, filing_rate := fifelse(
     !is.na(num_filings) & !is.na(total_units) & total_units > 0,
-    num_filings / total_units, NA_real_
+    pmin(num_filings / total_units, MAX_ALLOWABLE_FILING_RATE), NA_real_
   )]
 } else {
   event_panel[, filing_rate_q := fifelse(
@@ -1512,7 +1523,7 @@ if (freq == "annual") {
   bldg_full <- copy(bldg_sub)
   bldg_full[, filing_rate := fifelse(
     !is.na(num_filings) & !is.na(total_units) & total_units > 0,
-    num_filings / total_units, NA_real_
+    pmin(num_filings / total_units, MAX_ALLOWABLE_FILING_RATE), NA_real_
   )]
   bldg_full[, permit_rate := fifelse(
     !is.na(total_permits) & !is.na(total_units) & total_units > 0,
@@ -2864,7 +2875,7 @@ build_robustness_panel <- function(transfer_dt, bldg_dt, sample_filter = NULL) {
 bldg_robust <- copy(bldg_sub)
 bldg_robust[, filing_rate := fifelse(
   !is.na(num_filings) & !is.na(total_units) & total_units > 0,
-  num_filings / total_units, NA_real_
+  pmin(num_filings / total_units, MAX_ALLOWABLE_FILING_RATE), NA_real_
 )]
 
 # et_dummies and run_robustness_fit defined before Section 5 (shared with Section 5a rent).

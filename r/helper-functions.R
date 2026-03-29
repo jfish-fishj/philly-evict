@@ -1477,9 +1477,8 @@ eb_shrink_poisson_gamma <- function(y, exposure, prior_year = NULL, year = NULL)
 #'                   conglomerate_id (character), num_filings (integer/numeric),
 #'                   total_units (numeric). One row per PID x year.
 #' @param loo_min_unit_years  Minimum LOO unit-years to be classified as
-#'                            Small vs. Low/High portfolio. Default 90 corresponds
-#'                            to 10 units x 9 years (a full 2011-2019 window).
-#'                            Callers using shorter windows may want a smaller value.
+#'                            Small vs. Low/High portfolio. Default 100 corresponds
+#'                            to roughly 10 units observed over 10 years.
 #' @param loo_filing_threshold  Filing rate threshold for High vs. Low evicting
 #'                              (default 0.05, filings per unit-year).
 #'
@@ -1490,22 +1489,36 @@ eb_shrink_poisson_gamma <- function(y, exposure, prior_year = NULL, year = NULL)
 #'         conglomerate.
 compute_loo_filing_type <- function(
   pid_yr_dt,
-  loo_min_unit_years   = 90L,
-  loo_filing_threshold = 0.05
+  loo_min_unit_years   = 100L,
+  loo_filing_threshold = 0.05,
+  max_filing_rate      = Inf
 ) {
   stopifnot(data.table::is.data.table(pid_yr_dt))
   assert_has_cols(pid_yr_dt,
     c("PID", "year", "conglomerate_id", "num_filings", "total_units"),
     "compute_loo_filing_type: pid_yr_dt")
+  if (!is.numeric(max_filing_rate) || length(max_filing_rate) != 1L || is.na(max_filing_rate) ||
+      max_filing_rate <= 0) {
+    stop("compute_loo_filing_type: max_filing_rate must be a positive scalar or Inf")
+  }
+
+  pid_yr_use <- data.table::copy(pid_yr_dt)
+  if (is.finite(max_filing_rate)) {
+    pid_yr_use[, num_filings := data.table::fifelse(
+      !is.na(num_filings) & !is.na(total_units) & total_units > 0,
+      pmin(num_filings, max_filing_rate * total_units),
+      num_filings
+    )]
+  }
 
   # Full-period totals by conglomerate (all PIDs and rows supplied)
-  cong_full <- pid_yr_dt[, .(
+  cong_full <- pid_yr_use[, .(
     cong_filings_full = sum(num_filings,  na.rm = TRUE),
     cong_units_full   = sum(total_units,  na.rm = TRUE)
   ), by = conglomerate_id]
 
   # Per (PID, conglomerate_id): focal PID's contribution within that conglomerate
-  pid_cong_full <- pid_yr_dt[, .(
+  pid_cong_full <- pid_yr_use[, .(
     pid_filings_cong = sum(num_filings,  na.rm = TRUE),
     pid_units_cong   = sum(total_units,  na.rm = TRUE)
   ), by = .(PID, conglomerate_id)]
