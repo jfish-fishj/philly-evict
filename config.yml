@@ -125,6 +125,7 @@ products:
   altos_year_bedrooms: "panels/altos_year_bedrooms.csv"
   altos_year_building: "panels/altos_year_building.csv"
   altos_pid_year_bedbin: "panels/altos_pid_year_bedbin.csv"
+  altos_unit_year: "panels/altos_unit_year.csv"
   hex_panel_res7: "panels/phl_hex_yq_panel_res7.csv"
   hex_panel_res8: "panels/phl_hex_yq_panel_res8.csv"
   hex_panel_res9: "panels/phl_hex_yq_panel_res9.csv"
@@ -177,10 +178,6 @@ products:
   altos_corelogic_agg: "panels/altos_corelogic_agg.csv"
   altos_corelogic_agg_dir: "panels/altos_corelogic_agg"
 
-  # --- Altos-Parcel Crosswalks (from merge-altos-parcels.R) ---
-  altos_address_agg: "xwalks/altos_address_agg.csv"
-  altos_parcel_xwalk: "xwalks/altos_parcel_xwalk.csv"
-  altos_parcel_xwalk_listing: "xwalks/altos_parcel_xwalk_listing.csv"
   nhpd_address_agg: "xwalks/nhpd_address_agg.csv"
   nhpd_parcel_xwalk: "xwalks/nhpd_parcel_xwalk.csv"
   nhpd_parcel_xwalk_property: "xwalks/nhpd_parcel_xwalk_property.csv"

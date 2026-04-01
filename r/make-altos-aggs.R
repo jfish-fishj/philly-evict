@@ -6,7 +6,7 @@
 ##
 ## Inputs:
 ##   - cfg$products$altos_clean (clean/altos_clean.csv)
-##   - cfg$products$altos_parcel_xwalk (xwalks/altos_parcel_xwalk.csv)
+##   - cfg$products$xwalk_altos_to_parcel (xwalks/xwalk_altos_to_parcel.csv)
 ##
 ## Outputs:
 ##   - cfg$products$altos_year_bedrooms (panels/altos_year_bedrooms.csv)
@@ -96,42 +96,43 @@ impute_baths <- function(col) {
 # ============================================================
 
 altos_path <- p_product(cfg, "altos_clean")
-xwalk_path_phase1 <- tryCatch(p_product(cfg, "xwalk_altos_to_parcel"), error = function(e) NULL)
-xwalk_path_legacy <- p_product(cfg, "altos_parcel_xwalk")
-xwalk_path <- if (!is.null(xwalk_path_phase1) && file.exists(xwalk_path_phase1)) xwalk_path_phase1 else xwalk_path_legacy
+xwalk_path <- p_product(cfg, "xwalk_altos_to_parcel")
 
 logf("Loading cleaned Altos data from: ", altos_path, log_file = log_file)
 altos <- fread(altos_path)
 logf("  Loaded ", nrow(altos), " rows", log_file = log_file)
 
+if (!file.exists(xwalk_path)) {
+  stop("Missing required Altos winner crosswalk at ", xwalk_path,
+       ". Re-run r/make-address-parcel-xwalk.R first.")
+}
+
 logf("Loading address crosswalk from: ", xwalk_path, log_file = log_file)
 xwalk <- fread(xwalk_path)
 logf("  Loaded ", nrow(xwalk), " rows", log_file = log_file)
 
-use_phase1_xwalk <- all(c("source_address_id", "anchor_pid", "xwalk_status", "link_type", "ownership_unsafe") %in% names(xwalk))
-logf("  Crosswalk mode: ", if (use_phase1_xwalk) "Phase 1 winner xwalk" else "legacy unique xwalk", log_file = log_file)
+assert_has_cols(
+  xwalk,
+  c("source_address_id", "anchor_pid", "parcel_number", "xwalk_status", "link_type", "ownership_unsafe"),
+  "xwalk_altos_to_parcel"
+)
+assert_unique(xwalk, "source_address_id", "xwalk_altos_to_parcel (source_address_id)")
+logf("  Crosswalk mode: Phase 1 winner xwalk", log_file = log_file)
 
-if (use_phase1_xwalk) {
-  assert_unique(xwalk, "source_address_id", "xwalk_altos_to_parcel (source_address_id)")
-  xwalk_unique <- xwalk[
-    ,
-    .(
-      source_address_id = as.character(source_address_id),
-      PID = normalize_pid_local(fcoalesce(anchor_pid, parcel_number)),
-      altos_parcel_number_raw = normalize_pid_local(parcel_number),
-      altos_anchor_pid = normalize_pid_local(anchor_pid),
-      altos_link_id = as.character(link_id),
-      altos_link_type = as.character(link_type),
-      altos_xwalk_status = as.character(xwalk_status),
-      altos_ownership_unsafe = as.logical(fcoalesce(ownership_unsafe, FALSE))
-    )
-  ]
-  logf("  Winner xwalk rows (one per source address): ", nrow(xwalk_unique), log_file = log_file)
-} else {
-  # Filter legacy crosswalk to unique parcel matches
-  xwalk_unique <- xwalk[num_parcels_matched == 1 & !is.na(PID)]
-  logf("  Unique parcel matches: ", nrow(xwalk_unique), " rows", log_file = log_file)
-}
+xwalk_unique <- xwalk[
+  ,
+  .(
+    source_address_id = as.character(source_address_id),
+    PID = normalize_pid_local(fcoalesce(anchor_pid, parcel_number)),
+    altos_parcel_number_raw = normalize_pid_local(parcel_number),
+    altos_anchor_pid = normalize_pid_local(anchor_pid),
+    altos_link_id = as.character(link_id),
+    altos_link_type = as.character(link_type),
+    altos_xwalk_status = as.character(xwalk_status),
+    altos_ownership_unsafe = as.logical(fcoalesce(ownership_unsafe, FALSE))
+  )
+]
+logf("  Winner xwalk rows (one per source address): ", nrow(xwalk_unique), log_file = log_file)
 
 # ============================================================
 # CREATE ALTOS VARIABLES
@@ -153,40 +154,27 @@ altos[, bed_address_id := .GRP, by = .(address_id, beds_imp)]
 # ============================================================
 
 logf("Merging Altos with parcel crosswalk...", log_file = log_file)
-if (use_phase1_xwalk && "pm.uid" %in% names(altos)) {
-  altos[, source_address_id := as.character(pm.uid)]
-  if (!"PID" %in% names(altos)) altos[, PID := NA_character_]
-  if (!"altos_parcel_number_raw" %in% names(altos)) altos[, altos_parcel_number_raw := NA_character_]
-  if (!"altos_anchor_pid" %in% names(altos)) altos[, altos_anchor_pid := NA_character_]
-  if (!"altos_link_id" %in% names(altos)) altos[, altos_link_id := NA_character_]
-  if (!"altos_link_type" %in% names(altos)) altos[, altos_link_type := NA_character_]
-  if (!"altos_xwalk_status" %in% names(altos)) altos[, altos_xwalk_status := NA_character_]
-  if (!"altos_ownership_unsafe" %in% names(altos)) altos[, altos_ownership_unsafe := FALSE]
-  xwalk_join <- copy(xwalk_unique)
-  setkey(xwalk_join, source_address_id)
-  altos[xwalk_join, on = "source_address_id", `:=`(
-    PID = i.PID,
-    altos_parcel_number_raw = i.altos_parcel_number_raw,
-    altos_anchor_pid = i.altos_anchor_pid,
-    altos_link_id = i.altos_link_id,
-    altos_link_type = i.altos_link_type,
-    altos_xwalk_status = i.altos_xwalk_status,
-    altos_ownership_unsafe = i.altos_ownership_unsafe
-  )]
-  altos_m <- altos
-} else {
-  altos_m <- merge(
-    altos,
-    xwalk_unique,
-    by = "n_sn_ss_c",
-    all.x = TRUE
-  )
-  if (!"altos_link_type" %in% names(altos_m)) altos_m[, altos_link_type := fifelse(!is.na(PID), "parcel", NA_character_)]
-  if (!"altos_xwalk_status" %in% names(altos_m)) altos_m[, altos_xwalk_status := fifelse(!is.na(PID), "legacy_unique_match", NA_character_)]
-  if (!"altos_ownership_unsafe" %in% names(altos_m)) altos_m[, altos_ownership_unsafe := FALSE]
-  if (!"altos_link_id" %in% names(altos_m)) altos_m[, altos_link_id := fifelse(!is.na(PID), as.character(PID), NA_character_)]
-  if (!"altos_anchor_pid" %in% names(altos_m)) altos_m[, altos_anchor_pid := fifelse(!is.na(PID), normalize_pid_local(PID), NA_character_)]
-}
+assert_has_cols(altos, "pm.uid", "altos_clean")
+altos[, source_address_id := as.character(pm.uid)]
+if (!"PID" %in% names(altos)) altos[, PID := NA_character_]
+if (!"altos_parcel_number_raw" %in% names(altos)) altos[, altos_parcel_number_raw := NA_character_]
+if (!"altos_anchor_pid" %in% names(altos)) altos[, altos_anchor_pid := NA_character_]
+if (!"altos_link_id" %in% names(altos)) altos[, altos_link_id := NA_character_]
+if (!"altos_link_type" %in% names(altos)) altos[, altos_link_type := NA_character_]
+if (!"altos_xwalk_status" %in% names(altos)) altos[, altos_xwalk_status := NA_character_]
+if (!"altos_ownership_unsafe" %in% names(altos)) altos[, altos_ownership_unsafe := FALSE]
+xwalk_join <- copy(xwalk_unique)
+setkey(xwalk_join, source_address_id)
+altos[xwalk_join, on = "source_address_id", `:=`(
+  PID = i.PID,
+  altos_parcel_number_raw = i.altos_parcel_number_raw,
+  altos_anchor_pid = i.altos_anchor_pid,
+  altos_link_id = i.altos_link_id,
+  altos_link_type = i.altos_link_type,
+  altos_xwalk_status = i.altos_xwalk_status,
+  altos_ownership_unsafe = i.altos_ownership_unsafe
+)]
+altos_m <- altos
 altos_m[, PID := fifelse(is.na(PID) | !nzchar(as.character(PID)), NA_character_, normalize_pid_local(PID))]
 
 # Log merge statistics
@@ -266,7 +254,8 @@ altos_pid_year_bedbin <- altos_m[
     beds_imp <= 6 &
     baths <= 4 &
     is.finite(price) &
-    price > 0,
+    price > 0 &
+    (is.na(per_room_listing) | per_room_listing == FALSE),
   .(
     med_rent_cell = median(price, na.rm = TRUE),
     mean_rent_cell = mean(price, na.rm = TRUE),
@@ -292,7 +281,8 @@ logf("  PID-year-bed_bin panel: ", nrow(altos_pid_year_bedbin), " rows", log_fil
 
 logf("Aggregating to bedroom level...", log_file = log_file)
 
-altos_year_bedrooms <- altos_m[beds_imp <= 6 & baths <= 4, list(
+altos_year_bedrooms <- altos_m[beds_imp <= 6 & baths <= 4 &
+    (is.na(per_room_listing) | per_room_listing == FALSE), list(
   med_price = median(price, na.rm = TRUE),
   mean_price = mean(price, na.rm = TRUE),
   sd_price = sd(price, na.rm = TRUE),
@@ -321,7 +311,8 @@ logf("  Bedroom-level panel: ", nrow(altos_year_bedrooms), " rows", log_file = l
 
 logf("Aggregating to building level...", log_file = log_file)
 
-altos_year_building <- altos_m[beds_imp <= 6 & baths <= 4, list(
+altos_year_building <- altos_m[beds_imp <= 6 & baths <= 4 &
+    (is.na(per_room_listing) | per_room_listing == FALSE), list(
   med_price = median(price, na.rm = TRUE),
   mean_price = mean(price, na.rm = TRUE),
   sd_price = sd(price, na.rm = TRUE),
@@ -492,6 +483,46 @@ if (nrow(high_vol) > 0) {
 logf("", log_file = log_file)
 
 # ============================================================
+# BUILD altos_unit_year: enriched bedroom panel for event studies
+# ============================================================
+
+logf("Building altos_unit_year panel...", log_file = log_file)
+
+# Modal ZIP per bed_bath_pid_ID (from matched rows only)
+zip_lookup_unit <- altos_m[
+  !is.na(bed_bath_pid_ID) & !is.na(pm.zip) & nzchar(as.character(pm.zip)),
+  .(pm.zip = ModeChar(as.character(pm.zip))),
+  by = bed_bath_pid_ID
+]
+
+altos_unit_year <- copy(altos_year_bedrooms)
+altos_unit_year <- merge(altos_unit_year, zip_lookup_unit, by = "bed_bath_pid_ID", all.x = TRUE)
+
+altos_unit_year[, log_med_price := log(med_price)]
+altos_unit_year[, price_spread := max_price - min_price]
+# Flag cells where within-year max/min price ratio exceeds 2x.
+# This catches cases like a 5BR listed simultaneously at $2,000 and $6,000
+# (two different products mis-labeled as the same typology), while tolerating
+# normal floor/size variation (~1.1-1.3x). Use this flag rather than dropping
+# outright so downstream scripts can choose their own tolerance.
+altos_unit_year[, price_ratio := fifelse(min_price > 0, max_price / min_price, NA_real_)]
+altos_unit_year[, high_price_dispersion := !is.na(price_ratio) & price_ratio > 2]
+setorder(altos_unit_year, bed_bath_pid_ID, year)
+altos_unit_year[, change_log_med_price := log_med_price - shift(log_med_price, 1L), by = bed_bath_pid_ID]
+
+# Rename beds_imp_first/baths_first for convenience in downstream joins
+altos_unit_year[, beds_imp := beds_imp_first]
+altos_unit_year[, baths    := baths_first]
+
+n_uy     <- nrow(altos_unit_year)
+n_uy_key <- altos_unit_year[, uniqueN(.SD), .SDcols = c("bed_bath_pid_ID", "year")]
+if (n_uy != n_uy_key) stop("ASSERTION FAILED: altos_unit_year not unique on (bed_bath_pid_ID, year)")
+logf("  altos_unit_year: ", n_uy, " rows, ",
+     altos_unit_year[, uniqueN(bed_bath_pid_ID)], " units, ",
+     altos_unit_year[!is.na(PID), uniqueN(PID)], " PIDs",
+     log_file = log_file)
+
+# ============================================================
 # WRITE OUTPUTS
 # ============================================================
 
@@ -513,5 +544,11 @@ logf("Writing PID-year-bed_bin panel to: ", out_path_bedbin, log_file = log_file
 dir.create(dirname(out_path_bedbin), showWarnings = FALSE, recursive = TRUE)
 fwrite(altos_pid_year_bedbin, out_path_bedbin)
 logf("  Wrote ", nrow(altos_pid_year_bedbin), " rows", log_file = log_file)
+
+out_path_unit_year <- p_product(cfg, "altos_unit_year")
+logf("Writing altos_unit_year to: ", out_path_unit_year, log_file = log_file)
+dir.create(dirname(out_path_unit_year), showWarnings = FALSE, recursive = TRUE)
+fwrite(altos_unit_year, out_path_unit_year)
+logf("  Wrote ", nrow(altos_unit_year), " rows", log_file = log_file)
 
 logf("=== Finished make-altos-aggs.R ===", log_file = log_file)

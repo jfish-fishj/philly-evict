@@ -1,6 +1,10 @@
 ## ============================================================
 ## merge-altos-parcels.R
 ## ============================================================
+## Retired: superseded by r/make-address-parcel-xwalk.R -> xwalk_altos_to_parcel
+## and downstream aggregation in r/make-altos-aggs.R. Kept only for archival
+## reference because the legacy outputs were easy to misuse.
+##
 ## Purpose: Create crosswalk between Altos listings and OPA parcels using
 ##          tiered address matching plus spatial joining
 ##
@@ -57,6 +61,31 @@ logf("  Loading parcels: ", parcels_path, log_file = log_file)
 parcels <- fread(parcels_path)
 logf("  Loaded ", nrow(parcels), " parcels", log_file = log_file)
 
+alias_xwalk_path <- tryCatch(p_input(cfg, "eviction_address_alias_xwalk"), error = function(e) NULL)
+alias_xwalk <- data.table(n_sn_ss_c = character(), PID = character())
+if (!is.null(alias_xwalk_path) && file.exists(alias_xwalk_path)) {
+  alias_xwalk_raw <- fread(alias_xwalk_path)
+  assert_has_cols(
+    alias_xwalk_raw,
+    c("alias_n_sn_ss_c", "canonical_pid"),
+    "eviction_address_alias_xwalk"
+  )
+  alias_xwalk <- unique(
+    alias_xwalk_raw[
+      !is.na(alias_n_sn_ss_c) & nzchar(alias_n_sn_ss_c),
+      .(
+        n_sn_ss_c = str_to_lower(str_squish(as.character(alias_n_sn_ss_c))),
+        PID = str_pad(as.character(canonical_pid), 9, "left", pad = "0")
+      )
+    ],
+    by = "n_sn_ss_c"
+  )
+  assert_unique(alias_xwalk, "n_sn_ss_c", "alias_xwalk (Altos Tier 0)")
+  logf("  Alias xwalk rows: ", nrow(alias_xwalk), log_file = log_file)
+} else {
+  logf("  Alias xwalk not found; Tier 0 inactive", log_file = log_file)
+}
+
 # Load licenses to identify rental parcels
 licenses_path <- p_product(cfg, "licenses_clean")
 logf("  Loading licenses: ", licenses_path, log_file = log_file)
@@ -109,10 +138,26 @@ altos_addys <- unique(altos_address_agg, by = "n_sn_ss_c")
 logf("  Unique Altos addresses: ", nrow(altos_addys), log_file = log_file)
 logf("  Unique parcel addresses: ", nrow(parcel_addys), log_file = log_file)
 
+matched_alias_xwalk <- character(0)
+tier0_merge <- data.table(n_sn_ss_c = character(), PID = character(), merge = character())
+if (nrow(alias_xwalk) > 0L) {
+  tier0_merge <- merge(
+    altos_addys[, .(n_sn_ss_c)],
+    alias_xwalk,
+    by = "n_sn_ss_c",
+    all.x = TRUE
+  )
+  setDT(tier0_merge)
+  tier0_merge[!is.na(PID), merge := "alias_xwalk"]
+  matched_alias_xwalk <- tier0_merge[!is.na(PID), unique(n_sn_ss_c)]
+  logf("  Tier 0 alias_xwalk matches: ", length(matched_alias_xwalk), log_file = log_file)
+}
+
 # ---- Tier 1: Full address match ----
 logf("Tier 1: Matching on num_st_sfx_dir_zip...", log_file = log_file)
 
 num_st_sfx_dir_zip_merge <- altos_addys %>%
+  filter(!n_sn_ss_c %in% matched_alias_xwalk) %>%
   merge(
     parcel_addys[, .(pm.house, pm.street, pm.zip, pm.streetSuf, pm.sufDir, pm.preDir, PID)],
     by = c("pm.house", "pm.street", "pm.streetSuf", "pm.sufDir", "pm.preDir", "pm.zip"),
@@ -132,7 +177,8 @@ logf("  Tier 1 unique matches: ", length(matched_num_st_sfx_dir_zip), log_file =
 logf("Tier 2: Matching on num_st (unmatched from Tier 1)...", log_file = log_file)
 
 num_st_merge <- altos_addys %>%
-  filter(!n_sn_ss_c %in% matched_num_st_sfx_dir_zip) %>%
+  filter(!n_sn_ss_c %in% matched_alias_xwalk &
+           !n_sn_ss_c %in% matched_num_st_sfx_dir_zip) %>%
   merge(
     parcel_addys[, .(pm.house, pm.street, pm.zip, pm.streetSuf, pm.sufDir, pm.preDir, PID)],
     by = c("pm.house", "pm.street", "pm.zip"),
@@ -153,6 +199,7 @@ logf("Tier 3: Matching on num_st_sfx (unmatched from Tiers 1-2)...", log_file = 
 
 num_st_sfx_merge <- altos_addys %>%
   filter(
+    !n_sn_ss_c %in% matched_alias_xwalk &
     !n_sn_ss_c %in% matched_num_st_sfx_dir_zip &
     !n_sn_ss_c %in% matched_num_st
   ) %>%
@@ -233,16 +280,18 @@ if (nrow(spatial_join_dt) > 0) {
 logf("Building crosswalk...", log_file = log_file)
 
 matched_ids <- c(
+  matched_alias_xwalk,
   matched_num_st_sfx_dir_zip,
   matched_num_st,
   matched_num_st_sfx,
   matched_spatial
 )
 
-logf("  Total unique matches: ", length(matched_ids), log_file = log_file)
+logf("  Addresses with at least one candidate PID from any tier: ", length(matched_ids), log_file = log_file)
 
 # Unique matches
 xwalk_unique_parts <- list(
+  tier0_merge[!is.na(PID), .(PID, n_sn_ss_c, merge)] %>% distinct(),
   num_st_sfx_dir_zip_merge[num_pids == 1, .(PID, n_sn_ss_c, merge)] %>% distinct(),
   num_st_merge[num_pids == 1, .(PID, n_sn_ss_c, merge)] %>% distinct(),
   num_st_sfx_merge[num_pids == 1, .(PID, n_sn_ss_c, merge)] %>% distinct()

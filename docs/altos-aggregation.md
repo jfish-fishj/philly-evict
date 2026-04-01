@@ -2,6 +2,13 @@
 
 This note documents the `r/make-altos-aggs.R` and `r/make-rent-panel.R` Altos rent aggregation logic introduced for composition-robust rent measures.
 
+The active linkage path is:
+
+- `r/make-address-parcel-xwalk.R` -> `xwalk_altos_to_parcel`
+- `r/make-altos-aggs.R` -> Altos PID-year panels
+
+The older `r/merge-altos-parcels.R` script and its listing-level crosswalk outputs are retired and kept in `graveyard/` only for archival reference.
+
 ## Scope
 
 - `r/make-altos-aggs.R`:

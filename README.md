@@ -8,6 +8,7 @@ Additional documentation:
 - Eviction-InfoUSA linkage: [`docs/evict-infousa-linkage.md`](docs/evict-infousa-linkage.md)
 - Race imputation: [`docs/race-imputation.md`](docs/race-imputation.md)
 - Gender imputation: [`docs/gender-imputation.md`](docs/gender-imputation.md)
+- InfoUSA income proxy: [`docs/infousa-income-proxy.md`](docs/infousa-income-proxy.md)
 - Occupancy and shares: [`docs/occupancy-and-shares.md`](docs/occupancy-and-shares.md)
 - Altos aggregation and standardization: [`docs/altos-aggregation.md`](docs/altos-aggregation.md)
 - BLP estimation: [`docs/blp-estimation.md`](docs/blp-estimation.md)
@@ -20,7 +21,7 @@ Additional documentation:
 
 1. **R 4.0+** with packages: `data.table`, `dplyr`, `sf`, `stringr`, `yaml`, `targets`
 2. **Raw data** placed in `data/inputs/` (see `config.yml` for expected structure)
-3. **Config file**: Copy `config.example.yml` to `config.yml` and adjust paths if needed
+3. **Config file**: Edit the canonical `config.yml` and adjust paths if needed
 
 ### Running the Pipeline
 
@@ -100,7 +101,6 @@ Despite the naming, `merge-*` scripts produce crosswalks, not merged panels.
 |--------|--------|---------|-------|
 | `make_bldg_pid_xwalk.r` | `philly_parcels_sf`, `building_footprints_shp` | `building_pid_xwalk.csv`, `parcel_building_summary.csv` | Spatial join: building footprints → parcels |
 | `make-address-parcel-xwalk.R` | `parcels_clean`, `evictions_clean`, `altos_clean`, `infousa_clean` | `xwalk_evictions_to_parcel.csv`, `xwalk_altos_to_parcel.csv`, etc. | Fuzzy address matching to parcels |
-| `merge-altos-parcels.R` | `altos_clean`, `parcels_clean` | `altos_parcel_xwalk.csv` | Links listings → parcels |
 | `merge-infousa-parcels.R` | `infousa_clean`, `parcels_clean` | `xwalk_infousa_to_parcel.csv` | Links businesses → parcels |
 
 **Dependencies:** Requires Stage 1 clean outputs.
@@ -115,9 +115,10 @@ Build analysis-ready panels by aggregating linked data to PID × time.
 | `make-occupancy-vars.r` | `ever_rentals_panel`, `infousa_clean` | `parcel_occupancy_panel.csv` | PID × year |
 | `make-evict-aggs.R` | `evictions_clean`, `xwalk_evictions_to_parcel` | `evict_pid_year.csv`, `evict_zip_year.csv` | PID × year |
 | `make-building-data.R` | `parcels_clean`, `evict_pid_year` | `bldg_panel.csv` | PID × year_quarter |
-| `make-analytic-sample.R` | `parcel_occupancy_panel`, `evict_pid_year`, `ever_rentals_panel` | `analytic_sample.csv`, `bldg_panel_blp.csv` | PID × year |
+| `make-infousa-building-income-proxy.R` | `infousa_clean`, `xwalk_infousa_to_parcel` | `infousa_building_income_proxy_panel.csv` | PID × year |
+| `make-analytic-sample.R` | `parcel_occupancy_panel`, `ever_rentals_panel`, `building_data`, `infousa_building_demographics_panel`, `infousa_building_income_proxy_panel`, `parcels_clean`, `assessments` | `analytic_sample.csv`, `bldg_panel_blp.csv` | PID × year |
 
-**Dependencies:** Requires Stage 1 clean outputs and Stage 2 crosswalks.
+**Dependencies:** Requires Stage 1 clean outputs and Stage 2 crosswalks. `make-analytic-sample.R` also expects the InfoUSA building demographics panel and the building income proxy panel to exist before it runs.
 
 ### Stage 3b: Demographic Imputation
 
@@ -177,21 +178,22 @@ Run regressions, generate figures, produce tables.
                                        │
                     ┌──────────────────┼──────────────────┐
                     ▼                  ▼                  ▼
-          building_pid_xwalk   xwalk_evictions     altos_parcel_xwalk
-          xwalk_infousa        xwalk_altos
+          building_pid_xwalk   xwalk_evictions     xwalk_altos_to_parcel
+          xwalk_infousa
                     │                  │                  │
                     └──────────────────┼──────────────────┘
                                        │
                     ┌─────────────────────────────────────────┐
                     │        STAGE 3: AGGREGATION             │
                     │   make-rent-panel, make-occupancy-vars  │
-                    │   make-evict-aggs, make-analytic-sample │
+                    │   make-evict-aggs, make-infousa-...     │
+                    │   make-analytic-sample                  │
                     └─────────────────────────────────────────┘
                                        │
                     ┌──────────────────┼──────────────────┐
                     ▼                  ▼                  ▼
           ever_rentals_panel   evict_pid_year      parcel_occupancy
-          bldg_panel_blp       analytic_sample
+      infousa_income_proxy     bldg_panel_blp       analytic_sample
                     │                  │                  │
                     └──────────────────┼──────────────────┘
                                        │
@@ -222,7 +224,6 @@ Run regressions, generate figures, produce tables.
 
 ```bash
 # 1. Set up config
-cp config.example.yml config.yml
 # Edit config.yml to set your data paths
 
 # 2. Run cleaning (can be parallelized)
@@ -236,7 +237,6 @@ wait
 # 3. Build crosswalks (link datasets)
 Rscript r/make_bldg_pid_xwalk.r
 Rscript r/make-address-parcel-xwalk.R
-Rscript r/merge-altos-parcels.R
 Rscript r/merge-infousa-parcels.R
 
 # 4. Aggregate to panels
@@ -245,6 +245,9 @@ Rscript r/make-occupancy-vars.r
 Rscript r/make-evict-aggs.R
 Rscript r/make-building-data.R
 Rscript r/make-rental-building-data.R
+# Build this before make-analytic-sample.R so the PID-year income proxy is available
+Rscript r/make-infousa-building-income-proxy.R
+# make-analytic-sample.R also expects infousa_building_demographics_panel to exist
 Rscript r/make-analytic-sample.R
 
 # 5. Demographic imputation
@@ -268,16 +271,13 @@ Rscript r/run-calibrate-outer-sorting.R
 # 9. Build renter poverty geography products for empirical outer sorting targets
 Rscript r/make-renter-poverty-geo.R
 
-# 10. Build InfoUSA building-level income proxy for empirical outer sorting targets
-Rscript r/make-infousa-building-income-proxy.R
-
-# 11. Build empirical outer sorting target moments from bldg_panel_blp
+# 10. Build empirical outer sorting target moments from bldg_panel_blp
 Rscript r/make-outer-sorting-empirical-moments.R
 
-# 12. Run outer sorting recovery / Monte Carlo
+# 11. Run outer sorting recovery / Monte Carlo
 Rscript r/run-outer-sorting-recovery.R
 
-# 9. BLP demand estimation
+# 12. BLP demand estimation
 /opt/anaconda3/envs/pyblp-env/bin/python python/pyblp_estimation.py
 /opt/anaconda3/envs/pyblp-env/bin/python python/pyblp_estimation.py --iv full
 /opt/anaconda3/envs/pyblp-env/bin/python python/pyblp_estimation.py --iv pid_year
@@ -387,7 +387,6 @@ This is intentional and should be preserved.
 - Never silently drop unmatched observations
 
 **Examples**
-- `merge-altos-parcels.R`
 - `merge-infousa-parcels.R`
 
 ---
