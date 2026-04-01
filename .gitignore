@@ -32,3 +32,17 @@ writeups/*.pdf
 writeups/*.tex
 writeups/*.html
 writeups/*_files/
+
+# Local assistant scratch/plans
+.claude/
+claude-plans/
+memory/
+
+# Local presentation/build artifacts
+labor-slumlords-presentation.*
+setup-philly-evict.zip
+transfer-evictions.md
+woodhaven_missing.csv
+
+# Temporary office lock files
+docs/~$*
