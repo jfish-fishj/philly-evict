@@ -26,3 +26,9 @@ latex/*.out
 latex/*.zip
 **/smoke*/
 graveyard/
+
+# Rendered writeup artifacts (keep local; track source .qmd only)
+writeups/*.pdf
+writeups/*.tex
+writeups/*.html
+writeups/*_files/
