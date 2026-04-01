@@ -46,3 +46,7 @@ woodhaven_missing.csv
 
 # Temporary office lock files
 docs/~$*
+
+# Oversized generated transfer-evictions intermediates (local only)
+output/transfer_evictions/annual_filing_reg_panel.csv
+output/transfer_evictions/annual_filing_reg_panel.csv.gz
